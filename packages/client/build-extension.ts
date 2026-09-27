@@ -1,14 +1,5 @@
-/**
- * Extension assembler — runs after the main build (pnpm build).
- *
- * Builds two extensions from the same PWA assets: Firefox MV2 (persistent
- * background page holding SSE) and Chrome MV3 (service worker holding a
- * Web Push subscription). For each, compiles its background script, applies
- * extension-specific transforms (inline script extraction, manifest
- * generation), and removes PWA-only files.
- *
- * Usage: node build-extension.ts
- */
+// Assembles the Firefox MV2 and Chrome MV3 extensions from the PWA build in dist/, so it must
+// run after `pnpm build`.
 import { build, loadEnv, searchForWorkspaceRoot } from "vite";
 import { readFileSync, writeFileSync, cpSync, rmSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -50,7 +41,7 @@ const patchHtml = (outDir: string) => {
   let html = readFileSync(join(outDir, "index.html"), "utf-8");
   let scriptCount = 0;
 
-  // Extract inline <script> blocks — extension CSP blocks inline scripts.
+  // Extension CSP blocks inline scripts
   html = html.replace(
     /<script([^>]*)>([\s\S]+?)<\/script>/g,
     (match, attrs: string, content: string) => {
@@ -65,9 +56,8 @@ const patchHtml = (outDir: string) => {
     },
   );
 
-  // Convert async CSS preloads to plain stylesheets — extension CSP blocks the
-  // inline onload="this.rel='stylesheet'" event handler (script-src-attr),
-  // and all assets are local in the extension anyway so blocking load is fine.
+  // Extension CSP blocks the async preload's inline onload handler (script-src-attr), and every
+  // asset is local in the extension, so a blocking stylesheet costs nothing
   html = html.replace(
     /<link rel="preload" href="([^"]+)" as="style" onload="[^"]*"><noscript>.*?<\/noscript>/g,
     (_, href) => `<link rel="stylesheet" href="${href}">`,
@@ -132,14 +122,13 @@ const assemble = async (target: Target) => {
   const outDir = join(EXT_OUT, target.name);
   console.log(`[build:ext] ${target.name}`);
 
-  // 1. Copy PWA assets and strip PWA-only files
   cpSync(CLIENT_DIST, outDir, { recursive: true });
+  // The extension ships neither a service worker nor a web manifest
   rmSync(join(outDir, "sw.js"), { force: true });
   rmSync(join(outDir, "manifest.webmanifest"), { force: true });
 
-  // 2. Compile the background script directly into the output.
-  //    emptyOutDir: false so the PWA assets we just copied are preserved.
-  //    publicDir: false so Vite doesn't re-copy public/ (e.g. manifest.webmanifest).
+  // emptyOutDir: false keeps the PWA assets just copied; publicDir: false stops Vite re-copying
+  // public/, which would bring back manifest.webmanifest
   await build({
     configFile: false,
     publicDir: false,
@@ -164,13 +153,10 @@ const assemble = async (target: Target) => {
   });
   console.log(`  Built ${target.backgroundEntry} → background.js`);
 
-  // 3. Patch index.html for extension CSP compliance
   patchHtml(outDir);
 
-  // 4. Inline WASM in the OPFS worker
   inlineWasm(outDir);
 
-  // 5. Write extension manifest
   writeFileSync(join(outDir, "manifest.json"), JSON.stringify(target.manifest, null, 2));
   console.log(`  Done → ${outDir}`);
 };

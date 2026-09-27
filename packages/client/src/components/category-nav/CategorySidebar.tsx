@@ -31,8 +31,6 @@ const OpenCount = ({ count, className }: { count: number; className?: string }) 
   </span>
 );
 
-// ─── DnD wrappers ──────────────────────────────────────────────────────────
-
 function SortablePill({
   id,
   index,
@@ -66,8 +64,6 @@ function DroppablePill({
   });
   return <>{children(ref, isDropTarget)}</>;
 }
-
-// ─── CategorySidebar ────────────────────────────────────────────────────────
 
 // Outside the task list (People), lists can't be reordered: the drop handling lives with the list
 export function CategorySidebar({ reorderable = true }: { reorderable?: boolean }) {

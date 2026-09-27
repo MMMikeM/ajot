@@ -67,7 +67,6 @@ self.addEventListener("push", (event: PushEvent) => {
   const payload = event.data?.json() as PushPayload | undefined;
   if (!payload?.type) return;
 
-  // Visible notification — also trigger sync in open clients
   const notification = toNotification(payload);
   if (!notification) return;
 
@@ -87,14 +86,12 @@ self.addEventListener("push", (event: PushEvent) => {
   );
 });
 
-// Click: focus existing window or open new one at the notification's target URL
 self.addEventListener("notificationclick", (event: NotificationEvent) => {
   event.notification.close();
   const url = (event.notification.data as { url?: string })?.url ?? "#/";
 
   event.waitUntil(
     self.clients.matchAll({ type: "window" }).then((clients) => {
-      // Try to focus an existing window
       for (const client of clients) {
         if ("focus" in client) {
           void (client as WindowClient).focus();
@@ -102,7 +99,6 @@ self.addEventListener("notificationclick", (event: NotificationEvent) => {
           return;
         }
       }
-      // No existing window — open a new one
       return self.clients.openWindow(url);
     }),
   );
