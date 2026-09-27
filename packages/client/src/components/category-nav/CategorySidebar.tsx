@@ -16,6 +16,7 @@ import type { Category } from "~/lib/types";
 import { useCategoryNavState } from "./use-category-nav-state";
 import { useCategoryActions } from "./use-category-actions";
 import { CategoryOptionsContent } from "./CategoryOptionsContent";
+import { DeleteCategoryDialog } from "./DeleteCategoryDialog";
 
 // Fixed width even when empty, so counts line up down the sidebar
 const OpenCount = ({ count, className }: { count: number; className?: string }) => (
@@ -83,6 +84,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
     handleSetColor,
     handleDelete,
     handleLeave,
+    deleteDialog,
   } = useCategoryActions();
   const {
     renamingId,
@@ -294,6 +296,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
           onClose={() => setSharingCategoryId(null)}
         />
       )}
+      <DeleteCategoryDialog {...deleteDialog} />
     </>
   );
 }

@@ -25,6 +25,9 @@ export const MSG_SYNC_ALL = "SYNC_ALL";
 export const MODEL_NAMES = ["tasks", "categories", "notes"] as const;
 export type ModelName = (typeof MODEL_NAMES)[number];
 
+export const CATEGORY_TASK_ACTIONS = ["uncategorise", "delete"] as const;
+export type CategoryTaskAction = (typeof CATEGORY_TASK_ACTIONS)[number];
+
 export type MutationEvent = {
   model: ModelName;
   action: "insert" | "update" | "delete";
