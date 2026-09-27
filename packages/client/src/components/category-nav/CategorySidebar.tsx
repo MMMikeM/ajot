@@ -17,6 +17,7 @@ import { useCategoryNavState } from "./use-category-nav-state";
 import { useCategoryActions } from "./use-category-actions";
 import { CategoryOptionsContent } from "./CategoryOptionsContent";
 import { DeleteCategoryDialog } from "./DeleteCategoryDialog";
+import { SharedWithMeGroup } from "./SharedWithMeGroup";
 
 // Fixed width even when empty, so counts line up down the sidebar
 const OpenCount = ({ count, className }: { count: number; className?: string }) => (
@@ -272,10 +273,9 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
         )}
 
         {sharedCategories.length > 0 && (
-          <>
-            <div className="my-2 border-t border-ghost/15" />
+          <SharedWithMeGroup headingClassName="mt-5 mb-1 px-3">
             {sharedCategories.map((cat, index) => renderPill(cat, ownedCategories.length + index))}
-          </>
+          </SharedWithMeGroup>
         )}
 
         <div className="flex-1" />
