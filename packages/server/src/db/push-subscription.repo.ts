@@ -29,8 +29,8 @@ const removeMany = async (endpoints: string[]) => {
 
 type PushSubscriptionKind = (typeof pushSubscriptions.$inferSelect)["kind"];
 
-// Returns subscriptions for the given users. Rows with userId = null are legacy
-// (pre-3B) — included as a safe fallback until they re-register.
+// Rows with a null userId predate per-user subscriptions; they get every push until they
+// re-register
 const findForUsers = async (userIds: string[], kind?: PushSubscriptionKind) =>
   db.query.pushSubscriptions.findMany({
     where: { kind, OR: [{ userId: { in: userIds } }, { userId: { isNull: true } }] },
