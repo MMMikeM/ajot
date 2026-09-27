@@ -114,9 +114,13 @@ const mockData = () => {
       user: { ...MOCK_ME, avatarUrl: null },
     },
   ];
+  const home = category("c-home", "Home", "oklch(0.60 0.12 138)", MOCK_ME, "a1");
+  home.collaborators = [
+    { id: "cc2", categoryId: "c-home", userId: MOCK_SAM.id, addedAt: TIMESTAMP, user: { ...MOCK_SAM, avatarUrl: null } },
+  ];
   const categories = [
     category("c-work", "Work", "oklch(0.55 0.07 228)", MOCK_ME, "a0"),
-    category("c-home", "Home", "oklch(0.60 0.12 138)", MOCK_ME, "a1"),
+    home,
     groceries,
   ];
 
