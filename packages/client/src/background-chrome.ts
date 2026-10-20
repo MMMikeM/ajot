@@ -5,48 +5,22 @@
 // 121+ lets extensions subscribe with userVisibleOnly: false, so silent "sync" pushes are allowed
 // here (unlike in the PWA) and wake the worker even with no tabs open.
 
-import { hc } from "hono/client";
-import { serializeSubscription } from "@mmmike/web-push/client";
-import { urlBase64ToUint8Array } from "@mmmike/web-push/vapid";
+import { sendSubscriptionToServer, subscribe, unsubscribe } from "@mmmike/web-push/client";
 import { toNotification, type PushPayload } from "@newtab-todo/shared/push-payload";
-import type { AppType } from "@newtab-todo/server/app";
-import { TOKEN_KEY, MSG_TOKEN_CHANGED } from "@newtab-todo/shared/constants";
-import { ext } from "~/lib/ext";
+import { MSG_TOKEN_CHANGED } from "@newtab-todo/shared/constants";
+import { ext, getStoredToken, notifyTabs } from "~/lib/ext";
 
 declare let self: ServiceWorkerGlobalScope;
 declare const __SERVER_URL__: string;
 declare const __VAPID_PUBLIC_KEY__: string;
 
-const getToken = async () =>
-  ((await ext.storage.local.get(TOKEN_KEY)) as Record<string, string | undefined>)[TOKEN_KEY];
-
-const isReusable = (subscription: PushSubscription, key: Uint8Array) => {
-  if (subscription.options.userVisibleOnly) return false;
-  // Browsers that don't report the key keep their subscription rather than churn it.
-  const bound = subscription.options.applicationServerKey;
-  if (!bound) return true;
-  const boundBytes = new Uint8Array(bound);
-  return boundBytes.length === key.length && boundBytes.every((byte, i) => byte === key[i]);
-};
-
-const subscribe = async () => {
-  const key = urlBase64ToUint8Array(__VAPID_PUBLIC_KEY__);
-  const existing = await self.registration.pushManager.getSubscription();
-  if (existing && isReusable(existing, key)) return existing;
-  await existing?.unsubscribe();
-  return self.registration.pushManager.subscribe({
-    userVisibleOnly: false,
-    applicationServerKey: key,
-  });
-};
-
 const upload = async (subscription: PushSubscription, token: string) => {
-  const { endpoint, keys } = serializeSubscription(subscription);
-  const api = hc<AppType>(__SERVER_URL__, { headers: { Authorization: `Bearer ${token}` } });
-  const res = await api.api.push.subscribe.$post({
-    json: { endpoint, p256dh: keys.p256dh, auth: keys.auth, kind: "extension" },
-  });
-  if (!res.ok) throw new Error(`subscription upload failed: ${res.status}`);
+  const ok = await sendSubscriptionToServer(
+    subscription,
+    `${__SERVER_URL__}/api/push/subscribe?kind=extension`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!ok) throw new Error("subscription upload failed");
 };
 
 /**
@@ -54,13 +28,18 @@ const upload = async (subscription: PushSubscription, token: string) => {
  * unsubscribed when signed out (the server prunes the row as "gone" on its next send).
  */
 const reconcileSubscription = async () => {
-  const token = await getToken();
+  const token = await getStoredToken();
   if (!token) {
-    await (await self.registration.pushManager.getSubscription())?.unsubscribe();
+    await unsubscribe({ registration: self.registration });
     console.log("[bg-push] signed out, unsubscribed");
     return;
   }
-  await upload(await subscribe(), token);
+  const result = await subscribe(__VAPID_PUBLIC_KEY__, {
+    registration: self.registration,
+    userVisibleOnly: false,
+  });
+  if (result.status !== "subscribed") throw new Error(`push ${result.status}`);
+  await upload(result.subscription, token);
   console.log("[bg-push] subscribed");
 };
 
@@ -72,8 +51,6 @@ const queueReconcile = () => {
     .catch((err) => console.error("[bg-push] subscription error:", err));
   return reconciling;
 };
-
-const notifyTabs = () => ext.runtime.sendMessage({ type: "SYNC_ALL" }).catch(() => {});
 
 const showNotification = (payload: PushPayload) => {
   const notification = toNotification(payload);
