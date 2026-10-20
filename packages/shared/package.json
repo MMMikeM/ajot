@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./constants": "./src/constants.ts",
-    "./iso": "./src/iso.ts"
+    "./iso": "./src/iso.ts",
+    "./push-payload": "./src/push-payload.ts"
   },
   "dependencies": {
     "zod": "^4.6.7"

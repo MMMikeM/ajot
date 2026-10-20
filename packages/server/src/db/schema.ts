@@ -83,12 +83,16 @@ export const taskShares = sqliteTable("task_shares", {
 
 // --- Push Subscriptions ---
 
+// Only an extension subscription (userVisibleOnly: false) may receive pushes that show nothing.
+export const pushSubscriptionKinds = ["web", "extension"] as const;
+
 export const pushSubscriptions = sqliteTable("push_subscriptions", {
   id: pk(),
   userId: nullableFk("user_id", () => users.id, { onDelete: "set null" }),
   endpoint: string("endpoint").unique(),
   p256dh: string("p256dh"),
   auth: string("auth"),
+  kind: oneOf("kind", pushSubscriptionKinds).default("web"),
   createdAt: createdAt(),
 });
 

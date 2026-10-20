@@ -20,6 +20,7 @@ export const SSE_DATA_CHANGED = "data-changed";
 export const MSG_TOKEN_CHANGED = "TOKEN_CHANGED";
 export const MSG_GET_STATUS = "GET_STATUS";
 export const MSG_BG_STATUS = "BG_STATUS";
+export const MSG_SYNC_ALL = "SYNC_ALL";
 
 export const MODEL_NAMES = ["tasks", "categories", "notes"] as const;
 export type ModelName = (typeof MODEL_NAMES)[number];

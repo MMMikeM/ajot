@@ -11,9 +11,9 @@
 
 ## Sync rules
 
-- **Background sync must ALWAYS work, in EVERY context, even when no tabs are open.** IDB must be pre-warmed with the latest server data before the user opens a tab. Stale-on-open is not acceptable.
+- **Background sync must ALWAYS work in every extension context, even when no tabs are open** (the PWA can't; see below). IDB must be pre-warmed with the latest server data before the user opens a tab. Stale-on-open is not acceptable.
 - **Extension context**: Persistent MV2 background page holds the sync connection. This is the ONLY way to sync when no extension tabs are open.
-- **Browser/PWA context**: Service worker + Web Push is the ONLY way to sync when no browser tabs are open. Service workers CANNOT use EventSource/SSE — push notifications are the only viable mechanism.
+- **Browser/PWA context**: Service workers CANNOT use EventSource/SSE, and web push must show a notification (`userVisibleOnly: true`): a push that shows nothing makes Chrome show its own notification, and Safari revokes the permission. So a PWA cannot sync silently with no tabs open. Silent payloads (`sync`, `deploy`) go only to `kind: "extension"` subscriptions; visible notifications still sync open tabs.
 - **Never propose removing a background sync mechanism** unless you have a replacement that provides equivalent always-on background sync in that context.
 
 ## Spike traps

@@ -4,6 +4,8 @@ import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
 import { registerRoute, NavigationRoute } from "workbox-routing";
 import { NetworkFirst, CacheFirst } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
+import { toNotification, type PushPayload } from "@newtab-todo/shared/push-payload";
+import { MSG_SYNC_ALL } from "@newtab-todo/shared/constants";
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -60,84 +62,13 @@ self.addEventListener("activate", (event: ExtendableEvent) => {
   event.waitUntil(self.clients.claim());
 });
 
-// Map push payload type to notification display properties
-const getNotification = (
-  payload: Record<string, unknown>,
-): { title: string; body: string; url: string } | null => {
-  const p = payload as Record<string, string>;
-  switch (payload.type) {
-    case "task-shared":
-      return {
-        title: p.fromUser,
-        body: `Shared "${p.taskTitle}" with you`,
-        url: `#/tasks/${p.taskId}`,
-      };
-    case "task-updated":
-      return {
-        title: p.fromUser,
-        body: `Updated "${p.taskTitle}": ${p.changes}`,
-        url: `#/tasks/${p.taskId}`,
-      };
-    case "task-assigned":
-      return {
-        title: p.fromUser,
-        body: `Assigned "${p.taskTitle}" to you`,
-        url: `#/tasks/${p.taskId}`,
-      };
-    case "task-completed":
-      return { title: p.byUser, body: `Completed "${p.taskTitle}"`, url: `#/tasks/${p.taskId}` };
-    case "category-shared":
-      return {
-        title: p.fromUser,
-        body: `Shared category "${p.categoryName}" with you`,
-        url: `#/categories/${p.categoryId}`,
-      };
-    case "contact-accepted":
-      return {
-        title: "Ajot",
-        body: `${p.contactName} accepted your contact request`,
-        url: "#/settings",
-      };
-    case "reminder-due":
-      return { title: "Reminder", body: `"${p.taskTitle}" is due`, url: `#/tasks/${p.taskId}` };
-    case "overdue-digest": {
-      const tasks = (payload as { tasks?: unknown[] }).tasks ?? [];
-      return {
-        title: "Overdue tasks",
-        body: `You have ${tasks.length} overdue task${tasks.length === 1 ? "" : "s"}`,
-        url: "#/",
-      };
-    }
-    default:
-      return null;
-  }
-};
-
-// Push: handle typed payloads — show visible notification or silent sync
+// Push: web subscriptions only receive visible notifications; silent sync goes to extensions.
 self.addEventListener("push", (event: PushEvent) => {
-  const payload = event.data?.json();
+  const payload = event.data?.json() as PushPayload | undefined;
   if (!payload?.type) return;
 
-  // Deploy push — check for new SW version in the background
-  if (payload.type === "deploy") {
-    event.waitUntil(self.registration.update());
-    return;
-  }
-
-  // Silent sync — notify open clients to invalidate cache
-  if (payload.type === "sync") {
-    event.waitUntil(
-      self.clients.matchAll().then((clients) => {
-        for (const client of clients) {
-          client.postMessage({ type: "SYNC_ALL" });
-        }
-      }),
-    );
-    return;
-  }
-
   // Visible notification — also trigger sync in open clients
-  const notification = getNotification(payload);
+  const notification = toNotification(payload);
   if (!notification) return;
 
   event.waitUntil(
@@ -149,7 +80,7 @@ self.addEventListener("push", (event: PushEvent) => {
       }),
       self.clients.matchAll().then((clients) => {
         for (const client of clients) {
-          client.postMessage({ type: "SYNC_ALL" });
+          client.postMessage({ type: MSG_SYNC_ALL });
         }
       }),
     ]),

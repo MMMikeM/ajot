@@ -1,53 +1,35 @@
-import { client } from "~/lib/api";
+import {
+  getCurrentSubscription,
+  removeSubscriptionFromServer,
+  sendSubscriptionToServer,
+  subscribe,
+  unsubscribe,
+} from "@mmmike/web-push/client";
+import { apiHeaders, serverUrl } from "~/lib/api";
+import { getBuildTarget } from "~/lib/build-target";
 
-const urlBase64ToUint8Array = (base64String: string): Uint8Array => {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(base64);
-  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+// Extension tabs never touch push: the Chrome background worker owns the extension's subscription,
+// and a Firefox extension page has no service worker to subscribe with.
+const ownsSubscription = () => getBuildTarget() === "browser";
+
+const uploadSubscription = async (subscription: PushSubscription) => {
+  const ok = await sendSubscriptionToServer(subscription, `${serverUrl}/api/push/subscribe`, {
+    headers: apiHeaders(),
+  });
+  if (!ok) throw new Error("subscription upload failed");
 };
 
 export const registerPushSubscription = async (vapidPublicKey: string): Promise<boolean> => {
-  console.log("[push] registering, vapidKey length:", vapidPublicKey?.length);
-
-  if (typeof window === "undefined") {
-    console.log("[push] skip: no window");
-    return false;
-  }
-  if (location.protocol.endsWith("-extension:")) {
-    console.log("[push] skip: extension");
-    return false;
-  }
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-    console.log("[push] skip: no SW/PushManager");
-    return false;
-  }
+  if (!ownsSubscription()) return false;
 
   try {
-    const permission = await Notification.requestPermission();
-    console.log("[push] permission:", permission);
-    if (permission !== "granted") return false;
-
-    const registration = await navigator.serviceWorker.ready;
-    console.log("[push] SW ready, subscribing...");
-
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey).buffer as ArrayBuffer,
-    });
-
-    const json = subscription.toJSON();
-    console.log("[push] subscribed, sending to server...");
-
-    await client.api.push.subscribe.$post({
-      json: {
-        endpoint: json.endpoint!,
-        p256dh: json.keys!.p256dh!,
-        auth: json.keys!.auth!,
-      },
-    });
-
-    console.log("[push] registered successfully");
+    const result = await subscribe(vapidPublicKey);
+    if (result.status !== "subscribed") {
+      console.log("[push] not subscribed:", result.status);
+      return false;
+    }
+    await uploadSubscription(result.subscription);
+    console.log("[push] registered", result.isNew ? "(new subscription)" : "");
     return true;
   } catch (err) {
     console.error("[push] registration failed:", err);
@@ -56,28 +38,22 @@ export const registerPushSubscription = async (vapidPublicKey: string): Promise<
 };
 
 export const unregisterPushSubscription = async (): Promise<void> => {
-  if (!("serviceWorker" in navigator)) return;
-
+  if (!ownsSubscription()) return;
   try {
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
-    if (!subscription) return;
-
-    const endpoint = subscription.endpoint;
-    await subscription.unsubscribe();
-    await client.api.push.unsubscribe.$post({ json: { endpoint } });
+    const endpoint = await unsubscribe();
+    if (!endpoint) return;
+    await removeSubscriptionFromServer(endpoint, `${serverUrl}/api/push/unsubscribe`, {
+      method: "POST",
+      headers: apiHeaders(),
+    });
     console.log("[push] unregistered");
   } catch (err) {
     console.error("[push] unregister failed:", err);
   }
 };
 
-export const isPushSubscribed = async (): Promise<boolean> => {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
-  const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.getSubscription();
-  return !!subscription;
-};
+export const isPushSubscribed = async (): Promise<boolean> =>
+  ownsSubscription() && !!(await getCurrentSubscription());
 
 export const ensurePushRegistered = async (): Promise<void> => {
   const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string;
@@ -85,12 +61,5 @@ export const ensurePushRegistered = async (): Promise<void> => {
     console.warn("[push] no VITE_VAPID_PUBLIC_KEY");
     return;
   }
-
-  const alreadySubscribed = await isPushSubscribed();
-  if (alreadySubscribed) {
-    console.log("[push] already subscribed");
-    return;
-  }
-
   await registerPushSubscription(vapidKey);
 };
