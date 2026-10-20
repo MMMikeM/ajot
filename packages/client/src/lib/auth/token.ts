@@ -1,5 +1,6 @@
 import { TOKEN_KEY } from "~/lib/constants";
 import { getBuildTarget } from "~/lib/build-target";
+import { ext } from "~/lib/ext";
 import { createExternalStore } from "~/lib/external-store";
 
 const store = createExternalStore<string | null>(
@@ -13,7 +14,7 @@ export const setAuthToken = (value: string | null) => {
   else localStorage.removeItem(TOKEN_KEY);
 
   if (getBuildTarget() === "extension" && value) {
-    browser.storage.local.set({ [TOKEN_KEY]: value }).catch(console.error);
+    ext.storage.local.set({ [TOKEN_KEY]: value }).catch(console.error);
   }
 
   store.set(value);

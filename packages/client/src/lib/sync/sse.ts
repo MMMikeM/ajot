@@ -2,13 +2,26 @@ import { useSyncExternalStore } from "react";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
 import { tasksCollection, categoriesCollection, notesCollection } from "~/lib/db/collections";
 import { ensurePushRegistered } from "~/lib/sync/push";
+import { createBackoff } from "~/lib/sync/backoff";
 import { getBuildTarget } from "~/lib/build-target";
-import { SSE_DATA_CHANGED, EVENTS_PATH, MSG_GET_STATUS, MSG_BG_STATUS } from "~/lib/constants";
+import { serverUrl } from "~/lib/api";
+import { ext } from "~/lib/ext";
+import {
+  SSE_DATA_CHANGED,
+  EVENTS_PATH,
+  MSG_GET_STATUS,
+  MSG_BG_STATUS,
+  MSG_SYNC_ALL,
+} from "~/lib/constants";
 import type { MutationEvent } from "~/lib/constants";
 import { createExternalStore } from "~/lib/external-store";
 import { offline } from "~/lib/db/offline";
 
 let es: EventSource | null = null;
+
+// Firefox's persistent MV2 background page holds the SSE connection for every tab. Chrome's MV3
+// service worker can't hold an EventSource, so each Chrome tab connects itself.
+const backgroundHoldsSse = () => location.protocol === "moz-extension:";
 
 export type SyncState = "disconnected" | "connecting" | "connected";
 const syncStateStore = createExternalStore<SyncState>("disconnected");
@@ -99,7 +112,10 @@ const handleSSEData = (data: string) => {
   }
 };
 
+const sseBackoff = createBackoff(() => connectSSE());
+
 const connectSSE = () => {
+  sseBackoff.cancel();
   const token = getAuthToken();
   if (!token) {
     syncStateStore.set("disconnected");
@@ -107,21 +123,29 @@ const connectSSE = () => {
   }
 
   syncStateStore.set("connecting");
-  const url = `${EVENTS_PATH}?token=${encodeURIComponent(token)}`;
-  es = new EventSource(url);
-  es.addEventListener(SSE_DATA_CHANGED, (e: MessageEvent) => {
+  const origin = getBuildTarget() === "extension" ? serverUrl : "";
+  const url = `${origin}${EVENTS_PATH}?token=${encodeURIComponent(token)}`;
+  const source = new EventSource(url);
+  es = source;
+  source.addEventListener(SSE_DATA_CHANGED, (e: MessageEvent) => {
     handleSSEData(e.data);
   });
-  es.addEventListener("open", () => {
+  source.addEventListener("open", () => {
     syncStateStore.set("connected");
+    sseBackoff.reset();
     refetchAll();
   });
-  es.addEventListener("error", () => {
+  source.addEventListener("error", () => {
     syncStateStore.set("connecting");
+    if (source.readyState !== EventSource.CLOSED || es !== source) return;
+    es = null;
+    sseBackoff.schedule();
   });
 };
 
 const reconnect = () => {
+  sseBackoff.cancel();
+  sseBackoff.reset();
   es?.close();
   es = null;
   syncStateStore.set("disconnected");
@@ -132,14 +156,16 @@ const reconnect = () => {
 };
 
 const listenExtensionMessages = () => {
-  browser.runtime.onMessage.addListener((message: unknown) => {
+  ext.runtime.onMessage.addListener((message: unknown) => {
     const msg = message as { type?: string; payload?: MutationEvent };
     if (msg?.type === "SSE_MUTATION" && msg.payload) {
       // Any message from the background page means the SSE connection is alive.
       syncStateStore.set("connected");
       applyMutation(msg.payload);
-    } else if (msg?.type?.startsWith("SYNC_")) {
-      syncStateStore.set("connected");
+    } else if (msg?.type === MSG_SYNC_ALL) {
+      if (backgroundHoldsSse()) syncStateStore.set("connected");
+      // A tab with its own open SSE stream already applied the change this push announces.
+      else if (es?.readyState === EventSource.OPEN) return;
       refetchAll();
     }
   });
@@ -147,21 +173,23 @@ const listenExtensionMessages = () => {
 
 const listenSwMessages = () => {
   navigator.serviceWorker?.addEventListener("message", (event) => {
-    if (event.data?.type === "SYNC_ALL") refetchAll();
+    if (event.data?.type === MSG_SYNC_ALL) refetchAll();
   });
 };
 
 export const initSync = () => {
   const target = getBuildTarget();
-  if (target === "browser") {
+  if (target === "browser" || (target === "extension" && !backgroundHoldsSse())) {
     if (!es && getAuthToken()) connectSSE();
     subscribeAuthToken(reconnect);
-    listenSwMessages();
-  } else if (target === "extension") {
+  }
+  if (target === "browser") listenSwMessages();
+  if (target === "extension") {
     listenExtensionMessages();
+    if (!backgroundHoldsSse()) return;
     // Probe the background page for its current SSE connection state so the
     // indicator isn't stuck at "Offline" on fresh tab load.
-    browser.runtime
+    ext.runtime
       .sendMessage({ type: MSG_GET_STATUS })
       .then((resp: unknown) => {
         const r = resp as { type?: string; connected?: boolean };

@@ -11,7 +11,8 @@ export default {
     "packages/client": {
       entry: [
         "src/main.tsx",
-        "src/background.ts",
+        "src/background-firefox.ts",
+        "src/background-chrome.ts",
         "src/entry-server.tsx",
         "src/sw.ts",
         "src/routes/**/*.tsx",

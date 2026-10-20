@@ -1,13 +1,15 @@
 /**
  * Extension assembler — runs after the main build (pnpm build).
  *
- * Compiles background.ts, copies PWA assets, applies extension-specific
- * transforms (inline script extraction, manifest generation), and removes
- * PWA-only files.
+ * Builds two extensions from the same PWA assets: Firefox MV2 (persistent
+ * background page holding SSE) and Chrome MV3 (service worker holding a
+ * Web Push subscription). For each, compiles its background script, applies
+ * extension-specific transforms (inline script extraction, manifest
+ * generation), and removes PWA-only files.
  *
  * Usage: node build-extension.ts
  */
-import { build, loadEnv } from "vite";
+import { build, loadEnv, searchForWorkspaceRoot } from "vite";
 import { readFileSync, writeFileSync, cpSync, rmSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -15,29 +17,46 @@ const ROOT = resolve(import.meta.dirname);
 const CLIENT_DIST = join(ROOT, "dist");
 const EXT_OUT = join(ROOT, "dist-extension");
 
-const buildManifest = (serverUrl: string) => ({
+const connectSrc = (serverUrl: string) =>
+  `connect-src 'self' https: ${serverUrl.startsWith("http:") ? serverUrl : ""}`.trim();
+
+const firefoxManifest = (serverUrl: string) => ({
   manifest_version: 2,
   name: "New Tab Todo",
   version: "1.0.0",
   browser_specific_settings: { gecko: { id: "newtab-todo@local" } },
   chrome_url_overrides: { newtab: "index.html" },
-  content_security_policy:
-    `script-src 'self' 'unsafe-eval'; object-src 'self'; connect-src 'self' https: ${serverUrl.startsWith("http:") ? serverUrl : ""}`.trim(),
+  content_security_policy: `script-src 'self' 'unsafe-eval'; object-src 'self'; ${connectSrc(serverUrl)}`,
   permissions: ["storage"],
   background: { scripts: ["background.js"], persistent: true },
 });
 
-const patchHtml = () => {
-  let html = readFileSync(join(EXT_OUT, "index.html"), "utf-8");
+const chromeManifest = (serverUrl: string) => ({
+  manifest_version: 3,
+  name: "New Tab Todo",
+  version: "1.0.0",
+  // Silent pushes (userVisibleOnly: false) from an extension worker need Chrome 121.
+  minimum_chrome_version: "121",
+  chrome_url_overrides: { newtab: "index.html" },
+  // MV3 rejects 'unsafe-eval'; 'wasm-unsafe-eval' is enough for wa-sqlite.
+  content_security_policy: {
+    extension_pages: `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; ${connectSrc(serverUrl)}`,
+  },
+  permissions: ["storage", "notifications"],
+  background: { service_worker: "background.js" },
+});
+
+const patchHtml = (outDir: string) => {
+  let html = readFileSync(join(outDir, "index.html"), "utf-8");
   let scriptCount = 0;
 
-  // Extract inline <script> blocks — MV2 CSP blocks inline scripts.
+  // Extract inline <script> blocks — extension CSP blocks inline scripts.
   html = html.replace(
     /<script([^>]*)>([\s\S]+?)<\/script>/g,
     (match, attrs: string, content: string) => {
       if (attrs.includes("src=") || !content.trim()) return match;
       const filename = `_inline-${scriptCount++}.js`;
-      writeFileSync(join(EXT_OUT, filename), content);
+      writeFileSync(join(outDir, filename), content);
       const typeAttr = attrs.match(/type="([^"]*)"/)
         ? ` type="${attrs.match(/type="([^"]*)"/)![1]}"`
         : "";
@@ -46,7 +65,7 @@ const patchHtml = () => {
     },
   );
 
-  // Convert async CSS preloads to plain stylesheets — MV2 CSP blocks the
+  // Convert async CSS preloads to plain stylesheets — extension CSP blocks the
   // inline onload="this.rel='stylesheet'" event handler (script-src-attr),
   // and all assets are local in the extension anyway so blocking load is fine.
   html = html.replace(
@@ -54,22 +73,25 @@ const patchHtml = () => {
     (_, href) => `<link rel="stylesheet" href="${href}">`,
   );
 
-  writeFileSync(join(EXT_OUT, "index.html"), html);
+  writeFileSync(join(outDir, "index.html"), html);
   console.log(`  Extracted ${scriptCount} inline script(s), converted CSS preloads`);
 };
 
 // Firefox extension Web Workers can't fetch moz-extension:// resources, even
-// with credentials: "same-origin". Patch the OPFS worker to set wasmBinary
+// with credentials: "same-origin", and Chrome's connect-src blocks the data:
+// URL the worker falls back to. Patch the OPFS worker to set wasmBinary
 // directly so Emscripten never calls fetch() for the WASM file.
-const inlineWasm = () => {
-  const wasmPath = join(EXT_OUT, "assets", "wa-sqlite.wasm");
-  const wasmBase64 = readFileSync(wasmPath).toString("base64");
-  const wasmBytes = `Uint8Array.from(atob("${wasmBase64}"),c=>c.charCodeAt(0)).buffer`;
-
-  for (const f of readdirSync(join(EXT_OUT, "assets"))) {
+// The bytes come from the worker's own data: URL: assets/wa-sqlite.wasm is a
+// different build, and loading it fails with "_emscripten_stack_get_current
+// is not a function".
+const inlineWasm = (outDir: string) => {
+  for (const f of readdirSync(join(outDir, "assets"))) {
     if (!f.startsWith("opfs-worker-") || !f.endsWith(".js")) continue;
-    const path = join(EXT_OUT, "assets", f);
+    const path = join(outDir, "assets", f);
     const src = readFileSync(path, "utf-8");
+    const wasmBase64 = src.match(/data:application\/wasm;base64,([A-Za-z0-9+/=]+)/)?.[1];
+    if (!wasmBase64) throw new Error(`No embedded WASM found in ${f}`);
+    const wasmBytes = `Uint8Array.from(atob("${wasmBase64}"),c=>c.charCodeAt(0)).buffer`;
     const patched = src.replace("var wasmBinary;", `var wasmBinary = ${wasmBytes};`);
     if (patched === src) throw new Error(`Failed to patch wasmBinary in ${f}`);
     writeFileSync(path, patched);
@@ -77,53 +99,81 @@ const inlineWasm = () => {
   }
 };
 
-const env = loadEnv("production", ROOT, "");
+const env = loadEnv("production", searchForWorkspaceRoot(ROOT), "");
 const serverUrl = env.SERVER_URL || "http://localhost:3000";
+const vapidPublicKey = env.VITE_VAPID_PUBLIC_KEY ?? "";
 console.log(`[build:ext] SERVER_URL: ${serverUrl}`);
+if (!vapidPublicKey) {
+  const message = "VITE_VAPID_PUBLIC_KEY is not set: the Chrome build can't sync in the background";
+  if (process.env.CI) throw new Error(message);
+  console.warn(`[build:ext] ${message}`);
+}
 
-// 1. Clean output and copy PWA assets
-rmSync(EXT_OUT, { recursive: true, force: true });
-cpSync(CLIENT_DIST, EXT_OUT, { recursive: true });
-console.log(`  Copied dist/ → dist-extension/`);
+type Target = {
+  name: "firefox" | "chrome";
+  backgroundEntry: string;
+  manifest: Record<string, unknown>;
+};
 
-// 2. Strip PWA-only files
-rmSync(join(EXT_OUT, "sw.js"), { force: true });
-rmSync(join(EXT_OUT, "manifest.webmanifest"), { force: true });
-
-// 3. Compile background.ts directly into dist-extension/
-//    emptyOutDir: false so the PWA assets we just copied are preserved.
-//    publicDir: false so Vite doesn't re-copy public/ (e.g. manifest.webmanifest).
-await build({
-  configFile: false,
-  publicDir: false,
-  resolve: { alias: { "~": join(ROOT, "src") } },
-  define: {
-    __SERVER_URL__: JSON.stringify(serverUrl),
-    "process.env.NODE_ENV": JSON.stringify("production"),
+const targets: Target[] = [
+  {
+    name: "firefox",
+    backgroundEntry: "background-firefox.ts",
+    manifest: firefoxManifest(serverUrl),
   },
-  build: {
-    lib: {
-      entry: join(ROOT, "src", "background.ts"),
-      formats: ["iife"],
-      name: "background",
-      fileName: () => "background.js",
+  {
+    name: "chrome",
+    backgroundEntry: "background-chrome.ts",
+    manifest: chromeManifest(serverUrl),
+  },
+];
+
+const assemble = async (target: Target) => {
+  const outDir = join(EXT_OUT, target.name);
+  console.log(`[build:ext] ${target.name}`);
+
+  // 1. Copy PWA assets and strip PWA-only files
+  cpSync(CLIENT_DIST, outDir, { recursive: true });
+  rmSync(join(outDir, "sw.js"), { force: true });
+  rmSync(join(outDir, "manifest.webmanifest"), { force: true });
+
+  // 2. Compile the background script directly into the output.
+  //    emptyOutDir: false so the PWA assets we just copied are preserved.
+  //    publicDir: false so Vite doesn't re-copy public/ (e.g. manifest.webmanifest).
+  await build({
+    configFile: false,
+    publicDir: false,
+    resolve: { alias: { "~": join(ROOT, "src") } },
+    define: {
+      __SERVER_URL__: JSON.stringify(serverUrl),
+      __VAPID_PUBLIC_KEY__: JSON.stringify(vapidPublicKey),
+      "process.env.NODE_ENV": JSON.stringify("production"),
     },
-    outDir: EXT_OUT,
-    emptyOutDir: false,
-    minify: false,
-  },
-  logLevel: "warn",
-});
-console.log(`  Built background.ts → background.js`);
+    build: {
+      lib: {
+        entry: join(ROOT, "src", target.backgroundEntry),
+        formats: ["iife"],
+        name: "background",
+        fileName: () => "background.js",
+      },
+      outDir,
+      emptyOutDir: false,
+      minify: false,
+    },
+    logLevel: "warn",
+  });
+  console.log(`  Built ${target.backgroundEntry} → background.js`);
 
-// 4. Patch index.html for MV2 CSP compliance
-patchHtml();
+  // 3. Patch index.html for extension CSP compliance
+  patchHtml(outDir);
 
-// 5. Inline WASM in the OPFS worker
-inlineWasm();
+  // 4. Inline WASM in the OPFS worker
+  inlineWasm(outDir);
 
-// 6. Write extension manifest
-const manifest = buildManifest(serverUrl);
-writeFileSync(join(EXT_OUT, "manifest.json"), JSON.stringify(manifest, null, 2));
-console.log(`  CSP: ${manifest.content_security_policy}`);
-console.log(`[build:ext] Done → ${EXT_OUT}`);
+  // 5. Write extension manifest
+  writeFileSync(join(outDir, "manifest.json"), JSON.stringify(target.manifest, null, 2));
+  console.log(`  Done → ${outDir}`);
+};
+
+rmSync(EXT_OUT, { recursive: true, force: true });
+for (const target of targets) await assemble(target);

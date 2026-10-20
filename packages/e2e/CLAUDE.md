@@ -38,7 +38,7 @@ Import `test` and `expect` from here instead of `@playwright/test` to get the cu
 
 ## Non-obvious decisions
 
-- **`mockApi` answers `/api/events` with 204** — EventSource stops reconnecting on a 204, so the mocked page doesn't loop on the SSE stream. It also marks the swipe hint as seen by default, because the one-time peek slides the first row on touch.
+- **`mockApi` answers `/api/events` with 204** — EventSource stops reconnecting on a 204, so the mocked page doesn't loop on the SSE stream; `sse.ts`'s backoff still retries it, at most once a minute after the first few attempts. It also marks the swipe hint as seen by default, because the one-time peek slides the first row on touch.
 - **`user2Page` uses a separate `browser.newContext()`** so localStorage is not shared with `user1Page`. This is required for cross-user isolation; plain `page` instances share the same context and therefore the same origin storage.
 - **`waitForSync` polls, not `networkidle`** — the app holds a persistent SSE connection which keeps `networkidle` from ever resolving.
 - **`createCategory` has two variants** — desktop uses `placeholder="Name..."`, mobile sheet uses `placeholder="Category name..."`. Pass `"sidebar"` or `"sheet"` accordingly.
