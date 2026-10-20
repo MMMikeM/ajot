@@ -74,7 +74,7 @@ test.describe("task detail — visual language", () => {
     expect(cls).toContain("size-0");
 
     // The visible trigger is a button with aria-label
-    await expect(d.getByRole("button", { name: "Set due date" })).toBeVisible();
+    await expect(d.getByRole("button", { name: "Due date: Set date…" })).toBeVisible();
     // "Set date…" placeholder visible when no date set
     await expect(d.getByText("Set date…")).toBeVisible();
   });
