@@ -10,6 +10,7 @@ import {
 } from "~/lib/sync/push";
 import { logout } from "~/lib/actions";
 import { getBuildTarget } from "~/lib/build-target";
+import { ext } from "~/lib/ext";
 import { TOKEN_KEY, MSG_TOKEN_CHANGED } from "~/lib/constants";
 import { useSyncState, usePendingMutations } from "~/lib/sync/sse";
 import { useInstallPrompt } from "~/lib/hooks/use-install-prompt";
@@ -22,9 +23,9 @@ const clearAuth = () => {
   setAuthToken(null);
   clearCurrentUser();
   if (getBuildTarget() === "extension") {
-    browser.storage.local
+    ext.storage.local
       .remove(TOKEN_KEY)
-      .then(() => browser.runtime.sendMessage({ type: MSG_TOKEN_CHANGED }).catch(() => {}))
+      .then(() => ext.runtime.sendMessage({ type: MSG_TOKEN_CHANGED }).catch(() => {}))
       .catch(console.error);
   }
   // Handles its own errors

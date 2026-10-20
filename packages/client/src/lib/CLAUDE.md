@@ -17,4 +17,4 @@ Any module that accesses `localStorage`, `window`, or browser-only APIs (`OPFS`,
 
 ## Non-obvious decisions
 
-- **`sse.ts` vs `push.ts`** — SSE is for browser tabs (always-connected). Push is for when no tabs are open (service worker receives push event). Extension context uses neither — it uses runtime messages from the background page.
+- **`sse.ts` vs `push.ts`** — SSE is for browser tabs (always-connected). Push is for when no tabs are open (service worker receives push event). In the Firefox extension, tabs use neither: they get runtime messages from the background page, which holds SSE. Chrome extension tabs open their own SSE, and the background service worker receives push.

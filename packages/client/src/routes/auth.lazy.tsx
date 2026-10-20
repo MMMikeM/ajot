@@ -9,6 +9,7 @@ import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/field";
 import { Input } from "~/components/ui/field";
 import { getBuildTarget } from "~/lib/build-target";
+import { ext } from "~/lib/ext";
 import { TOKEN_KEY, MSG_TOKEN_CHANGED } from "~/lib/constants";
 
 const loginSchema = z.object({
@@ -25,9 +26,9 @@ const signupSchema = z.object({
 const persistToken = (token: string) => {
   setAuthToken(token);
   if (getBuildTarget() === "extension") {
-    browser.storage.local
+    ext.storage.local
       .set({ [TOKEN_KEY]: token })
-      .then(() => browser.runtime.sendMessage({ type: MSG_TOKEN_CHANGED }).catch(() => {}))
+      .then(() => ext.runtime.sendMessage({ type: MSG_TOKEN_CHANGED }).catch(() => {}))
       .catch(console.error);
   }
 };

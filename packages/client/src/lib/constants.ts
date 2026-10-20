@@ -7,6 +7,6 @@ export {
   MSG_TOKEN_CHANGED,
   MSG_GET_STATUS,
   MSG_BG_STATUS,
-  MODEL_NAMES,
+  MSG_SYNC_ALL,
 } from "@newtab-todo/shared";
 export type { ModelName, MutationEvent } from "@newtab-todo/shared";
