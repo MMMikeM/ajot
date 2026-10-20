@@ -28,8 +28,6 @@ const clearAuth = () => {
       .then(() => ext.runtime.sendMessage({ type: MSG_TOKEN_CHANGED }).catch(() => {}))
       .catch(console.error);
   }
-  // Handles its own errors
-  void unregisterPushSubscription();
 };
 
 const SYNC_LABELS = { connecting: "Syncing…", disconnected: "Offline", connected: "Sync" } as const;
@@ -60,6 +58,8 @@ export const SyncSettings = () => {
   };
 
   const handleLogout = async () => {
+    // The server only drops the subscription while the session is still valid.
+    await unregisterPushSubscription();
     await logout();
     clearAuth();
     setPushEnabled(false);
