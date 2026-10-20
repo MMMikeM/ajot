@@ -7,14 +7,6 @@ const Drawer = ({ ...props }: ComponentProps<typeof DrawerPrimitive.Root>) => {
   return <DrawerPrimitive.Root data-slot="drawer" {...props} />;
 };
 
-const DrawerTrigger = ({ ...props }: ComponentProps<typeof DrawerPrimitive.Trigger>) => {
-  return <DrawerPrimitive.Trigger data-slot="drawer-trigger" {...props} />;
-};
-
-const DrawerClose = ({ ...props }: ComponentProps<typeof DrawerPrimitive.Close>) => {
-  return <DrawerPrimitive.Close data-slot="drawer-close" {...props} />;
-};
-
 const DrawerContent = ({
   className,
   children,
@@ -61,16 +53,6 @@ const DrawerHeader = ({ className, ...props }: ComponentProps<"div">) => {
   );
 };
 
-const DrawerFooter = ({ className, ...props }: ComponentProps<"div">) => {
-  return (
-    <div
-      data-slot="drawer-footer"
-      className={cn("mt-auto flex flex-col gap-2 p-4", className)}
-      {...props}
-    />
-  );
-};
-
 const DrawerTitle = ({ className, ...props }: ComponentProps<typeof DrawerPrimitive.Title>) => {
   return (
     <DrawerPrimitive.Title
@@ -94,13 +76,4 @@ const DrawerDescription = ({
   );
 };
 
-export {
-  Drawer,
-  DrawerTrigger,
-  DrawerClose,
-  DrawerContent,
-  DrawerHeader,
-  DrawerFooter,
-  DrawerTitle,
-  DrawerDescription,
-};
+export { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription };

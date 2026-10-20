@@ -159,28 +159,4 @@ const SelectItem = ({
 // Group + GroupLabel — for organising options into labelled sections
 // ---------------------------------------------------------------------------
 
-const SelectGroup = ({ ...props }: ComponentProps<typeof SelectPrimitive.Group>) => (
-  <SelectPrimitive.Group data-slot="select-group" {...props} />
-);
-
-const SelectGroupLabel = ({
-  className,
-  ...props
-}: ComponentProps<typeof SelectPrimitive.GroupLabel>) => (
-  <SelectPrimitive.GroupLabel
-    data-slot="select-group-label"
-    className={cn("px-3 py-1 text-xs text-ghost", className)}
-    {...props}
-  />
-);
-
-export {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectGroupLabel,
-  SelectItem,
-  SelectTrigger,
-  selectTriggerVariants,
-  SelectValue,
-};
+export { Select, SelectContent, SelectItem, SelectTrigger, selectTriggerVariants, SelectValue };

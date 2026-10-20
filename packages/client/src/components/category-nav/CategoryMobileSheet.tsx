@@ -32,7 +32,7 @@ const OpenCount = ({ count }: { count: number }) =>
     </span>
   ) : null;
 
-export function CategoryMobileSheet() {
+function CategoryMobileSheet() {
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const addRef = useRef<HTMLInputElement>(null);

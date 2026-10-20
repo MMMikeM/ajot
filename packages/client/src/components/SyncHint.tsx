@@ -41,5 +41,3 @@ export function SyncHint() {
     </div>
   );
 }
-
-export default SyncHint;
