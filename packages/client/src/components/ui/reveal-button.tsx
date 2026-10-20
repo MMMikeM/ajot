@@ -38,7 +38,7 @@ export const RevealButton = ({ intent, className, variant, size, ...props }: Rev
 export const RevealGroup = ({ className, ...props }: ComponentProps<"div">) => (
   <div
     className={cn(
-      "pointer-events-none absolute inset-y-0 right-0 flex items-center rounded-r-[inherit] bg-muted pr-1 pl-6 opacity-0 transition-opacity [mask-image:linear-gradient(to_right,transparent,black_1.5rem)] group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-has-[:focus-visible]/row:pointer-events-auto group-has-[:focus-visible]/row:opacity-100 touch:pointer-events-auto touch:static touch:bg-transparent touch:p-0 touch:opacity-100 touch:[mask-image:none]",
+      "pointer-events-none absolute inset-y-0 right-0 flex items-center rounded-r-[inherit] bg-muted [mask-image:linear-gradient(to_right,transparent,black_1.5rem)] pr-1 pl-6 opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-has-[:focus-visible]/row:pointer-events-auto group-has-[:focus-visible]/row:opacity-100 touch:pointer-events-auto touch:static touch:bg-transparent touch:[mask-image:none] touch:p-0 touch:opacity-100",
       className,
     )}
     {...props}

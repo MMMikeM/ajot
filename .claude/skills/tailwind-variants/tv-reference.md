@@ -102,8 +102,8 @@ Variants apply per-slot styles:
 ```typescript
 const alert = tv({
   slots: {
-    root: "rounded py-3 px-5",
-    title: "font-bold mb-1",
+    root: "rounded px-5 py-3",
+    title: "mb-1 font-bold",
     message: "text-sm",
   },
   variants: {
@@ -175,7 +175,7 @@ const button = tv({
 
 ```typescript
 const baseButton = tv({
-  base: "font-semibold rounded-full px-4 py-2",
+  base: "rounded-full px-4 py-2 font-semibold",
   variants: {
     color: {
       primary: "bg-blue-500 text-white",
@@ -186,7 +186,7 @@ const baseButton = tv({
 
 const buyButton = tv({
   extend: baseButton,
-  base: "uppercase tracking-wider shadow-lg",
+  base: "tracking-wider uppercase shadow-lg",
   // Inherits color variants from baseButton
   // Can add new variants or override existing ones
   variants: {

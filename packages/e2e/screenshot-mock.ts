@@ -25,7 +25,10 @@ const openCategoryNav = async (page: Page) => {
     await page.getByTestId("category-nav-trigger").click();
     return;
   }
-  const pill = page.getByTestId("category-sidebar").locator(".group\\/pill").filter({ hasText: "Work" });
+  const pill = page
+    .getByTestId("category-sidebar")
+    .locator(".group\\/pill")
+    .filter({ hasText: "Work" });
   await pill.hover();
   await pill.getByRole("button", { name: "Category options" }).click();
 };

@@ -49,7 +49,7 @@ export const Toasts = () => {
         <Toast.Content className="py-2.5 pr-2.5 pl-4">
           <div className="flex items-center gap-2 text-sm">
             {/* select-text: the invite fallback toast holds a link to copy */}
-            <Toast.Title className="min-w-0 flex-1 text-hint select-text [overflow-wrap:anywhere]" />
+            <Toast.Title className="min-w-0 flex-1 [overflow-wrap:anywhere] text-hint select-text" />
             {toast.data?.onUndo && (
               <Toast.Action
                 render={<Button variant="link" className="h-8 px-2 touch:h-9" />}
