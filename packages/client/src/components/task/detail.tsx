@@ -118,6 +118,7 @@ const TaskDetailContent = ({
   const [description, setDescription] = useState(task.description ?? "");
   const isDone = task.status === "done";
   const dateRef = useRef<HTMLInputElement>(null);
+  const dueLabel = task.dueDate ? formatDueDateTime(task.dueDate) : "Set date…";
 
   // Sync local state when task changes externally (but not mid-edit)
   if (title !== task.title && document.activeElement?.getAttribute("data-slot") !== TITLE_SLOT) {
@@ -211,9 +212,9 @@ const TaskDetailContent = ({
                 task.dueDate ? "text-date" : "text-hint hover:text-foreground",
               ),
             })}
-            aria-label="Set due date"
+            aria-label={`Due date: ${dueLabel}`}
           >
-            {task.dueDate ? formatDueDateTime(task.dueDate) : "Set date…"}
+            {dueLabel}
           </button>
           {task.dueDate && (
             <Button

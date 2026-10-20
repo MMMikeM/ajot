@@ -81,6 +81,9 @@ export const SyncSettings = () => {
     );
   }
 
+  const syncLabel =
+    hasPending && syncState !== "disconnected" ? "Syncing…" : SYNC_LABELS[syncState];
+
   return (
     <Popover open={open} onOpenChange={setOpen} modal>
       <PopoverTrigger
@@ -95,7 +98,7 @@ export const SyncSettings = () => {
                 ? "text-foreground"
                 : "text-hint hover:text-muted-foreground",
             )}
-            aria-label="Sync settings"
+            aria-label={`Sync settings: ${syncLabel}`}
           />
         }
       >
@@ -109,9 +112,7 @@ export const SyncSettings = () => {
                 : "bg-primary",
           )}
         />
-        <span className={cn(syncState === "disconnected" && "font-medium")}>
-          {hasPending && syncState !== "disconnected" ? "Syncing…" : SYNC_LABELS[syncState]}
-        </span>
+        <span className={cn(syncState === "disconnected" && "font-medium")}>{syncLabel}</span>
       </PopoverTrigger>
 
       {currentUser && (
