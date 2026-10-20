@@ -21,11 +21,11 @@
     "reset-password": "pnpm --filter @newtab-todo/server exec tsx --env-file=../../.env src/reset-password.ts"
   },
   "dependencies": {
-    "temporal-polyfill": "^1.0.5"
+    "temporal-polyfill": "^1.0.6"
   },
   "devDependencies": {
-    "@types/node": "^26.6.2",
-    "knip": "^6.38.0",
+    "@types/node": "^26.6.5",
+    "knip": "^6.42.0",
     "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@12.6.0+sha512.3ef68f951cb111ac204b4a5a16f0b2ddf0da56a96e0413e81d855d9f0b55ef926714709028e1cd00c405c2c5fb7b9e8ec4dc46777c805d0373c2f2ff00fd20ec"
