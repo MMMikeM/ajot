@@ -68,7 +68,7 @@ const autoGrow = (el: HTMLTextAreaElement | null) => {
   el.style.height = `${el.scrollHeight}px`;
 };
 
-export function TaskDetail({
+function TaskDetail({
   taskId,
   open,
   onClose,

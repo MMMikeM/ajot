@@ -9,4 +9,4 @@ export {
   MSG_BG_STATUS,
   MSG_SYNC_ALL,
 } from "@newtab-todo/shared";
-export type { ModelName, MutationEvent } from "@newtab-todo/shared";
+export type { MutationEvent } from "@newtab-todo/shared";

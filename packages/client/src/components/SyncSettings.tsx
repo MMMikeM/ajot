@@ -163,5 +163,3 @@ export const SyncSettings = () => {
     </Popover>
   );
 };
-
-export default SyncSettings;
