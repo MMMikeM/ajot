@@ -42,7 +42,8 @@ const guardRead = <T extends object>(statement: T): T =>
       const value = Reflect.get(target, property, receiver);
       if (typeof value !== "function") return value;
       const method = value as Method;
-      if (property === "raw") return (...args: unknown[]) => guardRead(method.apply(target, args) as object);
+      if (property === "raw")
+        return (...args: unknown[]) => guardRead(method.apply(target, args) as object);
       if (property === "all" || property === "get" || property === "values")
         return (...args: unknown[]) => retryOnce(async () => method.apply(target, args));
       return method.bind(target);
@@ -60,7 +61,9 @@ export const withReadRetry = <T extends object>(client: T): T =>
         return async (sql: unknown, ...rest: unknown[]) => {
           if (!isRead(sql)) return method.call(target, sql, ...rest);
           // prepare is itself a round trip (a describe), so it can hit the dead socket too
-          return guardRead((await retryOnce(async () => method.call(target, sql, ...rest))) as object);
+          return guardRead(
+            (await retryOnce(async () => method.call(target, sql, ...rest))) as object,
+          );
         };
       if (property === "all" || property === "get")
         return (sql: unknown, ...params: unknown[]) =>

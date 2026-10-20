@@ -33,7 +33,9 @@ const promptHidden = (question: string) =>
 const [userId] = process.argv.slice(2);
 
 if (!userId) {
-  console.error("Usage: pnpm reset-password <user-id>  (on Fly: node dist/reset-password.js <user-id>)");
+  console.error(
+    "Usage: pnpm reset-password <user-id>  (on Fly: node dist/reset-password.js <user-id>)",
+  );
   process.exit(1);
 }
 if (!process.stdin.isTTY) {

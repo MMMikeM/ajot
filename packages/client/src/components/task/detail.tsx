@@ -88,7 +88,7 @@ export function TaskDetail({
   return (
     <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
       {/* Sits over AppShell's column */}
-      <DrawerContent className="max-h-[88dvh] max-w-(--column-w) border-x desk:translate-x-(--column-shift) touch:max-w-none touch:border-x-0">
+      <DrawerContent className="max-h-[88dvh] max-w-(--column-w) border-x touch:max-w-none touch:border-x-0 desk:translate-x-(--column-shift)">
         <DrawerHeader className="sr-only">
           <DrawerTitle>{task.title}</DrawerTitle>
           <DrawerDescription>Task details</DrawerDescription>

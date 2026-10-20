@@ -282,7 +282,11 @@ export function TaskItem({
                   onClick={openPicker}
                   className={cn(
                     "relative cursor-pointer text-xs whitespace-nowrap after:absolute after:-inset-x-1.5 after:-inset-y-2.5 hover:underline",
-                    isDone ? "text-muted-foreground" : due.overdue ? "text-destructive" : "text-date",
+                    isDone
+                      ? "text-muted-foreground"
+                      : due.overdue
+                        ? "text-destructive"
+                        : "text-date",
                   )}
                 >
                   {due.label}

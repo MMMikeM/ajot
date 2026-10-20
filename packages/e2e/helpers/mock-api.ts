@@ -87,7 +87,13 @@ const mockData = () => {
     task("Sourdough", { categoryId: "c-groc" }),
   ];
 
-  const category = (id: string, name: string, color: string, owner: MockUser, sortOrder: string) => ({
+  const category = (
+    id: string,
+    name: string,
+    color: string,
+    owner: MockUser,
+    sortOrder: string,
+  ) => ({
     id,
     userId: owner.id,
     name,
@@ -100,7 +106,13 @@ const mockData = () => {
   });
   const groceries = category("c-groc", "Groceries", "oklch(0.68 0.16 58)", MOCK_SARAH, "a2");
   groceries.collaborators = [
-    { id: "cc1", categoryId: "c-groc", userId: MOCK_ME.id, addedAt: TIMESTAMP, user: { ...MOCK_ME, avatarUrl: null } },
+    {
+      id: "cc1",
+      categoryId: "c-groc",
+      userId: MOCK_ME.id,
+      addedAt: TIMESTAMP,
+      user: { ...MOCK_ME, avatarUrl: null },
+    },
   ];
   const categories = [
     category("c-work", "Work", "oklch(0.55 0.07 228)", MOCK_ME, "a0"),
@@ -162,7 +174,8 @@ export const mockApi = async (
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
-    if (path.startsWith("/api/events")) return route.fulfill({ status: 204, headers: cors, body: "" });
+    if (path.startsWith("/api/events"))
+      return route.fulfill({ status: 204, headers: cors, body: "" });
 
     let body: unknown = {};
     if (request.method() === "GET") body = collections[path] ?? {};
