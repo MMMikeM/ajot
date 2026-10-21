@@ -79,27 +79,29 @@ Write directly to the synced data store, bypassing optimistic mutations and quer
 ### API
 
 ```ts
-collection.utils.writeInsert(data); // Insert directly to sync store
-collection.utils.writeUpdate(data); // Update in sync store
-collection.utils.writeDelete(key); // Delete from sync store
-collection.utils.writeUpsert(data); // Insert or update
-collection.utils.writeBatch(() => {
+await collection.utils.writeInsert(data); // Insert directly to sync store
+await collection.utils.writeUpdate(data); // Update in sync store
+await collection.utils.writeDelete(key); // Delete from sync store
+await collection.utils.writeUpsert(data); // Insert or update
+await collection.utils.writeBatch(() => {
   // Atomic batch
   collection.utils.writeInsert(item1);
   collection.utils.writeInsert(item2);
   collection.utils.writeDelete(id3);
 });
-collection.utils.refetch(opts?); // Manual refetch (bypasses enabled: false)
+await collection.utils.refetch(opts?); // Manual refetch (bypasses enabled: false)
 ```
 
 Direct writes do NOT create optimistic mutations, do NOT trigger refetches, and update the TanStack Query cache immediately.
+
+**Direct writes return promises — always await or catch them.** Errors (e.g. `writeUpdate` of a missing key, or a write before the collection is ready) reject the promise; they are not thrown synchronously. Inside a mutation function, await the write before returning: the optimistic state drops when the function settles, so an un-awaited write briefly shows the old synced row.
 
 ### Syncing Server-Computed Fields
 
 ```ts
 onInsert: async ({ transaction }) => {
   const serverItems = await api.createTodos(transaction.mutations.map((m) => m.modified));
-  todosCollection.utils.writeBatch(() => {
+  await todosCollection.utils.writeBatch(() => {
     serverItems.forEach((item) => todosCollection.utils.writeInsert(item));
   });
   return { refetch: false };

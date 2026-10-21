@@ -126,14 +126,16 @@ tx.mutate(() => tasksCollection.delete(id));
 
 ### SSE Sync Writes
 
-Server pushes mutations via SSE. Applied with collection utilities:
+Server pushes mutations via SSE. Applied with collection utilities, which all return promises:
 
 ```ts
-collection.utils.writeUpsert(data); // Insert or update from server
-collection.utils.writeUpdate(data); // Update from server
-collection.utils.writeDelete(key); // Remove
-collection.utils.refetch(); // Re-fetch from queryFn
+await collection.utils.writeUpsert(data); // Insert or update from server
+await collection.utils.writeUpdate(data); // Update from server (rejects if the key is missing)
+await collection.utils.writeDelete(key); // Remove
+await collection.utils.refetch(); // Re-fetch from queryFn
 ```
+
+Always await or `.catch` these. In the offline mutation functions (`lib/db/offline.ts`), await the write before returning, or the row briefly shows its old value.
 
 ### Sync State
 
