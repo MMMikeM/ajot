@@ -66,7 +66,7 @@ export const leaveCategory = async (categoryId: string, userId: string) => {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? "Failed to leave category");
   }
-  categoriesCollection.utils.writeDelete(categoryId as never);
+  await categoriesCollection.utils.writeDelete(categoryId as never);
 };
 
 /** Shares a task with another user by username. */

@@ -66,12 +66,32 @@ const collectionMap = {
 } as const;
 
 const refetchAll = () => {
-  tasksCollection.utils.refetch();
-  categoriesCollection.utils.refetch();
-  notesCollection.utils.refetch();
+  tasksCollection.utils.refetch().catch(console.error);
+  categoriesCollection.utils.refetch().catch(console.error);
+  notesCollection.utils.refetch().catch(console.error);
 };
 
-const applyMutation = (event: MutationEvent) => {
+const writeMutation = (
+  collection: (typeof collectionMap)[keyof typeof collectionMap],
+  event: MutationEvent,
+) => {
+  switch (event.action) {
+    case "insert":
+      console.log(`[sse] writeUpsert → ${event.model}`);
+      return collection.utils.writeUpsert(event.data as never);
+    case "update":
+      console.log(`[sse] writeUpdate → ${event.model}`);
+      return collection.utils.writeUpdate(event.data as never);
+    case "delete":
+      console.log(`[sse] writeDelete → ${event.model}`);
+      return collection.utils.writeDelete((event.data as { id: string }).id);
+    default:
+      console.log(`[sse] unknown action ${String(event.action)}, refetching all`);
+      refetchAll();
+  }
+};
+
+const applyMutation = async (event: MutationEvent) => {
   console.log(`[sse] received ${event.model}.${event.action}`, event.data);
   const collection = collectionMap[event.model];
   if (!collection) {
@@ -79,23 +99,12 @@ const applyMutation = (event: MutationEvent) => {
     refetchAll();
     return;
   }
-
-  switch (event.action) {
-    case "insert":
-      console.log(`[sse] writeUpsert → ${event.model}`);
-      collection.utils.writeUpsert(event.data as never);
-      break;
-    case "update":
-      console.log(`[sse] writeUpdate → ${event.model}`);
-      collection.utils.writeUpdate(event.data as never);
-      break;
-    case "delete":
-      console.log(`[sse] writeDelete → ${event.model}`);
-      collection.utils.writeDelete((event.data as { id: string }).id);
-      break;
-    default:
-      console.log(`[sse] unknown action ${String(event.action)}, refetching all`);
-      refetchAll();
+  try {
+    await writeMutation(collection, event);
+  } catch (err) {
+    // e.g. an update for a row this device never received
+    console.error("[sse] write rejected, refetching all", err);
+    refetchAll();
   }
 };
 
@@ -106,7 +115,7 @@ const handleSSEData = (data: string) => {
   }
   try {
     const event = JSON.parse(data) as MutationEvent;
-    applyMutation(event);
+    void applyMutation(event);
   } catch {
     refetchAll();
   }
@@ -161,7 +170,7 @@ const listenExtensionMessages = () => {
     if (msg?.type === "SSE_MUTATION" && msg.payload) {
       // Any message from the background page means the SSE connection is alive.
       syncStateStore.set("connected");
-      applyMutation(msg.payload);
+      void applyMutation(msg.payload);
     } else if (msg?.type === MSG_SYNC_ALL) {
       if (backgroundHoldsSse()) syncStateStore.set("connected");
       // A tab with its own open SSE stream already applied the change this push announces.

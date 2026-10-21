@@ -61,19 +61,19 @@ const createSyncFn =
         const res = await assertOk(await endpoint.$post({ json: payload }));
         const created = await res.json();
         console.log(`[sync:${name}] POST ← 200, writing to synced store`);
-        collection.utils.writeUpsert(created as never);
+        await collection.utils.writeUpsert(created as never);
       } else if (m.type === "update") {
         const payload = { ...m.changes, id: m.key };
         console.log(`[sync:${name}] PUT →`, payload);
         const res = await assertOk(await endpoint.$put({ json: payload }));
         const updated = await res.json();
         console.log(`[sync:${name}] PUT ← 200, writing to synced store`);
-        collection.utils.writeUpdate(updated as never);
+        await collection.utils.writeUpdate(updated as never);
       } else if (m.type === "delete") {
         console.log(`[sync:${name}] DELETE → id=${m.key}`);
         await assertOk(await endpoint.$delete({ json: { id: m.key } }));
         console.log(`[sync:${name}] DELETE ← 200, removing from synced store`);
-        collection.utils.writeDelete(m.key as never);
+        await collection.utils.writeDelete(m.key as never);
       }
 
       console.log(
