@@ -10,3 +10,5 @@ export {
   MSG_SYNC_ALL,
 } from "@newtab-todo/shared";
 export type { MutationEvent } from "@newtab-todo/shared";
+
+export const CATEGORY_DROP_PREFIX = "category-drop-";
