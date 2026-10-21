@@ -37,7 +37,6 @@ async function makeCollections() {
   return {
     contactsCollection: createCollection(
       persistedCollectionOptions<Contact, string>({
-        // @ts-ignore
         persistence,
         schemaVersion: 1,
         ...queryCollectionOptions({
@@ -57,7 +56,6 @@ async function makeCollections() {
     ),
     categoriesCollection: createCollection(
       persistedCollectionOptions<Category, string>({
-        // @ts-ignore
         persistence,
         schemaVersion: 1,
         ...queryCollectionOptions({
@@ -79,7 +77,6 @@ async function makeCollections() {
     ),
     tasksCollection: createCollection(
       persistedCollectionOptions<Task, string>({
-        // @ts-ignore
         persistence,
         schemaVersion: 1,
         ...queryCollectionOptions({
@@ -99,7 +96,6 @@ async function makeCollections() {
     ),
     notesCollection: createCollection(
       persistedCollectionOptions<Note, string>({
-        // @ts-ignore
         persistence,
         schemaVersion: 1,
         ...queryCollectionOptions({
