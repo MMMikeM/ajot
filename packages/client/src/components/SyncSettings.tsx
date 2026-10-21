@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { useRouter, useRouterState } from "@tanstack/react-router";
-import { useAuthToken, setAuthToken } from "~/lib/auth/token";
-import { useCurrentUser, clearCurrentUser } from "~/lib/auth/current-user";
+import { Toast } from "@base-ui/react/toast";
+import { useAuthToken } from "~/lib/auth/token";
+import { useCurrentUser } from "~/lib/auth/current-user";
+import { clearSession, onSessionExpired } from "~/lib/auth/session";
 import {
   registerPushSubscription,
   unregisterPushSubscription,
@@ -10,25 +12,12 @@ import {
 } from "~/lib/sync/push";
 import { logout } from "~/lib/actions";
 import { getBuildTarget } from "~/lib/build-target";
-import { ext } from "~/lib/ext";
-import { TOKEN_KEY, MSG_TOKEN_CHANGED } from "~/lib/constants";
 import { useSyncState, usePendingMutations } from "~/lib/sync/sse";
 import { useInstallPrompt } from "~/lib/hooks/use-install-prompt";
 import { Button } from "~/components/ui/button";
 import { MenuItem } from "~/components/ui/menu-item";
 import { Popover, PopoverTrigger, PopoverContent } from "~/components/ui/popover";
 import { cn } from "~/lib/utils";
-
-const clearAuth = () => {
-  setAuthToken(null);
-  clearCurrentUser();
-  if (getBuildTarget() === "extension") {
-    ext.storage.local
-      .remove(TOKEN_KEY)
-      .then(() => ext.runtime.sendMessage({ type: MSG_TOKEN_CHANGED }).catch(() => {}))
-      .catch(console.error);
-  }
-};
 
 const SYNC_LABELS = { connecting: "Syncing…", disconnected: "Offline", connected: "Sync" } as const;
 
@@ -41,10 +30,24 @@ export const SyncSettings = () => {
   const [open, setOpen] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const { canInstall, install } = useInstallPrompt();
+  const toastManager = Toast.useToastManager();
 
   useEffect(() => {
     isPushSubscribed().then(setPushEnabled).catch(console.error);
   }, []);
+
+  useEffect(
+    () =>
+      onSessionExpired(() => {
+        setOpen(false);
+        toastManager.add({
+          title: "Your session expired. Sign in again to sync your changes.",
+          timeout: 8000,
+          data: {},
+        });
+      }),
+    [],
+  );
 
   const handleTogglePush = async () => {
     const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string;
@@ -61,7 +64,7 @@ export const SyncSettings = () => {
     // The server only drops the subscription while the session is still valid.
     await unregisterPushSubscription();
     await logout();
-    clearAuth();
+    clearSession();
     setPushEnabled(false);
     setOpen(false);
   };

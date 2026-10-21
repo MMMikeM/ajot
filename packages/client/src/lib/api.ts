@@ -1,6 +1,7 @@
 import type { AppType } from "@newtab-todo/server/app";
 import { hc } from "hono/client";
 import { getAuthToken } from "~/lib/auth/token";
+import { expireSession } from "~/lib/auth/session";
 import { clientId } from "~/lib/client-id";
 
 // In dev, API is on the same origin (Hono dev server plugin).
@@ -17,10 +18,14 @@ export const apiHeaders = (): Record<string, string> => {
   return { ...(token && { Authorization: `Bearer ${token}` }), "X-Client-Id": clientId };
 };
 
-const browserFetch = (input: RequestInfo | URL, init?: RequestInit) => {
+const browserFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  const token = getAuthToken();
   const headers = new Headers(init?.headers);
   for (const [name, value] of Object.entries(apiHeaders())) headers.set(name, value);
-  return fetch(input, { ...init, headers });
+  const res = await fetch(input, { ...init, headers });
+  // Skip if the user signed in again while this request was in flight
+  if (res.status === 401 && token && token === getAuthToken()) expireSession();
+  return res;
 };
 
 export const client = hc<AppType>(serverUrl, {
