@@ -3,6 +3,8 @@ packages:
 
 allowBuilds:
   "@journeyapps/wa-sqlite": true
+  # Only checks for its prebuilt binary; dependency-cruiser parses TS through it
+  "@swc/core": false
   esbuild: true
   msw: true
 catalog:

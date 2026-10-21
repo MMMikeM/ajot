@@ -13,7 +13,8 @@
     "fmt": "vp fmt",
     "fmt:check": "vp fmt --check",
     "typecheck": "vp check --no-fmt --no-lint",
-    "check": "vp check && knip",
+    "check": "vp check && knip && pnpm deps:check",
+    "deps:check": "depcruise packages/client/src packages/server/src packages/shared/src --config .dependency-cruiser.cjs",
     "screenshot": "pnpm --dir packages/e2e run screenshot",
     "cls": "pnpm --dir packages/e2e install --ignore-workspace && pnpm --dir packages/e2e run cls",
     "test:e2e": "pnpm --filter @newtab-todo/e2e test",
@@ -24,7 +25,9 @@
     "temporal-polyfill": "^1.0.6"
   },
   "devDependencies": {
+    "@swc/core": "^1.16.18",
     "@types/node": "^26.6.5",
+    "dependency-cruiser": "^18.7.0",
     "knip": "^6.42.0",
     "vite-plus": "catalog:"
   },
