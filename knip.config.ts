@@ -4,6 +4,7 @@ export default {
   ignore: [
     "packages/e2e/**",
     "packages/client/src/lib/gradients.ts",
+    "packages/server/src/db/columns.ts",
   ],
   workspaces: {
     "packages/client": {
