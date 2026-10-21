@@ -16,9 +16,10 @@ import { getBuildTarget } from "../build-target";
 // Lazy route components that consume these collections suspend in SSR before rendering,
 // so null exports are safe. See packages/client/src/routes/CLAUDE.md.
 
-// Signed out, each queryFn returns [] rather than throwing: a query error during the first
-// load puts the collection in an error state that rejects local inserts. Signed-out edits
-// live as pending outbox transactions (lib/db/offline.ts) until the user signs in.
+// Signed out, or on a 401 (which signs out), each queryFn returns [] rather than throwing: a
+// query error during the first load puts the collection in an error state that rejects local
+// inserts. Signed-out edits live as pending outbox transactions (lib/db/offline.ts) until the
+// user signs in.
 async function makeCollections() {
   if (getBuildTarget() === "server")
     return {
@@ -45,6 +46,7 @@ async function makeCollections() {
           queryFn: async () => {
             if (!getAuthToken()) return [];
             const res = await client.api.contacts.$get();
+            if (res.status === 401) return [];
             if (!res.ok) throw new Error("Failed to fetch contacts");
             return res.json();
           },
@@ -64,6 +66,7 @@ async function makeCollections() {
           queryFn: async () => {
             if (!getAuthToken()) return [];
             const res = await client.api.categories.$get();
+            if (res.status === 401) return [];
             if (!res.ok) throw new Error("Failed to fetch categories");
             // Response schema marks user/collaborators nullish (shared with mutation routes),
             // but the list endpoint always includes them.
@@ -85,6 +88,7 @@ async function makeCollections() {
           queryFn: async () => {
             if (!getAuthToken()) return [];
             const res = await client.api.tasks.$get();
+            if (res.status === 401) return [];
             if (!res.ok) throw new Error("Failed to fetch tasks");
             return res.json();
           },
@@ -104,6 +108,7 @@ async function makeCollections() {
           queryFn: async () => {
             if (!getAuthToken()) return [];
             const res = await client.api.notes.$get();
+            if (res.status === 401) return [];
             if (!res.ok) throw new Error("Failed to fetch notes");
             return res.json();
           },

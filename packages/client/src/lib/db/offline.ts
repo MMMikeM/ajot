@@ -19,8 +19,12 @@ interface ResourceEndpoint {
   $delete: (opts: { json: AnyJson }) => Promise<Response>;
 }
 
+class SessionExpiredError extends Error {}
+
 const assertOk = async (res: Response): Promise<Response> => {
   if (res.ok) return res;
+  // Keep the edit queued: it replays once the user signs in again.
+  if (res.status === 401) throw new SessionExpiredError(await res.text());
   if (res.status >= 400 && res.status < 500) throw new NonRetriableError(await res.text());
   throw new Error(`Server error ${res.status}`);
 };
@@ -92,6 +96,8 @@ export const offline = startOfflineExecutor({
     ]),
     syncNotes: createSyncFn("notes", client.api.notes, notesCollection),
   },
+  // The default policy drops any error whose message contains "401" or "403", so decide by type.
+  shouldRetry: (error) => (error instanceof SessionExpiredError ? true : undefined),
 });
 
 // Kick off storage probe + leader election + outbox replay as early as possible.
@@ -100,6 +106,8 @@ offline.waitForInit().catch(console.error);
 // When the user logs in, fetch server data so the collections catch up.
 subscribeAuthToken(() => {
   if (getAuthToken()) {
+    // Replays queued edits now instead of after their retry backoff, ahead of the refetches.
+    offline.getOnlineDetector().notifyOnline();
     tasksCollection.utils.refetch().catch(console.error);
     categoriesCollection.utils.refetch().catch(console.error);
     notesCollection.utils.refetch().catch(console.error);
