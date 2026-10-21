@@ -8,7 +8,7 @@
   "tsx": true,
   "tailwind": {
     "config": "",
-    "css": "src/styles/app.css",
+    "css": "src/app.css",
     "baseColor": "taupe",
     "cssVariables": true,
     "prefix": ""

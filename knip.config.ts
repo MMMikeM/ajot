@@ -4,6 +4,7 @@ export default {
   ignore: [
     "packages/e2e/**",
     "packages/client/src/lib/gradients.ts",
+    "packages/server/src/db/columns.ts",
     // Vendored Impeccable skill (managed by `npx impeccable update`)
     ".claude/skills/impeccable/**",
   ],
