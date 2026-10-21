@@ -3,8 +3,6 @@ import { useIsDesk } from "~/lib/hooks/use-is-desk";
 import { useNavContext } from "~/lib/state/nav-context";
 import { CategorySidebar } from "./CategorySidebar";
 
-export { CATEGORY_DROP_PREFIX } from "./CategorySidebar";
-
 // Dynamic import — CategoryMobileSheet is only needed where the sidebar doesn't fit
 const CategoryMobileSheet = lazy(() => import("./CategoryMobileSheet"));
 

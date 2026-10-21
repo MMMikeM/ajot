@@ -3,7 +3,7 @@ import { DragDropProvider } from "@dnd-kit/react";
 import { isSortableOperation } from "@dnd-kit/react/sortable";
 import { generateKeyBetween } from "fractional-indexing";
 import { updateTask, updateCategory } from "~/lib/db/hooks";
-import { CATEGORY_DROP_PREFIX } from "~/components/category-nav";
+import { CATEGORY_DROP_PREFIX } from "~/lib/constants";
 import type { Task, Category } from "~/lib/types";
 
 type DragEndEvent = Parameters<

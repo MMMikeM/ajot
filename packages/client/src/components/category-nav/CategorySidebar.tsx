@@ -3,7 +3,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { useDroppable } from "@dnd-kit/react";
 import { Ellipsis, Plus } from "lucide-react";
-import { INBOX_COLOR } from "~/lib/constants";
+import { INBOX_COLOR, CATEGORY_DROP_PREFIX } from "~/lib/constants";
 import { Popover, PopoverTrigger, PopoverContent } from "~/components/ui/popover";
 import { CategoryCollabSheet } from "~/components/CategoryCollabSheet";
 import { CollabBadge } from "./CollabBadge";
@@ -16,8 +16,6 @@ import type { Category } from "~/lib/types";
 import { useCategoryNavState } from "./use-category-nav-state";
 import { useCategoryActions } from "./use-category-actions";
 import { CategoryOptionsContent } from "./CategoryOptionsContent";
-
-export const CATEGORY_DROP_PREFIX = "category-drop-";
 
 // Fixed width even when empty, so counts line up down the sidebar
 const OpenCount = ({ count, className }: { count: number; className?: string }) => (
