@@ -14,7 +14,7 @@ import userRepo from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
 import categoryCollaboratorRepo from "../db/category-collaborator.repo";
 import { authed } from "../middleware";
-import { broadcast, broadcastAll } from "../broadcast";
+import { broadcast, broadcastAll, broadcastPerUser } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import notificationQueueRepo from "../db/notification-queue.repo";
 import { errorSchema } from "./openapi-schemas";
@@ -202,7 +202,7 @@ export const taskRoutes = authed()
       const isOwner = task.userId === userId || task.parent?.userId === userId;
       if (!isOwner) throw new HTTPException(403, { message: "Not authorized" });
 
-      const { task: removed, subtaskIds } = await taskRepo.remove(id);
+      const { task: removed, subtaskIds, unlinkedNotes } = await taskRepo.remove(id);
       broadcastAll(
         c,
         [removed.id, ...subtaskIds].map((removedId) => ({
@@ -211,6 +211,13 @@ export const taskRoutes = authed()
           data: { id: removedId },
         })),
         taskUserIds(task),
+      );
+      broadcastPerUser(
+        c,
+        unlinkedNotes.map((note) => ({
+          userId: note.userId,
+          event: { model: "notes" as const, action: "update" as const, data: note },
+        })),
       );
       return c.json(removed, 200);
     },

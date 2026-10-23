@@ -46,80 +46,110 @@ const writeDeleted = async (
   }
 };
 
-const createSyncFn =
+type PendingWrite = {
+  type: string;
+  modified: Record<string, unknown>;
+  changes: Record<string, unknown>;
+  key: string;
+  collection: unknown;
+};
+
+const syncMutation =
   (
     name: string,
     endpoint: ResourceEndpoint,
     collection: Collection<any, any, any>, // eslint-disable-line @typescript-eslint/no-explicit-any
     stripKeys: string[] = [],
   ) =>
-  async ({
-    transaction,
-  }: {
-    transaction: {
-      mutations: Array<{
-        type: string;
-        modified: Record<string, unknown>;
-        changes: Record<string, unknown>;
-        key: string;
-      }>;
-    };
-  }) => {
-    // No auth token — defer sync until login. A retriable error (not NonRetriableError)
-    // keeps the transaction in the IDB outbox and holds the optimistic mutation visible.
-    if (!getAuthToken()) throw new Error("Not authenticated");
+  async (m: PendingWrite) => {
+    console.log(`[sync:${name}] ${m.type} key=${m.key}`);
 
-    for (const m of transaction.mutations) {
-      console.log(`[sync:${name}] ${m.type} key=${m.key}`);
-
-      if (m.type === "insert") {
-        const payload = { ...m.modified };
-        for (const k of stripKeys) delete payload[k];
-        // Tasks/categories/notes created offline carry a local device userId.
-        // Always stamp with the current authenticated userId so the server FK passes.
-        if ("userId" in payload) payload.userId = getCurrentUserId();
-        console.log(`[sync:${name}] POST →`, payload);
-        const res = await assertOk(await endpoint.$post({ json: payload }));
-        const created = await res.json();
-        console.log(`[sync:${name}] POST ← 200, writing to synced store`);
-        await collection.utils.writeUpsert(created as never);
-      } else if (m.type === "update") {
-        const payload = { ...m.changes, id: m.key };
-        console.log(`[sync:${name}] PUT →`, payload);
-        const res = await assertOk(await endpoint.$put({ json: payload }));
-        const updated = await res.json();
-        console.log(`[sync:${name}] PUT ← 200, writing to synced store`);
-        await collection.utils.writeUpdate(updated as never);
-      } else if (m.type === "delete") {
-        console.log(`[sync:${name}] DELETE → id=${m.key}`);
-        await assertDeleted(await endpoint.$delete({ json: { id: m.key } }));
-        console.log(`[sync:${name}] DELETE ← 200, removing from synced store`);
-        await writeDeleted(collection, m.key);
-      }
-
-      console.log(
-        `[sync:${name}] ${m.type} complete — synced store updated before optimistic removal`,
-      );
+    if (m.type === "insert") {
+      const payload = { ...m.modified };
+      for (const k of stripKeys) delete payload[k];
+      // Tasks/categories/notes created offline carry a local device userId.
+      // Always stamp with the current authenticated userId so the server FK passes.
+      if ("userId" in payload) payload.userId = getCurrentUserId();
+      console.log(`[sync:${name}] POST →`, payload);
+      const res = await assertOk(await endpoint.$post({ json: payload }));
+      const created = await res.json();
+      console.log(`[sync:${name}] POST ← 200, writing to synced store`);
+      await collection.utils.writeUpsert(created as never);
+    } else if (m.type === "update") {
+      const payload = { ...m.changes, id: m.key };
+      console.log(`[sync:${name}] PUT →`, payload);
+      const res = await assertOk(await endpoint.$put({ json: payload }));
+      const updated = await res.json();
+      console.log(`[sync:${name}] PUT ← 200, writing to synced store`);
+      await collection.utils.writeUpdate(updated as never);
+    } else if (m.type === "delete") {
+      console.log(`[sync:${name}] DELETE → id=${m.key}`);
+      await assertDeleted(await endpoint.$delete({ json: { id: m.key } }));
+      console.log(`[sync:${name}] DELETE ← 200, removing from synced store`);
+      await writeDeleted(collection, m.key);
     }
+
+    console.log(
+      `[sync:${name}] ${m.type} complete — synced store updated before optimistic removal`,
+    );
   };
+
+// No auth token — defer sync until login. A retriable error (not NonRetriableError)
+// keeps the transaction in the IDB outbox and holds the optimistic mutation visible.
+const assertSignedIn = () => {
+  if (!getAuthToken()) throw new Error("Not authenticated");
+};
+
+const syncEach =
+  (sync: (m: PendingWrite) => Promise<void>) =>
+  async ({ transaction }: { transaction: { mutations: PendingWrite[] } }) => {
+    assertSignedIn();
+    for (const m of transaction.mutations) await sync(m);
+  };
+
+const syncTask = syncMutation("tasks", client.api.tasks, tasksCollection);
+const syncCategory = syncMutation("categories", client.api.categories, categoriesCollection, [
+  "user",
+  "collaborators",
+]);
+const syncNote = syncMutation("notes", client.api.notes, notesCollection);
 
 export type TaskDeleteMetadata = { taskId: string };
 
 // One request for the task: the server deletes its subtasks with it, so a DELETE per subtask
-// would 404
+// would 404. It also unlinks the notes on them, which this transaction did locally.
 const deleteTaskWithSubtasks = async ({
   transaction,
 }: {
-  transaction: { metadata: Record<string, unknown>; mutations: Array<{ key: string }> };
+  transaction: { metadata: Record<string, unknown>; mutations: PendingWrite[] };
 }) => {
-  if (!getAuthToken()) throw new Error("Not authenticated");
+  assertSignedIn();
   const { taskId } = transaction.metadata as TaskDeleteMetadata;
   console.log(`[sync:tasks] DELETE → id=${taskId} with subtasks`);
   await assertDeleted(await client.api.tasks.$delete({ json: { id: taskId } }));
-  for (const m of transaction.mutations) await writeDeleted(tasksCollection, m.key);
+  for (const m of transaction.mutations) {
+    if (m.collection === notesCollection)
+      await notesCollection.utils.writeUpdate({ id: m.key, taskId: null } as never);
+    else await writeDeleted(tasksCollection, m.key);
+  }
 };
 
-export type CategoryDeleteMetadata = { categoryId: string; tasks: CategoryTaskAction };
+// Tasks before the notes linking back to them, which the server checks against tasks
+const restoreTasksAndNotes = async ({
+  transaction,
+}: {
+  transaction: { mutations: PendingWrite[] };
+}) => {
+  assertSignedIn();
+  for (const m of transaction.mutations)
+    await (m.collection === notesCollection ? syncNote : syncTask)(m);
+};
+
+export type CategoryDeleteMetadata = {
+  categoryId: string;
+  tasks: CategoryTaskAction;
+  taskIds: string[];
+};
 
 // One request for the category and its tasks: the server moves or deletes collaborators'
 // tasks too, which this user can't change one by one
@@ -128,25 +158,29 @@ const deleteCategoryWithTasks = async ({
 }: {
   transaction: { metadata: Record<string, unknown> };
 }) => {
-  if (!getAuthToken()) throw new Error("Not authenticated");
-  const { categoryId, tasks } = transaction.metadata as CategoryDeleteMetadata;
+  assertSignedIn();
+  const { categoryId, tasks, taskIds } = transaction.metadata as CategoryDeleteMetadata;
   console.log(`[sync:categories] DELETE → id=${categoryId} tasks=${tasks}`);
-  await assertDeleted(await client.api.categories.$delete({ json: { id: categoryId, tasks } }));
+  await assertDeleted(
+    await client.api.categories.$delete({ json: { id: categoryId, tasks, taskIds } }),
+  );
   // Refetch rather than write each row: SSE may already have applied some, and writing a
   // delete for a row the synced store no longer holds throws
-  await Promise.all([categoriesCollection.utils.refetch(), tasksCollection.utils.refetch()]);
+  await Promise.all([
+    categoriesCollection.utils.refetch(),
+    tasksCollection.utils.refetch(),
+    notesCollection.utils.refetch(),
+  ]);
 };
 
 export const offline = startOfflineExecutor({
   collections: { tasks: tasksCollection, categories: categoriesCollection, notes: notesCollection },
   mutationFns: {
-    syncTasks: createSyncFn("tasks", client.api.tasks, tasksCollection),
-    syncCategories: createSyncFn("categories", client.api.categories, categoriesCollection, [
-      "user",
-      "collaborators",
-    ]),
-    syncNotes: createSyncFn("notes", client.api.notes, notesCollection),
+    syncTasks: syncEach(syncTask),
+    syncCategories: syncEach(syncCategory),
+    syncNotes: syncEach(syncNote),
     deleteTask: deleteTaskWithSubtasks,
+    restoreTasks: restoreTasksAndNotes,
     deleteCategory: deleteCategoryWithTasks,
   },
   // The default policy drops any error whose message contains "401" or "403", so decide by type.

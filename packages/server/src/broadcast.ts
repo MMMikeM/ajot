@@ -51,16 +51,27 @@ export const broadcast = (
   notifyMutation({ model, action, data, sourceClientId: c.req.header("x-client-id") }, userIds);
 };
 
+type BroadcastEvent = Omit<MutationEvent, "sourceClientId">;
+
 /** Broadcast several mutation events with one push per device, rather than one per event. */
-export const broadcastAll = (
-  c: Context,
-  events: Omit<MutationEvent, "sourceClientId">[],
-  userIds: string[],
-) => {
+export const broadcastAll = (c: Context, events: BroadcastEvent[], userIds: string[]) => {
   const sourceClientId = c.req.header("x-client-id");
   writeEvents(
     events.map((event) => ({ ...event, sourceClientId })),
     userIds,
   );
   notifyOtherDevices(userIds).catch(() => {});
+};
+
+/** Sends each user only the events addressed to them, with one push per user. */
+export const broadcastPerUser = (
+  c: Context,
+  addressed: { userId: string; event: BroadcastEvent }[],
+) => {
+  for (const userId of new Set(addressed.map((a) => a.userId)))
+    broadcastAll(
+      c,
+      addressed.filter((a) => a.userId === userId).map((a) => a.event),
+      [userId],
+    );
 };

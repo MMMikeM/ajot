@@ -1,7 +1,8 @@
 import { and, eq, lt, or, sql } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
-import { db } from "./client";
+import { db, inTransaction } from "./client";
+import noteRepo from "./note.repo";
 import { tasks, taskShares, users } from "./schema";
 import { InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime } from "@newtab-todo/shared/iso";
@@ -120,15 +121,22 @@ const update = async (id: string, updatedAt: string, fields: Partial<TaskInsert>
 };
 
 // parent_id would cascade, but naming the subtasks here returns their ids for the broadcast
-const remove = async (id: string) => {
-  const rows = await db
-    .delete(tasks)
-    .where(or(eq(tasks.id, id), eq(tasks.parentId, id)))
-    .returning();
-  const task = rows.find((row) => row.id === id);
-  if (!task) throw new NotFoundError("task", id);
-  return { task, subtaskIds: rows.filter((row) => row.id !== id).map((row) => row.id) };
-};
+const remove = async (id: string) =>
+  inTransaction(async (tx) => {
+    const subtasks = await tx.query.tasks.findMany({
+      where: { parentId: id },
+      columns: { id: true },
+    });
+    const subtaskIds = subtasks.map((s) => s.id);
+    const unlinkedNotes = await noteRepo.unlinkFromTasks(tx, [id, ...subtaskIds]);
+    const rows = await tx
+      .delete(tasks)
+      .where(or(eq(tasks.id, id), eq(tasks.parentId, id)))
+      .returning();
+    const task = rows.find((row) => row.id === id);
+    if (!task) throw new NotFoundError("task", id);
+    return { task, subtaskIds, unlinkedNotes };
+  });
 
 export type TaskWithRelations = Awaited<ReturnType<typeof list>>[number];
 
@@ -157,21 +165,6 @@ const updateShareCategory = async (
   if (!row) throw new NotFoundError("task share", taskId);
   return row;
 };
-
-/** A category's tasks and their subtasks, which carry no categoryId of their own. */
-const listInCategory = async (categoryId: string) =>
-  db.query.tasks.findMany({
-    where: { OR: [{ categoryId }, { parent: { categoryId } }] },
-    columns: { id: true, userId: true, categoryId: true },
-    with: { shares: { columns: { sharedWithUserId: true } } },
-  });
-
-/** Shares that file a task under this category for the person it's shared with. */
-const listSharesFiledIn = async (categoryId: string) =>
-  db.query.taskShares.findMany({
-    where: { categoryId },
-    columns: { taskId: true, sharedWithUserId: true },
-  });
 
 /** Each task's shares, in the shape the task list sends them. */
 const listSharesForTasks = async (taskIds: string[]) => {
@@ -212,8 +205,6 @@ export default {
   insertShare,
   removeShare,
   updateShareCategory,
-  listInCategory,
-  listSharesFiledIn,
   listSharesForTasks,
   listShareUserIds,
   findOverdue,
