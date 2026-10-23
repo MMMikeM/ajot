@@ -47,7 +47,7 @@ Cross-package imports use `@newtab-todo/shared` and `@newtab-todo/server` (type-
 - `pnpm typecheck` — `vp check --no-fmt --no-lint` (TypeScript 7 via tsgolint; there is no per-package `tsc`)
 - `pnpm check` — `vp check` (fmt + lint + type-aware lint + typecheck) + knip + dependency-cruiser (`pnpm deps:check`; import-graph rules in `.dependency-cruiser.cjs`) (CI gate)
 - Server bundles with `vp pack` (tsdown); config is the `pack` block in `packages/server/vite.config.ts`
-- `pnpm --filter @newtab-todo/server db:push` — push schema to Turso
+- `pnpm --filter @newtab-todo/server db:push` — push schema to Turso. The deploy workflow runs it before `flyctl deploy`; a rename or data-loss change fails that step and has to be pushed by hand
 - Screenshots: `SCREENSHOT_DIR=./screenshots pnpm screenshot` — **never use `/tmp`**; output goes in `packages/e2e/screenshots/` or a project-local path
 
 ## CLAUDE.md hygiene

@@ -21,6 +21,23 @@ jobs:
             --build-arg VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY }} \
             .
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - run: pnpm install --frozen-lockfile --filter @newtab-todo/server...
+
+      # Without a TTY, a rename or data-loss change exits 2 and stops the deploy; push those by hand.
+      - name: Push database schema
+        run: pnpm --filter @newtab-todo/server db:push --verbose
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+
       - run: >
           flyctl deploy --local-only
           --build-arg SERVER_URL=https://extension-sync-service.fly.dev
