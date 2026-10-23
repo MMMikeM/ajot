@@ -1,4 +1,5 @@
 import { startOfflineExecutor, NonRetriableError } from "@tanstack/offline-transactions";
+import { DeleteOperationItemNotFoundError } from "@tanstack/query-db-collection";
 import {
   tasksCollection,
   categoriesCollection,
@@ -28,6 +29,21 @@ const assertOk = async (res: Response): Promise<Response> => {
   if (res.status === 401) throw new SessionExpiredError(await res.text());
   if (res.status >= 400 && res.status < 500) throw new NonRetriableError(await res.text());
   throw new Error(`Server error ${res.status}`);
+};
+
+// A replay after a lost response finds the row already gone, which means the delete worked
+const assertDeleted = (res: Response) => (res.status === 404 ? res : assertOk(res));
+
+// This device's own SSE event can remove the row from the synced store before the response lands
+const writeDeleted = async (
+  collection: Collection<any, any, any>, // eslint-disable-line @typescript-eslint/no-explicit-any
+  key: string,
+) => {
+  try {
+    await collection.utils.writeDelete(key as never);
+  } catch (err) {
+    if (!(err instanceof DeleteOperationItemNotFoundError)) throw err;
+  }
 };
 
 const createSyncFn =
@@ -76,9 +92,9 @@ const createSyncFn =
         await collection.utils.writeUpdate(updated as never);
       } else if (m.type === "delete") {
         console.log(`[sync:${name}] DELETE → id=${m.key}`);
-        await assertOk(await endpoint.$delete({ json: { id: m.key } }));
+        await assertDeleted(await endpoint.$delete({ json: { id: m.key } }));
         console.log(`[sync:${name}] DELETE ← 200, removing from synced store`);
-        await collection.utils.writeDelete(m.key as never);
+        await writeDeleted(collection, m.key);
       }
 
       console.log(
@@ -99,7 +115,7 @@ const deleteCategoryWithTasks = async ({
   if (!getAuthToken()) throw new Error("Not authenticated");
   const { categoryId, tasks } = transaction.metadata as CategoryDeleteMetadata;
   console.log(`[sync:categories] DELETE → id=${categoryId} tasks=${tasks}`);
-  await assertOk(await client.api.categories.$delete({ json: { id: categoryId, tasks } }));
+  await assertDeleted(await client.api.categories.$delete({ json: { id: categoryId, tasks } }));
   // Refetch rather than write each row: SSE may already have applied some, and writing a
   // delete for a row the synced store no longer holds throws
   await Promise.all([categoriesCollection.utils.refetch(), tasksCollection.utils.refetch()]);
