@@ -103,6 +103,22 @@ const createSyncFn =
     }
   };
 
+export type TaskDeleteMetadata = { taskId: string };
+
+// One request for the task: the server deletes its subtasks with it, so a DELETE per subtask
+// would 404
+const deleteTaskWithSubtasks = async ({
+  transaction,
+}: {
+  transaction: { metadata: Record<string, unknown>; mutations: Array<{ key: string }> };
+}) => {
+  if (!getAuthToken()) throw new Error("Not authenticated");
+  const { taskId } = transaction.metadata as TaskDeleteMetadata;
+  console.log(`[sync:tasks] DELETE → id=${taskId} with subtasks`);
+  await assertDeleted(await client.api.tasks.$delete({ json: { id: taskId } }));
+  for (const m of transaction.mutations) await writeDeleted(tasksCollection, m.key);
+};
+
 export type CategoryDeleteMetadata = { categoryId: string; tasks: CategoryTaskAction };
 
 // One request for the category and its tasks: the server moves or deletes collaborators'
@@ -130,6 +146,7 @@ export const offline = startOfflineExecutor({
       "collaborators",
     ]),
     syncNotes: createSyncFn("notes", client.api.notes, notesCollection),
+    deleteTask: deleteTaskWithSubtasks,
     deleteCategory: deleteCategoryWithTasks,
   },
   // The default policy drops any error whose message contains "401" or "403", so decide by type.

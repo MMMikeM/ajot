@@ -1,8 +1,7 @@
 import { useRef } from "react";
 import { flushSync } from "react-dom";
 import { Toast } from "@base-ui/react/toast";
-import { useTasks, updateTask, deleteTask } from "~/lib/db/hooks";
-import { tasksCollection } from "~/lib/db/collections";
+import { useTasks, updateTask, deleteTask, restoreTasks } from "~/lib/db/hooks";
 import { addTask } from "~/lib/db/add-task";
 import type { Task } from "~/lib/types";
 
@@ -35,7 +34,8 @@ export const useTaskActions = () => {
 
   const handleDelete = (task: Task) => {
     const originEl = document.querySelector<HTMLElement>(`[data-task-id="${task.id}"]`);
-    const onUndo = () => tasksCollection.insert(task);
+    const subtasks = (allTasks ?? []).filter((t) => t.parentId === task.id);
+    const onUndo = () => restoreTasks([task, ...subtasks]);
 
     // document.startViewTransition not referenced at module level — SSR-safe
     if (originEl && typeof document.startViewTransition === "function") {
