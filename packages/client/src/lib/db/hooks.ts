@@ -5,7 +5,7 @@ import {
   notesCollection,
   contactsCollection,
 } from "~/lib/db/collections";
-import { offline, type CategoryDeleteMetadata } from "~/lib/db/offline";
+import { offline, type CategoryDeleteMetadata, type TaskDeleteMetadata } from "~/lib/db/offline";
 import type { CategoryTaskAction } from "~/lib/constants";
 import type { Task, Category, Note } from "~/lib/types";
 import { now } from "~/lib/utils";
@@ -26,9 +26,26 @@ export const updateTask = (id: string, fields: Partial<Task>) => {
 
 export const deleteTask = (id: string) => {
   console.log(`[mutation] deleteTask id=${id}`);
-  const tx = offline.createOfflineTransaction({ mutationFnName: "syncTasks" });
-  tx.mutate(() => tasksCollection.delete(id));
+  const subtaskIds = [...(tasksCollection.state?.values() ?? [])]
+    .filter((t) => t.parentId === id)
+    .map((t) => t.id);
+  const tx = offline.createOfflineTransaction({
+    mutationFnName: "deleteTask",
+    metadata: { taskId: id } satisfies TaskDeleteMetadata,
+  });
+  tx.mutate(() => tasksCollection.delete([id, ...subtaskIds]));
   console.log("[mutation] optimistic applied, tx queued");
+};
+
+/**
+ * Undoes deleteTask; parents must come before their subtasks. Shares and note links were deleted
+ * with the task and don't come back.
+ */
+export const restoreTasks = (tasks: Task[]) => {
+  const tx = offline.createOfflineTransaction({ mutationFnName: "syncTasks" });
+  tx.mutate(() => {
+    for (const task of tasks) tasksCollection.insert({ ...task, shares: [], updatedAt: now() });
+  });
 };
 
 export const addCategory = (
