@@ -66,9 +66,12 @@ export const useCategoryActions = () => {
   const handleSetColor = (id: string, color: string | null) => updateCategory(id, { color });
 
   const deleteAndMoveOn = (cat: Category, tasks: CategoryTaskAction) => {
+    const wasActive = cat.id === activeCategoryId;
     deleteCategory(cat.id, tasks).isPersisted.promise.catch(() => {
       toastManager.add({ title: `Couldn't delete “${cat.name}”` });
+      if (wasActive) setActiveCategoryId(cat.id);
     });
+    if (!wasActive) return;
     const remaining = categories.filter((c) => c.id !== cat.id);
     setActiveCategoryId(remaining.length > 0 ? remaining[0].id : null);
   };
