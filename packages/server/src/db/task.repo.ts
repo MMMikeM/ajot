@@ -166,6 +166,25 @@ const listInCategory = async (categoryId: string) =>
     with: { shares: { columns: { sharedWithUserId: true } } },
   });
 
+/** Shares that file a task under this category for the person it's shared with. */
+const listSharesFiledIn = async (categoryId: string) =>
+  db.query.taskShares.findMany({
+    where: { categoryId },
+    columns: { taskId: true, sharedWithUserId: true },
+  });
+
+/** Each task's shares, in the shape the task list sends them. */
+const listSharesForTasks = async (taskIds: string[]) => {
+  if (taskIds.length === 0) return [];
+  return db.query.tasks.findMany({
+    where: { id: { in: taskIds } },
+    columns: { id: true },
+    with: {
+      shares: { with: { sharedWithUser: { columns: { id: true, name: true, username: true } } } },
+    },
+  });
+};
+
 const listShareUserIds = async (taskId: string) => {
   const rows = await db.query.taskShares.findMany({
     where: { taskId },
@@ -194,6 +213,8 @@ export default {
   removeShare,
   updateShareCategory,
   listInCategory,
+  listSharesFiledIn,
+  listSharesForTasks,
   listShareUserIds,
   findOverdue,
 };
