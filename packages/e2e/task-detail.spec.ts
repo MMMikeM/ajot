@@ -15,7 +15,7 @@ const drawer = (page: Parameters<typeof createTask>[0]) =>
 test.beforeEach(async ({ user1Auth }) => {
   type Task = { id: string; parentId: string | null };
   const tasks = await apiRequest<Task[]>("GET", "/api/tasks", undefined, user1Auth.token);
-  // Top-level only: the server leaves subtasks behind, but without a parent they never render
+  // Top-level only: the server deletes subtasks with their parent
   // allSettled: parallel workers may have already deleted some tasks (404 is fine)
   await Promise.allSettled(
     tasks
