@@ -97,7 +97,9 @@ export const useCategoryActions = () => {
     deleteAndMoveOn(pendingDelete.category, tasks);
     toastManager.add({
       title:
-        tasks === "delete" ? "Category and tasks deleted" : "Category deleted, tasks moved to Inbox",
+        tasks === "delete"
+          ? "Category and tasks deleted"
+          : "Category deleted, tasks moved to Inbox",
     });
   };
 

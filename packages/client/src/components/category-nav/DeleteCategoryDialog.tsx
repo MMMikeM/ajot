@@ -44,8 +44,8 @@ export function DeleteCategoryDialog({
           <AlertDialogTitle>Delete “{request.category.name}”?</AlertDialogTitle>
           <AlertDialogDescription>
             It has {countOf(request.tasks.length, "task")}
-            {othersCount > 0 && `, including ${othersCount} added by others`}. Move them to
-            Inbox, or delete them {othersCount > 0 ? "for everyone" : "too"}.
+            {othersCount > 0 && `, including ${othersCount} added by others`}. Move them to Inbox,
+            or delete them {othersCount > 0 ? "for everyone" : "too"}.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
