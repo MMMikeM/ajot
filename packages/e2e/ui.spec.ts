@@ -230,6 +230,19 @@ test.describe("deleting a category", () => {
   });
 });
 
+test("the app still starts when OPFS is refused, as in a Firefox private window", async ({
+  page,
+}) => {
+  await page.route(/opfs-worker/, async (route) => {
+    const response = await route.fetch();
+    const refuse =
+      'StorageManager.prototype.getDirectory = () => Promise.reject(new DOMException("insecure", "SecurityError"));\n';
+    await route.fulfill({ response, body: refuse + (await response.text()) });
+  });
+  await openList(page);
+  await expect(row(page, "Book flights")).toBeVisible();
+});
+
 test.describe("accessibility", () => {
   test("task list", async ({ page }) => {
     await openList(page);

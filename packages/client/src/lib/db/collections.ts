@@ -1,5 +1,5 @@
-import { createCollection } from "@tanstack/db";
-import { queryCollectionOptions } from "@tanstack/query-db-collection";
+import { createCollection, type CollectionConfig } from "@tanstack/db";
+import { queryCollectionOptions, type QueryCollectionUtils } from "@tanstack/query-db-collection";
 import { persistedCollectionOptions } from "@tanstack/browser-db-sqlite-persistence";
 import { queryClient } from "~/lib/db/query-client";
 import { client } from "~/lib/api";
@@ -20,6 +20,26 @@ import { getBuildTarget } from "../build-target";
 // query error during the first load puts the collection in an error state that rejects local
 // inserts. Signed-out edits live as pending outbox transactions (lib/db/offline.ts) until the
 // user signs in.
+type QueryOptions<T extends object> = CollectionConfig<
+  T,
+  string,
+  never,
+  QueryCollectionUtils<T, string, T>
+> & { utils: QueryCollectionUtils<T, string, T> };
+
+// Private windows refuse OPFS (Firefox throws a SecurityError), and opening it can time out.
+// The app then keeps this session's data in memory rather than failing to start.
+const openPersistence = async () => {
+  try {
+    const database = await openBrowserWASQLiteOPFSDatabase({ databaseName: "newtab-todo.sqlite" });
+    const coordinator = new BrowserCollectionCoordinator({ dbName: "newtab-todo" });
+    return createBrowserWASQLitePersistence({ database, coordinator });
+  } catch (err) {
+    console.warn("[db] OPFS unavailable, keeping data in memory:", err);
+    return null;
+  }
+};
+
 async function makeCollections() {
   if (getBuildTarget() === "server")
     return {
@@ -29,18 +49,19 @@ async function makeCollections() {
       contactsCollection: null,
     };
 
-  const database = await openBrowserWASQLiteOPFSDatabase({ databaseName: "newtab-todo.sqlite" });
-  const coordinator = new BrowserCollectionCoordinator({ dbName: "newtab-todo" });
-  const persistence = createBrowserWASQLitePersistence({
-    database,
-    coordinator,
-  });
+  const persistence = await openPersistence();
+  const withPersistence = <T extends object>(options: QueryOptions<T>): QueryOptions<T> =>
+    persistence
+      ? {
+          ...persistedCollectionOptions<T, string>({ ...options, persistence, schemaVersion: 1 }),
+          // The wrapper passes utils through but types them as a plain UtilsRecord
+          utils: options.utils,
+        }
+      : options;
   return {
     contactsCollection: createCollection(
-      persistedCollectionOptions<Contact, string>({
-        persistence,
-        schemaVersion: 1,
-        ...queryCollectionOptions({
+      withPersistence<Contact>(
+        queryCollectionOptions({
           id: "contacts",
           queryKey: ["contacts"] as const,
           queryFn: async () => {
@@ -54,13 +75,11 @@ async function makeCollections() {
           getKey: (item) => item.id,
           retry: () => !!getAuthToken(),
         }),
-      }),
+      ),
     ),
     categoriesCollection: createCollection(
-      persistedCollectionOptions<Category, string>({
-        persistence,
-        schemaVersion: 1,
-        ...queryCollectionOptions({
+      withPersistence<Category>(
+        queryCollectionOptions({
           id: "categories",
           queryKey: ["categories"] as const,
           queryFn: async () => {
@@ -76,13 +95,11 @@ async function makeCollections() {
           getKey: (item) => item.id,
           retry: () => !!getAuthToken(),
         }),
-      }),
+      ),
     ),
     tasksCollection: createCollection(
-      persistedCollectionOptions<Task, string>({
-        persistence,
-        schemaVersion: 1,
-        ...queryCollectionOptions({
+      withPersistence<Task>(
+        queryCollectionOptions({
           id: "tasks",
           queryKey: ["tasks"] as const,
           queryFn: async () => {
@@ -96,13 +113,11 @@ async function makeCollections() {
           getKey: (item) => item.id,
           retry: () => !!getAuthToken(),
         }),
-      }),
+      ),
     ),
     notesCollection: createCollection(
-      persistedCollectionOptions<Note, string>({
-        persistence,
-        schemaVersion: 1,
-        ...queryCollectionOptions({
+      withPersistence<Note>(
+        queryCollectionOptions({
           id: "notes",
           queryKey: ["notes"] as const,
           queryFn: async () => {
@@ -116,7 +131,7 @@ async function makeCollections() {
           getKey: (item) => item.id,
           retry: () => !!getAuthToken(),
         }),
-      }),
+      ),
     ),
   };
 }
