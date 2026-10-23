@@ -77,6 +77,7 @@ const findByIdWithAccess = async (id: string, _userId: string) => {
   const row = await db.query.tasks.findFirst({
     where: { id },
     with: {
+      shares: { columns: { sharedWithUserId: true } },
       category: {
         with: { collaborators: { columns: { userId: true } } },
         columns: { id: true },

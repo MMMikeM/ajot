@@ -14,7 +14,7 @@ import userRepo from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
 import categoryCollaboratorRepo from "../db/category-collaborator.repo";
 import { authed } from "../middleware";
-import { broadcast } from "../broadcast";
+import { broadcast, broadcastAll } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import notificationQueueRepo from "../db/notification-queue.repo";
 import { errorSchema } from "./openapi-schemas";
@@ -33,6 +33,7 @@ const shareCategorySchema = z.object({
 
 const taskUserIds = (task: {
   userId: string;
+  shares?: { sharedWithUserId: string }[];
   category?: { collaborators: { userId: string }[] } | null;
   parent?: {
     userId: string;
@@ -42,6 +43,7 @@ const taskUserIds = (task: {
 }) => [
   ...new Set([
     task.userId,
+    ...(task.shares?.map((s) => s.sharedWithUserId) ?? []),
     ...(task.category?.collaborators.map((c) => c.userId) ?? []),
     // Subtasks have no shares or category of their own; everyone with the parent sees them
     ...(task.parent ? [task.parent.userId] : []),
@@ -201,8 +203,15 @@ export const taskRoutes = authed()
       if (!isOwner) throw new HTTPException(403, { message: "Not authorized" });
 
       const { task: removed, subtaskIds } = await taskRepo.remove(id);
-      for (const removedId of [removed.id, ...subtaskIds])
-        broadcast(c, "tasks", "delete", { id: removedId }, taskUserIds(task));
+      broadcastAll(
+        c,
+        [removed.id, ...subtaskIds].map((removedId) => ({
+          model: "tasks" as const,
+          action: "delete" as const,
+          data: { id: removedId },
+        })),
+        taskUserIds(task),
+      );
       return c.json(removed, 200);
     },
   )
