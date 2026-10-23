@@ -190,7 +190,13 @@ test.describe("deleting a category", () => {
 
       const request = deleteRequest(page);
       await page.getByRole("alertdialog").getByRole("button", { name: choice }).click();
-      expect((await request).postDataJSON()).toEqual({ id: "c-work", tasks });
+      const body = (await request).postDataJSON();
+      // Only the tasks the dialog counted can be deleted
+      expect({ ...body, taskIds: body.taskIds.toSorted() }).toEqual({
+        id: "c-work",
+        tasks,
+        taskIds: ["t-10", "t-11"],
+      });
     });
   }
 
@@ -200,7 +206,11 @@ test.describe("deleting a category", () => {
 
     const request = deleteRequest(page);
     await page.getByRole("button", { name: "Delete", exact: true }).click();
-    expect((await request).postDataJSON()).toEqual({ id: "c-home", tasks: "uncategorise" });
+    expect((await request).postDataJSON()).toEqual({
+      id: "c-home",
+      tasks: "uncategorise",
+      taskIds: [],
+    });
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
     await expect(page.getByText("Category deleted")).toBeVisible();
   });

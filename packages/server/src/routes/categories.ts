@@ -11,7 +11,7 @@ import taskRepo from "../db/task.repo";
 import userRepo, { userPublicSchema } from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
 import { authed } from "../middleware";
-import { broadcast, broadcastAll } from "../broadcast";
+import { broadcast, broadcastAll, broadcastPerUser } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
@@ -80,47 +80,33 @@ export const categoryRoutes = authed()
       }),
     }),
     async (c) => {
-      const { id, tasks: taskAction } = c.req.valid("json");
+      const { id, tasks: taskAction, taskIds } = c.req.valid("json");
       const userId = c.get("userId");
 
       // findByIdWithCollaborators used (not findById) so we have userIds for broadcast
       // before the row is deleted — after deletion we can't look up collaborators.
-      const [cat, categoryTasks, filedShares] = await Promise.all([
-        categoryRepo.findByIdWithCollaborators(id),
-        taskRepo.listInCategory(id),
-        taskRepo.listSharesFiledIn(id),
-      ]);
+      const cat = await categoryRepo.findByIdWithCollaborators(id);
       if (cat.userId !== userId) throw new HTTPException(403, { message: "Not authorized" });
       const catUserIds = [
         cat.userId,
         ...cat.collaborators.flatMap((c) => (c.user ? [c.user.id] : [])),
       ];
 
-      const topLevelIds = categoryTasks.filter((t) => t.categoryId === id).map((t) => t.id);
-      if (topLevelIds.length > 0 && !taskAction)
-        throw new HTTPException(400, {
-          message: "Move or delete all tasks before removing this category",
-        });
+      const { category, inCategory, deletedIds, movedTasks, unlinkedNotes, unfiledShares } =
+        await categoryRepo.removeWithTasks(id, taskAction, taskIds);
 
-      const affectedIds = taskAction === "delete" ? categoryTasks.map((t) => t.id) : topLevelIds;
-      const { category, updatedTasks } = await categoryRepo.removeWithTasks(
-        id,
-        affectedIds,
-        taskAction ?? "uncategorise",
-      );
-
-      const taskEvents =
-        taskAction === "delete"
-          ? affectedIds.map((taskId) => ({
-              model: "tasks" as const,
-              action: "delete" as const,
-              data: { id: taskId },
-            }))
-          : updatedTasks.map((task) => ({
-              model: "tasks" as const,
-              action: "update" as const,
-              data: task,
-            }));
+      const taskEvents = [
+        ...deletedIds.map((taskId) => ({
+          model: "tasks" as const,
+          action: "delete" as const,
+          data: { id: taskId },
+        })),
+        ...movedTasks.map((task) => ({
+          model: "tasks" as const,
+          action: "update" as const,
+          data: task,
+        })),
+      ];
       broadcastAll(
         c,
         [...taskEvents, { model: "categories", action: "delete", data: { id: category.id } }],
@@ -130,32 +116,38 @@ export const categoryRoutes = authed()
       // tasks but not the category
       const outsideUserIds = [
         ...new Set(
-          categoryTasks.flatMap((t) => [t.userId, ...t.shares.map((s) => s.sharedWithUserId)]),
+          inCategory.flatMap((t) => [
+            t.userId,
+            ...t.subtasks.map((s) => s.userId),
+            ...t.shares.map((s) => s.sharedWithUserId),
+          ]),
         ),
       ].filter((uid) => !catUserIds.includes(uid));
       if (taskEvents.length > 0 && outsideUserIds.length > 0)
         broadcastAll(c, taskEvents, outsideUserIds);
 
-      // The FK unfiled these shares without touching the tasks, so whoever filed them would
-      // otherwise keep seeing them under the deleted category on their other devices
-      const deletedIds = new Set(taskAction === "delete" ? affectedIds : []);
-      const unfiled = filedShares.filter((s) => !deletedIds.has(s.taskId));
+      // Whoever filed a shared task here would otherwise keep seeing it under the deleted
+      // category on their other devices
+      const deleted = new Set(deletedIds);
+      const unfiled = unfiledShares.filter((s) => !deleted.has(s.taskId));
       const unfiledTasks = await taskRepo.listSharesForTasks([
         ...new Set(unfiled.map((s) => s.taskId)),
       ]);
       const sharesByTask = new Map(unfiledTasks.map((t) => [t.id, t.shares]));
-      for (const shareeId of new Set(unfiled.map((s) => s.sharedWithUserId)))
-        broadcastAll(
-          c,
-          unfiled
-            .filter((s) => s.sharedWithUserId === shareeId)
-            .map((s) => ({
-              model: "tasks" as const,
-              action: "update" as const,
-              data: { id: s.taskId, shares: sharesByTask.get(s.taskId) ?? [] },
-            })),
-          [shareeId],
-        );
+      broadcastPerUser(c, [
+        ...unfiled.map((s) => ({
+          userId: s.sharedWithUserId,
+          event: {
+            model: "tasks" as const,
+            action: "update" as const,
+            data: { id: s.taskId, shares: sharesByTask.get(s.taskId) ?? [] },
+          },
+        })),
+        ...unlinkedNotes.map((note) => ({
+          userId: note.userId,
+          event: { model: "notes" as const, action: "update" as const, data: note },
+        })),
+      ]);
 
       return c.json(category, 200);
     },

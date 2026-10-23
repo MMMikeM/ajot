@@ -1,9 +1,9 @@
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
-import { db } from "./client";
+import { db, type Transaction } from "./client";
 import { notes } from "./schema";
 import { InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
-import { isoDatetime } from "@newtab-todo/shared/iso";
+import { isoDatetime, now } from "@newtab-todo/shared/iso";
 
 export type NoteInsert = typeof notes.$inferInsert;
 export type NoteSelect = typeof notes.$inferSelect;
@@ -51,4 +51,14 @@ const remove = async (id: string) => {
   return row;
 };
 
-export default { list, insert, update, remove };
+/** Notes outlive their task. Bumping updatedAt makes the unlink win over older offline edits. */
+const unlinkFromTasks = async (tx: Transaction, taskIds: string[]) => {
+  if (taskIds.length === 0) return [];
+  return tx
+    .update(notes)
+    .set({ taskId: null, updatedAt: now() })
+    .where(inArray(notes.taskId, taskIds))
+    .returning();
+};
+
+export default { list, insert, update, remove, unlinkFromTasks };

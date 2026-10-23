@@ -2,8 +2,9 @@ import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db, inTransaction } from "./client";
-import { categories, tasks } from "./schema";
-import { InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
+import noteRepo from "./note.repo";
+import { categories, tasks, taskShares } from "./schema";
+import { BadRequestError, InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime, now } from "@newtab-todo/shared/iso";
 import { CATEGORY_TASK_ACTIONS, type CategoryTaskAction } from "@newtab-todo/shared/constants";
 
@@ -13,6 +14,8 @@ export type CategorySelect = typeof categories.$inferSelect;
 export const categorySelectSchema = createSelectSchema(categories).pick({ id: true });
 export const categoryDeleteSchema = categorySelectSchema.extend({
   tasks: z.enum(CATEGORY_TASK_ACTIONS).optional(),
+  /** The top-level tasks the user was shown; only these can be deleted */
+  taskIds: z.array(z.string()).optional(),
 });
 const collaboratorUserSchema = z.object({
   id: z.string(),
@@ -92,22 +95,50 @@ const update = async (id: string, updatedAt: string, fields: Partial<CategoryIns
   return row;
 };
 
-// One transaction, so a failed category delete can't leave its tasks already moved or deleted
-const removeWithTasks = async (id: string, taskIds: string[], action: CategoryTaskAction) =>
+// Reads and writes in one transaction, so a task moved out meanwhile is left alone, and one
+// added meanwhile goes to the Inbox rather than being deleted unseen
+const removeWithTasks = async (
+  id: string,
+  action: CategoryTaskAction | undefined,
+  confirmedIds: string[] | undefined,
+) =>
   inTransaction(async (tx) => {
-    let updatedTasks: (typeof tasks.$inferSelect)[] = [];
-    if (taskIds.length > 0) {
-      if (action === "delete") await tx.delete(tasks).where(inArray(tasks.id, taskIds));
-      else
-        updatedTasks = await tx
-          .update(tasks)
-          .set({ categoryId: null, updatedAt: now() })
-          .where(inArray(tasks.id, taskIds))
-          .returning();
-    }
-    const [row] = await tx.delete(categories).where(eq(categories.id, id)).returning();
-    if (!row) throw new NotFoundError("category", id);
-    return { category: row, updatedTasks };
+    const inCategory = await tx.query.tasks.findMany({
+      where: { categoryId: id },
+      columns: { id: true, userId: true },
+      with: {
+        shares: { columns: { sharedWithUserId: true } },
+        subtasks: { columns: { id: true, userId: true } },
+      },
+    });
+    if (inCategory.length > 0 && !action)
+      throw new BadRequestError("Move or delete all tasks before removing this category");
+
+    // A client from before confirmed ids were sent meant everything in the category
+    const confirmed = new Set(confirmedIds ?? inCategory.map((t) => t.id));
+    const doomed = action === "delete" ? inCategory.filter((t) => confirmed.has(t.id)) : [];
+    const deletedIds = doomed.flatMap((t) => [t.id, ...t.subtasks.map((s) => s.id)]);
+    const movedIds = inCategory.filter((t) => !doomed.includes(t)).map((t) => t.id);
+
+    const unlinkedNotes = await noteRepo.unlinkFromTasks(tx, deletedIds);
+    if (deletedIds.length > 0) await tx.delete(tasks).where(inArray(tasks.id, deletedIds));
+    const movedTasks =
+      movedIds.length > 0
+        ? await tx
+            .update(tasks)
+            .set({ categoryId: null, updatedAt: now() })
+            .where(inArray(tasks.id, movedIds))
+            .returning()
+        : [];
+    const unfiledShares = await tx
+      .update(taskShares)
+      .set({ categoryId: null })
+      .where(eq(taskShares.categoryId, id))
+      .returning({ taskId: taskShares.taskId, sharedWithUserId: taskShares.sharedWithUserId });
+
+    const [category] = await tx.delete(categories).where(eq(categories.id, id)).returning();
+    if (!category) throw new NotFoundError("category", id);
+    return { category, inCategory, deletedIds, movedTasks, unlinkedNotes, unfiledShares };
   });
 
 export default { list, findById, findByIdWithCollaborators, insert, update, removeWithTasks };

@@ -25,27 +25,40 @@ export const updateTask = (id: string, fields: Partial<Task>) => {
   console.log("[mutation] optimistic applied, tx queued");
 };
 
+/** Returns an undo that brings back the task, its subtasks and their notes' links. */
 export const deleteTask = (id: string) => {
   console.log(`[mutation] deleteTask id=${id}`);
-  const subtaskIds = [...(tasksCollection.state?.values() ?? [])]
-    .filter((t) => t.parentId === id)
-    .map((t) => t.id);
+  const deleted = [...(tasksCollection.state?.values() ?? [])]
+    .filter((t) => t.id === id || t.parentId === id)
+    .sort((a, b) => Number(b.id === id) - Number(a.id === id));
+  const deletedIds = new Set(deleted.map((t) => t.id));
+  const noteLinks = [...(notesCollection.state?.values() ?? [])].flatMap((n) =>
+    n.taskId && deletedIds.has(n.taskId) ? [{ id: n.id, taskId: n.taskId }] : [],
+  );
   const tx = offline.createOfflineTransaction({
     mutationFnName: "deleteTask",
     metadata: { taskId: id } satisfies TaskDeleteMetadata,
   });
-  tx.mutate(() => tasksCollection.delete([id, ...subtaskIds]));
+  tx.mutate(() => {
+    tasksCollection.delete([...deletedIds]);
+    for (const link of noteLinks)
+      notesCollection.update(link.id, (draft) =>
+        Object.assign(draft, { taskId: null, updatedAt: now() }),
+      );
+  });
   console.log("[mutation] optimistic applied, tx queued");
+  return () => restoreTasks(deleted, noteLinks);
 };
 
-/**
- * Undoes deleteTask; parents must come before their subtasks. Shares and note links were deleted
- * with the task and don't come back.
- */
-export const restoreTasks = (tasks: Task[]) => {
-  const tx = offline.createOfflineTransaction({ mutationFnName: "syncTasks" });
+// Shares were deleted with the task and don't come back
+const restoreTasks = (tasks: Task[], noteLinks: { id: string; taskId: string }[]) => {
+  const tx = offline.createOfflineTransaction({ mutationFnName: "restoreTasks" });
   tx.mutate(() => {
     for (const task of tasks) tasksCollection.insert({ ...task, shares: [], updatedAt: now() });
+    for (const link of noteLinks)
+      notesCollection.update(link.id, (draft) =>
+        Object.assign(draft, { taskId: link.taskId, updatedAt: now() }),
+      );
   });
 };
 
@@ -90,7 +103,7 @@ export const deleteCategory = (id: string, tasks: CategoryTaskAction) => {
   const filedByMyShare = (task: Task) => task.shares.some((s) => isMine(s) && s.categoryId === id);
   const tx = offline.createOfflineTransaction({
     mutationFnName: "deleteCategory",
-    metadata: { categoryId: id, tasks } satisfies CategoryDeleteMetadata,
+    metadata: { categoryId: id, tasks, taskIds: [...topLevelIds] } satisfies CategoryDeleteMetadata,
   });
   const transaction = tx.mutate(() => {
     for (const task of allTasks) {
