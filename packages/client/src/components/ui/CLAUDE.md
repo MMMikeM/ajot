@@ -6,14 +6,14 @@ Shadcn/Base UI component primitives. Two-tier architecture:
 
 These are unmodified shadcn output. Do not add app opinions here.
 
-| File           | Component                    | Notes                             |
-| -------------- | ---------------------------- | --------------------------------- |
-| `input.tsx`    | `Input`                      | Box-style, Base UI InputPrimitive |
-| `textarea.tsx` | `Textarea`                   | Box-style, raw `<textarea>`       |
-| `button.tsx`   | `Button`                     | —                                 |
-| `checkbox.tsx` | `Checkbox`                   | —                                 |
-| `select.tsx`   | `Select`, `SelectTrigger`, … | —                                 |
-| `drawer.tsx`   | `Drawer`, `DrawerContent`, … | —                                 |
+| File               | Component                              | Notes                                                                                                                                            |
+| ------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `input.tsx`        | `Input`                                | Box-style, Base UI InputPrimitive                                                                                                                |
+| `textarea.tsx`     | `Textarea`                             | Box-style, raw `<textarea>`                                                                                                                      |
+| `button.tsx`       | `Button`                               | —                                                                                                                                                |
+| `checkbox.tsx`     | `Checkbox`                             | —                                                                                                                                                |
+| `select.tsx`       | `Select`, `SelectTrigger`, …           | —                                                                                                                                                |
+| `drawer.tsx`       | `Drawer`, `DrawerContent`, …           | —                                                                                                                                                |
 | `alert-dialog.tsx` | `AlertDialog`, `AlertDialogContent`, … | Added by hand: `shadcn add` would overwrite `button.tsx`. Only the parts in use are exported (knip); backdrop uses `bg-backdrop` like the drawer |
 
 Regenerate any of these with: `npx shadcn@latest add <name> --overwrite`
