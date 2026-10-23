@@ -118,7 +118,7 @@ const update = async (id: string, updatedAt: string, fields: Partial<TaskInsert>
   return row;
 };
 
-// parent_id has no foreign key to cascade from, so subtasks are deleted here with their parent
+// parent_id would cascade, but naming the subtasks here returns their ids for the broadcast
 const remove = async (id: string) => {
   const rows = await db
     .delete(tasks)

@@ -1,6 +1,5 @@
 import { defineRelations } from "drizzle-orm";
-import { sqliteTable, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { text } from "drizzle-orm/sqlite-core";
+import { sqliteTable, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { pk, string, nullableString, oneOf, fk, nullableFk, createdAt, updatedAt } from "./columns";
 
 export const categories = sqliteTable("categories", {
@@ -20,7 +19,7 @@ export const tasks = sqliteTable("tasks", {
   userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
   categoryId: nullableFk("category_id", () => categories.id, { onDelete: "set null" }),
   assigneeId: nullableFk("assignee_id", () => users.id, { onDelete: "set null" }),
-  parentId: text("parent_id"),
+  parentId: nullableFk("parent_id", (): AnySQLiteColumn => tasks.id, { onDelete: "cascade" }),
   title: string("title"),
   description: nullableString("description"),
   status: oneOf("status", taskStatuses).default("todo"),
