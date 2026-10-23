@@ -1,6 +1,9 @@
+import { existsSync } from "node:fs";
 import { defineConfig } from "drizzle-kit";
 
-process.loadEnvFile(new URL("../../.env.dev", import.meta.url));
+// CI sets TURSO_* in the environment instead.
+const devEnv = new URL("../../.env.dev", import.meta.url);
+if (existsSync(devEnv)) process.loadEnvFile(devEnv);
 
 export default defineConfig({
   out: "./drizzle",
