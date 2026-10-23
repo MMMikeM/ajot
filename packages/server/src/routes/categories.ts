@@ -85,9 +85,10 @@ export const categoryRoutes = authed()
 
       // findByIdWithCollaborators used (not findById) so we have userIds for broadcast
       // before the row is deleted — after deletion we can't look up collaborators.
-      const [cat, categoryTasks] = await Promise.all([
+      const [cat, categoryTasks, filedShares] = await Promise.all([
         categoryRepo.findByIdWithCollaborators(id),
         taskRepo.listInCategory(id),
+        taskRepo.listSharesFiledIn(id),
       ]);
       if (cat.userId !== userId) throw new HTTPException(403, { message: "Not authorized" });
       const catUserIds = [
@@ -134,6 +135,27 @@ export const categoryRoutes = authed()
       ].filter((uid) => !catUserIds.includes(uid));
       if (taskEvents.length > 0 && outsideUserIds.length > 0)
         broadcastAll(c, taskEvents, outsideUserIds);
+
+      // The FK unfiled these shares without touching the tasks, so whoever filed them would
+      // otherwise keep seeing them under the deleted category on their other devices
+      const deletedIds = new Set(taskAction === "delete" ? affectedIds : []);
+      const unfiled = filedShares.filter((s) => !deletedIds.has(s.taskId));
+      const unfiledTasks = await taskRepo.listSharesForTasks([
+        ...new Set(unfiled.map((s) => s.taskId)),
+      ]);
+      const sharesByTask = new Map(unfiledTasks.map((t) => [t.id, t.shares]));
+      for (const shareeId of new Set(unfiled.map((s) => s.sharedWithUserId)))
+        broadcastAll(
+          c,
+          unfiled
+            .filter((s) => s.sharedWithUserId === shareeId)
+            .map((s) => ({
+              model: "tasks" as const,
+              action: "update" as const,
+              data: { id: s.taskId, shares: sharesByTask.get(s.taskId) ?? [] },
+            })),
+          [shareeId],
+        );
 
       return c.json(category, 200);
     },

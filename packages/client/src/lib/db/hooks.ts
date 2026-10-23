@@ -6,6 +6,7 @@ import {
   contactsCollection,
 } from "~/lib/db/collections";
 import { offline, type CategoryDeleteMetadata, type TaskDeleteMetadata } from "~/lib/db/offline";
+import { getCurrentUserId } from "~/lib/auth/current-user";
 import type { CategoryTaskAction } from "~/lib/constants";
 import type { Task, Category, Note } from "~/lib/types";
 import { now } from "~/lib/utils";
@@ -83,19 +84,28 @@ export const deleteCategory = (id: string, tasks: CategoryTaskAction) => {
   console.log(`[mutation] deleteCategory id=${id} tasks=${tasks}`);
   const allTasks = [...(tasksCollection.state?.values() ?? [])];
   const topLevelIds = new Set(allTasks.filter((t) => t.categoryId === id).map((t) => t.id));
+  const userId = getCurrentUserId();
+  const isMine = (share: Task["shares"][number]) => share.sharedWithUserId === userId;
+  // Shared with this user and filed under the category: the server unfiles it, whatever `tasks` is
+  const filedByMyShare = (task: Task) => task.shares.some((s) => isMine(s) && s.categoryId === id);
   const tx = offline.createOfflineTransaction({
     mutationFnName: "deleteCategory",
     metadata: { categoryId: id, tasks } satisfies CategoryDeleteMetadata,
   });
   const transaction = tx.mutate(() => {
     for (const task of allTasks) {
-      if (tasks === "delete") {
-        if (topLevelIds.has(task.id) || (task.parentId && topLevelIds.has(task.parentId)))
-          tasksCollection.delete(task.id);
+      const inCategory =
+        topLevelIds.has(task.id) || (task.parentId && topLevelIds.has(task.parentId));
+      if (tasks === "delete" && inCategory) {
+        tasksCollection.delete(task.id);
       } else if (topLevelIds.has(task.id)) {
         tasksCollection.update(task.id, (draft) =>
           Object.assign(draft, { categoryId: null, updatedAt: now() }),
         );
+      } else if (filedByMyShare(task)) {
+        tasksCollection.update(task.id, (draft) => {
+          for (const share of draft.shares) if (isMine(share)) share.categoryId = null;
+        });
       }
     }
     categoriesCollection.delete(id);
