@@ -1,4 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { isPushServiceEndpoint } from "@mmmike/web-push/send";
 import pushSubscriptionRepo from "../db/push-subscription.repo";
 import { pushSubscriptionKinds } from "../db/schema";
 import { authed } from "../middleware";
@@ -6,7 +7,8 @@ import { okSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
 
 const subscriptionSchema = z.object({
-  endpoint: z.url(),
+  // The server posts to whatever endpoint is stored, so only accept browser push services.
+  endpoint: z.url().refine(isPushServiceEndpoint, "Not a browser push service endpoint"),
   keys: z.object({ p256dh: z.string(), auth: z.string() }),
 });
 

@@ -1,10 +1,11 @@
 import {
+  InvalidSubscriptionError,
   rawPayload,
   sendPushBatch,
   WebPushError,
   type SendPushOptions,
   type VapidConfig,
-} from "@mmmike/web-push";
+} from "@mmmike/web-push/send";
 import type { PushPayload } from "@newtab-todo/shared";
 import pushSubscriptionRepo from "./db/push-subscription.repo";
 
@@ -32,11 +33,15 @@ export const sendPush = async (
     vapid,
     options,
   );
-  await pushSubscriptionRepo.removeMany(gone);
-  if (failed.length > 0) {
+  const malformed = failed.filter(({ error }) => error instanceof InvalidSubscriptionError);
+  await pushSubscriptionRepo.removeMany([...gone, ...malformed.map(({ endpoint }) => endpoint)]);
+  const retryable = failed.filter(({ error }) => !(error instanceof InvalidSubscriptionError));
+  if (retryable.length > 0) {
     console.warn(
       `Push [${payload.type}] failed:`,
-      failed.map(({ error }) => (error instanceof WebPushError ? error.toJSON() : String(error))),
+      retryable.map(({ error }) =>
+        error instanceof WebPushError ? error.toJSON() : String(error),
+      ),
     );
   }
   return delivered;
