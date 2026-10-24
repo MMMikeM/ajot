@@ -41,7 +41,26 @@ jobs:
             https://extension-sync-service.fly.dev/api/deploy/notify
         continue-on-error: true
 
+      # Zips the stores take as they are: manifest.json at the root, plus the source archive AMO
+      # asks for because the code is bundled
+      - name: Package for the stores
+        run: |
+          version=$(jq -r .version packages/client/package.json)
+          (cd extension/firefox && zip -r -X -q "$OLDPWD/ajot-$version-firefox.zip" .)
+          (cd extension/chrome && zip -r -X -q "$OLDPWD/ajot-$version-chrome.zip" .)
+          git archive --format=zip -o "ajot-$version-source.zip" HEAD
+
       - uses: actions/upload-artifact@v7
         with:
-          name: extension
-          path: extension/
+          path: ajot-*-firefox.zip
+          archive: false
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ajot-*-chrome.zip
+          archive: false
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ajot-*-source.zip
+          archive: false
