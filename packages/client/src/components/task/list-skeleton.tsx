@@ -5,16 +5,19 @@ import { TaskRowsSkeleton } from "./rows-skeleton";
 export function TaskListSkeleton() {
   return (
     <>
-      <div className="mb-3 flex shrink-0 items-center gap-2.5 py-1">
-        <Skeleton className="size-2 rounded-full" />
+      {/* The title's line box: text-[1.75rem] leading-tight */}
+      <div className="mb-3 box-content flex h-[2.1875rem] shrink-0 items-center gap-2.5 py-1">
+        <Skeleton className="mt-1 size-2 rounded-full" />
         <Skeleton className="h-7 w-28" />
         <output className="sr-only">Loading tasks</output>
       </div>
       <div className="touch:order-2 touch:-mx-(--gutter) touch:shrink-0 touch:border-t touch:border-ghost touch:px-(--gutter) touch:pt-2 touch:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
-        <div className="hidden h-9 items-center touch:flex">
-          <Skeleton className="h-4 w-20" />
+        <div className="hidden h-9 items-center gap-2 touch:flex">
+          <Skeleton className="size-2 rounded-full" />
+          <Skeleton className="h-4 w-16" />
         </div>
-        <div className="flex h-11 items-center border-b border-ghost">
+        {/* The input's box: py-2, a text-lg line, then the underline */}
+        <div className="box-content flex h-7 items-center border-b border-ghost py-2">
           <Skeleton className="h-5 w-40" />
         </div>
       </div>
