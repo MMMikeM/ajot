@@ -73,7 +73,6 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
     categories,
     activeCategoryId,
     currentUserId,
-    showInbox,
     inboxCount,
     openCounts,
     handleAdd,
@@ -207,24 +206,22 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
         data-testid="category-sidebar"
         className="fixed top-(--sheet-inset) left-(--panel-left) z-10 hidden h-[calc(100dvh-2*var(--sheet-inset))] w-(--sidebar-w) flex-col overflow-y-auto py-8 pr-1 pl-3 desk:flex"
       >
-        {showInbox && (
-          <button
-            onClick={() => openList(null)}
-            className={cn(
-              "relative flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
-              onListPage && activeCategoryId === null
-                ? "text-foreground"
-                : "text-hint hover:text-foreground",
-            )}
-          >
-            {onListPage && activeCategoryId === null && (
-              <span className="absolute top-1/2 left-0 h-3.5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
-            )}
-            <ColorDot size="sm" color={INBOX_COLOR} />
-            <span className="text-left">Inbox</span>
-            <OpenCount count={inboxCount} />
-          </button>
-        )}
+        <button
+          onClick={() => openList(null)}
+          className={cn(
+            "relative flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
+            onListPage && activeCategoryId === null
+              ? "text-foreground"
+              : "text-hint hover:text-foreground",
+          )}
+        >
+          {onListPage && activeCategoryId === null && (
+            <span className="absolute top-1/2 left-0 h-3.5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
+          )}
+          <ColorDot size="sm" color={INBOX_COLOR} />
+          <span className="text-left">Inbox</span>
+          <OpenCount count={inboxCount} />
+        </button>
 
         {ownedCategories.map((cat, index) => renderPill(cat, index))}
 

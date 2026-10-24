@@ -42,7 +42,6 @@ function CategoryMobileSheet() {
     categories,
     activeCategoryId,
     currentUserId,
-    showInbox,
     inboxCount,
     openCounts,
     handleAdd,
@@ -157,21 +156,19 @@ function CategoryMobileSheet() {
             Categories
           </DrawerTitle>
 
-          {showInbox && (
-            <div className={rowClass(activeCategoryId === null)}>
-              <button
-                onClick={() => selectAndClose(null)}
-                aria-current={activeCategoryId === null ? "true" : undefined}
-                className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3 text-left"
-              >
-                <ColorDot color={INBOX_COLOR} />
-                <span className="flex-1">Inbox</span>
-                <OpenCount count={inboxCount} />
-              </button>
-              {/* Spacer matching the options button so counts line up */}
-              <span className="w-11 shrink-0" aria-hidden="true" />
-            </div>
-          )}
+          <div className={rowClass(activeCategoryId === null)}>
+            <button
+              onClick={() => selectAndClose(null)}
+              aria-current={activeCategoryId === null ? "true" : undefined}
+              className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3 text-left"
+            >
+              <ColorDot color={INBOX_COLOR} />
+              <span className="flex-1">Inbox</span>
+              <OpenCount count={inboxCount} />
+            </button>
+            {/* Spacer matching the options button so counts line up */}
+            <span className="w-11 shrink-0" aria-hidden="true" />
+          </div>
 
           {ownedCategories.map(renderRow)}
 
