@@ -5,7 +5,7 @@ import { db, inTransaction } from "./client";
 import noteRepo from "./note.repo";
 import { tasks, taskShares, users } from "./schema";
 import { InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
-import { isoDatetime } from "@newtab-todo/shared/iso";
+import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 
 export type TaskShareInsert = typeof taskShares.$inferInsert;
 
