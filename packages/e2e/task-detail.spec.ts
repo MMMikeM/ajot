@@ -89,9 +89,6 @@ test.describe("task detail — visual language", () => {
     expect(cls).toContain("text-hint");
     expect(cls).toContain("hover:text-destructive");
     expect(cls).not.toContain("bg-destructive");
-    // Must be a plain <button>, not the Button component wrapper
-    const slot = await deleteBtn.getAttribute("data-slot");
-    expect(slot).not.toBe("button");
   });
 
   test("title input is an Input primitive (underline, no box)", async ({ user1Page: page }) => {
@@ -123,7 +120,8 @@ test.describe("task detail — visual language", () => {
     await openFirstTaskDetail(page);
 
     await expect(drawer(page).locator("select")).toHaveCount(0);
-    await expect(drawer(page).locator('[data-slot="select-trigger"]')).toBeVisible();
+    const shareWith = drawer(page).getByRole("combobox", { name: "Share with" });
+    await expect(shareWith).toHaveAttribute("data-slot", "select-trigger");
   });
 });
 

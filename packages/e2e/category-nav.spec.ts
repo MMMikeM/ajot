@@ -125,7 +125,7 @@ test("desktop: category options popover Rename item is not obscured by main cont
   await createCategory(page, "LayerTest", "sidebar");
   await openCategoryOptionsPopover(page, "LayerTest");
 
-  const renameBtn = page.getByRole("button", { name: "Rename" }).first();
+  const renameBtn = page.getByRole("button", { name: "Rename", exact: true });
   await expect(renameBtn).toBeVisible({ timeout: 3000 });
 
   // elementFromPoint at the center of the Rename button must resolve to an
@@ -166,7 +166,8 @@ test("desktop: clicking Rename in category options starts rename flow", async ({
   await createCategory(page, "RenameMe", "sidebar");
   await openCategoryOptionsPopover(page, "RenameMe");
 
-  const renameBtn = page.getByRole("button", { name: "Rename" }).first();
+  // Exact: "RenameMe" is a button too
+  const renameBtn = page.getByRole("button", { name: "Rename", exact: true });
   await expect(renameBtn).toBeVisible({ timeout: 3000 });
   // locator.click() dispatches CDP pointer events which interfere with
   // floating-ui's useDismiss insideReactTree flag. Use element.click() instead.
@@ -185,7 +186,8 @@ test("desktop: clicking Delete in category options removes the category", async 
   await createCategory(page, "DeleteMe", "sidebar");
   await openCategoryOptionsPopover(page, "DeleteMe");
 
-  const deleteBtn = page.getByRole("button", { name: "Delete" }).first();
+  // Exact: "DeleteMe" and each task's "Delete task" are buttons too
+  const deleteBtn = page.getByRole("button", { name: "Delete", exact: true });
   await expect(deleteBtn).toBeVisible({ timeout: 3000 });
   // Same floating-ui/CDP issue as Rename above — use element.click()
   await deleteBtn.evaluate((el) => (el as HTMLElement).click());
