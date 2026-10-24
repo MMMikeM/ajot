@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useState } from "react";
+import { useState } from "react";
 import { Toast } from "@base-ui/react/toast";
 import {
   useTasks,
@@ -38,17 +38,6 @@ export const useCategoryActions = () => {
     collaboratedCategoryIds,
   );
   const inboxCount = openCounts.get(null) ?? 0;
-  const showInbox = inboxCount > 0;
-
-  const autoSelectFirst = useEffectEvent(() => {
-    if (activeCategoryId === null && !showInbox && categories.length > 0) {
-      setActiveCategoryId(categories[0].id);
-    }
-  });
-
-  useEffect(() => {
-    autoSelectFirst();
-  }, [showInbox]);
 
   const handleAdd = (name: string) => {
     const cat = addCategory({
@@ -114,7 +103,6 @@ export const useCategoryActions = () => {
     categories,
     activeCategoryId,
     currentUserId,
-    showInbox,
     inboxCount,
     openCounts,
     handleAdd,

@@ -92,6 +92,28 @@ test.describe("task rows", () => {
 });
 
 test.describe("navigation", () => {
+  test("an empty Inbox stays open and listed", async ({ page }, testInfo) => {
+    const data = await mockApi(page);
+    await page.route("**/api/tasks", (route) =>
+      route.request().method() === "GET"
+        ? route.fulfill({ json: data.tasks.filter((t) => t.categoryId) })
+        : route.fallback(),
+    );
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("type something")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Inbox" })).toHaveCount(1);
+
+    if (testInfo.project.name !== "desktop") await page.getByTestId("category-nav-trigger").click();
+    await page.getByRole("button", { name: /^Work/ }).first().click();
+    await expect(page.getByRole("heading", { level: 2, name: "Work" })).toHaveCount(1);
+    if (testInfo.project.name !== "desktop") await page.getByTestId("category-nav-trigger").click();
+    await page
+      .getByRole("button", { name: /^Inbox/ })
+      .first()
+      .click();
+    await expect(page.getByRole("heading", { level: 2, name: "Inbox" })).toHaveCount(1);
+  });
+
   test("the list title renders once", async ({ page }, testInfo) => {
     await openList(page);
     await expect(page.getByRole("heading", { level: 2, name: "Inbox" })).toHaveCount(1);
