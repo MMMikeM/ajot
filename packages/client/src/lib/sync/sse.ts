@@ -16,6 +16,7 @@ import {
 import type { MutationEvent } from "~/lib/constants";
 import { createExternalStore } from "~/lib/external-store";
 import { offline } from "~/lib/db/offline";
+import { trackSyncState, type SyncState } from "~/lib/sync/sync-state";
 
 let es: EventSource | null = null;
 
@@ -23,9 +24,9 @@ let es: EventSource | null = null;
 // service worker can't hold an EventSource, so each Chrome tab connects itself.
 const backgroundHoldsSse = () => location.protocol === "moz-extension:";
 
-export type SyncState = "disconnected" | "connecting" | "connected";
 const syncStateStore = createExternalStore<SyncState>("disconnected");
 export const useSyncState = syncStateStore.useStore;
+const ownSyncState = trackSyncState(syncStateStore.set);
 
 let pendingSnapshot = 0;
 const pendingListeners = new Set<() => void>();
@@ -119,15 +120,22 @@ const handleSSEData = (data: string) => {
 
 const sseBackoff = createBackoff(() => connectSSE());
 
-const connectSSE = () => {
+const disconnectSSE = () => {
   sseBackoff.cancel();
+  es?.close();
+  es = null;
+};
+
+const connectSSE = () => {
+  disconnectSSE();
   const token = getAuthToken();
-  if (!token) {
-    syncStateStore.set("disconnected");
+  // The online listener reconnects once the network is back
+  if (!token || !navigator.onLine) {
+    ownSyncState.stopped();
     return;
   }
 
-  syncStateStore.set("connecting");
+  ownSyncState.connecting();
   const url = `${getServerUrl()}${EVENTS_PATH}?token=${encodeURIComponent(token)}`;
   const source = new EventSource(url);
   es = source;
@@ -135,34 +143,47 @@ const connectSSE = () => {
     handleSSEData(e.data);
   });
   source.addEventListener("open", () => {
-    syncStateStore.set("connected");
+    ownSyncState.opened();
     sseBackoff.reset();
     refetchAll();
   });
   source.addEventListener("error", () => {
-    syncStateStore.set("connecting");
-    if (source.readyState !== EventSource.CLOSED || es !== source) return;
+    if (es !== source) return;
+    ownSyncState.failed();
+    if (source.readyState !== EventSource.CLOSED) return;
     es = null;
     sseBackoff.schedule();
   });
 };
 
-const reconnect = () => {
-  sseBackoff.cancel();
+const restartSSE = () => {
   sseBackoff.reset();
-  es?.close();
-  es = null;
-  syncStateStore.set("disconnected");
-  if (getAuthToken()) {
-    connectSSE();
-    if (getBuildTarget() === "browser") void registerPushSubscription();
-  }
+  ownSyncState.restart();
+  connectSSE();
+};
+
+const reconnect = () => {
+  restartSSE();
+  if (getAuthToken() && getBuildTarget() === "browser") void registerPushSubscription();
+};
+
+const listenNetworkChanges = () => {
+  window.addEventListener("offline", () => {
+    disconnectSSE();
+    ownSyncState.stopped();
+  });
+  window.addEventListener("online", () => {
+    if (es && es.readyState !== EventSource.CLOSED) return;
+    restartSSE();
+  });
 };
 
 const listenExtensionMessages = () => {
   ext.runtime.onMessage.addListener((message: unknown) => {
-    const msg = message as { type?: string; payload?: MutationEvent };
-    if (msg?.type === "SSE_MUTATION" && msg.payload) {
+    const msg = message as { type?: string; payload?: MutationEvent; state?: SyncState };
+    if (msg?.type === MSG_BG_STATUS && msg.state && backgroundHoldsSse()) {
+      syncStateStore.set(msg.state);
+    } else if (msg?.type === "SSE_MUTATION" && msg.payload) {
       // Any message from the background page means the SSE connection is alive.
       syncStateStore.set("connected");
       void applyMutation(msg.payload);
@@ -186,18 +207,20 @@ export const initSync = () => {
   if (target === "browser" || (target === "extension" && !backgroundHoldsSse())) {
     if (!es && getAuthToken()) connectSSE();
     subscribeAuthToken(reconnect);
+    listenNetworkChanges();
   }
   if (target === "browser") listenSwMessages();
   if (target === "extension") {
     listenExtensionMessages();
     if (!backgroundHoldsSse()) return;
     // Probe the background page for its current SSE connection state so the
-    // indicator isn't stuck at "Offline" on fresh tab load.
+    // indicator isn't stuck at "Offline" on fresh tab load. It broadcasts later changes.
+    syncStateStore.set(navigator.onLine ? "connecting" : "disconnected");
     ext.runtime
       .sendMessage({ type: MSG_GET_STATUS })
       .then((resp: unknown) => {
-        const r = resp as { type?: string; connected?: boolean };
-        if (r?.type === MSG_BG_STATUS && r.connected) syncStateStore.set("connected");
+        const r = resp as { type?: string; state?: SyncState };
+        if (r?.type === MSG_BG_STATUS && r.state) syncStateStore.set(r.state);
       })
       .catch(() => {}); // background not yet ready — first SYNC_* message will update state
   }

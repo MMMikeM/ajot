@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type RefCallback } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefCallback } from "react";
 import { ChevronRight } from "lucide-react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
@@ -13,6 +13,7 @@ import { TaskItem } from "./item";
 import { TaskRowsSkeleton } from "./rows-skeleton";
 import { finishStartup } from "~/lib/startup-timing";
 import { useTaskActions } from "./use-actions";
+import { handOffRowFocus } from "./focus-handoff";
 import { useTaskActions as useDndActions } from "~/lib/hooks/use-task-actions";
 import type { Task } from "~/lib/types";
 
@@ -90,6 +91,11 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   // that id by addTask) still count as owned and show up in the list.
   const userId = useOptimisticUserId();
   const actions = useTaskActions();
+  const activeListRef = useRef<HTMLUListElement>(null);
+  const withFocusHandoff = (action: (task: Task) => void) => (task: Task) => {
+    handOffRowFocus(activeListRef.current, task.id);
+    action(task);
+  };
 
   const categories = rawCategories
     ? [...rawCategories].sort((a, b) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? ""))
@@ -130,7 +136,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   return (
     <DragDropProvider onDragEnd={handleDragEnd}>
       <div className="flex flex-1 flex-col gap-4">
-        <ul className="flex flex-col gap-1">
+        <ul ref={activeListRef} className="flex flex-col gap-1">
           {activeTasks.map((task, index) => (
             <SortableTask key={task.id} id={task.id} index={index}>
               {(ref, handleRef) => (
@@ -140,8 +146,8 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
                     dragHandleRef={handleRef}
                     subtasks={actions.getSubtasks(task.id)}
                     onOpen={onSelectTask}
-                    onToggle={actions.handleToggle}
-                    onDelete={actions.handleDelete}
+                    onToggle={withFocusHandoff(actions.handleToggle)}
+                    onDelete={withFocusHandoff(actions.handleDelete)}
                     onSetDueDate={actions.handleSetDueDate}
                     onAddSubtask={actions.handleAddSubtask}
                     isInSharedCategory={!!task.categoryId && sharedCategoryIds.has(task.categoryId)}
