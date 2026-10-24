@@ -269,6 +269,19 @@ test.describe("signing up", () => {
   });
 });
 
+test("tasks saved on the device show before a slow server answers", async ({ page }) => {
+  await openList(page);
+  // Persisted to OPFS by now; the next load's fetch takes far longer than the assertion allows
+  await page.waitForTimeout(1000);
+  await page.route("**/api/tasks", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    await route.fallback();
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(row(page, "Book flights")).toBeVisible({ timeout: 1500 });
+});
+
 test("the app still starts when OPFS is refused, as in a Firefox private window", async ({
   page,
 }) => {

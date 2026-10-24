@@ -116,12 +116,11 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
     categories.filter((c) => c.collaborators && c.collaborators.length > 0).map((c) => c.id),
   );
 
-  // While OPFS is initialising, data is undefined or the collection is loading.
-  // Guard both: data===undefined catches the pre-ready state, isLoading catches
-  // the brief window where the collection is ready but hasn't emitted yet.
-  if (tasksLoading || categoriesLoading || allTasks === undefined || rawCategories === undefined) {
-    return <TaskRowsSkeleton />;
-  }
+  // A persisted collection only reports ready once the server has answered, but the rows saved
+  // on this device are there before that. Show them; the skeleton is for having nothing yet.
+  const isLoading =
+    tasksLoading || categoriesLoading || allTasks === undefined || rawCategories === undefined;
+  if (isLoading && !allTasks?.length) return <TaskRowsSkeleton />;
 
   const doneTasks = categoryTasks.filter((t) => t.status === "done");
 
