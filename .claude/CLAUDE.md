@@ -42,7 +42,7 @@ Cross-package imports use `@newtab-todo/shared` and `@newtab-todo/server` (type-
 
 ## Dev workflow
 
-- `pnpm dev` / `pnpm build` / `pnpm build:ext` / `pnpm start` — workspace tasks run via `vp run -r` (replaces turbo)
+- `pnpm dev` / `pnpm build` / `pnpm build:ext` / `pnpm start` — workspace tasks run via `vp run` (replaces turbo). Task dependencies live in package `vite.config.ts` `run.tasks` (`dependsOn`): `build:ext` builds the client first
 - `pnpm lint` / `pnpm fmt` — `vp lint` / `vp fmt` (oxlint / oxfmt; config lives in the root `vite.config.ts`, not separate oxc config files)
 - `pnpm typecheck` — `vp check --no-fmt --no-lint` (TypeScript 7 via tsgolint; there is no per-package `tsc`)
 - `pnpm check` — `vp check` (fmt + lint + type-aware lint + typecheck) + knip + dependency-cruiser (`pnpm deps:check`; import-graph rules in `.dependency-cruiser.cjs`) (CI gate)
