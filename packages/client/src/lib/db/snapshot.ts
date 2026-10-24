@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { markStartup } from "~/lib/startup-timing";
 
 // Keeps each list's last server response in IndexedDB and puts it back in the query cache on
 // startup, so a query collection fills from it before the server answers. Collections without
@@ -32,6 +33,7 @@ const read = (db: IDBDatabase, keys: readonly string[]) =>
 /** Seeds the cache from the saved lists, then saves each list again whenever its query changes. */
 export const restoreSnapshot = async (queryClient: QueryClient, keys: readonly string[]) => {
   const db = await openDb();
+  markStartup("snapshot-opened");
   for (const [key, data] of await read(db, keys)) queryClient.setQueryData([key], data);
 
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
