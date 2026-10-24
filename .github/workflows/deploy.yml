@@ -16,10 +16,7 @@ jobs:
 
       - name: Extract extension artifact
         run: |
-          docker buildx build --target extension --output type=local,dest=./extension \
-            --build-arg SERVER_URL=https://extension-sync-service.fly.dev \
-            --build-arg VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY }} \
-            .
+          docker buildx build --target extension --output type=local,dest=./extension .
 
       - uses: actions/setup-node@v7
         with:
@@ -38,10 +35,7 @@ jobs:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
 
-      - run: >
-          flyctl deploy --local-only
-          --build-arg SERVER_URL=https://extension-sync-service.fly.dev
-          --build-arg VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY }}
+      - run: flyctl deploy --local-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 

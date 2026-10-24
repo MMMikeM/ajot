@@ -18,7 +18,6 @@ COPY packages/client/package.json packages/client/
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm i --frozen-lockfile
 COPY . .
-ARG SERVER_URL VITE_VAPID_PUBLIC_KEY
 RUN pnpm build:ext
 
 FROM scratch AS extension
