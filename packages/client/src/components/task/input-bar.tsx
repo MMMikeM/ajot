@@ -54,7 +54,6 @@ export function TaskInputBar() {
         aria-label={`Adding to ${activeCategory?.name ?? "Inbox"}. Change list`}
         className="relative -ml-2 hidden h-9 max-w-full items-center gap-2 rounded-full px-2 text-sm transition-colors after:absolute after:inset-x-0 after:-inset-y-1 active:bg-muted touch:flex"
       >
-        <span className="shrink-0 text-hint">Adding to</span>{" "}
         <ColorDot color={activeCategory ? (activeCategory.color ?? undefined) : INBOX_COLOR} />
         <span className="truncate font-medium text-foreground">
           {activeCategory?.name ?? "Inbox"}

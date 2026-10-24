@@ -136,7 +136,6 @@ export function TaskItem({
     close: closeSwipe,
   } = useSwipeReveal(!IS_TOUCH || !!isSubtask, swipeHint);
   const swipeEnabled = IS_TOUCH && !isSubtask;
-  const taskOwnerName = task.user?.name ?? null;
 
   const openPicker = () => dateRef.current?.showPicker();
 
@@ -235,21 +234,6 @@ export function TaskItem({
                 <X size={16} />
                 Delete
               </button>
-            )}
-            {!canDelete && taskOwnerName && (
-              // Where Delete would be: says whose task it is, which is why it can't be deleted
-              <p className={cn(swipeCellClass, "text-hint")}>
-                <span aria-hidden="true" className="contents">
-                  <InitialsAvatar
-                    name={taskOwnerName}
-                    className="bg-collab text-collab-foreground"
-                  />
-                  <span>{taskOwnerName.split(" ")[0]}'s</span>
-                </span>
-                <span className="sr-only">
-                  {taskOwnerName}'s task. Only {taskOwnerName} can delete it.
-                </span>
-              </p>
             )}
           </div>
         )}
