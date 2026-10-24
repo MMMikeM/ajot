@@ -11,6 +11,7 @@ import { getEffectiveCategoryId } from "~/lib/effective-category";
 import { CategoryNav } from "~/components/category-nav";
 import { Button } from "~/components/ui/button";
 import { TaskItem } from "./item";
+import { TaskRowsSkeleton } from "./rows-skeleton";
 import { useTaskActions } from "./use-actions";
 import { useTaskActions as useDndActions } from "~/lib/hooks/use-task-actions";
 import type { Task } from "~/lib/types";
@@ -119,7 +120,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   // Guard both: data===undefined catches the pre-ready state, isLoading catches
   // the brief window where the collection is ready but hasn't emitted yet.
   if (tasksLoading || categoriesLoading || allTasks === undefined || rawCategories === undefined) {
-    return null;
+    return <TaskRowsSkeleton />;
   }
 
   const doneTasks = categoryTasks.filter((t) => t.status === "done");
