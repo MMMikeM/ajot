@@ -26,6 +26,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Textarea } from "~/components/ui/field";
 import { cn } from "~/lib/utils";
+import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 import { canDeleteTask } from "~/lib/task-permissions";
 import { useTasks } from "~/lib/db/hooks";
 import { useTaskActions } from "~/components/task/use-actions";
@@ -61,10 +62,6 @@ const autoGrow = (el: HTMLTextAreaElement | null) => {
   el.style.height = `${el.scrollHeight}px`;
 };
 
-// The toast viewport sits outside the sheet, so pressing Undo reads as a press outside it
-const isToastPress = (event: Event) =>
-  event.target instanceof Element && event.target.closest("[data-toast-undo]") !== null;
-
 // Underlined only while editing, so the title and description read as text, not a form
 const quietField = "border-transparent focus-visible:border-hint";
 
@@ -88,14 +85,9 @@ function TaskDetail({
   return (
     <Drawer
       open={open}
-      onOpenChange={(next, details) => {
-        if (next) return;
-        if (details.reason === "outside-press" && isToastPress(details.event)) {
-          details.cancel();
-          return;
-        }
-        onClose();
-      }}
+      onOpenChange={keepOpenOnToastPress((next) => {
+        if (!next) onClose();
+      })}
     >
       {/* Over AppShell's column. On desktop it docks inside the sheet's inset, so the
           detail reads as a page of the notepad rather than a drawer from the window edge.
@@ -143,6 +135,9 @@ const TaskDetailContent = ({
   const [description, setDescription] = useState(task.description ?? "");
   const [revealed, setRevealed] = useState<ReadonlySet<DetailPiece>>(new Set());
   const [offering, setOffering] = useState(false);
+  // Rows shown when the sheet opened stay until it closes: unassigning would otherwise remove
+  // the row under the pointer, as hiding an added field on blur did
+  const [openedAssigned] = useState(() => !!task.assigneeId);
   const isDone = task.status === "done";
   const isTopLevel = !task.parentId;
   const dateRef = useRef<HTMLInputElement>(null);
@@ -176,7 +171,9 @@ const TaskDetailContent = ({
     focusOnReveal[piece]?.current?.focus();
   };
 
-  const showDescription = description !== "" || revealed.has("description");
+  // From the saved value too: clearing the draft must not unmount the field mid-edit, before
+  // its blur saves the empty description
+  const showDescription = !!task.description || description !== "" || revealed.has("description");
   const canAssign = sharing.isOwner && isTopLevel && !task.assigneeId && sharing.others.length > 0;
 
   const offers = [
@@ -184,7 +181,9 @@ const TaskDetailContent = ({
     !showDescription && { key: "description", label: "Description", icon: AlignLeft },
     isTopLevel && { key: "subtask", label: "Subtask", icon: ListChecks },
     { key: "note", label: "Note", icon: StickyNote },
-    !filing.category &&
+    // Subtasks follow their parent's list
+    isTopLevel &&
+      !filing.category &&
       filing.choices.length > 0 &&
       !revealed.has("list") && { key: "list", label: "List", icon: ListPlus },
     sharing.isOwner &&
@@ -293,11 +292,15 @@ const TaskDetailContent = ({
             onClear={() => updateTask(task.id, { dueDate: null })}
           />
         )}
-        <ListField filing={filing} choosing={revealed.has("list")} />
+        {isTopLevel && <ListField filing={filing} choosing={revealed.has("list")} />}
         {isTopLevel && (
           <SharingField task={task} sharing={sharing} adding={revealed.has("share")} />
         )}
-        <AssigneeField task={task} sharing={sharing} choosing={revealed.has("assignee")} />
+        <AssigneeField
+          task={task}
+          sharing={sharing}
+          choosing={revealed.has("assignee") || openedAssigned}
+        />
       </div>
 
       {isTopLevel && (

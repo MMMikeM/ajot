@@ -58,11 +58,14 @@ test.describe("sync status", () => {
     await expect(syncButton(page)).toHaveText("Sync");
   });
 
-  test("a stream the server keeps refusing reads as Offline", async ({ page }) => {
-    // mockApi's 204 closes the stream; the first retry, a second later, fails the same way
+  test("a server that keeps refusing reads as not syncing, not offline", async ({ page }) => {
+    // mockApi's 204 closes the stream; the first retry, a second later, fails the same way.
+    // The device is online, so waiting for a connection wouldn't help.
     await mockApi(page);
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await expect(syncButton(page)).toHaveText("Offline · saved here", { timeout: 15000 });
+    await expect(syncButton(page)).toHaveText("Not syncing", { timeout: 15000 });
+    await syncButton(page).click();
+    await expect(page.getByText("Can't reach the sync server.", { exact: false })).toBeVisible();
   });
 });
 

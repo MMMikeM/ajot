@@ -19,6 +19,7 @@ import { useCategoryActions } from "./use-category-actions";
 import { CategoryOptionsContent } from "./CategoryOptionsContent";
 import { DeleteCategoryDialog } from "./DeleteCategoryDialog";
 import { SharedWithMeGroup } from "./SharedWithMeGroup";
+import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 
 const rowClass = (isActive: boolean) =>
   cn(
@@ -153,7 +154,7 @@ function CategoryMobileSheet() {
 
   return (
     <>
-      <Drawer open={navOpen} onOpenChange={setNavOpen}>
+      <Drawer open={navOpen} onOpenChange={keepOpenOnToastPress(setNavOpen)}>
         <DrawerContent>
           <DrawerTitle className="px-5 pt-3 pb-2 text-xs font-medium tracking-wide text-hint uppercase">
             Lists

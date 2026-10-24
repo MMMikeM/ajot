@@ -41,11 +41,6 @@ const connect = async () => {
     syncState.stopped();
     return;
   }
-  if (!navigator.onLine) {
-    console.log("[bg-sse] offline, connecting when the network is back");
-    syncState.stopped();
-    return;
-  }
 
   syncState.connecting();
   const url = `${session.serverUrl}${EVENTS_PATH}?token=${encodeURIComponent(session.token)}`;

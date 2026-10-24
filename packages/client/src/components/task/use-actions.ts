@@ -1,19 +1,19 @@
 import { useRef } from "react";
 import { flushSync } from "react-dom";
-import { Toast } from "@base-ui/react/toast";
 import { useTasks, useNotes, updateTask, deleteTask } from "~/lib/db/hooks";
 import { addTask } from "~/lib/db/add-task";
+import { useUndoToast } from "~/lib/hooks/use-undo-toast";
 import type { Task } from "~/lib/types";
 
 export const useTaskActions = () => {
   const { data: allTasks } = useTasks();
   // Keeps notes loaded: deleting a task unlinks its notes, and Undo links them back
   useNotes();
-  const toastManager = Toast.useToastManager();
+  const pushUndoToast = useUndoToast();
   const undoIdRef = useRef<string | undefined>(undefined);
 
   const pushUndo = (message: string, onUndo: () => void) => {
-    undoIdRef.current = toastManager.add({ title: message, timeout: 5000, data: { onUndo } });
+    undoIdRef.current = pushUndoToast(message, onUndo);
   };
 
   const handleToggle = (task: Task) => {
@@ -42,12 +42,7 @@ export const useTaskActions = () => {
       originEl.style.viewTransitionName = "undo-morph";
       const vt = document.startViewTransition(() => {
         flushSync(() => {
-          const onUndo = deleteTask(task.id);
-          undoIdRef.current = toastManager.add({
-            title: "Task deleted",
-            timeout: 5000,
-            data: { onUndo },
-          });
+          pushUndo("Task deleted", deleteTask(task.id));
         });
         const toastEl = document.querySelector<HTMLElement>("[data-toast-undo]");
         if (toastEl) toastEl.style.viewTransitionName = "undo-morph";

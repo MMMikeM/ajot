@@ -1,5 +1,4 @@
 import { type ReactNode } from "react";
-import { Toast } from "@base-ui/react/toast";
 import { cn } from "~/lib/utils";
 
 export type DetailPiece = "description" | "subtask" | "note" | "list" | "share" | "assignee";
@@ -33,13 +32,3 @@ export const DetailRow = ({
     <div className="flex min-w-0 flex-1 flex-col">{children}</div>
   </div>
 );
-
-/** Grows a 36px touch control to a 44px target without changing its size. */
-export const hitArea =
-  "relative touch:h-9 touch:after:absolute touch:after:inset-x-0 touch:after:-inset-y-1";
-
-export const useUndoToast = () => {
-  const toastManager = Toast.useToastManager();
-  return (title: string, onUndo: () => void) =>
-    toastManager.add({ title, timeout: 5000, data: { onUndo } });
-};

@@ -10,7 +10,9 @@ import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { cn } from "~/lib/utils";
 import { canDeleteTask } from "~/lib/task-permissions";
-import { DetailRow, hitArea, useUndoToast } from "~/components/task/detail-row";
+import { DetailRow } from "~/components/task/detail-row";
+import { hitArea } from "~/components/hit-area";
+import { useUndoToast } from "~/lib/hooks/use-undo-toast";
 
 const AddLine = ({
   inputRef,
