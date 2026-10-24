@@ -5,8 +5,10 @@ import { RouterProvider } from "@tanstack/react-router";
 import { queryClient } from "~/lib/db/query-client";
 import { getRouter } from "./router";
 import { initSync } from "~/lib/sync/sse";
+import { markStartup } from "~/lib/startup-timing";
 import "./app.css";
 
+markStartup("modules-loaded");
 initSync();
 
 console.log(`[build] ${__BUILD_VERSION__}`);

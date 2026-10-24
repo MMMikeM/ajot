@@ -4,6 +4,7 @@ import { getAuthToken } from "~/lib/auth/token";
 import { expireSession } from "~/lib/auth/session";
 import { clientId } from "~/lib/client-id";
 import { getServerUrl } from "~/lib/server-url";
+import { markStartup } from "~/lib/startup-timing";
 
 // During SSR prerender (Node.js), relative URLs are invalid and there's no auth.
 // Return empty JSON so collections render with no data — client hydrates after mount.
@@ -15,6 +16,15 @@ export const apiHeaders = (): Record<string, string> => {
   return { ...(token && { Authorization: `Bearer ${token}` }), "X-Client-Id": clientId };
 };
 
+const answeredPaths = new Set<string>();
+
+const markFirstResponse = (url: string) => {
+  const path = new URL(url, location.href).pathname;
+  if (answeredPaths.has(path)) return;
+  answeredPaths.add(path);
+  markStartup(`server ${path}`);
+};
+
 const browserFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const token = getAuthToken();
   const headers = new Headers(init?.headers);
@@ -22,6 +32,7 @@ const browserFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   // Routes are relative; the extension sends them to the server the user chose
   const url = typeof input === "string" && input.startsWith("/") ? getServerUrl() + input : input;
   const res = await fetch(url, { ...init, headers });
+  if (typeof url === "string") markFirstResponse(url);
   // Skip if the user signed in again while this request was in flight
   if (res.status === 401 && token && token === getAuthToken()) expireSession();
   return res;
