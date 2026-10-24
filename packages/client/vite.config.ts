@@ -77,6 +77,7 @@ const opfsWorker = (): PluginOption => ({
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, searchForWorkspaceRoot(process.cwd()), "");
 
+  // The API server the dev proxy forwards to
   const serverUrl = env.SERVER_URL || "http://localhost:3000";
 
   return {
@@ -96,7 +97,6 @@ export default defineConfig(({ mode }) => {
       tsconfigPaths: true,
     },
     define: {
-      "import.meta.env.SERVER_URL": JSON.stringify(serverUrl),
       __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
       __BUILD_VERSION__: JSON.stringify(
         `${new Date().toISOString().slice(0, 16)}:${process.env.GITHUB_SHA?.slice(0, 7) ?? "dev"}`,

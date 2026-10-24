@@ -1,6 +1,6 @@
 // Assembles the Firefox MV2 and Chrome MV3 extensions from the PWA build in dist/, so it must
 // run after `pnpm build`.
-import { build, loadEnv, searchForWorkspaceRoot } from "vite";
+import { build } from "vite";
 import { readFileSync, writeFileSync, cpSync, rmSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -8,21 +8,21 @@ const ROOT = resolve(import.meta.dirname);
 const CLIENT_DIST = join(ROOT, "dist");
 const EXT_OUT = join(ROOT, "dist-extension");
 
-const connectSrc = (serverUrl: string) =>
-  `connect-src 'self' https: ${serverUrl.startsWith("http:") ? serverUrl : ""}`.trim();
+// The user picks the server at runtime, so any HTTPS origin, plus local servers for development
+const CONNECT_SRC = "connect-src 'self' https: http://localhost:* http://127.0.0.1:*";
 
-const firefoxManifest = (serverUrl: string) => ({
+const firefoxManifest = {
   manifest_version: 2,
   name: "New Tab Todo",
   version: "1.0.0",
   browser_specific_settings: { gecko: { id: "newtab-todo@local" } },
   chrome_url_overrides: { newtab: "index.html" },
-  content_security_policy: `script-src 'self' 'unsafe-eval'; object-src 'self'; ${connectSrc(serverUrl)}`,
+  content_security_policy: `script-src 'self' 'unsafe-eval'; object-src 'self'; ${CONNECT_SRC}`,
   permissions: ["storage"],
   background: { scripts: ["background.js"], persistent: true },
-});
+};
 
-const chromeManifest = (serverUrl: string) => ({
+const chromeManifest = {
   manifest_version: 3,
   name: "New Tab Todo",
   version: "1.0.0",
@@ -31,11 +31,11 @@ const chromeManifest = (serverUrl: string) => ({
   chrome_url_overrides: { newtab: "index.html" },
   // MV3 rejects 'unsafe-eval'; 'wasm-unsafe-eval' is enough for wa-sqlite.
   content_security_policy: {
-    extension_pages: `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; ${connectSrc(serverUrl)}`,
+    extension_pages: `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; ${CONNECT_SRC}`,
   },
   permissions: ["storage", "notifications"],
   background: { service_worker: "background.js" },
-});
+};
 
 const patchHtml = (outDir: string) => {
   let html = readFileSync(join(outDir, "index.html"), "utf-8");
@@ -89,16 +89,6 @@ const inlineWasm = (outDir: string) => {
   }
 };
 
-const env = loadEnv("production", searchForWorkspaceRoot(ROOT), "");
-const serverUrl = env.SERVER_URL || "http://localhost:3000";
-const vapidPublicKey = env.VITE_VAPID_PUBLIC_KEY ?? "";
-console.log(`[build:ext] SERVER_URL: ${serverUrl}`);
-if (!vapidPublicKey) {
-  const message = "VITE_VAPID_PUBLIC_KEY is not set: the Chrome build can't sync in the background";
-  if (process.env.CI) throw new Error(message);
-  console.warn(`[build:ext] ${message}`);
-}
-
 type Target = {
   name: "firefox" | "chrome";
   backgroundEntry: string;
@@ -109,12 +99,12 @@ const targets: Target[] = [
   {
     name: "firefox",
     backgroundEntry: "background-firefox.ts",
-    manifest: firefoxManifest(serverUrl),
+    manifest: firefoxManifest,
   },
   {
     name: "chrome",
     backgroundEntry: "background-chrome.ts",
-    manifest: chromeManifest(serverUrl),
+    manifest: chromeManifest,
   },
 ];
 
@@ -134,8 +124,6 @@ const assemble = async (target: Target) => {
     publicDir: false,
     resolve: { alias: { "~": join(ROOT, "src") } },
     define: {
-      __SERVER_URL__: JSON.stringify(serverUrl),
-      __VAPID_PUBLIC_KEY__: JSON.stringify(vapidPublicKey),
       "process.env.NODE_ENV": JSON.stringify("production"),
     },
     build: {
