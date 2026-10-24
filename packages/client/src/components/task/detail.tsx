@@ -42,6 +42,7 @@ import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { TextStack } from "~/components/ui/text-stack";
 import { TogglePill } from "~/components/ui/toggle-pill";
 import { cn } from "~/lib/utils";
+import { canDeleteTask } from "~/lib/task-permissions";
 import { useTasks } from "~/lib/db/hooks";
 
 const INBOX_VALUE = "__inbox__";
@@ -94,6 +95,7 @@ function TaskDetail({
         </DrawerHeader>
         <TaskDetailContent
           task={task}
+          parent={allTasks?.find((t) => t.id === task.parentId)}
           // From the live collection, not task.subtasks: that embedded copy only refreshes
           // on a server refetch, so ticking or deleting a subtask here looked like a no-op
           subtasks={(allTasks ?? []).filter((t) => t.parentId === task.id)}
@@ -106,13 +108,16 @@ function TaskDetail({
 
 const TaskDetailContent = ({
   task,
+  parent,
   subtasks,
   onClose,
 }: {
   task: Task;
+  parent?: Task;
   subtasks: Task[];
   onClose: () => void;
 }) => {
+  const userId = useOptimisticUserId();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
   const isDone = task.status === "done";
@@ -243,7 +248,7 @@ const TaskDetailContent = ({
         />
       )}
 
-      {!task.parentId && <SubtaskSection taskId={task.id} subtasks={subtasks} />}
+      {!task.parentId && <SubtaskSection task={task} subtasks={subtasks} />}
 
       {!task.parentId &&
         (isInSharedCategory ? (
@@ -265,19 +270,21 @@ const TaskDetailContent = ({
         <AddNoteInput taskId={task.id} />
       </DetailSection>
 
-      <Button
-        variant="subtle"
-        intent="destructive"
-        size="xs"
-        className="-ml-2.5 self-start touch:h-10 touch:text-sm"
-        onClick={() => {
-          deleteTask(task.id);
-          onClose();
-        }}
-      >
-        <Trash2 />
-        Delete task
-      </Button>
+      {canDeleteTask(userId, task, parent) && (
+        <Button
+          variant="subtle"
+          intent="destructive"
+          size="xs"
+          className="-ml-2.5 self-start touch:h-10 touch:text-sm"
+          onClick={() => {
+            deleteTask(task.id);
+            onClose();
+          }}
+        >
+          <Trash2 />
+          Delete task
+        </Button>
+      )}
     </div>
   );
 };
@@ -343,13 +350,8 @@ const AddNoteInput = ({ taskId }: { taskId: string }) => {
   );
 };
 
-const SubtaskSection = ({
-  taskId,
-  subtasks: rawSubtasks,
-}: {
-  taskId: string;
-  subtasks: Task[];
-}) => {
+const SubtaskSection = ({ task, subtasks: rawSubtasks }: { task: Task; subtasks: Task[] }) => {
+  const userId = useOptimisticUserId();
   const [value, setValue] = useState("");
 
   const subtasks = [...rawSubtasks].sort((a, b) =>
@@ -376,9 +378,11 @@ const SubtaskSection = ({
           >
             {sub.title}
           </span>
-          <RevealGroup>
-            <RevealButton onClick={() => deleteTask(sub.id)}>delete</RevealButton>
-          </RevealGroup>
+          {canDeleteTask(userId, sub, task) && (
+            <RevealGroup>
+              <RevealButton onClick={() => deleteTask(sub.id)}>delete</RevealButton>
+            </RevealGroup>
+          )}
         </ListRow>
       ))}
       <form
@@ -386,7 +390,7 @@ const SubtaskSection = ({
           e.preventDefault();
           const title = value.trim();
           if (!title) return;
-          void addTask(title, null, taskId);
+          void addTask(title, null, task.id);
           setValue("");
         }}
       >

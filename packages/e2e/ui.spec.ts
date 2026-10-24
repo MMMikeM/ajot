@@ -116,7 +116,7 @@ test.describe("navigation", () => {
     test.skip(testInfo.project.name !== "desktop", "the sidebar is desktop-only");
     await openList(page);
     const sidebar = page.getByTestId("category-sidebar");
-    await expect(sidebar.getByRole("button", { name: /^Inbox/ })).toContainText("6");
+    await expect(sidebar.getByRole("button", { name: /^Inbox/ })).toContainText("7");
     await expect(sidebar.getByRole("button", { name: /^Work/ })).toContainText("2");
   });
 
@@ -227,6 +227,50 @@ test.describe("deleting a category", () => {
 
     await expect(page.getByText("Couldn't delete “Home”")).toBeVisible();
     await expect(page.getByRole("button", { name: /^Home/ }).first()).toBeVisible();
+  });
+});
+
+// The server refuses to delete a task for anyone but its owner, or the owner of its parent
+test.describe("deleting someone else's task", () => {
+  // Hidden too: the hover buttons sit at opacity 0 and the swipe actions stay invisible until swiped
+  const deleteControls = (page: Page, title: string) =>
+    row(page, title).getByRole("button", { name: /^Delete/, includeHidden: true });
+
+  const openGroceries = async (page: Page, isDesktop: boolean) => {
+    if (!isDesktop) await page.getByTestId("category-nav-trigger").click();
+    await page
+      .getByRole("group", { name: "Shared with me" })
+      .getByRole("button", { name: /^Groceries/ })
+      .click();
+  };
+
+  // By name: on touch the category sheet is still closing when the task's sheet opens
+  const openDetail = async (page: Page, title: string) => {
+    await row(page, title).getByRole("button", { name: title, exact: true }).click();
+    const detail = page.getByRole("dialog", { name: title });
+    await expect(detail).toBeVisible();
+    return detail.getByRole("button", { name: "Delete task" });
+  };
+
+  test("your own task offers delete", async ({ page }) => {
+    await openList(page);
+    await expect(deleteControls(page, "Pick up dry cleaning")).not.toHaveCount(0);
+    await expect(await openDetail(page, "Pick up dry cleaning")).toHaveCount(1);
+  });
+
+  test("a task shared with you offers no delete", async ({ page }) => {
+    await openList(page);
+    await expect(deleteControls(page, "Pick a restaurant for Friday")).toHaveCount(0);
+    await expect(await openDetail(page, "Pick a restaurant for Friday")).toHaveCount(0);
+  });
+
+  test("a collaborator's task in a list shared with you offers no delete", async ({
+    page,
+  }, testInfo) => {
+    await openList(page);
+    await openGroceries(page, testInfo.project.name === "desktop");
+    await expect(deleteControls(page, "Eggs")).toHaveCount(0);
+    await expect(await openDetail(page, "Eggs")).toHaveCount(0);
   });
 });
 
