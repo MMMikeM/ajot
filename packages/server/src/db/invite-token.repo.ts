@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { now } from "@newtab-todo/shared/iso";
 import { db, inTransaction } from "./client";
@@ -28,6 +28,28 @@ const findValid = async (token: string) =>
 
 type InviteToken = NonNullable<Awaited<ReturnType<typeof findValid>>>;
 
+// Marks the invite used in one statement, so two signups racing on the same link can't both
+// pass. consume() records who used it once their account exists.
+const claim = async (token: string) => {
+  const [row] = await db
+    .update(inviteTokens)
+    .set({ usedAt: now() })
+    .where(
+      and(
+        eq(inviteTokens.id, token),
+        isNull(inviteTokens.usedAt),
+        gt(inviteTokens.expiresAt, now()),
+      ),
+    )
+    .returning();
+  return row;
+};
+
+/** Undoes claim() when the account it was for couldn't be created. */
+const release = async (token: string) => {
+  await db.update(inviteTokens).set({ usedAt: null }).where(eq(inviteTokens.id, token));
+};
+
 // One transaction, so a failed contact insert leaves the token unused for a retry. The caller
 // passes an invite already validated by findValid; this doesn't check it again.
 const consume = async (invite: InviteToken, usedByUserId: string) => {
@@ -47,4 +69,4 @@ const consume = async (invite: InviteToken, usedByUserId: string) => {
   });
 };
 
-export default { create, findById, findValid, consume };
+export default { create, findById, findValid, claim, release, consume };

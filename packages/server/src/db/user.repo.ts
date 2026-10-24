@@ -44,6 +44,8 @@ const findByUsernameWithPassword = async (username: string) => {
   return row;
 };
 
+const count = () => db.$count(users);
+
 const insert = async (data: UserInsert) => {
   const [row] = await db.insert(users).values(data).returning();
   if (!row) throw new InsertFailedError("user");
@@ -71,6 +73,7 @@ export default {
   findById,
   findByUsername,
   findByUsernameWithPassword,
+  count,
   insert,
   update,
   remove,

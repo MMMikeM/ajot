@@ -6,6 +6,7 @@ import { extractToken, validateSession } from "../auth";
 import { errorSchema, okSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent } from "./crud";
 import { MIN_PASSWORD_LENGTH } from "../password";
+import { sendNotification } from "../notify";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -18,6 +19,7 @@ const signupSchema = z.object({
     .string()
     .min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`),
   name: z.string().min(1, "Name is required"),
+  invite: z.string().optional(),
 });
 
 const authResponseSchema = z.object({
@@ -68,14 +70,25 @@ export const authRoutes = new OpenAPIHono()
       request: jsonBody(signupSchema),
       responses: {
         200: jsonContent(authResponseSchema),
+        403: jsonContent(errorSchema, "No invite, or the invite is no longer valid"),
         409: jsonContent(errorSchema, "Conflict"),
       },
     }),
     async (c) => {
       const data = c.req.valid("json");
-      const result = await signup(data.username, data.password, data.name);
-      setAuthCookie(c, result.token);
-      return c.json(result, 200);
+      const { session, invitedBy } = await signup(
+        data.username,
+        data.password,
+        data.name,
+        data.invite,
+      );
+      if (invitedBy) {
+        sendNotification(invitedBy, { type: "contact-accepted", contactName: session.name }).catch(
+          () => {},
+        );
+      }
+      setAuthCookie(c, session.token);
+      return c.json(session, 200);
     },
   )
   .openapi(
