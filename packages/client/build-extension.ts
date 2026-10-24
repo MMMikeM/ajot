@@ -1,7 +1,7 @@
 // Assembles the Firefox MV2 and Chrome MV3 extensions from the PWA build in dist/, so it must
 // run after `pnpm build`.
 import { build } from "vite";
-import { readFileSync, writeFileSync, cpSync, rmSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, cpSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname);
@@ -36,7 +36,7 @@ const firefoxManifest = {
     gecko_android: { strict_min_version: "142.0" },
   },
   chrome_url_overrides: { newtab: "index.html" },
-  content_security_policy: `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; ${CONNECT_SRC}`,
+  content_security_policy: `script-src 'self'; object-src 'self'; ${CONNECT_SRC}`,
   permissions: ["storage"],
   background: { scripts: ["background.js"], persistent: true },
 };
@@ -49,9 +49,8 @@ const chromeManifest = {
   // Silent pushes (userVisibleOnly: false) from an extension worker need Chrome 121.
   minimum_chrome_version: "121",
   chrome_url_overrides: { newtab: "index.html" },
-  // MV3 rejects 'unsafe-eval'; 'wasm-unsafe-eval' is enough for wa-sqlite.
   content_security_policy: {
-    extension_pages: `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; ${CONNECT_SRC}`,
+    extension_pages: `script-src 'self'; object-src 'self'; ${CONNECT_SRC}`,
   },
   permissions: ["storage", "notifications"],
   background: { service_worker: "background.js" },
@@ -88,36 +87,6 @@ const patchHtml = (outDir: string) => {
 
   writeFileSync(join(outDir, "index.html"), html);
   console.log(`  Extracted ${scriptCount} inline script(s), converted CSS preloads`);
-};
-
-// Firefox extension Web Workers can't fetch moz-extension:// resources, even
-// with credentials: "same-origin", and Chrome's connect-src blocks the data:
-// URL the worker falls back to. Patch the OPFS worker to set wasmBinary
-// directly so Emscripten never calls fetch() for the WASM file.
-// The bytes come from the worker's own data: URL: assets/wa-sqlite.wasm is a
-// different build, and loading it fails with "_emscripten_stack_get_current
-// is not a function".
-const WASM_DATA_URL = /data:application\/wasm;base64,([A-Za-z0-9+/=]+)/;
-
-const inlineWasm = (outDir: string) => {
-  for (const f of readdirSync(join(outDir, "assets"))) {
-    if (!f.startsWith("opfs-worker-") || !f.endsWith(".js")) continue;
-    const path = join(outDir, "assets", f);
-    const src = readFileSync(path, "utf-8");
-    const wasmBase64 = src.match(WASM_DATA_URL)?.[1];
-    if (!wasmBase64) throw new Error(`No embedded WASM found in ${f}`);
-    // Uint8Array.fromBase64 decodes natively (Firefox 133, Chrome 140); the per-character
-    // fallback runs a callback for each of the million bytes on every new tab
-    const wasmBytes = `(s=>(Uint8Array.fromBase64?Uint8Array.fromBase64(s):Uint8Array.from(atob(s),c=>c.charCodeAt(0))).buffer)("${wasmBase64}")`;
-    // Emptying the data: URL leaves one copy of the bytes; with wasmBinary set it's never read
-    const patched = src
-      .replace(WASM_DATA_URL, "data:application/wasm;base64,")
-      .replace("var wasmBinary;", `var wasmBinary = ${wasmBytes};`);
-    if (!patched.includes("var wasmBinary = "))
-      throw new Error(`Failed to patch wasmBinary in ${f}`);
-    writeFileSync(path, patched);
-    console.log(`  Inlined WASM in ${f} (${(wasmBase64.length / 1024).toFixed(0)} KB base64)`);
-  }
 };
 
 type Target = {
@@ -173,8 +142,6 @@ const assemble = async (target: Target) => {
   console.log(`  Built ${target.backgroundEntry} → background.js`);
 
   patchHtml(outDir);
-
-  inlineWasm(outDir);
 
   writeFileSync(join(outDir, "manifest.json"), JSON.stringify(target.manifest, null, 2));
   console.log(`  Done → ${outDir}`);

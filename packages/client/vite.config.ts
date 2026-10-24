@@ -1,41 +1,12 @@
-import { defineConfig, loadEnv, searchForWorkspaceRoot, type PluginOption } from "vite-plus";
+import { defineConfig, loadEnv, searchForWorkspaceRoot } from "vite-plus";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { resolve } from "node:path";
-import { readFileSync } from "node:fs";
 import { VitePWA } from "vite-plugin-pwa";
 import { injectFontPreloads } from "./plugins/inject-font-preloads";
 import { prerender } from "./plugins/prerender";
 import { injectCriticalCss } from "./plugins/inject-critical-css";
 import babel from "@rolldown/plugin-babel";
-
-const OPFS_WORKER_SRC = resolve(
-  import.meta.dirname,
-  "node_modules/@tanstack/browser-db-sqlite-persistence/dist/assets",
-);
-
-/**
- * TanStack DB loads its OPFS worker itself, with `new Worker("/assets/opfs-worker-*.js")`. The
- * build emits it from that URL, but dev never sees it, so dev serves it from node_modules.
- */
-const opfsWorker = (): PluginOption => ({
-  name: "opfs-worker",
-  configureServer(server) {
-    server.middlewares.use((req, res, next) => {
-      if (req.url?.startsWith("/assets/opfs-worker-")) {
-        try {
-          res.setHeader("Content-Type", "application/javascript");
-          res.end(readFileSync(resolve(OPFS_WORKER_SRC, req.url.split("/").pop()!)));
-        } catch {
-          next();
-        }
-        return;
-      }
-      next();
-    });
-  },
-});
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, searchForWorkspaceRoot(process.cwd()), "");
@@ -72,7 +43,6 @@ export default defineConfig(({ mode }) => {
       ),
     },
     plugins: [
-      opfsWorker(),
       tailwindcss(),
       tanstackRouter({
         routesDirectory: "src/routes",
@@ -108,9 +78,8 @@ export default defineConfig(({ mode }) => {
         },
         includeAssets: ["favicon.svg", "apple-touch-icon-180x180.png"],
         injectManifest: {
-          globPatterns: ["**/*.{js,css,html,woff2,wasm,png,svg,webmanifest}"],
+          globPatterns: ["**/*.{js,css,html,woff2,png,svg,webmanifest}"],
           globIgnores: ["sw.js"],
-          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         },
         devOptions: { enabled: false },
       }),
@@ -135,7 +104,7 @@ export default defineConfig(({ mode }) => {
 
               {
                 name: "tanstack-db",
-                test: /node_modules[\\/](@tanstack[\\/](db|db-ivm|offline-transactions|browser-db-sqlite-persistence|query-db-collection)|@journeyapps|fractional-indexing|bignumber\.js|@noble)[\\/]/,
+                test: /node_modules[\\/](@tanstack[\\/](db|db-ivm|offline-transactions|query-db-collection)|fractional-indexing|bignumber\.js|@noble)[\\/]/,
                 priority: 40,
               },
 

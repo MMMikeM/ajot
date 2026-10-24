@@ -271,7 +271,7 @@ test.describe("signing up", () => {
 
 test("tasks saved on the device show before a slow server answers", async ({ page }) => {
   await openList(page);
-  // Persisted to OPFS by now; the next load's fetch takes far longer than the assertion allows
+  // Saved to IndexedDB by now; the next load's fetch takes far longer than the assertion allows
   await page.waitForTimeout(1000);
   await page.route("**/api/tasks", async (route) => {
     if (route.request().method() !== "GET") return route.fallback();
@@ -282,14 +282,13 @@ test("tasks saved on the device show before a slow server answers", async ({ pag
   await expect(row(page, "Book flights")).toBeVisible({ timeout: 1500 });
 });
 
-test("the app still starts when OPFS is refused, as in a Firefox private window", async ({
+test("the app still starts when IndexedDB is refused, as with site data blocked", async ({
   page,
 }) => {
-  await page.route(/opfs-worker/, async (route) => {
-    const response = await route.fetch();
-    const refuse =
-      'StorageManager.prototype.getDirectory = () => Promise.reject(new DOMException("insecure", "SecurityError"));\n';
-    await route.fulfill({ response, body: refuse + (await response.text()) });
+  await page.addInitScript(() => {
+    IDBFactory.prototype.open = () => {
+      throw new DOMException("The operation is insecure.", "SecurityError");
+    };
   });
   await openList(page);
   await expect(row(page, "Book flights")).toBeVisible();

@@ -8,7 +8,7 @@ import { getRouter } from "./router";
 //
 // Only the root chrome renders: the header, the SyncSettings fallback and the task list skeleton.
 // The root route keeps the Outlet behind ClientOnly, since routes read localStorage-backed stores.
-// collections.ts guards its OPFS init so it doesn't crash when imported in Node.js.
+// collections.ts guards its IndexedDB init so it doesn't crash when imported in Node.js.
 export const render = async (): Promise<string> => {
   const router = getRouter();
   await router.load();
