@@ -1,4 +1,4 @@
-app = 'extension-sync-service'
+app = 'ajot'
 primary_region = 'ams'
 
 [http_service]
