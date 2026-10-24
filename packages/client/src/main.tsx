@@ -1,3 +1,5 @@
+// First, so its js-start mark is taken before any other module runs
+import { markStartup } from "~/lib/startup-timing";
 import { StrictMode } from "react";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -5,7 +7,6 @@ import { RouterProvider } from "@tanstack/react-router";
 import { queryClient } from "~/lib/db/query-client";
 import { getRouter } from "./router";
 import { initSync } from "~/lib/sync/sse";
-import { markStartup } from "~/lib/startup-timing";
 import "./app.css";
 
 markStartup("modules-loaded");
