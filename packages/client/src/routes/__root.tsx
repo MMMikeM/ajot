@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { ClientOnly, Outlet } from "@tanstack/react-router";
 import { AppShell } from "~/AppBackground";
 import { SyncSettings } from "~/components/SyncSettings";
+import { TaskListSkeleton } from "~/components/task/list-skeleton";
 import { Toast } from "~/components/ui/toast";
 import { NavContextProvider } from "~/lib/state/nav-context";
 import { registerServiceWorker } from "~/lib/sync/register-sw";
@@ -41,7 +42,7 @@ export default function RootComponent() {
           }
         >
           {/* Routes read localStorage-backed stores, which have no value to prerender */}
-          <ClientOnly>
+          <ClientOnly fallback={<TaskListSkeleton />}>
             <Outlet />
           </ClientOnly>
         </AppShell>
