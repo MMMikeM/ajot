@@ -8,6 +8,7 @@ import { Calendar, GripVertical, Plus, X } from "lucide-react";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { useSwipeReveal } from "~/lib/hooks/use-swipe-reveal";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
+import { canDeleteTask } from "~/lib/task-permissions";
 
 // Read once: pointer type doesn't change during a session
 const IS_TOUCH = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -19,7 +20,8 @@ const swipeActionClass =
 const COMPLETE_LINGER_MS = 450;
 
 // Must match the hover actions: size-6 buttons, gap-0.5, plus clearance from the meta
-const hoverActionsWidth = (count: number) => `${count * 1.5 + (count - 1) * 0.125 + 0.5}rem`;
+const hoverActionsWidth = (count: number) =>
+  count === 0 ? "0rem" : `${count * 1.5 + (count - 1) * 0.125 + 0.5}rem`;
 
 const formatDueDate = (dateStr: string) => {
   const date = Temporal.PlainDate.from(dateStr.slice(0, 10));
@@ -69,6 +71,7 @@ export function TaskItem({
   onSetDueDate,
   onAddSubtask,
   subtasks = [],
+  parent,
   hideDate,
   isSubtask,
   isInSharedCategory = false,
@@ -82,6 +85,7 @@ export function TaskItem({
   onSetDueDate: (task: Task, date: string | null) => void;
   onAddSubtask: (task: Task, title: string) => void;
   subtasks?: Task[];
+  parent?: Task;
   hideDate?: boolean;
   isSubtask?: boolean;
   isInSharedCategory?: boolean;
@@ -100,7 +104,8 @@ export function TaskItem({
   const hasMeta = showDate || shareNames.length > 0 || !!task.assignee;
   const canSetDate = !isDone && !showDate;
   const canAddSubtask = !isSubtask && !isDone;
-  const hoverActionCount = 1 + Number(canSetDate) + Number(canAddSubtask);
+  const canDelete = canDeleteTask(currentUserId, task, parent);
+  const hoverActionCount = Number(canSetDate) + Number(canAddSubtask) + Number(canDelete);
   const dateRef = useRef<HTMLInputElement>(null);
   const [entering] = useState(() => isJustCreated(task));
   const [completing, setCompleting] = useState(false);
@@ -192,19 +197,21 @@ export function TaskItem({
                 <span className="text-xs">Subtask</span>
               </button>
             )}
-            <button
-              onClick={() => {
-                onDelete(task);
-                closeSwipe();
-              }}
-              className={cn(
-                swipeActionClass,
-                "bg-destructive-subtle text-destructive active:bg-destructive/20",
-              )}
-            >
-              <X size={16} />
-              <span className="text-xs">Delete</span>
-            </button>
+            {canDelete && (
+              <button
+                onClick={() => {
+                  onDelete(task);
+                  closeSwipe();
+                }}
+                className={cn(
+                  swipeActionClass,
+                  "bg-destructive-subtle text-destructive active:bg-destructive/20",
+                )}
+              >
+                <X size={16} />
+                <span className="text-xs">Delete</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -329,17 +336,19 @@ export function TaskItem({
                 <Plus size={14} />
               </Button>
             )}
-            <Button
-              variant="subtle"
-              intent="destructive"
-              size="xs"
-              icon
-              onClick={() => onDelete(task)}
-              aria-label="Delete task"
-              title="Delete task"
-            >
-              <X size={14} />
-            </Button>
+            {canDelete && (
+              <Button
+                variant="subtle"
+                intent="destructive"
+                size="xs"
+                icon
+                onClick={() => onDelete(task)}
+                aria-label="Delete task"
+                title="Delete task"
+              >
+                <X size={14} />
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -350,6 +359,7 @@ export function TaskItem({
             <TaskItem
               key={sub.id}
               task={sub}
+              parent={task}
               isSubtask
               onOpen={onOpen}
               onToggle={onToggle}
