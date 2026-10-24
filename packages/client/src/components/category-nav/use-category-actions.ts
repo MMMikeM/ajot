@@ -91,7 +91,14 @@ export const useCategoryActions = () => {
 
   const handleLeave = async (categoryId: string) => {
     if (!authUserId) return;
-    await leaveCategory(categoryId, authUserId);
+    try {
+      await leaveCategory(categoryId, authUserId);
+    } catch (err) {
+      console.error("[leave] failed:", err);
+      const name = categories.find((c) => c.id === categoryId)?.name;
+      toastManager.add({ title: name ? `Couldn't leave “${name}”` : "Couldn't leave the list" });
+      return;
+    }
     const remaining = categories.filter((c) => c.id !== categoryId);
     setActiveCategoryId(remaining.length > 0 ? remaining[0].id : null);
   };

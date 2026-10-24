@@ -164,7 +164,7 @@ export const SyncSettings = () => {
             Sign out
           </MenuItem>
           <div className="my-1 h-px bg-border" />
-          <span className="px-2.5 pb-0.5 text-[10px] text-hint">{__BUILD_VERSION__}</span>
+          <span className="px-2.5 pb-0.5 text-xs text-hint tabular-nums">{__BUILD_VERSION__}</span>
         </PopoverContent>
       )}
     </Popover>

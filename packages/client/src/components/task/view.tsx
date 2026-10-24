@@ -41,14 +41,18 @@ const writeDoneOpen = (open: boolean) => {
 const DoneSection = ({
   count,
   onClear,
+  clearsAll,
   children,
 }: {
   count: number;
   /** Absent when none of the done tasks are yours to delete */
   onClear?: () => void;
+  /** Clear empties the section, so it unmounts with the button */
+  clearsAll: boolean;
   children: React.ReactNode;
 }) => {
   const [open, setOpen] = useState(readDoneOpen);
+  const toggleRef = useRef<HTMLButtonElement>(null);
 
   if (count === 0) return null;
 
@@ -57,10 +61,19 @@ const DoneSection = ({
     setOpen(!open);
   };
 
+  // Clear removes itself, so keyboard focus would fall to <body>; as with ticking, pointer focus
+  // stays put, since moving it to the capture input raises the on-screen keyboard
+  const clear = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (e.currentTarget.matches(":focus-visible"))
+      (clearsAll ? document.getElementById("add-task-input") : toggleRef.current)?.focus();
+    onClear?.();
+  };
+
   return (
     <div className="mt-1 border-t border-border pt-2">
       <div className="flex items-center justify-between">
         <Button
+          ref={toggleRef}
           variant="ghost"
           size="xs"
           onClick={toggle}
@@ -78,7 +91,7 @@ const DoneSection = ({
           <Button
             variant="subtle"
             size="xs"
-            onClick={onClear}
+            onClick={clear}
             aria-label="Clear done tasks"
             className="-mr-2.5 touch:h-11 touch:px-3"
           >
@@ -256,6 +269,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
               ? () => actions.handleClearDone(clearableDoneTasks)
               : undefined
           }
+          clearsAll={clearableDoneTasks.length === doneTasks.length}
         >
           <ul className="mt-2 flex flex-col">
             {doneTasks.map((task) => (

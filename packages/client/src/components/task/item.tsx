@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type RefCallback } from "react";
 import type { Task } from "~/lib/types";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
+import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/field";
 import { cn } from "~/lib/utils";
 import { Calendar, GripVertical, Plus, Users, X } from "lucide-react";
@@ -274,6 +274,8 @@ export function TaskItem({
                 "absolute top-2.5 -left-3.5 flex h-6 w-3.5 cursor-grab items-center justify-center rounded-sm text-transparent transition-colors group-hover/task:text-ghost focus-visible:text-hint active:cursor-grabbing touch:static touch:order-last touch:-my-2.5 touch:-mr-2 touch:h-11 touch:w-9 touch:text-hint",
                 // Done rows aren't sortable
                 isDone && "invisible touch:hidden",
+                // Swiped open, the title slides out of view; a grip left alone there reads as broken
+                "group-data-[swiping]/swipe:invisible",
               )}
               onTouchStart={(e) => e.stopPropagation()}
             >
@@ -288,8 +290,7 @@ export function TaskItem({
             className={cn(
               "mt-1 touch:mt-[3px] touch:size-[18px] touch:after:-inset-3",
               isSubtask && "mt-0.5 touch:mt-px",
-              isDone &&
-                "data-checked:animate-none data-checked:border-primary/35 data-checked:bg-primary-subtle data-checked:text-primary",
+              isDone && checkboxDoneClass,
             )}
           />
           {onOpen ? (
