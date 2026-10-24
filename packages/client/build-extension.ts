@@ -77,16 +77,24 @@ const patchHtml = (outDir: string) => {
 // The bytes come from the worker's own data: URL: assets/wa-sqlite.wasm is a
 // different build, and loading it fails with "_emscripten_stack_get_current
 // is not a function".
+const WASM_DATA_URL = /data:application\/wasm;base64,([A-Za-z0-9+/=]+)/;
+
 const inlineWasm = (outDir: string) => {
   for (const f of readdirSync(join(outDir, "assets"))) {
     if (!f.startsWith("opfs-worker-") || !f.endsWith(".js")) continue;
     const path = join(outDir, "assets", f);
     const src = readFileSync(path, "utf-8");
-    const wasmBase64 = src.match(/data:application\/wasm;base64,([A-Za-z0-9+/=]+)/)?.[1];
+    const wasmBase64 = src.match(WASM_DATA_URL)?.[1];
     if (!wasmBase64) throw new Error(`No embedded WASM found in ${f}`);
-    const wasmBytes = `Uint8Array.from(atob("${wasmBase64}"),c=>c.charCodeAt(0)).buffer`;
-    const patched = src.replace("var wasmBinary;", `var wasmBinary = ${wasmBytes};`);
-    if (patched === src) throw new Error(`Failed to patch wasmBinary in ${f}`);
+    // Uint8Array.fromBase64 decodes natively (Firefox 133, Chrome 140); the per-character
+    // fallback runs a callback for each of the million bytes on every new tab
+    const wasmBytes = `(s=>(Uint8Array.fromBase64?Uint8Array.fromBase64(s):Uint8Array.from(atob(s),c=>c.charCodeAt(0))).buffer)("${wasmBase64}")`;
+    // Emptying the data: URL leaves one copy of the bytes; with wasmBinary set it's never read
+    const patched = src
+      .replace(WASM_DATA_URL, "data:application/wasm;base64,")
+      .replace("var wasmBinary;", `var wasmBinary = ${wasmBytes};`);
+    if (!patched.includes("var wasmBinary = "))
+      throw new Error(`Failed to patch wasmBinary in ${f}`);
     writeFileSync(path, patched);
     console.log(`  Inlined WASM in ${f} (${(wasmBase64.length / 1024).toFixed(0)} KB base64)`);
   }

@@ -3,36 +3,21 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
-import { readFileSync, cpSync, readdirSync, mkdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { VitePWA } from "vite-plugin-pwa";
 import { injectFontPreloads } from "./plugins/inject-font-preloads";
 import { prerender } from "./plugins/prerender";
 import { injectCriticalCss } from "./plugins/inject-critical-css";
 import babel from "@rolldown/plugin-babel";
-import { globSync } from "node:fs";
 
 const OPFS_WORKER_SRC = resolve(
   import.meta.dirname,
   "node_modules/@tanstack/browser-db-sqlite-persistence/dist/assets",
 );
 
-const WA_SQLITE_WASM =
-  globSync(
-    resolve(
-      import.meta.dirname,
-      "node_modules/.pnpm/@journeyapps+wa-sqlite*/node_modules/@journeyapps/wa-sqlite/dist/wa-sqlite.wasm",
-    ),
-  )[0] ??
-  globSync(
-    resolve(
-      import.meta.dirname,
-      "../../node_modules/.pnpm/@journeyapps+wa-sqlite*/node_modules/@journeyapps/wa-sqlite/dist/wa-sqlite.wasm",
-    ),
-  )[0]!;
-
 /**
- * TanStack DB loads its OPFS worker itself, with `new Worker("/assets/opfs-worker-*.js")`,
- * so Vite never sees it: dev serves it from node_modules and the build copies it in.
+ * TanStack DB loads its OPFS worker itself, with `new Worker("/assets/opfs-worker-*.js")`. The
+ * build emits it from that URL, but dev never sees it, so dev serves it from node_modules.
  */
 const opfsWorker = (): PluginOption => ({
   name: "opfs-worker",
@@ -47,30 +32,8 @@ const opfsWorker = (): PluginOption => ({
         }
         return;
       }
-      if (req.url === "/assets/wa-sqlite.wasm") {
-        try {
-          res.setHeader("Content-Type", "application/wasm");
-          res.end(readFileSync(WA_SQLITE_WASM));
-        } catch {
-          next();
-        }
-        return;
-      }
       next();
     });
-  },
-  closeBundle() {
-    if (this.environment?.name !== "client") return;
-
-    const outDir = resolve(import.meta.dirname, "dist/assets");
-    mkdirSync(outDir, { recursive: true });
-
-    for (const f of readdirSync(OPFS_WORKER_SRC)) {
-      if (f.startsWith("opfs-worker-") && f.endsWith(".js")) {
-        cpSync(resolve(OPFS_WORKER_SRC, f), resolve(outDir, f));
-      }
-    }
-    cpSync(WA_SQLITE_WASM, resolve(outDir, "wa-sqlite.wasm"));
   },
 });
 
