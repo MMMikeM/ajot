@@ -6,6 +6,7 @@ import { ChevronLeft, UserPlus } from "lucide-react";
 import { useContacts } from "~/lib/db/hooks";
 import { createInvite, removeContact } from "~/lib/actions";
 import { getBuildTarget } from "~/lib/build-target";
+import { getServerUrl } from "~/lib/server-url";
 import { useIsDesk } from "~/lib/hooks/use-is-desk";
 import { CategorySidebar } from "~/components/category-nav/CategorySidebar";
 import { Button } from "~/components/ui/button";
@@ -30,14 +31,10 @@ export function PeoplePage() {
     setInviting(true);
     try {
       const { token } = await createInvite();
-      // Browser/PWA uses browser history — route is a real path, no hash.
-      // Extension uses hash history AND chrome-extension:// origin — use
-      // SERVER_URL so the link is openable outside that browser.
-      const serverOrigin = import.meta.env.SERVER_URL || window.location.origin;
-      const url =
-        getBuildTarget() === "extension"
-          ? `${serverOrigin}/#/invite/${token}`
-          : `${window.location.origin}/invite/${token}`;
+      // The extension's own origin only opens in that browser, so its links go to the
+      // server's PWA too
+      const origin = getBuildTarget() === "extension" ? getServerUrl() : window.location.origin;
+      const url = `${origin}/invite/${token}`;
       if (navigator.share) {
         try {
           await navigator.share({ title: "Join me on Todo", url });

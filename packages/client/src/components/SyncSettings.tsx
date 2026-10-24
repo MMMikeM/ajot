@@ -50,12 +50,11 @@ export const SyncSettings = () => {
   );
 
   const handleTogglePush = async () => {
-    const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string;
     if (pushEnabled) {
       await unregisterPushSubscription();
       setPushEnabled(false);
     } else {
-      const ok = await registerPushSubscription(VAPID_PUBLIC_KEY);
+      const ok = await registerPushSubscription();
       setPushEnabled(ok);
     }
   };

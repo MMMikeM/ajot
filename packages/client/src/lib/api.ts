@@ -3,9 +3,7 @@ import { hc } from "hono/client";
 import { getAuthToken } from "~/lib/auth/token";
 import { expireSession } from "~/lib/auth/session";
 import { clientId } from "~/lib/client-id";
-
-// Dev requests stay same-origin and go through Vite's /api proxy
-export const serverUrl = import.meta.env.DEV ? "" : (import.meta.env.SERVER_URL ?? "");
+import { getServerUrl } from "~/lib/server-url";
 
 // During SSR prerender (Node.js), relative URLs are invalid and there's no auth.
 // Return empty JSON so collections render with no data — client hydrates after mount.
@@ -21,12 +19,14 @@ const browserFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const token = getAuthToken();
   const headers = new Headers(init?.headers);
   for (const [name, value] of Object.entries(apiHeaders())) headers.set(name, value);
-  const res = await fetch(input, { ...init, headers });
+  // Routes are relative; the extension sends them to the server the user chose
+  const url = typeof input === "string" && input.startsWith("/") ? getServerUrl() + input : input;
+  const res = await fetch(url, { ...init, headers });
   // Skip if the user signed in again while this request was in flight
   if (res.status === 401 && token && token === getAuthToken()) expireSession();
   return res;
 };
 
-export const client = hc<AppType>(serverUrl, {
+export const client = hc<AppType>("", {
   fetch: typeof window === "undefined" ? ssrFetch : browserFetch,
 });

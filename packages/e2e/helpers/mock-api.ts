@@ -171,9 +171,10 @@ export const mockApi = async (
     "/api/categories": data.categories,
     "/api/contacts": data.contacts,
     "/api/notes": data.notes,
+    "/api/config": { vapidPublicKey: "", awaitingFirstUser: false },
   };
 
-  // Production builds call SERVER_URL cross-origin, so answer preflights and allow the origin
+  // The extension calls its server cross-origin, so answer preflights and allow the origin
   const cors = {
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "authorization, content-type, x-client-id",

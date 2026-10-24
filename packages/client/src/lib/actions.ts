@@ -82,7 +82,7 @@ export const updateShareCategory = async (taskId: string, categoryId: string | n
 
 export const authenticate = async (
   mode: "login" | "signup",
-  fields: { username: string; password: string; name: string },
+  fields: { username: string; password: string; name: string; invite?: string },
 ): Promise<{ userId: string; token: string; name: string; username: string }> => {
   const controller = new AbortController();
   const timeout = setTimeout(

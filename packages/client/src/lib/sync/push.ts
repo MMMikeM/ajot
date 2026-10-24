@@ -5,7 +5,9 @@ import {
   subscribe,
   unsubscribe,
 } from "@mmmike/web-push/client";
-import { apiHeaders, serverUrl } from "~/lib/api";
+import { apiHeaders } from "~/lib/api";
+import { fetchServerConfig } from "~/lib/server-config";
+import { getServerUrl } from "~/lib/server-url";
 import { getBuildTarget } from "~/lib/build-target";
 
 // Extension tabs never touch push: the Chrome background worker owns the extension's subscription,
@@ -13,16 +15,21 @@ import { getBuildTarget } from "~/lib/build-target";
 const ownsSubscription = () => getBuildTarget() === "browser";
 
 const uploadSubscription = async (subscription: PushSubscription) => {
-  const ok = await sendSubscriptionToServer(subscription, `${serverUrl}/api/push/subscribe`, {
+  const ok = await sendSubscriptionToServer(subscription, `${getServerUrl()}/api/push/subscribe`, {
     headers: apiHeaders(),
   });
   if (!ok) throw new Error("subscription upload failed");
 };
 
-export const registerPushSubscription = async (vapidPublicKey: string): Promise<boolean> => {
+export const registerPushSubscription = async (): Promise<boolean> => {
   if (!ownsSubscription()) return false;
 
   try {
+    const { vapidPublicKey } = await fetchServerConfig(getServerUrl());
+    if (!vapidPublicKey) {
+      console.warn("[push] the server has no VAPID_PUBLIC_KEY");
+      return false;
+    }
     const result = await subscribe(vapidPublicKey);
     if (result.status !== "subscribed") {
       console.log("[push] not subscribed:", result.status);
@@ -42,7 +49,7 @@ export const unregisterPushSubscription = async (): Promise<void> => {
   try {
     const endpoint = await unsubscribe();
     if (!endpoint) return;
-    await removeSubscriptionFromServer(endpoint, `${serverUrl}/api/push/unsubscribe`, {
+    await removeSubscriptionFromServer(endpoint, `${getServerUrl()}/api/push/unsubscribe`, {
       method: "POST",
       headers: apiHeaders(),
     });
@@ -54,12 +61,3 @@ export const unregisterPushSubscription = async (): Promise<void> => {
 
 export const isPushSubscribed = async (): Promise<boolean> =>
   ownsSubscription() && !!(await getCurrentSubscription());
-
-export const ensurePushRegistered = async (): Promise<void> => {
-  const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string;
-  if (!vapidKey) {
-    console.warn("[push] no VITE_VAPID_PUBLIC_KEY");
-    return;
-  }
-  await registerPushSubscription(vapidKey);
-};
