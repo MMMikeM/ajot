@@ -40,7 +40,10 @@ export default function RootComponent() {
             </ClientOnly>
           }
         >
-          <Outlet />
+          {/* Routes read localStorage-backed stores, which have no value to prerender */}
+          <ClientOnly>
+            <Outlet />
+          </ClientOnly>
         </AppShell>
       </Toast.Provider>
     </NavContextProvider>
