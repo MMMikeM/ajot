@@ -18,7 +18,8 @@ import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { TogglePill } from "~/components/ui/toggle-pill";
-import { DetailRow, hitArea } from "~/components/task/detail-row";
+import { DetailRow } from "~/components/task/detail-row";
+import { hitArea } from "~/components/hit-area";
 
 const INBOX_VALUE = "__inbox__";
 

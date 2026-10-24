@@ -129,8 +129,7 @@ const disconnectSSE = () => {
 const connectSSE = () => {
   disconnectSSE();
   const token = getAuthToken();
-  // The online listener reconnects once the network is back
-  if (!token || !navigator.onLine) {
+  if (!token) {
     ownSyncState.stopped();
     return;
   }

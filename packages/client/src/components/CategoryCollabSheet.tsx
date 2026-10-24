@@ -24,6 +24,7 @@ import { SectionLabel } from "~/components/ui/section-label";
 import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { TextStack } from "~/components/ui/text-stack";
+import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 
 export function CategoryCollabSheet({
   categoryId,
@@ -73,7 +74,12 @@ export function CategoryCollabSheet({
   };
 
   return (
-    <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
+    <Drawer
+      open={open}
+      onOpenChange={keepOpenOnToastPress((next) => {
+        if (!next) onClose();
+      })}
+    >
       <DrawerContent className="max-w-(--column-w) border-x touch:max-w-none touch:border-x-0 desk:translate-x-(--column-shift)">
         <DrawerHeader className="gap-1 px-6 pt-4 pb-2 touch:px-5">
           <DrawerTitle className="font-display text-2xl leading-tight font-normal">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Check } from "lucide-react";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { Toast } from "@base-ui/react/toast";
@@ -18,6 +18,23 @@ import { Button } from "~/components/ui/button";
 import { MenuItem } from "~/components/ui/menu-item";
 import { Popover, PopoverTrigger, PopoverContent } from "~/components/ui/popover";
 import { cn } from "~/lib/utils";
+import { hitArea } from "~/components/hit-area";
+
+// The device's own connection, as distinct from whether the sync server answers
+const subscribeOnline = (onChange: () => void) => {
+  window.addEventListener("online", onChange);
+  window.addEventListener("offline", onChange);
+  return () => {
+    window.removeEventListener("online", onChange);
+    window.removeEventListener("offline", onChange);
+  };
+};
+const useDeviceOnline = () =>
+  useSyncExternalStore(
+    subscribeOnline,
+    () => navigator.onLine,
+    () => true,
+  );
 
 const SYNC_LABELS = {
   connecting: "Syncing…",
@@ -29,6 +46,7 @@ export const SyncSettings = () => {
   const token = useAuthToken();
   const currentUser = useCurrentUser();
   const syncState = useSyncState();
+  const deviceOnline = useDeviceOnline();
   const hasPending = usePendingMutations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -80,7 +98,7 @@ export const SyncSettings = () => {
       <Button
         variant="ghost"
         size="xs"
-        className="relative touch:h-9 touch:px-3 touch:text-sm touch:after:absolute touch:after:inset-x-0 touch:after:-inset-y-1"
+        className={cn(hitArea, "touch:px-3 touch:text-sm")}
         onClick={() => router.navigate({ to: "/auth" })}
       >
         Sign in
@@ -89,7 +107,13 @@ export const SyncSettings = () => {
   }
 
   const isOffline = syncState === "disconnected";
-  const syncLabel = hasPending && !isOffline ? "Syncing…" : SYNC_LABELS[syncState];
+  // Online but not syncing is the server or the sign-in, not something waiting will fix
+  const unreachable = isOffline && deviceOnline;
+  const syncLabel = unreachable
+    ? "Not syncing"
+    : hasPending && !isOffline
+      ? "Syncing…"
+      : SYNC_LABELS[syncState];
 
   return (
     <Popover open={open} onOpenChange={setOpen} modal>
@@ -98,9 +122,8 @@ export const SyncSettings = () => {
           <Button
             variant="ghost"
             size="xs"
-            // after: 44px touch target without growing the header
-            className="relative gap-1.5 text-hint hover:text-muted-foreground touch:h-9 touch:px-3 touch:after:absolute touch:after:inset-x-0 touch:after:-inset-y-1"
-            aria-label={`Sync settings: ${isOffline ? "offline, changes saved on this device" : syncLabel}`}
+            className={cn(hitArea, "gap-1.5 text-hint hover:text-muted-foreground touch:px-3")}
+            aria-label={`Sync settings: ${isOffline ? `${unreachable ? "not syncing" : "offline"}, changes saved on this device` : syncLabel}`}
           />
         }
       >
@@ -133,7 +156,9 @@ export const SyncSettings = () => {
           </div>
           {isOffline && (
             <p className="max-w-52 px-2.5 pb-2 text-xs text-hint">
-              You're offline. Changes stay on this device and sync once you're back.
+              {unreachable
+                ? "Can't reach the sync server. Changes stay on this device and sync once it answers."
+                : "You're offline. Changes stay on this device and sync once you're back."}
             </p>
           )}
           <div className="mb-1 h-px bg-border" />

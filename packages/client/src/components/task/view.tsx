@@ -232,7 +232,11 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   if (isLoading && !hasRows) return <TaskRowsSkeleton />;
 
   const doneTasks = categoryTasks.filter((t) => t.status === "done");
-  const clearableDoneTasks = doneTasks.filter((t) => canDeleteTask(userId, t));
+  // Deleting a task deletes its subtasks, so one still holding open work stays
+  const clearableDoneTasks = doneTasks.filter(
+    (t) =>
+      canDeleteTask(userId, t) && actions.getSubtasks(t.id).every((sub) => sub.status === "done"),
+  );
 
   return (
     <DragDropProvider onDragEnd={handleDragEnd}>

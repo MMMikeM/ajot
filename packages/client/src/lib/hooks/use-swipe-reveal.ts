@@ -28,6 +28,8 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
   const trayRef = useRef<HTMLDivElement>(null);
   // Read at gesture time: the tray holds one to three actions, and it's invisible but laid out
   const trayWidth = () => trayRef.current?.offsetWidth ?? 0;
+  // Measured once per gesture: reading it on each move would force a layout every frame
+  const gestureWidth = useRef(0);
 
   const [isOpen, setIsOpen] = useState(false);
 
@@ -78,6 +80,7 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
       touchStartX.current = e.touches[0].clientX;
       touchStartY.current = e.touches[0].clientY;
       isDraggingRef.current = false;
+      gestureWidth.current = trayWidth();
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -103,7 +106,7 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
       if (!isDraggingRef.current) return;
       e.preventDefault(); // stop scroll — requires non-passive listener
 
-      const width = trayWidth();
+      const width = gestureWidth.current;
       const base = isOpenRef.current ? -width : 0;
       const next = Math.min(0, Math.max(-width, base + dx));
       currentPx.current = next;
@@ -117,7 +120,7 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
         return;
       }
 
-      const width = trayWidth();
+      const width = gestureWidth.current;
       // A one-action tray is barely wider than the usual threshold
       const threshold = Math.min(OPEN_THRESHOLD, width / 2);
       const shouldOpen = isOpenRef.current
