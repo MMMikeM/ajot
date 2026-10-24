@@ -55,7 +55,7 @@ const EmptySection = ({ activeTasks, doneTasks }: { activeTasks: Task[]; doneTas
 
   if (doneTasks.length === 0)
     return (
-      <div className="flex flex-1 animate-in flex-col items-center justify-center pb-8 duration-300 fade-in slide-in-from-bottom-1 touch:pb-0">
+      <div className="flex flex-1 flex-col items-center justify-center pb-8 touch:pb-0">
         <p className="font-display text-2xl text-muted-foreground">{getEmptyPhrase()}</p>
         <p className="mt-1 text-sm text-hint">
           type something <span className="touch:hidden">above</span>
@@ -65,9 +65,7 @@ const EmptySection = ({ activeTasks, doneTasks }: { activeTasks: Task[]; doneTas
     );
 
   return (
-    <p className="animate-in text-sm text-hint duration-300 fade-in slide-in-from-bottom-1">
-      All done.
-    </p>
+    <p className="text-sm text-hint">All done.</p>
   );
 };
 
