@@ -1,10 +1,9 @@
 import { test, expect, type Browser, type Locator } from "@playwright/test";
 import { mockApi } from "./helpers/mock-api";
 
-// The skeleton only exists in the prerendered index.html, which the dev server never serves.
-// Needs a production build on `vp preview`: `pnpm build`, then `pnpm exec vp preview` in packages/client.
+// The skeleton only exists in the prerendered index.html, so this runs against a production
+// build: `pnpm test:e2e:prerender` (playwright.prerender.config.ts)
 test.use({
-  baseURL: process.env.PREVIEW_URL || "http://localhost:4173",
   serviceWorkers: "block",
   // Rows slide in as they mount; measure where they settle
   reducedMotion: "reduce",

@@ -5,6 +5,7 @@
   "scripts": {
     "test": "playwright test",
     "test:ui": "playwright test --ui",
+    "test:prerender": "playwright test -c playwright.prerender.config.ts",
     "screenshot": "tsx screenshot.ts",
     "screenshot:mock": "tsx screenshot-mock.ts",
     "cls": "tsx cls.ts"
