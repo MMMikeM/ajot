@@ -12,6 +12,7 @@ import {
 } from "@tanstack/browser-db-sqlite-persistence";
 import { getBuildTarget } from "../build-target";
 import { markStartup } from "~/lib/startup-timing";
+import { restoreSnapshot } from "~/lib/db/snapshot";
 
 // Guard: OPFS requires browser APIs — not available in Node.js (SSR prerender).
 // Lazy route components that consume these collections suspend in SSR before rendering,
@@ -45,6 +46,20 @@ const openPersistence = async () => {
   }
 };
 
+// Firefox's extension worker takes ~300ms to open SQLite, against ~25ms in Chrome, so there the
+// lists come back from an IndexedDB copy of their last server response instead
+const restoresFromSnapshot = () => location.protocol === "moz-extension:";
+
+const openSnapshot = async () => {
+  markStartup("snapshot-read-start");
+  try {
+    await restoreSnapshot(queryClient, ["tasks", "categories", "notes", "contacts"]);
+    markStartup("snapshot-read-end");
+  } catch (err) {
+    console.warn("[db] snapshot unavailable, loading from the server:", err);
+  }
+};
+
 async function makeCollections() {
   if (getBuildTarget() === "server")
     return {
@@ -54,7 +69,9 @@ async function makeCollections() {
       contactsCollection: null,
     };
 
-  const persistence = await openPersistence();
+  let persistence: Awaited<ReturnType<typeof openPersistence>> = null;
+  if (restoresFromSnapshot()) await openSnapshot();
+  else persistence = await openPersistence();
   const withPersistence = <T extends object>(options: QueryOptions<T>): QueryOptions<T> =>
     persistence
       ? {
