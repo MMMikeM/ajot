@@ -13,8 +13,13 @@ import { canDeleteTask } from "~/lib/task-permissions";
 // Read once: pointer type doesn't change during a session
 const IS_TOUCH = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
 
-const swipeActionClass =
-  "flex flex-1 flex-col items-center justify-center gap-1 text-hint transition-colors active:bg-secondary active:text-foreground";
+// The tray's grid gives every cell the widest one's width, so labels set the size and never clip
+const swipeCellClass =
+  "flex min-w-14 flex-col items-center justify-center gap-1 px-2.5 text-xs whitespace-nowrap";
+const swipeActionClass = cn(
+  swipeCellClass,
+  "text-hint transition-colors active:bg-secondary active:text-foreground",
+);
 
 // Long enough to see the tick and to undo a mis-click
 const COMPLETE_LINGER_MS = 450;
@@ -126,10 +131,12 @@ export function TaskItem({
   const {
     containerRef,
     contentRef,
+    trayRef,
     isOpen: isSwipeOpen,
     close: closeSwipe,
   } = useSwipeReveal(!IS_TOUCH || !!isSubtask, swipeHint);
   const swipeEnabled = IS_TOUCH && !isSubtask;
+  const taskOwnerName = task.user?.name ?? null;
 
   const openPicker = () => dateRef.current?.showPicker();
 
@@ -171,7 +178,11 @@ export function TaskItem({
   const doneSubtaskCount = isDone ? 0 : subtasks.length - openSubtasks.length;
 
   return (
-    <div data-task-id={task.id}>
+    <div
+      data-task-id={task.id}
+      // Lifted while dragged, so it doesn't read as text floating over the rows below
+      className="in-[[data-dnd-dragging]]:-mx-2 in-[[data-dnd-dragging]]:rounded-lg in-[[data-dnd-dragging]]:bg-popover in-[[data-dnd-dragging]]:px-2 in-[[data-dnd-dragging]]:shadow-md"
+    >
       <div
         ref={containerRef}
         className={cn(
@@ -184,7 +195,8 @@ export function TaskItem({
           // inert while closed: the tray sits under the row, so it must not be
           // focusable or announced until the row is swiped open.
           <div
-            className="invisible absolute top-0 right-0 flex h-full w-[148px] items-stretch bg-muted group-data-[swiping]/swipe:visible"
+            ref={trayRef}
+            className="invisible absolute top-0 right-0 grid h-full auto-cols-fr grid-flow-col bg-muted group-data-[swiping]/swipe:visible"
             inert={!isSwipeOpen}
           >
             <button
@@ -195,7 +207,7 @@ export function TaskItem({
               className={swipeActionClass}
             >
               <Calendar size={16} />
-              <span className="text-xs">Date</span>
+              Date
             </button>
             {!isDone && (
               <button
@@ -206,7 +218,7 @@ export function TaskItem({
                 className={swipeActionClass}
               >
                 <Plus size={16} />
-                <span className="text-xs">Subtask</span>
+                Subtask
               </button>
             )}
             {canDelete && (
@@ -221,8 +233,23 @@ export function TaskItem({
                 )}
               >
                 <X size={16} />
-                <span className="text-xs">Delete</span>
+                Delete
               </button>
+            )}
+            {!canDelete && taskOwnerName && (
+              // Where Delete would be: says whose task it is, which is why it can't be deleted
+              <p className={cn(swipeCellClass, "text-hint")}>
+                <span aria-hidden="true" className="contents">
+                  <InitialsAvatar
+                    name={taskOwnerName}
+                    className="bg-collab text-collab-foreground"
+                  />
+                  <span>{taskOwnerName.split(" ")[0]}'s</span>
+                </span>
+                <span className="sr-only">
+                  {taskOwnerName}'s task. Only {taskOwnerName} can delete it.
+                </span>
+              </p>
             )}
           </div>
         )}
@@ -239,14 +266,14 @@ export function TaskItem({
           )}
         >
           {!isSubtask && (
-            // Desktop: hangs in the gutter. Touch: a 44px grab target on the first title line.
+            // Desktop: hangs in the gutter. Touch: a 44px-tall grab target at the row's end, away from the checkbox.
             <span
               ref={dragHandleRef}
               aria-label={dragHandleRef ? "Drag to reorder" : undefined}
               className={cn(
-                "absolute top-2.5 -left-3.5 flex h-6 w-3.5 cursor-grab items-center justify-center rounded-sm text-transparent transition-colors group-hover/task:text-ghost focus-visible:text-hint active:cursor-grabbing touch:static touch:-my-2.5 touch:-ml-1 touch:h-11 touch:w-6 touch:text-hint",
-                // Done rows aren't sortable; the box stays for alignment
-                isDone && "invisible",
+                "absolute top-2.5 -left-3.5 flex h-6 w-3.5 cursor-grab items-center justify-center rounded-sm text-transparent transition-colors group-hover/task:text-ghost focus-visible:text-hint active:cursor-grabbing touch:static touch:order-last touch:-my-2.5 touch:-mr-2 touch:h-11 touch:w-9 touch:text-hint",
+                // Done rows aren't sortable
+                isDone && "invisible touch:hidden",
               )}
               onTouchStart={(e) => e.stopPropagation()}
             >
@@ -375,7 +402,7 @@ export function TaskItem({
       </div>
 
       {!isSubtask && (openSubtasks.length > 0 || doneSubtaskCount > 0) && (
-        <div className="mt-1 ml-2 border-l border-ghost pl-[15px] touch:ml-[38px] touch:pl-[19px]">
+        <div className="mt-1 ml-2 border-l border-ghost pl-[15px] touch:pl-[19px]">
           {openSubtasks.map((sub) => (
             <TaskItem
               key={sub.id}
@@ -404,7 +431,7 @@ export function TaskItem({
       )}
       {addingSubtask && (
         <form
-          className="mb-1 ml-6 touch:ml-[58px]"
+          className="mb-1 ml-6 touch:ml-7"
           onSubmit={(e) => {
             e.preventDefault();
             submitSubtask();
