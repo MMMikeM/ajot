@@ -11,11 +11,10 @@ export default defineConfig({
   use: { ...base.use, baseURL: `http://localhost:${PORT}` },
   webServer: {
     // exec, so stopping the server stops vp itself rather than a shell around it
-    command: `pnpm build && exec node_modules/.bin/vp preview --port ${PORT} --strictPort`,
+    command: `exec node_modules/.bin/vp preview --port ${PORT} --strictPort`,
     cwd: "../client",
     url: `http://localhost:${PORT}`,
     // A server already on this port could be serving an older build
     reuseExistingServer: false,
-    timeout: 180_000,
   },
 });

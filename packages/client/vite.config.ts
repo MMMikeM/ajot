@@ -81,6 +81,12 @@ export default defineConfig(({ mode }) => {
   const serverUrl = env.SERVER_URL || "http://localhost:3000";
 
   return {
+    run: {
+      tasks: {
+        // Assembles both extensions from the PWA build in dist/. A cache hit saves under a second.
+        "build:ext": { command: "node build-extension.ts", dependsOn: ["build"], cache: false },
+      },
+    },
     server: {
       cors: { origin: true },
       fs: {

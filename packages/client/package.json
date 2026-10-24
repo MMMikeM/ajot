@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vp dev",
-    "build": "vp build",
-    "build:ext": "node build-extension.ts"
+    "build": "vp build"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

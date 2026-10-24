@@ -8,7 +8,7 @@ Playwright test suite. Two projects: `desktop` (Chrome) and `mobile` (iPhone 14 
 - `screenshot.ts` — standalone script (`pnpm screenshot`), captures viewport screenshots + axe contrast audit
 - `screenshot-mock.ts` — the same against mocked `/api` data (`pnpm --dir packages/e2e screenshot:mock`); needs only the Vite dev server
 - `ui.spec.ts` — UI behaviour and axe checks against mocked `/api` data; runs without the API server or database
-- `skeleton.spec.ts` — the prerendered loading skeleton against the loaded list. The dev server doesn't prerender, so `pnpm test:e2e:prerender` runs it under `playwright.prerender.config.ts`, which builds the client and serves it with `vp preview`; plain `pnpm test:e2e` skips it
+- `skeleton.spec.ts` — the prerendered loading skeleton against the loaded list. The dev server doesn't prerender, so `pnpm test:e2e:prerender` runs it: the `test:prerender` task in this package's `vite.config.ts` builds the client first, then `playwright.prerender.config.ts` serves the build with `vp preview`. Plain `pnpm test:e2e` skips it
 - `filmstrip.ts` — standalone script, CDP screencast during page load
 
 ## Helpers (`helpers/`)
