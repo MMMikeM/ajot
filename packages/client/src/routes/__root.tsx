@@ -35,7 +35,11 @@ export default function RootComponent() {
           withSidebar={pathname === "/" || pathname === "/people"}
           right={
             <ClientOnly
-              fallback={<span className="text-muted-foreground opacity-40">&#x2699;</span>}
+              fallback={
+                <span className="text-muted-foreground opacity-40 touch:flex touch:h-9 touch:items-center">
+                  &#x2699;
+                </span>
+              }
             >
               <SyncSettings />
             </ClientOnly>
