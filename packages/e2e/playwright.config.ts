@@ -3,6 +3,8 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: ".",
   testMatch: "*.spec.ts",
+  // Runs against a production build: playwright.prerender.config.ts
+  testIgnore: "skeleton.spec.ts",
   outputDir: ".output",
   snapshotDir: ".snapshots",
 
