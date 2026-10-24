@@ -85,6 +85,8 @@ export const taskRoutes = authed()
       }
 
       const result = await taskRepo.insert({ ...data, userId });
+      // A retry gets its own row back; an id someone else's task already has must not
+      if (result.userId !== userId) throw new HTTPException(409, { message: "Task id taken" });
       const taskWithRelations = { ...result, subtasks: [], shares: [] };
 
       const collabIds = effectiveCategoryId
