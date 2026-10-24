@@ -12,6 +12,7 @@ import { inviteRoutes } from "./routes/invites";
 import { contactRoutes } from "./routes/contacts";
 import { notificationRoutes } from "./routes/notifications";
 import { deployRoutes } from "./routes/deploy";
+import { configRoutes } from "./routes/config";
 
 const app = new OpenAPIHono();
 
@@ -70,6 +71,7 @@ app.options("*", (c) => c.body(null, 204));
 app.get("/health", (c) => c.json({ ok: true }));
 
 const api = app
+  .route("/api/config", configRoutes)
   .route("/api/auth", authRoutes)
   .route("/api/tasks", taskRoutes)
   .route("/api/categories", categoryRoutes)

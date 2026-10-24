@@ -12,6 +12,12 @@ export class BadRequestError extends HTTPException {
   }
 }
 
+export class ForbiddenError extends HTTPException {
+  constructor(message: string) {
+    super(403, { message });
+  }
+}
+
 export class ConflictError extends HTTPException {
   constructor(message: string) {
     super(409, { message });

@@ -4,26 +4,30 @@ import { now } from "@newtab-todo/shared/iso";
 import userRepo from "./db/user.repo";
 import sessionRepo from "./db/session.repo";
 import categoryRepo from "./db/category.repo";
-import { ConflictError, NotFoundError } from "./db/errors";
+import inviteTokenRepo from "./db/invite-token.repo";
+import { ConflictError, ForbiddenError, NotFoundError } from "./db/errors";
 import { hashPassword, verifyPassword } from "./password";
 
-export const signup = async (username: string, password: string, name: string) => {
-  const normalizedUsername = username.toLowerCase();
-  let existing = false;
-  try {
-    await userRepo.findByUsername(normalizedUsername);
-    existing = true;
-  } catch (e) {
-    if (!(e instanceof NotFoundError)) throw e;
+/** A server's first account signs up freely; everyone after needs an invite from someone on it. */
+const admit = async (inviteToken: string | undefined) => {
+  if (inviteToken) {
+    const invite = await inviteTokenRepo.claim(inviteToken);
+    if (!invite) throw new ForbiddenError("Invite link has expired or already been used");
+    return invite;
   }
-  if (existing) throw new ConflictError("Username already taken");
+  if ((await userRepo.count()) > 0) {
+    throw new ForbiddenError("Ask someone on this server for an invite link to sign up");
+  }
+  return null;
+};
 
+const createAccount = async (username: string, password: string, name: string) => {
   const passwordHash = await hashPassword(password);
   const ts = now();
   const user = await userRepo.insert({
     id: createId(),
     name,
-    username: normalizedUsername,
+    username,
     passwordHash,
     createdAt: ts,
     updatedAt: ts,
@@ -37,9 +41,40 @@ export const signup = async (username: string, password: string, name: string) =
     createdAt: ts,
     updatedAt: ts,
   });
+  return user;
+};
+
+export const signup = async (
+  username: string,
+  password: string,
+  name: string,
+  inviteToken?: string,
+) => {
+  const normalizedUsername = username.toLowerCase();
+  let existing = false;
+  try {
+    await userRepo.findByUsername(normalizedUsername);
+    existing = true;
+  } catch (e) {
+    if (!(e instanceof NotFoundError)) throw e;
+  }
+  if (existing) throw new ConflictError("Username already taken");
+
+  const invite = await admit(inviteToken);
+  let user;
+  try {
+    user = await createAccount(normalizedUsername, password, name);
+  } catch (e) {
+    if (invite) await inviteTokenRepo.release(invite.id);
+    throw e;
+  }
+  if (invite) await inviteTokenRepo.consume(invite, user.id);
 
   const token = await sessionRepo.insert(user.id);
-  return { userId: user.id, token, name: user.name, username: user.username };
+  return {
+    session: { userId: user.id, token, name: user.name, username: user.username },
+    invitedBy: invite?.createdByUserId ?? null,
+  };
 };
 
 export const login = async (username: string, password: string) => {

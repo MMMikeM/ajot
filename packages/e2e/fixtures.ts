@@ -37,9 +37,8 @@ export const test = base.extend<Fixtures>({
     await use(await getOrCreateUser(USER_1));
   },
 
-  // eslint-disable-next-line no-empty-pattern
-  user2Auth: async ({}, use) => {
-    await use(await getOrCreateUser(USER_2));
+  user2Auth: async ({ user1Auth }, use) => {
+    await use(await getOrCreateUser(USER_2, user1Auth));
   },
 
   user1Page: async ({ page, user1Auth }, use) => {

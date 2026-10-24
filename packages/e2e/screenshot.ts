@@ -36,7 +36,7 @@ await forBothViewports(
 
 // So the sharing UI shows the contacts picker
 const user1Auth = await getOrCreateUser(USER_1);
-const user2Auth = await getOrCreateUser(USER_2);
+const user2Auth = await getOrCreateUser(USER_2, user1Auth);
 await ensureMutualContacts(user1Auth.token, user2Auth.token);
 
 await forBothViewports(
