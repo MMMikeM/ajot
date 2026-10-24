@@ -145,9 +145,16 @@ export const updateNote = (id: string, fields: Partial<Note>) => {
   console.log("[mutation] optimistic applied, tx queued");
 };
 
+/** Returns an undo that brings the note back under its original id. */
 export const deleteNote = (id: string) => {
   console.log(`[mutation] deleteNote id=${id}`);
+  const deleted = notesCollection.get(id);
   const tx = offline.createOfflineTransaction({ mutationFnName: "syncNotes" });
   tx.mutate(() => notesCollection.delete(id));
   console.log("[mutation] optimistic applied, tx queued");
+  return () => {
+    if (!deleted) return;
+    const restore = offline.createOfflineTransaction({ mutationFnName: "syncNotes" });
+    restore.mutate(() => notesCollection.insert({ ...deleted, updatedAt: now() }));
+  };
 };
