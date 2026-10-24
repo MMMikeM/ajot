@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 
-const DRAWER_WIDTH = 148;
 const OPEN_THRESHOLD = 60;
 const SNAP_MS = 200;
 const HINT_SEEN_KEY = "newtab-todo-swipe-hint-seen";
@@ -19,13 +18,16 @@ const closeRegistry = new Set<() => void>();
  *
  * Usage:
  *   const swipe = useSwipeReveal(disabled, hint);
- *   <div ref={swipe.containerRef}>          // receives touch events + outside-tap guard
- *     <div className="absolute right-0 ..."> // action drawer
- *     <div ref={swipe.contentRef}>           // slides left via translateX
+ *   <div ref={swipe.containerRef}>                 // receives touch events + outside-tap guard
+ *     <div ref={swipe.trayRef} className="absolute right-0 ..."> // action tray, sized by its actions
+ *     <div ref={swipe.contentRef}>                  // slides left by the tray's width
  */
 export const useSwipeReveal = (disabled = false, hint = false) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const trayRef = useRef<HTMLDivElement>(null);
+  // Read at gesture time: the tray holds one to three actions, and it's invisible but laid out
+  const trayWidth = () => trayRef.current?.offsetWidth ?? 0;
 
   const [isOpen, setIsOpen] = useState(false);
 
@@ -101,8 +103,9 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
       if (!isDraggingRef.current) return;
       e.preventDefault(); // stop scroll — requires non-passive listener
 
-      const base = isOpenRef.current ? -DRAWER_WIDTH : 0;
-      const next = Math.min(0, Math.max(-DRAWER_WIDTH, base + dx));
+      const width = trayWidth();
+      const base = isOpenRef.current ? -width : 0;
+      const next = Math.min(0, Math.max(-width, base + dx));
       currentPx.current = next;
       const el = contentRef.current;
       if (el) el.style.transform = `translateX(${next}px)`;
@@ -114,9 +117,12 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
         return;
       }
 
+      const width = trayWidth();
+      // A one-action tray is barely wider than the usual threshold
+      const threshold = Math.min(OPEN_THRESHOLD, width / 2);
       const shouldOpen = isOpenRef.current
-        ? currentPx.current > -(DRAWER_WIDTH - OPEN_THRESHOLD) // swipe right past threshold to close
-        : currentPx.current < -OPEN_THRESHOLD; // swipe left past threshold to open
+        ? currentPx.current > -(width - threshold) // swipe right past threshold to close
+        : currentPx.current < -threshold; // swipe left past threshold to open
 
       if (shouldOpen) {
         closeRegistry.forEach((fn) => {
@@ -127,10 +133,10 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
       const el = contentRef.current;
       if (el) {
         el.style.transition = `transform ${SNAP_MS}ms ease-out`;
-        el.style.transform = shouldOpen ? `translateX(${-DRAWER_WIDTH}px)` : "translateX(0px)";
+        el.style.transform = shouldOpen ? `translateX(${-width}px)` : "translateX(0px)";
       }
 
-      currentPx.current = shouldOpen ? -DRAWER_WIDTH : 0;
+      currentPx.current = shouldOpen ? -width : 0;
       isOpenRef.current = shouldOpen;
       setIsOpen(shouldOpen);
       isDraggingRef.current = false;
@@ -175,7 +181,7 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
       peeking = true;
       markSwiping();
       el.style.transition = "transform 420ms cubic-bezier(0.22, 1, 0.36, 1)";
-      el.style.transform = `translateX(${-DRAWER_WIDTH}px)`;
+      el.style.transform = `translateX(${-trayWidth()}px)`;
       returnTimer = window.setTimeout(() => {
         peeking = false;
         if (isOpenRef.current || isDraggingRef.current) return;
@@ -199,8 +205,8 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
   return {
     containerRef,
     contentRef,
+    trayRef,
     isOpen,
     close,
-    drawerWidth: DRAWER_WIDTH,
   };
 };
