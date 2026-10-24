@@ -63,6 +63,9 @@ const patchHtml = (outDir: string) => {
     (_, href) => `<link rel="stylesheet" href="${href}">`,
   );
 
+  // assemble() deletes the web manifest, so the link would fail on every new tab
+  html = html.replace(/<link rel="manifest"[^>]*>/, "");
+
   writeFileSync(join(outDir, "index.html"), html);
   console.log(`  Extracted ${scriptCount} inline script(s), converted CSS preloads`);
 };
