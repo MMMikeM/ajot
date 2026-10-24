@@ -6,9 +6,8 @@ import { getRouter } from "./router";
 
 // getBuildTarget() returns "server" in Node.js, so getRouter() creates a memoryHistory at "/".
 //
-// router.load() resolves routes at "/", loading the lazy index route. Lazy route
-// components suspend inside renderToString (their Suspense boundaries render fallbacks),
-// so only the root chrome actually renders: header, AddTaskInput, SyncSettings fallback.
+// Only the root chrome renders: the header and the SyncSettings fallback. The root route keeps
+// the Outlet behind ClientOnly, since routes read localStorage-backed stores.
 // collections.ts guards its OPFS init so it doesn't crash when imported in Node.js.
 export const render = async (): Promise<string> => {
   const router = getRouter();
