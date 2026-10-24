@@ -12,7 +12,7 @@ module.exports = {
       name: "background-stays-light",
       comment:
         "Extension backgrounds and the PWA service worker run without a DOM. collections.ts " +
-        "opens OPFS with a top-level await, and React and TanStack would bloat the worker.",
+        "opens IndexedDB with a top-level await, and React and TanStack would bloat the worker.",
       severity: "error",
       from: { path: "^packages/client/src/(background-firefox|background-chrome|sw)\\.ts$" },
       to: {

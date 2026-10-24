@@ -30,7 +30,7 @@ export const clearLocalStorage = async (page: Page): Promise<void> => {
   await page.evaluate(() => localStorage.clear());
 };
 
-/** Clears the offline outbox, which lives in IndexedDB. Collections persist in OPFS and survive this. */
+/** Clears IndexedDB: the offline outbox and the saved lists. */
 export const clearIDB = async (page: Page): Promise<void> => {
   await page.evaluate(async () => {
     const dbs = (await indexedDB.databases?.()) ?? [];

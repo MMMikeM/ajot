@@ -1,13 +1,13 @@
 ---
 name: tanstack-db
-description: Use when writing or modifying code that touches TanStack DB collections, live queries, mutations, offline transactions, or sync — including adding features, fixing bugs, or refactoring data access patterns. Triggers on imports from @tanstack/db, @tanstack/react-db, @tanstack/offline-transactions, @tanstack/query-db-collection, @tanstack/browser-db-sqlite-persistence.
+description: Use when writing or modifying code that touches TanStack DB collections, live queries, mutations, offline transactions, or sync — including adding features, fixing bugs, or refactoring data access patterns. Triggers on imports from @tanstack/db, @tanstack/react-db, @tanstack/offline-transactions, @tanstack/query-db-collection.
 ---
 
 # TanStack DB
 
 ## Overview
 
-TanStack DB provides local-first reactive collections with offline-first sync. This project uses it for all client-side data access with OPFS SQLite persistence.
+TanStack DB provides local-first reactive collections with offline-first sync. This project uses it for all client-side data access with each list's last server response saved to IndexedDB (`lib/db/snapshot.ts`) so a new tab fills before the server answers.
 
 ## Project Architecture
 
@@ -22,23 +22,21 @@ Four collections in `packages/client/src/lib/db/collections.ts`:
 | `notesCollection`      | `note.id`    | `NoteSelect`        |
 | `contactsCollection`   | `contact.id` | `ContactWithUser`   |
 
-Creation pattern — layered composition:
+Creation pattern:
 
 ```ts
 createCollection(
-  persistedCollectionOptions<T, string>({
-    persistence,
-    schemaVersion: 1,
-    ...queryCollectionOptions({
-      id: "tasks",
-      queryKey: ["tasks"] as const,
-      queryFn: async () => (await client.api.tasks.$get()).json(),
-      queryClient,
-      getKey: (item) => item.id,
-    }),
+  queryCollectionOptions({
+    id: "tasks",
+    queryKey: ["tasks"] as const,
+    queryFn: async () => (await client.api.tasks.$get()).json(),
+    queryClient,
+    getKey: (item) => item.id,
   }),
 );
 ```
+
+`restoreSnapshot` seeds each `[key]` query from IndexedDB before the collections are created, and saves it again after every successful update. Bump its `SCHEMA_VERSION` when a row's shape changes.
 
 ### Reading Data
 
