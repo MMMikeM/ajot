@@ -22,9 +22,6 @@
     "test:e2e:prerender": "vp run @newtab-todo/e2e#test:prerender",
     "reset-password": "vp run @newtab-todo/server#reset-password"
   },
-  "dependencies": {
-    "temporal-polyfill": "^1.0.6"
-  },
   "devDependencies": {
     "@swc/core": "^1.16.18",
     "@types/node": "^26.6.5",

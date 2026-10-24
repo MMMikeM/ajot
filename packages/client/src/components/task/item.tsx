@@ -1,4 +1,3 @@
-import { Temporal } from "temporal-polyfill";
 import { useEffect, useRef, useState, type CSSProperties, type RefCallback } from "react";
 import type { Task } from "~/lib/types";
 import { Button } from "~/components/ui/button";
