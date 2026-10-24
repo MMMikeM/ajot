@@ -10,6 +10,7 @@ import { toNotification, type PushPayload } from "@newtab-todo/shared/push-paylo
 import { MSG_TOKEN_CHANGED } from "@newtab-todo/shared/constants";
 import { ext, getStoredSession, notifyTabs } from "~/lib/ext";
 import { fetchServerConfig } from "~/lib/server-config";
+import { setupContextMenu } from "~/lib/context-menu";
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -65,6 +66,7 @@ const showNotification = (payload: PushPayload) => {
   });
 };
 
+setupContextMenu();
 ext.runtime.onInstalled.addListener(() => void queueReconcile());
 ext.runtime.onStartup.addListener(() => void queueReconcile());
 ext.runtime.onMessage.addListener((message: unknown) => {
