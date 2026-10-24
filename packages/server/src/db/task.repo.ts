@@ -1,4 +1,4 @@
-import { and, eq, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db, inTransaction } from "./client";
@@ -146,8 +146,13 @@ const insertShare = async (data: TaskShareInsert) => {
   return row;
 };
 
-const removeShare = async (id: string) => {
-  const [row] = await db.delete(taskShares).where(eq(taskShares.id, id)).returning();
+// Someone else's share reads as missing, so its id can't be probed
+const removeShare = async (id: string, ownerId: string) => {
+  const ownedTaskIds = db.select({ id: tasks.id }).from(tasks).where(eq(tasks.userId, ownerId));
+  const [row] = await db
+    .delete(taskShares)
+    .where(and(eq(taskShares.id, id), inArray(taskShares.taskId, ownedTaskIds)))
+    .returning();
   if (!row) throw new NotFoundError("task share", id);
   return row;
 };

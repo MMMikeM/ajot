@@ -271,7 +271,7 @@ export const taskRoutes = authed()
       responses: withAuth({ 200: jsonContent(taskShareResponseSchema) }),
     }),
     async (c) => {
-      const result = await taskRepo.removeShare(c.req.valid("json").id);
+      const result = await taskRepo.removeShare(c.req.valid("json").id, c.get("userId"));
       const task = await taskRepo.findById(result.taskId);
       broadcast(c, "tasks", "update", { id: result.taskId }, [
         task.userId,
