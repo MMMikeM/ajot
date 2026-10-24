@@ -8,24 +8,44 @@ const ROOT = resolve(import.meta.dirname);
 const CLIENT_DIST = join(ROOT, "dist");
 const EXT_OUT = join(ROOT, "dist-extension");
 
+// Both stores reject an upload whose version isn't higher than the last one
+const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8")) as {
+  version: string;
+};
+const icons = { 192: "icons/icon-192.png", 512: "icons/icon-512.png" };
+
 // The user picks the server at runtime, so any HTTPS origin, plus local servers for development
 const CONNECT_SRC = "connect-src 'self' https: http://localhost:* http://127.0.0.1:*";
 
 const firefoxManifest = {
   manifest_version: 2,
-  name: "New Tab Todo",
-  version: "1.0.0",
-  browser_specific_settings: { gecko: { id: "newtab-todo@local" } },
+  name: "Ajot",
+  version,
+  icons,
+  browser_specific_settings: {
+    gecko: {
+      id: "@ajot",
+      // Firefox asks before an add-on sends personal data anywhere (140+ has the prompt). Local-only
+      // sends nothing; signing in to a server sends the account there, so that's asked then.
+      strict_min_version: "140.0",
+      data_collection_permissions: {
+        required: ["none"],
+        optional: ["authenticationInfo", "personallyIdentifyingInfo"],
+      },
+    },
+    gecko_android: { strict_min_version: "142.0" },
+  },
   chrome_url_overrides: { newtab: "index.html" },
-  content_security_policy: `script-src 'self' 'unsafe-eval'; object-src 'self'; ${CONNECT_SRC}`,
+  content_security_policy: `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; ${CONNECT_SRC}`,
   permissions: ["storage"],
   background: { scripts: ["background.js"], persistent: true },
 };
 
 const chromeManifest = {
   manifest_version: 3,
-  name: "New Tab Todo",
-  version: "1.0.0",
+  name: "Ajot",
+  version,
+  icons,
   // Silent pushes (userVisibleOnly: false) from an extension worker need Chrome 121.
   minimum_chrome_version: "121",
   chrome_url_overrides: { newtab: "index.html" },

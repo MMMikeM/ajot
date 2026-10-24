@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createLazyFileRoute, useRouter } from "@tanstack/react-router";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod/mini";
@@ -9,7 +9,7 @@ import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/field";
 import { Input } from "~/components/ui/field";
 import { getBuildTarget } from "~/lib/build-target";
-import { ext } from "~/lib/ext";
+import { ext, requestSyncDataConsent } from "~/lib/ext";
 import { TOKEN_KEY, MSG_TOKEN_CHANGED } from "~/lib/constants";
 import { getServerUrl, setServerUrl } from "~/lib/server-url";
 import { fetchServerConfig, normalizeServerUrl, type ServerConfig } from "~/lib/server-config";
@@ -68,6 +68,7 @@ const AuthView = () => {
   const [serverError, setServerError] = useState<string | null>(null);
   const [config, setConfig] = useState<ServerConfig | null>(null);
   const [pendingInvite] = useState(readPendingInvite);
+  const syncConsent = useRef<Promise<boolean>>(Promise.resolve(true));
 
   useEffect(() => {
     if (choosesServer && !getServerUrl()) return;
@@ -85,6 +86,10 @@ const AuthView = () => {
       setServerError(null);
       let result: { userId: string; token: string; name: string; username: string };
       try {
+        if (!(await syncConsent.current)) {
+          setServerError("Firefox needs your permission to send your account to the server.");
+          return;
+        }
         if (choosesServer) setConfig(await connectToServer(value.server));
         result = await authenticate(mode, {
           username: value.username.trim(),
@@ -125,6 +130,8 @@ const AuthView = () => {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            // Firefox only prompts from within the submit itself, before anything is awaited
+            if (choosesServer) syncConsent.current = requestSyncDataConsent();
             void form.handleSubmit();
           }}
           className="flex flex-col gap-3"
