@@ -26,7 +26,8 @@ export default {
       typescript: { config: ["tsconfig.json"] },
     },
     "packages/server": {
-      entry: ["src/reset-password.ts"],
+      // The pack block in vite.config.ts bundles these, which knip doesn't read
+      entry: ["src/index.ts", "src/reset-password.ts"],
       project: ["src/**/*.{ts,tsx}"],
     },
     "packages/shared": {
