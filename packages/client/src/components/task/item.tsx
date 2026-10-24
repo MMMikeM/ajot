@@ -4,7 +4,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/field";
 import { cn } from "~/lib/utils";
-import { Calendar, GripVertical, Plus, X } from "lucide-react";
+import { Calendar, GripVertical, Plus, Users, X } from "lucide-react";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { useSwipeReveal } from "~/lib/hooks/use-swipe-reveal";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
@@ -43,23 +43,26 @@ const formatDueDate = (dateStr: string) => {
 const ENTER_WINDOW_MS = 3000;
 const isJustCreated = (task: Task) => Date.now() - Date.parse(task.createdAt) < ENTER_WINDOW_MS;
 
-const sharedWithNames = (task: Task, currentUserId: string, isOwned: boolean) => {
-  const names: string[] = [];
-  if (!isOwned && task.user?.name) names.push(task.user.name);
-  for (const s of task.shares) {
-    if (s.sharedWithUser?.id !== currentUserId && s.sharedWithUser?.name)
-      names.push(s.sharedWithUser.name);
-  }
-  return names;
-};
+const listNames = new Intl.ListFormat(undefined, { type: "conjunction" });
 
-function ShareBadges({ names }: { names: string[] }) {
+// As in the sidebar: a face always means whose task it is, so a task you shared never shows a
+// recipient's face
+function ShareChip({ ownerName, sharedWith }: { ownerName?: string; sharedWith: string[] }) {
+  if (ownerName)
+    return (
+      <InitialsAvatar
+        name={ownerName}
+        label={`${ownerName}'s task`}
+        className="bg-collab text-collab-foreground"
+      />
+    );
+
+  const label = `Shared with ${listNames.format(sharedWith)}`;
   return (
-    <div className="flex items-center [&>:not(:first-child)]:-ml-1">
-      {names.map((name) => (
-        <InitialsAvatar key={name} name={name} className="bg-muted text-hint" />
-      ))}
-    </div>
+    <span title={label} className="flex size-5.5 shrink-0 items-center justify-center text-hint">
+      <Users size={14} aria-hidden="true" />
+      <span className="sr-only">{label}</span>
+    </span>
   );
 }
 
@@ -97,11 +100,16 @@ export function TaskItem({
   const isDone = task.status === "done";
   const due = task.dueDate ? formatDueDate(task.dueDate) : null;
   const showDate = !!due && (!hideDate || due.overdue);
-  const shareNames =
-    !isSubtask && !isInSharedCategory && task.shares.length > 0
-      ? sharedWithNames(task, currentUserId, isOwned)
+  const showsSharing = !isSubtask && !isInSharedCategory && task.shares.length > 0;
+  const ownerName = showsSharing && !isOwned ? task.user?.name : undefined;
+  const sharedWith =
+    showsSharing && isOwned
+      ? task.shares.flatMap((s) =>
+          s.sharedWithUser && s.sharedWithUser.id !== currentUserId ? [s.sharedWithUser.name] : [],
+        )
       : [];
-  const hasMeta = showDate || shareNames.length > 0 || !!task.assignee;
+  const hasShareChip = !!ownerName || sharedWith.length > 0;
+  const hasMeta = showDate || hasShareChip || !!task.assignee;
   const canSetDate = !isDone && !showDate;
   const canAddSubtask = !isSubtask && !isDone;
   const canDelete = canDeleteTask(currentUserId, task, parent);
@@ -302,8 +310,15 @@ export function TaskItem({
                   {due.label}
                 </button>
               )}
-              {shareNames.length > 0 && <ShareBadges names={shareNames} />}
-              {task.assignee && <InitialsAvatar name={task.assignee.name} size="sm" />}
+              {hasShareChip && <ShareChip ownerName={ownerName} sharedWith={sharedWith} />}
+              {/* Hollow, so an assignee doesn't read as the owner */}
+              {task.assignee && (
+                <InitialsAvatar
+                  name={task.assignee.name}
+                  label={`Assigned to ${task.assignee.name}`}
+                  className="bg-transparent text-hint ring-1 ring-ghost ring-inset"
+                />
+              )}
             </div>
           )}
           <div

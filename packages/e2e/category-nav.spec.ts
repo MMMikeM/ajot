@@ -99,7 +99,7 @@ const openCategoryOptionsPopover = async (
   const pill = categoryBtn.locator("..");
   await pill.hover();
   // The trigger is opacity-0 until hover; force skips the visibility check
-  await pill.getByRole("button", { name: "Category options" }).click({ force: true });
+  await pill.getByRole("button", { name: "List options" }).click({ force: true });
 };
 
 test("desktop: category options popover is visible above main content", async ({
@@ -202,8 +202,8 @@ test("mobile: tapping header trigger opens sheet", async ({ page, isMobile }) =>
 
   await page.getByTestId("category-nav-trigger").tap();
 
-  // Sheet is open — the Add category button is always present
-  await expect(page.getByRole("button", { name: "Add category" })).toBeVisible({ timeout: 3000 });
+  // Sheet is open — the Add list button is always present
+  await expect(page.getByRole("button", { name: "Add list" })).toBeVisible({ timeout: 3000 });
 });
 
 test("mobile: selecting a category from the sheet closes it and updates trigger", async ({
@@ -215,15 +215,15 @@ test("mobile: selecting a category from the sheet closes it and updates trigger"
   const trigger = page.getByTestId("category-nav-trigger");
 
   await trigger.tap();
-  await page.getByRole("button", { name: "Add category" }).tap();
-  await page.locator('input[placeholder="Category name..."]').fill("Errands");
+  await page.getByRole("button", { name: "Add list" }).tap();
+  await page.locator('input[placeholder="List name..."]').fill("Errands");
   await page.keyboard.press("Enter");
 
   // The sheet stays open after adding
   await page.getByRole("button", { name: "Errands" }).tap();
 
   await expect(trigger).toContainText("Errands");
-  await expect(page.getByRole("button", { name: "Add category" })).toBeHidden({ timeout: 3000 });
+  await expect(page.getByRole("button", { name: "Add list" })).toBeHidden({ timeout: 3000 });
 });
 
 test("mobile: input chip visible with active category", async ({ page, isMobile }) => {
@@ -236,8 +236,8 @@ test("mobile: input chip visible with active category", async ({ page, isMobile 
   await expect(chip).toContainText("Inbox");
 
   await page.getByTestId("category-nav-trigger").tap();
-  await page.getByRole("button", { name: "Add category" }).tap();
-  await page.locator('input[placeholder="Category name..."]').fill("Personal");
+  await page.getByRole("button", { name: "Add list" }).tap();
+  await page.locator('input[placeholder="List name..."]').fill("Personal");
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Personal" }).tap();
 
@@ -249,8 +249,8 @@ test("mobile: tapping input chip opens the category sheet", async ({ page, isMob
 
   await page.getByTestId("category-input-chip").tap();
 
-  // Sheet is open — the Add category button is always present
-  await expect(page.getByRole("button", { name: "Add category" })).toBeVisible({ timeout: 3000 });
+  // Sheet is open — the Add list button is always present
+  await expect(page.getByRole("button", { name: "Add list" })).toBeVisible({ timeout: 3000 });
 });
 
 test("mobile: header trigger and input chip stay visible while scrolling", async ({

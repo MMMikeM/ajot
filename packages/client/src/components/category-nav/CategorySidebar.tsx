@@ -173,7 +173,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
                       <button
                         data-slot="category-options"
                         className="pointer-events-none absolute top-1/2 right-3 flex size-5 -translate-y-1/2 items-center justify-center rounded text-hint opacity-0 transition-opacity group-hover/pill:pointer-events-auto group-hover/pill:opacity-100 hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 data-[popup-open]:pointer-events-auto data-[popup-open]:text-foreground data-[popup-open]:opacity-100"
-                        aria-label="Category options"
+                        aria-label="List options"
                       />
                     }
                   >
@@ -256,7 +256,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
             size="xs"
             onClick={() => setAdding(true)}
             className="h-auto justify-start gap-2 px-3 py-1.5"
-            aria-label="Add category"
+            aria-label="Add list"
           >
             <span className="flex w-1.5 justify-center">
               <Plus className="size-2.5" />

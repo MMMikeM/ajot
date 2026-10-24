@@ -92,7 +92,7 @@ function CategoryMobileSheet() {
           <Input
             ref={renameRef}
             type="text"
-            aria-label="Category name"
+            aria-label="List name"
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={submitRename}
@@ -125,7 +125,7 @@ function CategoryMobileSheet() {
             render={
               <button
                 className="flex size-11 shrink-0 items-center justify-center rounded-lg text-hint transition-colors active:bg-secondary active:text-foreground"
-                aria-label="Category options"
+                aria-label="List options"
               />
             }
           >
@@ -153,7 +153,7 @@ function CategoryMobileSheet() {
       <Drawer open={navOpen} onOpenChange={setNavOpen}>
         <DrawerContent>
           <DrawerTitle className="px-5 pt-3 pb-2 text-xs font-medium tracking-wide text-hint uppercase">
-            Categories
+            Lists
           </DrawerTitle>
 
           <div className={rowClass(activeCategoryId === null)}>
@@ -195,10 +195,10 @@ function CategoryMobileSheet() {
               <Input
                 ref={addRef}
                 type="text"
-                aria-label="New category name"
+                aria-label="New list name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Category name..."
+                placeholder="List name..."
                 enterKeyHint="done"
                 onBlur={() => {
                   if (!newName.trim()) setAdding(false);
@@ -213,7 +213,7 @@ function CategoryMobileSheet() {
               className="mx-2 h-12 w-[calc(100%-1rem)] justify-start gap-3 rounded-lg px-3 active:bg-secondary active:text-foreground"
             >
               <Plus size={16} />
-              Add category
+              Add list
             </Button>
           )}
 
