@@ -2,6 +2,10 @@
 
 Playwright test suite. Two projects: `desktop` (Chrome) and `mobile` (iPhone 14 via Chromium).
 
+## The stack
+
+`pnpm test:e2e` brings its own, so it needs Docker and nothing else running: Playwright's `webServer` starts `api-stack.ts` (a throwaway libSQL container, `drizzle-kit push`, then the API server on port 3180) and the Vite dev server on 5180, proxying to it. Each run starts from an empty database, and stopping the run removes the container. Set `BASE_URL` to run against a stack that's already up instead; nothing is started then.
+
 ## Entry points
 
 - `*.spec.ts` — Playwright test files, picked up automatically
@@ -17,7 +21,8 @@ Playwright test suite. Two projects: `desktop` (Chrome) and `mobile` (iPhone 14 
 | File            | What it exports                                                                                               |
 | --------------- | ------------------------------------------------------------------------------------------------------------- |
 | `users.ts`      | `USER_1`, `USER_2` — dedicated e2e accounts (Alice / Bob)                                                     |
-| `auth.ts`       | `getOrCreateUser(user)` — signup on first run, login thereafter; `signIn(page, auth)` — seeds localStorage    |
+| `stack.ts`      | `API_PORT`, `CLIENT_PORT`, `BASE_URL` — where the suite finds the app                                         |
+| `auth.ts`       | `getOrCreateUser(user, inviter?)` — login, or signup (invited) on first run; `signIn(page, auth)`             |
 | `api.ts`        | `apiRequest()` — raw fetch with Bearer token; `deleteAllTasksInCategory(token, categoryId)`                   |
 | `app.ts`        | `waitForAppReady`, `createTask`, `createCategory`, `clearLocalStorage`, `clearIDB`                            |
 | `sync.ts`       | `createSyncTracker(page)` — tracks non-GET `/api/*` mutations, exposes `waitForSync()` + `assertNoFailures()` |
@@ -29,14 +34,14 @@ Playwright test suite. Two projects: `desktop` (Chrome) and `mobile` (iPhone 14 
 Import `test` and `expect` from here instead of `@playwright/test` to get the custom fixtures:
 
 - `appPage` — navigated to `/` and ready (unauthenticated)
-- `user1Auth` / `user2Auth` — resolved `AuthResult` objects
-- `user1Page` — signed in as USER_1 (default context)
-- `user2Page` — signed in as USER_2 in an **isolated browser context** — use alongside `user1Page` for cross-user tests
+- `user1Auth` / `user2Auth` — this worker's own Alice and Bob (`e2e_alice_<worker>`), contacts of each other
+- `user1Page` — signed in as `user1Auth` (default context)
+- `user2Page` — signed in as `user2Auth` in an **isolated browser context** — use alongside `user1Page` for cross-user tests
 - `syncTracker` — auto-calls `assertNoFailures()` in teardown
 
 ## Test users
 
-`USER_1` / `USER_2` are created via `POST /api/auth/signup` on first run and reused (login) on subsequent runs. They are persistent accounts in the dev/staging DB — do not rely on them having a clean task list between runs; use `deleteAllTasksInCategory` in `beforeEach` if isolation matters.
+`global-setup.ts` makes `USER_1` before any worker starts: a new server takes one signup without an invite, and workers racing to make it all failed but one. Each worker then gets its own Alice and Bob, invited by `USER_1`. Specs clear their account's tasks and lists in `beforeEach`, which on one shared account deleted what other workers' tests had just made. Against a persistent `BASE_URL` stack the accounts are reused (login) on later runs.
 
 ## Non-obvious decisions
 
