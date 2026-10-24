@@ -6,9 +6,7 @@ import {
   MSG_BG_STATUS,
 } from "~/lib/constants";
 import { createBackoff } from "~/lib/sync/backoff";
-import { getStoredToken, notifyTabs } from "~/lib/ext";
-
-declare const __SERVER_URL__: string;
+import { getStoredSession, notifyTabs } from "~/lib/ext";
 
 let eventSource: EventSource | null = null;
 let isConnected = false;
@@ -22,13 +20,13 @@ const connect = async () => {
   eventSource?.close();
   eventSource = null;
 
-  const token = await getStoredToken();
-  if (!token) {
-    console.log("[bg-sse] no token, not connecting");
+  const session = await getStoredSession();
+  if (!session) {
+    console.log("[bg-sse] signed out, not connecting");
     return;
   }
 
-  const url = `${__SERVER_URL__}${EVENTS_PATH}?token=${encodeURIComponent(token)}`;
+  const url = `${session.serverUrl}${EVENTS_PATH}?token=${encodeURIComponent(session.token)}`;
   console.log("[bg-sse] connecting...");
   const source = new EventSource(url);
   eventSource = source;

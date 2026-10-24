@@ -8,16 +8,17 @@
 import { sendSubscriptionToServer, subscribe, unsubscribe } from "@mmmike/web-push/client";
 import { toNotification, type PushPayload } from "@newtab-todo/shared/push-payload";
 import { MSG_TOKEN_CHANGED } from "@newtab-todo/shared/constants";
-import { ext, getStoredToken, notifyTabs } from "~/lib/ext";
+import { ext, getStoredSession, notifyTabs } from "~/lib/ext";
+import { fetchServerConfig } from "~/lib/server-config";
 
 declare let self: ServiceWorkerGlobalScope;
-declare const __SERVER_URL__: string;
-declare const __VAPID_PUBLIC_KEY__: string;
 
-const upload = async (subscription: PushSubscription, token: string) => {
+type Session = NonNullable<Awaited<ReturnType<typeof getStoredSession>>>;
+
+const upload = async (subscription: PushSubscription, { token, serverUrl }: Session) => {
   const ok = await sendSubscriptionToServer(
     subscription,
-    `${__SERVER_URL__}/api/push/subscribe?kind=extension`,
+    `${serverUrl}/api/push/subscribe?kind=extension`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
   if (!ok) throw new Error("subscription upload failed");
@@ -28,18 +29,21 @@ const upload = async (subscription: PushSubscription, token: string) => {
  * unsubscribed when signed out (the server prunes the row as "gone" on its next send).
  */
 const reconcileSubscription = async () => {
-  const token = await getStoredToken();
-  if (!token) {
+  const session = await getStoredSession();
+  if (!session) {
     await unsubscribe({ registration: self.registration });
     console.log("[bg-push] signed out, unsubscribed");
     return;
   }
-  const result = await subscribe(__VAPID_PUBLIC_KEY__, {
+  // Each server has its own key; subscribe() replaces a subscription made with another one
+  const { vapidPublicKey } = await fetchServerConfig(session.serverUrl);
+  if (!vapidPublicKey) throw new Error("the server has no VAPID_PUBLIC_KEY");
+  const result = await subscribe(vapidPublicKey, {
     registration: self.registration,
     userVisibleOnly: false,
   });
   if (result.status !== "subscribed") throw new Error(`push ${result.status}`);
-  await upload(result.subscription, token);
+  await upload(result.subscription, session);
   console.log("[bg-push] subscribed");
 };
 

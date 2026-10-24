@@ -1,4 +1,5 @@
 export const TOKEN_KEY = "newtab-todo-token";
+export const SERVER_URL_KEY = "newtab-todo-server-url";
 
 // Inbox has no user-assigned colour — use warm off-white to distinguish it from categories
 export const INBOX_COLOR = "oklch(0.90 0.008 80)";

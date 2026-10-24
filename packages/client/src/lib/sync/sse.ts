@@ -1,10 +1,10 @@
 import { useSyncExternalStore } from "react";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
 import { tasksCollection, categoriesCollection, notesCollection } from "~/lib/db/collections";
-import { ensurePushRegistered } from "~/lib/sync/push";
+import { registerPushSubscription } from "~/lib/sync/push";
 import { createBackoff } from "~/lib/sync/backoff";
 import { getBuildTarget } from "~/lib/build-target";
-import { serverUrl } from "~/lib/api";
+import { getServerUrl } from "~/lib/server-url";
 import { ext } from "~/lib/ext";
 import {
   SSE_DATA_CHANGED,
@@ -128,8 +128,7 @@ const connectSSE = () => {
   }
 
   syncStateStore.set("connecting");
-  const origin = getBuildTarget() === "extension" ? serverUrl : "";
-  const url = `${origin}${EVENTS_PATH}?token=${encodeURIComponent(token)}`;
+  const url = `${getServerUrl()}${EVENTS_PATH}?token=${encodeURIComponent(token)}`;
   const source = new EventSource(url);
   es = source;
   source.addEventListener(SSE_DATA_CHANGED, (e: MessageEvent) => {
@@ -156,7 +155,7 @@ const reconnect = () => {
   syncStateStore.set("disconnected");
   if (getAuthToken()) {
     connectSSE();
-    if (getBuildTarget() === "browser") ensurePushRegistered().catch(console.error);
+    if (getBuildTarget() === "browser") void registerPushSubscription();
   }
 };
 

@@ -230,6 +230,45 @@ test.describe("deleting a category", () => {
   });
 });
 
+test.describe("signing up", () => {
+  const signedOutAt = async (page: Page, path: string, awaitingFirstUser = false) => {
+    await mockApi(page, { signedIn: false });
+    await page.route("**/api/config", (route) =>
+      route.fulfill({ json: { vapidPublicKey: "", awaitingFirstUser } }),
+    );
+    const config = page.waitForResponse("**/api/config");
+    await page.goto(path, { waitUntil: "domcontentloaded" });
+    await config;
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+  };
+
+  test("a server with accounts only takes signups through an invite", async ({ page }) => {
+    await signedOutAt(page, "/auth");
+    await expect(page.getByRole("button", { name: "Create an account" })).toHaveCount(0);
+  });
+
+  test("a new server offers its first account", async ({ page }) => {
+    await signedOutAt(page, "/auth", true);
+    await page.getByRole("button", { name: "Create an account" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Create the server's first account" }),
+    ).toBeVisible();
+  });
+
+  test("an invite link signs up with its invite", async ({ page }) => {
+    await signedOutAt(page, "/invite/abc");
+    await expect(page).toHaveURL(/\/auth$/);
+    await page.getByRole("button", { name: "Create an account" }).click();
+    await page.getByLabel("Name", { exact: true }).fill("Sam Okafor");
+    await page.getByLabel("Username").fill("sam");
+    await page.getByLabel("Password").fill("correct horse");
+
+    const signup = page.waitForRequest((r) => r.url().endsWith("/api/auth/signup"));
+    await page.getByRole("button", { name: "Create account" }).click();
+    expect((await signup).postDataJSON()).toMatchObject({ username: "sam", invite: "abc" });
+  });
+});
+
 test("the app still starts when OPFS is refused, as in a Firefox private window", async ({
   page,
 }) => {
