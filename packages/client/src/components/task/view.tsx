@@ -1,4 +1,3 @@
-import { Temporal } from "temporal-polyfill";
 import { useEffect, useState, type ReactNode, type RefCallback } from "react";
 import { ChevronRight } from "lucide-react";
 import { DragDropProvider } from "@dnd-kit/react";

@@ -294,6 +294,24 @@ test("the app still starts when IndexedDB is refused, as with site data blocked"
   await expect(row(page, "Book flights")).toBeVisible();
 });
 
+test("due dates and the detail sheet work where the browser lacks Temporal", async ({ page }) => {
+  await page.addInitScript(() => {
+    delete (globalThis as { Temporal?: unknown }).Temporal;
+  });
+  const errors: Error[] = [];
+  page.on("pageerror", (err) => errors.push(err));
+  const polyfill = page.waitForRequest(/temporal-polyfill|global\.esm/);
+  await openList(page);
+  await polyfill;
+
+  await expect(row(page, "Renew passport")).toContainText("3d ago");
+  await row(page, "Call the plumber")
+    .getByRole("button", { name: /^Call the plumber/ })
+    .click();
+  await expect(page.locator('[data-slot="drawer-content"]')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test.describe("accessibility", () => {
   test("task list", async ({ page }) => {
     await openList(page);
