@@ -19,3 +19,23 @@ export const getStoredSession = async () => {
 };
 
 export const notifyTabs = () => ext.runtime.sendMessage({ type: MSG_SYNC_ALL }).catch(() => {});
+
+type DataCollectionPermissions = {
+  request: (permissions: { data_collection: string[] }) => Promise<boolean>;
+};
+
+/**
+ * Asks Firefox to let the add-on send the account to a sync server, as the manifest's optional
+ * data_collection_permissions declare. Chrome has no such consent, so it resolves true there.
+ * Firefox only shows the prompt when this is called straight from a click or key handler.
+ */
+export const requestSyncDataConsent = (): Promise<boolean> => {
+  const gecko = ext.runtime.getManifest().browser_specific_settings?.gecko as
+    | { data_collection_permissions?: { optional?: string[] } }
+    | undefined;
+  const optional = gecko?.data_collection_permissions?.optional;
+  if (!optional?.length) return Promise.resolve(true);
+  return (ext.permissions as unknown as DataCollectionPermissions).request({
+    data_collection: optional,
+  });
+};
