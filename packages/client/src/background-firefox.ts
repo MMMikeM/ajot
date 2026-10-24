@@ -7,6 +7,7 @@ import {
 } from "~/lib/constants";
 import { createBackoff } from "~/lib/sync/backoff";
 import { getStoredSession, notifyTabs } from "~/lib/ext";
+import { setupContextMenu } from "~/lib/context-menu";
 
 let eventSource: EventSource | null = null;
 let isConnected = false;
@@ -76,5 +77,6 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
 });
 
 connect().catch((err) => console.error("[bg-sse] initial connect error:", err));
+setupContextMenu();
 
 console.log("[bg-sse] persistent background page loaded");
