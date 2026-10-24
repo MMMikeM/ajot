@@ -16,29 +16,76 @@ import { finishStartup } from "~/lib/startup-timing";
 import { useTaskActions } from "./use-actions";
 import { handOffRowFocus } from "./focus-handoff";
 import { useTaskActions as useDndActions } from "~/lib/hooks/use-task-actions";
+import { canDeleteTask } from "~/lib/task-permissions";
 import type { Task } from "~/lib/types";
 
-const DoneSection = ({ count, children }: { count: number; children: React.ReactNode }) => {
-  const [open, setOpen] = useState(false);
+const DONE_OPEN_KEY = "newtab-todo-done-open";
+
+// Storage can throw (blocked site data); the section then just starts closed
+const readDoneOpen = () => {
+  try {
+    return localStorage.getItem(DONE_OPEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
+const writeDoneOpen = (open: boolean) => {
+  try {
+    localStorage.setItem(DONE_OPEN_KEY, open ? "1" : "0");
+  } catch {
+    /* not remembered this time */
+  }
+};
+
+const DoneSection = ({
+  count,
+  onClear,
+  children,
+}: {
+  count: number;
+  /** Absent when none of the done tasks are yours to delete */
+  onClear?: () => void;
+  children: React.ReactNode;
+}) => {
+  const [open, setOpen] = useState(readDoneOpen);
 
   if (count === 0) return null;
 
+  const toggle = () => {
+    writeDoneOpen(!open);
+    setOpen(!open);
+  };
+
   return (
     <div className="mt-1 border-t border-border pt-2">
-      <Button
-        variant="ghost"
-        size="xs"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="-ml-2.5 font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground aria-expanded:bg-transparent touch:h-11"
-      >
-        <ChevronRight
-          size={14}
-          className="transition-transform"
-          style={{ transform: open ? "rotate(90deg)" : "none" }}
-        />
-        Done ({count})
-      </Button>
+      <div className="flex items-center justify-between">
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={toggle}
+          aria-expanded={open}
+          className="-ml-2.5 font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground aria-expanded:bg-transparent touch:h-11"
+        >
+          <ChevronRight
+            size={14}
+            className="transition-transform"
+            style={{ transform: open ? "rotate(90deg)" : "none" }}
+          />
+          Done ({count})
+        </Button>
+        {open && onClear && (
+          <Button
+            variant="subtle"
+            size="xs"
+            onClick={onClear}
+            aria-label="Clear done tasks"
+            className="-mr-2.5 touch:h-11 touch:px-3"
+          >
+            Clear
+          </Button>
+        )}
+      </div>
       {open && children}
     </div>
   );
@@ -172,6 +219,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   if (isLoading && !hasRows) return <TaskRowsSkeleton />;
 
   const doneTasks = categoryTasks.filter((t) => t.status === "done");
+  const clearableDoneTasks = doneTasks.filter((t) => canDeleteTask(userId, t));
 
   return (
     <DragDropProvider onDragEnd={handleDragEnd}>
@@ -201,7 +249,14 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
 
         <EmptySection activeTasks={activeTasks} doneTasks={doneTasks} />
 
-        <DoneSection count={doneTasks.length}>
+        <DoneSection
+          count={doneTasks.length}
+          onClear={
+            clearableDoneTasks.length > 0
+              ? () => actions.handleClearDone(clearableDoneTasks)
+              : undefined
+          }
+        >
           <ul className="mt-2 flex flex-col">
             {doneTasks.map((task) => (
               <li key={task.id}>

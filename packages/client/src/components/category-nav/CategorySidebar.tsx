@@ -11,6 +11,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/field";
 import { ColorDot } from "~/components/ui/color-dot";
 import { setActiveCategoryId } from "~/lib/state/active-category";
+import { useCurrentUserId } from "~/lib/auth/current-user";
 import { cn } from "~/lib/utils";
 import type { Category } from "~/lib/types";
 import { useCategoryNavState } from "./use-category-nav-state";
@@ -93,6 +94,8 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
     renameRef,
   } = useCategoryNavState(handleRename);
 
+  const signedIn = useCurrentUserId() !== null;
+
   const navigate = useNavigate();
   const onListPage = useRouterState({ select: (s) => s.location.pathname === "/" });
   const openList = (categoryId: string | null) => {
@@ -158,7 +161,9 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
                     />
                   )}
                   <ColorDot size="sm" color={cat.color ?? undefined} />
-                  <span className="min-w-0 truncate">{cat.name}</span>
+                  <span className="min-w-0 truncate" title={cat.name}>
+                    {cat.name}
+                  </span>
                   <CollabBadge category={cat} currentUserId={currentUserId} />
                   <OpenCount
                     count={openCounts.get(cat.id) ?? 0}
@@ -272,14 +277,16 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
         )}
 
         <div className="flex-1" />
-        <div className="mt-2 border-t border-ghost/15 pt-2">
-          <Link
-            to="/people"
-            className="flex items-center px-3 py-1.5 text-sm text-hint transition-colors hover:text-foreground data-[status=active]:text-foreground"
-          >
-            People
-          </Link>
-        </div>
+        {signedIn && (
+          <div className="mt-2 border-t border-ghost/15 pt-2">
+            <Link
+              to="/people"
+              className="flex items-center px-3 py-1.5 text-sm text-hint transition-colors hover:text-foreground data-[status=active]:text-foreground"
+            >
+              People
+            </Link>
+          </div>
+        )}
       </nav>
 
       {sharingCategoryId && (

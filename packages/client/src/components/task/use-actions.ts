@@ -68,8 +68,22 @@ export const useTaskActions = () => {
 
   const getSubtasks = (taskId: string): Task[] =>
     (allTasks ?? [])
-      .filter((t) => t.parentId === taskId && t.status !== "done")
+      .filter((t) => t.parentId === taskId)
       .sort((a, b) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? ""));
 
-  return { handleToggle, handleDelete, handleSetDueDate, handleAddSubtask, getSubtasks };
+  const handleClearDone = (tasks: Task[]) => {
+    const undos = tasks.map((t) => deleteTask(t.id));
+    pushUndo(`Cleared ${tasks.length} done ${tasks.length === 1 ? "task" : "tasks"}`, () => {
+      for (const undo of undos) undo();
+    });
+  };
+
+  return {
+    handleToggle,
+    handleDelete,
+    handleSetDueDate,
+    handleAddSubtask,
+    getSubtasks,
+    handleClearDone,
+  };
 };

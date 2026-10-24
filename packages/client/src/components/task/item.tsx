@@ -166,6 +166,10 @@ export function TaskItem({
     }
   };
 
+  const openSubtasks = subtasks.filter((s) => s.status !== "done");
+  // Ticking a parent ticks its subtasks, so on a done row the count only repeats the tick
+  const doneSubtaskCount = isDone ? 0 : subtasks.length - openSubtasks.length;
+
   return (
     <div data-task-id={task.id}>
       <div
@@ -370,9 +374,9 @@ export function TaskItem({
         </div>
       </div>
 
-      {!isSubtask && subtasks.length > 0 && (
+      {!isSubtask && (openSubtasks.length > 0 || doneSubtaskCount > 0) && (
         <div className="mt-1 ml-2 border-l border-ghost pl-[15px] touch:ml-[38px] touch:pl-[19px]">
-          {subtasks.map((sub) => (
+          {openSubtasks.map((sub) => (
             <TaskItem
               key={sub.id}
               task={sub}
@@ -385,6 +389,17 @@ export function TaskItem({
               onAddSubtask={onAddSubtask}
             />
           ))}
+          {doneSubtaskCount > 0 && (
+            <button
+              type="button"
+              onClick={() => onOpen?.(task.id)}
+              disabled={!onOpen}
+              className="relative rounded-sm py-1 text-xs text-hint transition-colors after:absolute after:-inset-x-2 after:-inset-y-1.5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring touch:py-1.5"
+            >
+              {doneSubtaskCount} done
+              <span className="sr-only"> {doneSubtaskCount === 1 ? "subtask" : "subtasks"}</span>
+            </button>
+          )}
         </div>
       )}
       {addingSubtask && (

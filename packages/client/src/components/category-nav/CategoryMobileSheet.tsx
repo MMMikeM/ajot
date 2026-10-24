@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/field";
 import { ColorDot } from "~/components/ui/color-dot";
 import { setActiveCategoryId } from "~/lib/state/active-category";
+import { useCurrentUserId } from "~/lib/auth/current-user";
 import { useNavContext } from "~/lib/state/nav-context";
 import { cn } from "~/lib/utils";
 import type { Category } from "~/lib/types";
@@ -62,6 +63,7 @@ function CategoryMobileSheet() {
     renameRef,
   } = useCategoryNavState(handleRename);
   const { navOpen, setNavOpen } = useNavContext();
+  const signedIn = useCurrentUserId() !== null;
 
   useEffect(() => {
     if (adding) addRef.current?.focus();
@@ -108,8 +110,9 @@ function CategoryMobileSheet() {
           aria-current={isActive ? "true" : undefined}
           className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3 text-left"
         >
-          <ColorDot color={cat.color ?? undefined} />
-          <span className="min-w-0 flex-1 truncate">
+          {/* Long names wrap: touch has no hover to reveal a truncated one */}
+          <ColorDot color={cat.color ?? undefined} className="mt-1.5 self-start" />
+          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
             {cat.name}
             {!isOwned && cat.user?.name && (
               <span className="ml-1 text-xs font-normal text-hint">· {cat.user.name}</span>
@@ -217,14 +220,16 @@ function CategoryMobileSheet() {
             </Button>
           )}
 
-          <Link
-            to="/people"
-            onClick={() => setNavOpen(false)}
-            className="mx-2 flex h-12 items-center gap-3 rounded-lg px-3 text-sm text-hint transition-colors active:bg-secondary active:text-foreground"
-          >
-            <Users size={16} />
-            People
-          </Link>
+          {signedIn && (
+            <Link
+              to="/people"
+              onClick={() => setNavOpen(false)}
+              className="mx-2 flex h-12 items-center gap-3 rounded-lg px-3 text-sm text-hint transition-colors active:bg-secondary active:text-foreground"
+            >
+              <Users size={16} />
+              People
+            </Link>
+          )}
 
           <div className="h-[max(0.75rem,env(safe-area-inset-bottom,0px))]" />
         </DrawerContent>

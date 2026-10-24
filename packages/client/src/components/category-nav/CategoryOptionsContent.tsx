@@ -48,7 +48,18 @@ export function CategoryOptionsContent({
       </MenuItem>
       <fieldset className="px-3 pt-1.5 pb-2">
         <legend className="float-left text-xs text-hint">Colour</legend>
-        <div className="clear-left grid grid-cols-4 gap-1.5 pt-1.5 touch:gap-2">
+        <div className="clear-left grid grid-cols-5 gap-1.5 pt-1.5 touch:gap-2">
+          <button
+            onClick={() => onSetColor(cat.id, null)}
+            aria-label="No colour"
+            aria-pressed={!cat.color}
+            title="No colour"
+            className={swatch({ selected: !cat.color, className: "bg-ghost" })}
+          >
+            {!cat.color && (
+              <Check className="size-3.5 text-foreground touch:size-4" strokeWidth={3} />
+            )}
+          </button>
           {CATEGORY_COLORS.map((c) => {
             const selected = cat.color === c.value;
             return (
