@@ -12,7 +12,7 @@
  *   --network=<name>  One of: fast3g | slow3g | 4g | none (default none)
  *
  * Examples:
- *   BASE_URL=https://extension-sync-service.fly.dev npx tsx filmstrip.ts /
+ *   BASE_URL=https://ajot.fly.dev npx tsx filmstrip.ts /
  *   npx tsx filmstrip.ts /auth --cpu=4 --network=fast3g
  *
  * Output: .filmstrip/<slug>/frame-NNN.png  +  .filmstrip/<slug>/index.html

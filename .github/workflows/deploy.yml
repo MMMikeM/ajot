@@ -38,7 +38,7 @@ jobs:
         run: |
           curl -sf -X POST \
             -H "X-Deploy-Secret: ${{ secrets.DEPLOY_PUSH_SECRET }}" \
-            https://extension-sync-service.fly.dev/api/deploy/notify
+            https://ajot.fly.dev/api/deploy/notify
         continue-on-error: true
 
       # Zips the stores take as they are: manifest.json at the root, plus the source archive AMO
