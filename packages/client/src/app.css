@@ -226,6 +226,13 @@
   }
 }
 
+@keyframes cleared-settle {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
 @keyframes toast-progress {
   from {
     transform: scaleX(1);

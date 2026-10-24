@@ -257,6 +257,8 @@ export function TaskItem({
             className={cn(
               "mt-1 touch:mt-[3px] touch:size-[18px] touch:after:-inset-3",
               isSubtask && "mt-0.5 touch:mt-px",
+              isDone &&
+                "data-checked:animate-none data-checked:border-primary/35 data-checked:bg-primary-subtle data-checked:text-primary",
             )}
           />
           {onOpen ? (

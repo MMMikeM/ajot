@@ -9,6 +9,7 @@ import { useCollaboratedCategoryIds } from "~/lib/hooks/use-collaborated-categor
 import { getEffectiveCategoryId } from "~/lib/effective-category";
 import { CategoryNav } from "~/components/category-nav";
 import { Button } from "~/components/ui/button";
+import { cn } from "~/lib/utils";
 import { TaskItem } from "./item";
 import { TaskRowsSkeleton } from "./rows-skeleton";
 import { finishStartup } from "~/lib/startup-timing";
@@ -65,8 +66,47 @@ const EmptySection = ({ activeTasks, doneTasks }: { activeTasks: Task[]; doneTas
       </div>
     );
 
+  return <ClearedState doneTasks={doneTasks} />;
+};
+
+const getClearedLine = () => {
+  const hour = Temporal.Now.plainDateTimeISO().hour;
+  if (hour >= 5 && hour < 12) return "A clear start to the day.";
+  if (hour >= 12 && hour < 17) return "The rest of the afternoon is yours.";
+  if (hour >= 17 && hour < 22) return "Nothing left for tonight.";
+  return "Rest well.";
+};
+
+// Settles in only when the last task was ticked moments ago, here or on another device. A list
+// that was already clear (on load, or switching lists) shows it at once.
+const CLEARED_WINDOW_MS = 3000;
+const wasJustCleared = (doneTasks: Task[]) =>
+  doneTasks.some((t) => Date.now() - Date.parse(t.updatedAt) < CLEARED_WINDOW_MS);
+
+const ClearedState = ({ doneTasks }: { doneTasks: Task[] }) => {
+  const [settling] = useState(() => wasJustCleared(doneTasks));
+
   return (
-    <p className="text-sm text-hint">All done.</p>
+    <div className="flex flex-col items-center py-6 touch:flex-1 touch:justify-center touch:py-0">
+      <p
+        className={cn(
+          "font-display text-2xl text-muted-foreground",
+          settling &&
+            "animate-[cleared-settle_700ms_cubic-bezier(0.16,1,0.3,1)_both] motion-reduce:animate-none",
+        )}
+      >
+        All done.
+      </p>
+      <p
+        className={cn(
+          "mt-1 text-sm text-hint",
+          settling &&
+            "animate-[cleared-settle_700ms_cubic-bezier(0.16,1,0.3,1)_150ms_both] motion-reduce:animate-none",
+        )}
+      >
+        {getClearedLine()}
+      </p>
+    </div>
   );
 };
 
