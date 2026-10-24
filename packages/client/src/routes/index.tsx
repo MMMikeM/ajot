@@ -1,5 +1,5 @@
 import { Suspense, useState, lazy } from "react";
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { TaskInputBar } from "~/components/task/input-bar";
 import { SyncHint } from "~/components/SyncHint";
 import { Toast, Toasts } from "~/components/ui/toast";
@@ -46,6 +46,6 @@ function TaskListView() {
   );
 }
 
-export const Route = createLazyFileRoute("/")({
+export const Route = createFileRoute("/")({
   component: TaskListView,
 });
