@@ -7,59 +7,30 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-26.04
-    env:
-      IMAGE: registry.fly.io/extension-sync-service:deployment-${{ github.sha }}
-      # The summary and build records only add a few seconds to each build
-      DOCKER_BUILD_SUMMARY: false
-      DOCKER_BUILD_RECORD_UPLOAD: false
     steps:
       - uses: actions/checkout@v6
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      # A docker-container builder, the kind that can keep its cache in GitHub Actions between runs
-      - uses: docker/setup-buildx-action@v4
-
+      # Every build below runs on the runner's own Docker, so each reuses the layers the ones
+      # before it built. (Restoring layers from the GitHub Actions cache instead was slower:
+      # the node_modules layers run to 200+ MB each.)
       - name: Build the extensions
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          target: extension
-          outputs: type=local,dest=extension
-          build-args: GITHUB_SHA=${{ github.sha }}
-          cache-from: type=gha
-
-      - run: flyctl auth docker
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      - name: Build and push the server image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          target: server
-          push: true
-          tags: ${{ env.IMAGE }}
-          build-args: GITHUB_SHA=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: >
+          docker buildx build --target extension --build-arg GITHUB_SHA
+          --output type=local,dest=extension .
 
       - name: Push database schema
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          target: schema
-          outputs: type=cacheonly
-          no-cache-filters: schema
-          secret-envs: |
-            TURSO_DATABASE_URL=TURSO_DATABASE_URL
-            TURSO_AUTH_TOKEN=TURSO_AUTH_TOKEN
-          cache-from: type=gha
+        run: >
+          docker buildx build --target schema --no-cache-filter schema
+          --secret id=TURSO_DATABASE_URL,env=TURSO_DATABASE_URL
+          --secret id=TURSO_AUTH_TOKEN,env=TURSO_AUTH_TOKEN
+          --output type=cacheonly .
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
 
-      - run: flyctl deploy --image "$IMAGE"
+      - run: flyctl deploy --local-only --build-arg GITHUB_SHA=${{ github.sha }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
