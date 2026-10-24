@@ -77,7 +77,7 @@ export const useCategoryActions = () => {
     }
 
     deleteAndMoveOn(cat, "uncategorise");
-    toastManager.add({ title: "Category deleted" });
+    toastManager.add({ title: "List deleted" });
   };
 
   const confirmDelete = (tasks: CategoryTaskAction) => {
@@ -85,10 +85,7 @@ export const useCategoryActions = () => {
     if (!pendingDelete) return;
     deleteAndMoveOn(pendingDelete.category, tasks);
     toastManager.add({
-      title:
-        tasks === "delete"
-          ? "Category and tasks deleted"
-          : "Category deleted, tasks moved to Inbox",
+      title: tasks === "delete" ? "List and tasks deleted" : "List deleted, tasks moved to Inbox",
     });
   };
 

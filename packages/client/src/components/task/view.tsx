@@ -47,7 +47,7 @@ const getEmptyPhrase = () => {
   const hour = Temporal.Now.plainDateTimeISO().hour;
   if (hour >= 5 && hour < 12) return "Morning.";
   if (hour >= 12 && hour < 17) return "All clear.";
-  if (hour >= 17 && hour < 22) return "Nothing here yet.";
+  if (hour >= 17 && hour < 22) return "Evening.";
   return "All quiet.";
 };
 

@@ -17,11 +17,11 @@ export const createCategory = async (
   context: "sidebar" | "sheet",
 ): Promise<void> => {
   if (context === "sidebar") {
-    await page.getByTestId("category-sidebar").getByLabel("Add category").click();
+    await page.getByTestId("category-sidebar").getByLabel("Add list").click();
     await page.locator('input[placeholder="Name..."]').fill(name);
   } else {
-    await page.getByRole("button", { name: "Add category" }).tap();
-    await page.locator('input[placeholder="Category name..."]').fill(name);
+    await page.getByRole("button", { name: "Add list" }).tap();
+    await page.locator('input[placeholder="List name..."]').fill(name);
   }
   await page.keyboard.press("Enter");
 };
