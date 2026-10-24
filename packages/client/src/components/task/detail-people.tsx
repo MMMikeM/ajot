@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Toast } from "@base-ui/react/toast";
 import { Link } from "@tanstack/react-router";
 import { UserRound, Users } from "lucide-react";
 import type { Task, Category } from "~/lib/types";
@@ -38,14 +39,18 @@ export const useListFiling = (task: Task) => {
   const categoryId = mode === "share" ? (myShare?.categoryId ?? null) : task.categoryId;
   const category = categories.find((c) => c.id === categoryId);
   const choices = categories.filter((c) => c.userId === userId || c.id === task.categoryId);
+  const toastManager = Toast.useToastManager();
+  const fileShare = (id: string | null) =>
+    updateShareCategory(task.id, id).catch((err) => {
+      console.error("[share] filing failed:", err);
+      toastManager.add({ title: "Couldn't move it to that list" });
+    });
   return {
     mode,
     category,
     choices: mode === "view" ? [] : choices.filter((c) => mode === "owner" || c.userId === userId),
     move: (id: string | null) =>
-      mode === "share"
-        ? void updateShareCategory(task.id, id)
-        : updateTask(task.id, { categoryId: id }),
+      mode === "share" ? void fileShare(id) : updateTask(task.id, { categoryId: id }),
   };
 };
 

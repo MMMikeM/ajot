@@ -4,7 +4,7 @@ import type { Task, Note } from "~/lib/types";
 import { addNote, updateNote, deleteNote, deleteTask } from "~/lib/db/hooks";
 import { addTask } from "~/lib/db/add-task";
 import { getCurrentUserId, useOptimisticUserId } from "~/lib/auth/current-user";
-import { Checkbox } from "~/components/ui/checkbox";
+import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { Input, Textarea } from "~/components/ui/field";
 import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
@@ -78,7 +78,10 @@ export const Subtasks = ({
               checked={done}
               aria-label={sub.title}
               onCheckedChange={() => onToggle(sub)}
-              className="size-3.5 touch:size-4 touch:after:-inset-3.5"
+              className={cn(
+                "size-3.5 touch:size-4 touch:after:-inset-3.5",
+                done && checkboxDoneClass,
+              )}
             />
             <span className={cn("flex-1 text-sm", done && "text-muted-foreground line-through")}>
               {sub.title}
