@@ -7,33 +7,59 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-26.04
+    env:
+      IMAGE: registry.fly.io/extension-sync-service:deployment-${{ github.sha }}
+      # The summary and build records only add a few seconds to each build
+      DOCKER_BUILD_SUMMARY: false
+      DOCKER_BUILD_RECORD_UPLOAD: false
     steps:
       - uses: actions/checkout@v6
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Extract extension artifact
-        run: |
-          docker buildx build --target extension --output type=local,dest=./extension .
+      # A docker-container builder, the kind that can keep its cache in GitHub Actions between runs
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: actions/setup-node@v7
+      - name: Build the extensions
+        uses: docker/build-push-action@v7
         with:
-          node-version: 24
+          context: .
+          target: extension
+          outputs: type=local,dest=extension
+          build-args: GITHUB_SHA=${{ github.sha }}
+          cache-from: type=gha
 
-      - uses: pnpm/action-setup@v6
+      - run: flyctl auth docker
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Build and push the server image
+        uses: docker/build-push-action@v7
         with:
-          cache: true
+          context: .
+          target: server
+          push: true
+          tags: ${{ env.IMAGE }}
+          build-args: GITHUB_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - run: pnpm install --frozen-lockfile --filter @newtab-todo/server...
-
-      # Without a TTY, a rename or data-loss change exits 2 and stops the deploy; push those by hand.
       - name: Push database schema
-        run: pnpm --filter @newtab-todo/server db:push --verbose
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: schema
+          outputs: type=cacheonly
+          no-cache-filters: schema
+          secret-envs: |
+            TURSO_DATABASE_URL=TURSO_DATABASE_URL
+            TURSO_AUTH_TOKEN=TURSO_AUTH_TOKEN
+          cache-from: type=gha
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
 
-      - run: flyctl deploy --local-only
+      - run: flyctl deploy --image "$IMAGE"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
