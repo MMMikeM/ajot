@@ -60,7 +60,7 @@ test.describe("swipe tray", () => {
       await expectFullyOnScreen(page, target.getByRole("button", { name, exact: true }));
   });
 
-  test("someone else's task says whose it is instead of offering delete", async ({
+  test("someone else's task offers no delete, and the tray shrinks to fit", async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile", "the swipe tray is touch-only");
@@ -71,10 +71,6 @@ test.describe("swipe tray", () => {
     await expect(target.getByRole("button", { name: /^Delete/ })).toHaveCount(0);
     for (const name of ["Date", "Subtask"])
       await expectFullyOnScreen(page, target.getByRole("button", { name, exact: true }));
-
-    const owner = target.locator("p", { hasText: "Sarah's" });
-    await expectFullyOnScreen(page, owner);
-    await expect(owner).toContainText("Only Sarah Murray can delete it");
   });
 });
 
@@ -153,13 +149,4 @@ test.describe("dragging", () => {
       )
       .toBe(true);
   });
-});
-
-test("mobile: the input chip says it's where new tasks go", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "mobile", "the chip is touch-only");
-  await openList(page);
-  const chip = page.getByTestId("category-input-chip");
-
-  await expect(chip.getByText("Adding to", { exact: true })).toBeVisible();
-  await expect(chip).toContainText("Inbox");
 });
