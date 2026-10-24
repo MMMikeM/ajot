@@ -92,49 +92,6 @@ export default defineConfig(({ mode }) => {
     ],
     build: {
       outDir: "dist",
-      rolldownOptions: {
-        output: {
-          codeSplitting: {
-            groups: [
-              {
-                name: "react-core",
-                test: /node_modules[\\/](react|react-dom|scheduler|use-sync-external-store)[\\/]/,
-                priority: 50,
-              },
-
-              {
-                name: "tanstack-db",
-                test: /node_modules[\\/](@tanstack[\\/](db|db-ivm|offline-transactions|query-db-collection)|fractional-indexing|bignumber\.js|@noble)[\\/]/,
-                priority: 40,
-              },
-
-              {
-                name: "tanstack-core",
-                test: /node_modules[\\/]@tanstack[\\/](react-router|router-core|history|react-query|query-core|react-form|form-core)[\\/]/,
-                priority: 35,
-              },
-
-              {
-                name: "ui-primitives",
-                test: /node_modules[\\/](@base-ui|@floating-ui|tailwind-merge|tailwind-variants)[\\/]/,
-                priority: 30,
-              },
-
-              {
-                name: "dnd-kit",
-                test: /node_modules[\\/]@dnd-kit[\\/]/,
-                priority: 25,
-              },
-
-              {
-                name: "vendor",
-                test: /node_modules[\\/]/,
-                priority: 10,
-              },
-            ],
-          },
-        },
-      },
     },
   };
 });
