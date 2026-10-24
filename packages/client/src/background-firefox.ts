@@ -6,27 +6,48 @@ import {
   MSG_BG_STATUS,
 } from "~/lib/constants";
 import { createBackoff } from "~/lib/sync/backoff";
+import { trackSyncState } from "~/lib/sync/sync-state";
 import { getStoredSession, notifyTabs } from "~/lib/ext";
 import { setupContextMenu } from "~/lib/context-menu";
 
 let eventSource: EventSource | null = null;
-let isConnected = false;
+let connectAttempt = 0;
+
+// No open tab is listening when the page sends this, so it rejects
+const syncState = trackSyncState((state) => {
+  browser.runtime.sendMessage({ type: MSG_BG_STATUS, state }).catch(() => {});
+});
 
 const backoff = createBackoff(() => {
   connect().catch((err) => console.error("[bg-sse] retry error:", err));
 });
 
-const connect = async () => {
+const disconnect = () => {
   backoff.cancel();
   eventSource?.close();
   eventSource = null;
+};
 
+const connect = async () => {
+  disconnect();
+
+  // Two calls can overlap (online fires twice, or a token change lands mid-retry); only the
+  // latest may open a stream, or the earlier one is orphaned and never closed
+  const attempt = ++connectAttempt;
   const session = await getStoredSession();
+  if (attempt !== connectAttempt) return;
   if (!session) {
     console.log("[bg-sse] signed out, not connecting");
+    syncState.stopped();
+    return;
+  }
+  if (!navigator.onLine) {
+    console.log("[bg-sse] offline, connecting when the network is back");
+    syncState.stopped();
     return;
   }
 
+  syncState.connecting();
   const url = `${session.serverUrl}${EVENTS_PATH}?token=${encodeURIComponent(session.token)}`;
   console.log("[bg-sse] connecting...");
   const source = new EventSource(url);
@@ -48,14 +69,15 @@ const connect = async () => {
 
   source.addEventListener("open", () => {
     console.log("[bg-sse] connected");
-    isConnected = true;
+    syncState.opened();
     backoff.reset();
     void notifyTabs();
   });
 
   source.onerror = () => {
-    isConnected = false;
-    if (source.readyState !== EventSource.CLOSED || eventSource !== source) {
+    if (eventSource !== source) return;
+    syncState.failed();
+    if (source.readyState !== EventSource.CLOSED) {
       console.log("[bg-sse] connection error, will auto-reconnect");
       return;
     }
@@ -70,10 +92,24 @@ browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) 
   if (type === MSG_TOKEN_CHANGED) {
     console.log("[bg-sse] token changed, reconnecting");
     backoff.reset();
+    syncState.restart();
     connect().catch((err) => console.error("[bg-sse] reconnect error:", err));
   } else if (type === MSG_GET_STATUS) {
-    sendResponse({ type: MSG_BG_STATUS, connected: isConnected });
+    sendResponse({ type: MSG_BG_STATUS, state: syncState.get() });
   }
+});
+
+addEventListener("offline", () => {
+  console.log("[bg-sse] offline");
+  disconnect();
+  syncState.stopped();
+});
+addEventListener("online", () => {
+  if (eventSource && eventSource.readyState !== EventSource.CLOSED) return;
+  console.log("[bg-sse] back online, reconnecting");
+  backoff.reset();
+  syncState.restart();
+  connect().catch((err) => console.error("[bg-sse] reconnect error:", err));
 });
 
 connect().catch((err) => console.error("[bg-sse] initial connect error:", err));
