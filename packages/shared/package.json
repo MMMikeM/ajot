@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./constants": "./src/constants.ts",
     "./iso": "./src/iso.ts",
+    "./iso-schema": "./src/iso-schema.ts",
     "./push-payload": "./src/push-payload.ts"
   },
   "dependencies": {

@@ -5,7 +5,8 @@ import { db, inTransaction } from "./client";
 import noteRepo from "./note.repo";
 import { categories, tasks, taskShares } from "./schema";
 import { BadRequestError, InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
-import { isoDatetime, now } from "@newtab-todo/shared/iso";
+import { now } from "@newtab-todo/shared/iso";
+import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { CATEGORY_TASK_ACTIONS, type CategoryTaskAction } from "@newtab-todo/shared/constants";
 
 export type CategoryInsert = typeof categories.$inferInsert;
