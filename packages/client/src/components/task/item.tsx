@@ -36,6 +36,11 @@ const formatDueDate = (dateStr: string) => {
   };
 };
 
+// Only a task created moments ago, here or on another device, slides in. Rows that already
+// existed appear at once, so loading, switching lists or opening Done shows them without a fade.
+const ENTER_WINDOW_MS = 3000;
+const isJustCreated = (task: Task) => Date.now() - Date.parse(task.createdAt) < ENTER_WINDOW_MS;
+
 const sharedWithNames = (task: Task, currentUserId: string, isOwned: boolean) => {
   const names: string[] = [];
   if (!isOwned && task.user?.name) names.push(task.user.name);
@@ -97,6 +102,7 @@ export function TaskItem({
   const canAddSubtask = !isSubtask && !isDone;
   const hoverActionCount = 1 + Number(canSetDate) + Number(canAddSubtask);
   const dateRef = useRef<HTMLInputElement>(null);
+  const [entering] = useState(() => isJustCreated(task));
   const [completing, setCompleting] = useState(false);
   const completeTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(completeTimer.current), []);
@@ -152,7 +158,8 @@ export function TaskItem({
       <div
         ref={containerRef}
         className={cn(
-          "-mx-2 animate-[task-enter_200ms_ease-out] motion-reduce:animate-none",
+          "-mx-2",
+          entering && "animate-[task-enter_200ms_ease-out] motion-reduce:animate-none",
           swipeEnabled && "group/swipe relative overflow-hidden rounded-lg",
         )}
       >

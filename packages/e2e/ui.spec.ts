@@ -294,6 +294,17 @@ test("the app still starts when IndexedDB is refused, as with site data blocked"
   await expect(row(page, "Book flights")).toBeVisible();
 });
 
+test("only a task added now slides in; the loaded list appears at once", async ({ page }) => {
+  await openList(page);
+  const entering = page.locator('[data-task-id] [class*="task-enter"]');
+  await expect(entering).toHaveCount(0);
+
+  await page.fill("#add-task-input", "Water the plants");
+  await page.keyboard.press("Enter");
+  await expect(row(page, "Water the plants").locator('[class*="task-enter"]')).toHaveCount(1);
+  await expect(entering).toHaveCount(1);
+});
+
 test("due dates and the detail sheet work where the browser lacks Temporal", async ({ page }) => {
   await page.addInitScript(() => {
     delete (globalThis as { Temporal?: unknown }).Temporal;
