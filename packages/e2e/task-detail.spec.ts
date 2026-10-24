@@ -12,6 +12,13 @@ const openFirstTaskDetail = async (page: Parameters<typeof createTask>[0]) => {
 const drawer = (page: Parameters<typeof createTask>[0]) =>
   page.locator('[data-slot="drawer-content"]');
 
+// The sheet shows only what a task has; anything else is offered under Add
+const addField = async (page: Parameters<typeof createTask>[0], field: string) => {
+  const d = drawer(page);
+  await d.getByRole("button", { name: "Add", exact: true }).click();
+  await d.getByRole("group", { name: "Add to task" }).getByRole("button", { name: field }).click();
+};
+
 test.beforeEach(async ({ user1Auth }) => {
   type Task = { id: string; parentId: string | null };
   const tasks = await apiRequest<Task[]>("GET", "/api/tasks", undefined, user1Auth.token);
@@ -30,7 +37,8 @@ test.describe("task detail — visual language", () => {
     await page.waitForSelector("[data-task-id]");
     await openFirstTaskDetail(page);
 
-    const textarea = drawer(page).locator('[data-slot="textarea"]').first();
+    await addField(page, "Description");
+    const textarea = drawer(page).getByRole("textbox", { name: "Description" });
     await expect(textarea).toBeVisible();
 
     const cls = (await textarea.getAttribute("class")) ?? "";
@@ -55,24 +63,8 @@ test.describe("task detail — visual language", () => {
     expect(cls).toContain("invisible");
     expect(cls).toContain("size-0");
 
-    await expect(d.getByRole("button", { name: "Due date: Set date…" })).toBeVisible();
-    await expect(d.getByText("Set date…")).toBeVisible();
-  });
-
-  test("section labels use text-hint, not text-muted-foreground", async ({ user1Page: page }) => {
-    await createTask(page, "Test task");
-    await page.waitForSelector("[data-task-id]");
-    await openFirstTaskDetail(page);
-
-    const d = drawer(page);
-
-    for (const labelText of ["Description", "Due date", "Subtasks", "Notes"]) {
-      const label = d.locator(`text=${labelText}`).first();
-      await expect(label).toBeVisible();
-      const cls = await label.evaluate((el) => el.className);
-      expect(cls).toContain("text-hint");
-      expect(cls).not.toContain("text-muted-foreground");
-    }
+    // An undated task has no date row; Add offers one
+    await expect(d.getByRole("button", { name: /^Due date:/ })).toHaveCount(0);
   });
 
   test("delete button is a quiet text link, not a destructive Button variant", async ({
@@ -118,6 +110,7 @@ test.describe("task detail — visual language", () => {
     await page.waitForSelector("[data-task-id]");
     await page.waitForTimeout(1000); // contacts collection hydrate
     await openFirstTaskDetail(page);
+    await addField(page, "Share");
 
     await expect(drawer(page).locator("select")).toHaveCount(0);
     const shareWith = drawer(page).getByRole("combobox", { name: "Share with" });
@@ -137,8 +130,8 @@ test.describe("task detail — functionality", () => {
     await titleInput.click({ clickCount: 3 });
     await titleInput.fill("Updated title");
 
-    // Blur by clicking the description area
-    await d.locator('[data-slot="textarea"]').first().click();
+    // Blur by moving to the description
+    await addField(page, "Description");
     await page.waitForTimeout(400);
 
     await expect(titleInput).toHaveValue("Updated title");
@@ -171,7 +164,7 @@ test.describe("task detail — functionality", () => {
     await clearBtn.click();
     await page.waitForTimeout(300);
     await expect(clearBtn).not.toBeVisible();
-    await expect(d.getByText("Set date…")).toBeVisible();
+    await expect(d.getByRole("button", { name: /^Due date:/ })).toHaveCount(0);
   });
 
   test("delete task closes drawer and removes task from list", async ({ user1Page: page }) => {
@@ -193,7 +186,8 @@ test.describe("task detail — functionality", () => {
     await openFirstTaskDetail(page);
 
     const d = drawer(page);
-    const desc = d.locator('[data-slot="textarea"]').first();
+    await addField(page, "Description");
+    const desc = d.getByRole("textbox", { name: "Description" });
     await desc.click();
     await desc.fill("My description");
 
@@ -208,6 +202,6 @@ test.describe("task detail — functionality", () => {
     });
 
     await openFirstTaskDetail(page);
-    await expect(d.locator('[data-slot="textarea"]').first()).toHaveValue("My description");
+    await expect(d.getByRole("textbox", { name: "Description" })).toHaveValue("My description");
   });
 });
