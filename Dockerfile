@@ -38,9 +38,12 @@ RUN pnpm --filter @newtab-todo/server --prod deploy --legacy /app/deploy
 # CI pushes the schema from here before deploying, building it uncached so it runs every time.
 # Without a TTY, a rename or data-loss change exits 2 and stops the deploy; push those by hand.
 FROM server-build AS schema
+WORKDIR /app/packages/server
+# Not `pnpm db:push`: pnpm reinstalls before running a script, and after the --prod deploy above
+# that reinstall prunes the dev dependencies, drizzle-kit among them
 RUN --mount=type=secret,id=TURSO_DATABASE_URL,env=TURSO_DATABASE_URL \
     --mount=type=secret,id=TURSO_AUTH_TOKEN,env=TURSO_AUTH_TOKEN \
-    pnpm --filter @newtab-todo/server db:push --verbose
+    node_modules/.bin/drizzle-kit push --verbose
 
 FROM node:24-alpine AS server
 RUN apk add --no-cache ca-certificates tini
