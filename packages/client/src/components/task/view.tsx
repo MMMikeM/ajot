@@ -1,5 +1,5 @@
 import { Temporal } from "temporal-polyfill";
-import { useState, type ReactNode, type RefCallback } from "react";
+import { useEffect, useState, type ReactNode, type RefCallback } from "react";
 import { ChevronRight } from "lucide-react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
@@ -12,6 +12,7 @@ import { CategoryNav } from "~/components/category-nav";
 import { Button } from "~/components/ui/button";
 import { TaskItem } from "./item";
 import { TaskRowsSkeleton } from "./rows-skeleton";
+import { finishStartup } from "~/lib/startup-timing";
 import { useTaskActions } from "./use-actions";
 import { useTaskActions as useDndActions } from "~/lib/hooks/use-task-actions";
 import type { Task } from "~/lib/types";
@@ -120,7 +121,12 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   // on this device are there before that. Show them; the skeleton is for having nothing yet.
   const isLoading =
     tasksLoading || categoriesLoading || allTasks === undefined || rawCategories === undefined;
-  if (isLoading && !allTasks?.length) return <TaskRowsSkeleton />;
+  const hasRows = !!allTasks?.length;
+  useEffect(() => {
+    if (hasRows) finishStartup("tasks-shown");
+    else if (!isLoading) finishStartup("list-ready");
+  }, [hasRows, isLoading]);
+  if (isLoading && !hasRows) return <TaskRowsSkeleton />;
 
   const doneTasks = categoryTasks.filter((t) => t.status === "done");
 

@@ -11,6 +11,7 @@ import {
   BrowserCollectionCoordinator,
 } from "@tanstack/browser-db-sqlite-persistence";
 import { getBuildTarget } from "../build-target";
+import { markStartup } from "~/lib/startup-timing";
 
 // Guard: OPFS requires browser APIs — not available in Node.js (SSR prerender).
 // Lazy route components that consume these collections suspend in SSR before rendering,
@@ -30,11 +31,15 @@ type QueryOptions<T extends object> = CollectionConfig<
 // Private windows refuse OPFS (Firefox throws a SecurityError), and opening it can time out.
 // The app then keeps this session's data in memory rather than failing to start.
 const openPersistence = async () => {
+  markStartup("db-open-start");
   try {
     const database = await openBrowserWASQLiteOPFSDatabase({ databaseName: "newtab-todo.sqlite" });
     const coordinator = new BrowserCollectionCoordinator({ dbName: "newtab-todo" });
-    return createBrowserWASQLitePersistence({ database, coordinator });
+    const persistence = createBrowserWASQLitePersistence({ database, coordinator });
+    markStartup("db-open-end");
+    return persistence;
   } catch (err) {
+    markStartup("db-unavailable");
     console.warn("[db] OPFS unavailable, keeping data in memory:", err);
     return null;
   }
