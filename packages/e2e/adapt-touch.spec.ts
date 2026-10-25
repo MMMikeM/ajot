@@ -38,6 +38,17 @@ const swipeOpen = async (page: Page, target: Locator) => {
   await expect(target.locator("[inert]")).toHaveCount(0);
 };
 
+// boundingBox() ignores an ancestor's overflow clip, which once hid the tray's right edge
+const isClippedByAncestor = (el: Element) => {
+  const box = el.getBoundingClientRect();
+  for (let a = el.parentElement; a; a = a.parentElement) {
+    if (getComputedStyle(a).overflowX === "visible") continue;
+    const clip = a.getBoundingClientRect();
+    if (box.left < clip.left || box.right > clip.right) return true;
+  }
+  return false;
+};
+
 const expectFullyOnScreen = async (page: Page, cell: Locator) => {
   await expect(cell).toBeVisible();
   const box = (await cell.boundingBox())!;
@@ -45,6 +56,7 @@ const expectFullyOnScreen = async (page: Page, cell: Locator) => {
   expect(box.width).toBeGreaterThanOrEqual(44);
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(width);
+  expect(await cell.evaluate(isClippedByAncestor)).toBe(false);
   // The label fits its cell rather than overflowing it
   expect(await cell.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 };

@@ -25,7 +25,8 @@ function TaskListView() {
        */}
       <CategoryHeader />
       <TaskInputBar />
-      <div className="scroll-edge-fade touch:order-1 touch:flex touch:min-h-0 touch:flex-1 touch:flex-col touch:overflow-x-hidden touch:overflow-y-auto">
+      {/* Touch: widened by the rows' -mx-2, or overflow-x-hidden cuts off a swiped row's tray */}
+      <div className="scroll-edge-fade touch:order-1 touch:-mx-2 touch:flex touch:min-h-0 touch:flex-1 touch:flex-col touch:overflow-x-hidden touch:overflow-y-auto touch:px-2">
         <Suspense fallback={null}>
           <SyncHint />
         </Suspense>
