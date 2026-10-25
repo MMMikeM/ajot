@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { flushSync } from "react-dom";
-import { useTasks, useNotes, updateTask, deleteTask } from "~/lib/db/hooks";
+import { useTasks, useNotes, updateTask, deleteTask, deleteTasks } from "~/lib/db/hooks";
 import { addTask } from "~/lib/db/add-task";
 import { useUndoToast } from "~/lib/hooks/use-undo-toast";
 import type { Task } from "~/lib/types";
@@ -67,10 +67,8 @@ export const useTaskActions = () => {
       .sort((a, b) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? ""));
 
   const handleClearDone = (tasks: Task[]) => {
-    const undos = tasks.map((t) => deleteTask(t.id));
-    pushUndo(`Cleared ${tasks.length} done ${tasks.length === 1 ? "task" : "tasks"}`, () => {
-      for (const undo of undos) undo();
-    });
+    const undo = deleteTasks(tasks.map((t) => t.id));
+    pushUndo(`Cleared ${tasks.length} done ${tasks.length === 1 ? "task" : "tasks"}`, undo);
   };
 
   return {
