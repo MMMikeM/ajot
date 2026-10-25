@@ -1,25 +1,13 @@
 import userRepo from "./db/user.repo";
-import { NOTIFICATION_TRIGGERS, type PushPayload } from "@newtab-todo/shared";
-import { findRecipients, sendToDevices, withoutMuted } from "./push";
-
-type NotificationPayload = Extract<PushPayload, { type: keyof typeof NOTIFICATION_TRIGGERS }>;
+import type { NotificationPayload } from "./push-plan";
+import { queueNotification } from "./push-queue";
 
 /**
- * Sent to each of the user's devices that hasn't muted it. A failed send to one device is counted,
- * not thrown; a subscription the push service rejects is removed.
+ * Sent within a second, with any changes waiting for the same user, to each of their devices that
+ * hasn't turned it off. Never throws: a failed send is logged.
  */
-export const sendNotification = async (userId: string, payload: NotificationPayload) => {
-  const recipients = await findRecipients([userId]);
-  const subs = withoutMuted(
-    recipients.subs,
-    recipients.preferences,
-    () => NOTIFICATION_TRIGGERS[payload.type],
-  );
-  if (subs.length === 0) return;
-
-  const sent = await sendToDevices(subs, recipients.preferences, payload);
-  console.log(`Notification [${payload.type}] to ${userId}: ${sent}/${subs.length} delivered`);
-};
+export const sendNotification = async (userId: string, payload: NotificationPayload) =>
+  queueNotification(userId, payload);
 
 export const getUserName = async (userId: string): Promise<string> => {
   try {

@@ -1,5 +1,10 @@
 import { useSyncExternalStore } from "react";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
+import {
+  getSignedInUserId,
+  shareUserWithBackground,
+  subscribeCurrentUser,
+} from "~/lib/auth/current-user";
 import { tasksCollection, categoriesCollection, notesCollection } from "~/lib/db/collections";
 import { refreshPushSubscription, registerPushSubscription } from "~/lib/sync/push";
 import { createBackoff } from "~/lib/sync/backoff";
@@ -211,12 +216,16 @@ export const initSync = () => {
   }
   if (target === "browser") {
     listenSwMessages();
-    void shareSessionWithWorker(getAuthToken());
+    const shareSession = () => void shareSessionWithWorker(getAuthToken(), getSignedInUserId());
+    shareSession();
     if (getAuthToken()) refreshPushSubscription().catch(console.error);
-    subscribeAuthToken(() => void shareSessionWithWorker(getAuthToken()));
+    subscribeAuthToken(shareSession);
+    subscribeCurrentUser(shareSession);
   }
   if (target === "extension") {
     listenExtensionMessages();
+    // Installs signed in before the background needed the account
+    shareUserWithBackground();
     if (!backgroundHoldsSse()) return;
     // Probe the background page for its current SSE connection state so the
     // indicator isn't stuck at "Offline" on fresh tab load. It broadcasts later changes.

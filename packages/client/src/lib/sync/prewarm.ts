@@ -1,7 +1,15 @@
-import { SNAPSHOT_KEYS, saveSnapshot } from "~/lib/snapshot-store";
+import type { PushRows } from "@newtab-todo/shared/push-payload";
+import {
+  SNAPSHOT_KEYS,
+  openSnapshotDb,
+  readSnapshot,
+  saveSnapshot,
+  writeSnapshot,
+} from "~/lib/snapshot-store";
+import { applyRows } from "~/lib/sync/saved-rows";
 
-/** serverUrl is "" for the PWA, which calls its own origin. */
-export type PrewarmSession = { token: string; serverUrl: string };
+/** serverUrl is "" for the PWA, which calls its own origin. userId is null until it's known. */
+export type PrewarmSession = { token: string; serverUrl: string; userId: string | null };
 
 type GetSession = () => Promise<PrewarmSession | null>;
 
@@ -15,6 +23,19 @@ const fetchList = async ({ serverUrl, token }: PrewarmSession, key: string) => {
 
 const sameSession = (a: PrewarmSession | null, b: PrewarmSession) =>
   a?.token === b.token && a.serverUrl === b.serverUrl;
+
+// Rows from another account (a device signed out while offline, still subscribed) never land
+const saveRows = async (getSession: GetSession, rows: PushRows) => {
+  const session = await getSession();
+  if (!session || session.userId !== rows.userId) return;
+  const db = await openSnapshotDb();
+  try {
+    const models = [...new Set(rows.events.map((event) => event.model))];
+    await writeSnapshot(db, applyRows(await readSnapshot(db, models), rows.events));
+  } finally {
+    db.close();
+  }
+};
 
 const prewarmOnce = async (getSession: GetSession) => {
   const session = await getSession();
@@ -32,14 +53,18 @@ const prewarmOnce = async (getSession: GetSession) => {
 
 /**
  * Saves the server's lists where a page reads them on startup, so one opened offline shows what
- * the server last had. The returned function never rejects; calls run one at a time, so an
- * earlier fetch can never save over a later one.
+ * the server last had. A push's rows are saved first, so they're kept if the fetch then fails.
+ * The returned function never rejects; calls run one at a time, so an earlier fetch can never
+ * save over a later one.
  */
 export const createPrewarm = (getSession: GetSession) => {
   let queue = Promise.resolve();
-  return () => {
+  return (rows?: PushRows) => {
     queue = queue
-      .then(() => prewarmOnce(getSession))
+      .then(async () => {
+        if (rows) await saveRows(getSession, rows).catch((err) => console.error("[prewarm]", err));
+        await prewarmOnce(getSession);
+      })
       .catch((err) => console.error("[prewarm] failed:", err));
     return queue;
   };

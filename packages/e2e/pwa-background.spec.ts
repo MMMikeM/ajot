@@ -63,6 +63,31 @@ test.describe("the PWA's worker saves the lists for the next launch", () => {
     await expect(page.getByText(title)).toBeVisible();
   });
 
+  test("from the rows a push carries, when its fetch fails", async ({ user1Auth }) => {
+    await deliverPush(context, ORIGIN, { type: "changes" });
+    await expect.poll(() => savedTitles(worker)).not.toBeNull();
+    // The server's own row, so the page gets the shape it reads
+    const title = `Saved from the push ${Date.now()}`;
+    const task = await addTask(user1Auth.token, title);
+    const pushRows = (userId: string, data: object) =>
+      deliverPush(context, ORIGIN, {
+        type: "changes",
+        rows: { userId, events: [{ model: "tasks", action: "insert", data }] },
+      });
+    await context.setOffline(true);
+
+    const foreign = `Another account's ${Date.now()}`;
+    await pushRows("someone-else", { ...task, id: crypto.randomUUID(), title: foreign });
+    // Delivering the next push stops the worker, so let it finish this one first
+    await new Promise((done) => setTimeout(done, 1_000));
+    await pushRows(user1Auth.userId, task);
+    await expect.poll(() => savedTitles(worker)).toContain(title);
+    expect(await savedTitles(worker)).not.toContain(foreign);
+
+    const page = await openInFlightMode();
+    await expect(page.getByText(title)).toBeVisible();
+  });
+
   test("so a notification's task opens offline", async ({ user1Auth }) => {
     const title = `Opened from a notification ${Date.now()}`;
     const { id } = await addTask(user1Auth.token, title);

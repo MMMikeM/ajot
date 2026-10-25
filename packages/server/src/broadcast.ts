@@ -1,5 +1,6 @@
 import type { Context } from "hono";
-import { notifyOtherDevices, type ChangeSource } from "./push";
+import { queueChanges } from "./push-queue";
+import type { ChangeSource } from "./push-plan";
 import type { MutationEvent, ModelName } from "@newtab-todo/shared";
 
 export type { MutationEvent };
@@ -29,9 +30,13 @@ const writeEvents = (events: MutationEvent[], userIds: string[]) => {
   }
 };
 
-export const notifyMutation = (event: MutationEvent, userIds: string[], source?: ChangeSource) => {
-  writeEvents([event], userIds);
-  notifyOtherDevices(userIds, source).catch(() => {});
+export const notifyMutation = (
+  { sourceClientId, ...event }: MutationEvent,
+  userIds: string[],
+  source: ChangeSource = {},
+) => {
+  writeEvents([{ ...event, sourceClientId }], userIds);
+  queueChanges(userIds, [event], source);
 };
 
 const changeSource = (c: Context): ChangeSource => ({
@@ -69,7 +74,7 @@ export const broadcastAll = (c: Context, events: BroadcastEvent[], userIds: stri
     events.map((event) => ({ ...event, sourceClientId })),
     userIds,
   );
-  notifyOtherDevices(userIds, changeSource(c)).catch(() => {});
+  queueChanges(userIds, events, changeSource(c));
 };
 
 /** Sends each user only the events addressed to them, with one push per user. */

@@ -17,6 +17,7 @@
     "deps:check": "depcruise packages/client/src packages/server/src packages/shared/src --config .dependency-cruiser.cjs",
     "screenshot": "pnpm --dir packages/e2e run screenshot",
     "cls": "pnpm --dir packages/e2e install --ignore-workspace && pnpm --dir packages/e2e run cls",
+    "test": "pnpm --filter @newtab-todo/server test",
     "test:e2e": "pnpm --filter @newtab-todo/e2e test",
     "test:e2e:ui": "pnpm --filter @newtab-todo/e2e test:ui",
     "test:e2e:prerender": "vp run @newtab-todo/e2e#test:prerender",
