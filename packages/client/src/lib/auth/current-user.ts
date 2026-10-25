@@ -6,7 +6,7 @@ const ID_KEY = "newtab-todo-user-id";
 const INFO_KEY = "newtab-todo-user-info";
 const DEVICE_ID_KEY = "newtab-todo-device-id";
 
-const getOrCreateDeviceId = (): string => {
+export const getOrCreateDeviceId = (): string => {
   if (typeof localStorage === "undefined") return "";
   let id = localStorage.getItem(DEVICE_ID_KEY);
   if (!id) {

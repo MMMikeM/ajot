@@ -9,6 +9,15 @@ import { createBackoff } from "~/lib/sync/backoff";
 import { trackSyncState } from "~/lib/sync/sync-state";
 import { getStoredSession, notifyTabs } from "~/lib/ext";
 import { setupContextMenu } from "~/lib/context-menu";
+import { prewarmPeriodically, prewarmSnapshot } from "~/lib/sync/prewarm-extension";
+
+// Changes arrive in bursts (a drag, Clear done); save the lists once after the last of them
+const PREWARM_DELAY_MS = 1000;
+let prewarmTimer: ReturnType<typeof setTimeout> | undefined;
+const schedulePrewarm = () => {
+  clearTimeout(prewarmTimer);
+  prewarmTimer = setTimeout(() => void prewarmSnapshot(), PREWARM_DELAY_MS);
+};
 
 let eventSource: EventSource | null = null;
 let connectAttempt = 0;
@@ -50,6 +59,7 @@ const connect = async () => {
 
   source.addEventListener(SSE_DATA_CHANGED, (e: MessageEvent) => {
     console.log("[bg-sse] data-changed event received");
+    schedulePrewarm();
     if (e.data) {
       try {
         const payload = JSON.parse(e.data);
@@ -67,6 +77,7 @@ const connect = async () => {
     syncState.opened();
     backoff.reset();
     void notifyTabs();
+    schedulePrewarm();
   });
 
   source.onerror = () => {
@@ -109,5 +120,6 @@ addEventListener("online", () => {
 
 connect().catch((err) => console.error("[bg-sse] initial connect error:", err));
 setupContextMenu();
+prewarmPeriodically();
 
 console.log("[bg-sse] persistent background page loaded");

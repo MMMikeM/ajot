@@ -1,4 +1,23 @@
 const UPDATE_POLL_MS = 60 * 60 * 1000;
+// As often as the browser allows; Chrome decides from how much the app is used, hours apart
+const PREWARM_EVERY_MS = 15 * 60 * 1000;
+
+type PeriodicSyncRegistration = ServiceWorkerRegistration & {
+  periodicSync?: { register: (tag: string, options: { minInterval: number }) => Promise<void> };
+};
+
+/**
+ * Wakes the worker now and then to save the lists, so the app opens offline on recent ones.
+ * Chromium only, and only once the PWA is installed; elsewhere this does nothing.
+ */
+const registerPeriodicPrewarm = async (reg: PeriodicSyncRegistration) => {
+  if (!reg.periodicSync) return;
+  const { state } = await navigator.permissions.query({
+    name: "periodic-background-sync" as PermissionName,
+  });
+  if (state !== "granted") return;
+  await reg.periodicSync.register("prewarm", { minInterval: PREWARM_EVERY_MS });
+};
 
 export const registerServiceWorker = () => {
   console.log("[sw] guards:", {
@@ -31,6 +50,7 @@ export const registerServiceWorker = () => {
     .register("/sw.js")
     .then((reg) => {
       console.log("[sw] registered:", reg.scope, reg);
+      registerPeriodicPrewarm(reg).catch((err) => console.warn("[sw] periodic sync:", err));
 
       // Fallback: deploy pushes are the primary update signal
       setInterval(() => {

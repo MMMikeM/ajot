@@ -44,6 +44,16 @@ export const registerPushSubscription = async (): Promise<boolean> => {
   }
 };
 
+/**
+ * Uploads this device's subscription again, now with its device id, so the server can send it
+ * changes made elsewhere and not its own. Never subscribes, so it can't prompt.
+ */
+export const refreshPushSubscription = async () => {
+  if (!ownsSubscription()) return;
+  const subscription = await getCurrentSubscription();
+  if (subscription) await uploadSubscription(subscription);
+};
+
 export const unregisterPushSubscription = async (): Promise<void> => {
   if (!ownsSubscription()) return;
   try {
