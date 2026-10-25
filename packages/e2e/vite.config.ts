@@ -9,6 +9,12 @@ export default defineConfig({
         dependsOn: ["@newtab-todo/client#build"],
         cache: false,
       },
+      // build:ext builds the client first, so this has the PWA build too
+      "test:background": {
+        command: "playwright test -c playwright.background.config.ts",
+        dependsOn: ["@newtab-todo/client#build:ext"],
+        cache: false,
+      },
     },
   },
 });

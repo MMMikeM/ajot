@@ -4,8 +4,15 @@ import { API_PORT, BASE_URL, CLIENT_PORT } from "./helpers/stack";
 export default defineConfig({
   testDir: ".",
   testMatch: "*.spec.ts",
-  // Runs against a production build: playwright.prerender.config.ts
-  testIgnore: ["skeleton.spec.ts", "stale-chunk.spec.ts", "perf.spec.ts"],
+  // Run against a production build: playwright.prerender.config.ts and
+  // playwright.background.config.ts
+  testIgnore: [
+    "skeleton.spec.ts",
+    "stale-chunk.spec.ts",
+    "perf.spec.ts",
+    "extension.spec.ts",
+    "pwa-background.spec.ts",
+  ],
   outputDir: ".output",
   snapshotDir: ".snapshots",
 
