@@ -1,37 +1,48 @@
 import { createInsertSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
-import { PUSH_TRIGGERS, type PushTrigger } from "@newtab-todo/shared/push-payload";
+import { PUSH_TRIGGERS } from "@newtab-todo/shared/push-payload";
 import { db } from "./client";
 import { pushPreferences } from "./schema";
 
 export const pushPreferencesSchema = createInsertSchema(pushPreferences, {
   muted: z.array(z.enum(PUSH_TRIGGERS)),
-}).pick({ muted: true });
+  urgent: z.boolean(),
+}).pick({ muted: true, urgent: true });
 
 export type PushPreferences = z.infer<typeof pushPreferencesSchema>;
 
+export const DEFAULT_PUSH_PREFERENCES: PushPreferences = { muted: [], urgent: true };
+
 const find = async (userId: string, deviceId: string): Promise<PushPreferences> => {
-  const row = await db.query.pushPreferences.findFirst({ where: { userId, deviceId } });
-  return { muted: row?.muted ?? [] };
+  const row = await db.query.pushPreferences.findFirst({
+    where: { userId, deviceId },
+    columns: { muted: true, urgent: true },
+  });
+  return row ?? DEFAULT_PUSH_PREFERENCES;
 };
 
-const save = async (userId: string, deviceId: string, { muted }: PushPreferences) => {
+const save = async (userId: string, deviceId: string, preferences: PushPreferences) => {
   await db
     .insert(pushPreferences)
-    .values({ userId, deviceId, muted })
+    .values({ userId, deviceId, ...preferences })
     .onConflictDoUpdate({
       target: [pushPreferences.userId, pushPreferences.deviceId],
-      set: { muted },
+      set: preferences,
     });
 };
 
-/** What each of these users' devices has muted, keyed by `mutedKey`. */
-const findMutedForUsers = async (userIds: string[]) => {
-  if (userIds.length === 0) return new Map<string, PushTrigger[]>();
+/** Each of these users' devices' preferences, keyed by `deviceKey`. */
+const findForUsers = async (userIds: string[]) => {
+  if (userIds.length === 0) return new Map<string, PushPreferences>();
   const rows = await db.query.pushPreferences.findMany({ where: { userId: { in: userIds } } });
-  return new Map(rows.map((row) => [mutedKey(row.userId, row.deviceId), row.muted]));
+  return new Map(
+    rows.map((row) => [
+      deviceKey(row.userId, row.deviceId),
+      { muted: row.muted, urgent: row.urgent },
+    ]),
+  );
 };
 
-export const mutedKey = (userId: string, deviceId: string) => `${userId}:${deviceId}`;
+export const deviceKey = (userId: string, deviceId: string) => `${userId}:${deviceId}`;
 
-export default { find, save, findMutedForUsers };
+export default { find, save, findForUsers };

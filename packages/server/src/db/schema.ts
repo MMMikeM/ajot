@@ -16,6 +16,7 @@ import {
   updatedAt,
   int,
   json,
+  bool,
 } from "./columns";
 import type { PushTrigger } from "@newtab-todo/shared/push-payload";
 
@@ -108,6 +109,8 @@ export const pushPreferences = sqliteTable(
     userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
     deviceId: string("device_id"),
     muted: json<PushTrigger[]>("muted"),
+    // Off lets an idle phone hold its pushes until it next wakes, saving battery
+    urgent: bool("urgent").default(true),
   },
   (t) => [primaryKey({ columns: [t.userId, t.deviceId] })],
 );

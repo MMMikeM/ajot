@@ -97,13 +97,25 @@ test.describe("settings", () => {
 
     await expect(page.getByRole("checkbox", { name: "Update in the background" })).toBeChecked();
     const due = page.getByRole("checkbox", { name: "A task is due" });
+    const rightAway = page.getByRole("checkbox", { name: "Deliver right away" });
     await expect(due).toBeChecked();
+    await expect(rightAway).toBeChecked();
+    const saved = page.waitForResponse(
+      (res) => res.url().endsWith("/api/push/preferences") && res.request().method() === "PUT",
+    );
     await due.click();
     await expect(due).not.toBeChecked();
+    await saved;
+    const savedAgain = page.waitForResponse(
+      (res) => res.url().endsWith("/api/push/preferences") && res.request().method() === "PUT",
+    );
+    await rightAway.click();
+    await savedAgain;
 
     await page.reload();
     await expect(page.getByRole("group", { name: "Reminders" })).toBeVisible();
     await expect(page.getByRole("checkbox", { name: "A task is due" })).not.toBeChecked();
+    await expect(page.getByRole("checkbox", { name: "Deliver right away" })).not.toBeChecked();
     await expect(
       page.getByRole("checkbox", { name: "Someone changes a list you share" }),
     ).toBeChecked();
