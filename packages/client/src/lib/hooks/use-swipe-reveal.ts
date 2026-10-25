@@ -90,8 +90,9 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
       const dy = e.touches[0].clientY - touchStartY.current;
 
       if (!isDraggingRef.current) {
-        // Yield vertical gestures to the list's scroll
-        if (Math.abs(dy) > Math.abs(dx)) {
+        // Yield vertical gestures to the list's scroll, and a touch already claimed: a long-press
+        // drag cancels the moves it takes before they bubble up here
+        if (Math.abs(dy) > Math.abs(dx) || e.defaultPrevented) {
           touchStartX.current = null;
           return;
         }

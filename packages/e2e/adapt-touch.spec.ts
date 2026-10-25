@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
-import { mockApi } from "./helpers/mock-api";
+import { mockApi, mockData } from "./helpers/mock-api";
 
 // Touch layout of the task list: swipe tray, drag, and the input bar's list chip.
 
@@ -86,79 +86,197 @@ test.describe("swipe tray", () => {
   });
 });
 
-type Box = { x: number; y: number; width: number; height: number };
+type Point = { x: number; y: number };
 
-const inflate = (b: Box, dx: number, dy: number): Box => ({
-  x: b.x - dx,
-  y: b.y - dy,
-  width: b.width + 2 * dx,
-  height: b.height + 2 * dy,
-});
+const centreOf = async (locator: Locator): Promise<Point> => {
+  const b = (await locator.boundingBox())!;
+  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+};
 
-const overlaps = (a: Box, b: Box) =>
-  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+const titleOf = (page: Page, title: string) =>
+  row(page, title).getByRole("button", { name: title }).first();
 
-test.describe("dragging", () => {
-  test("on touch the grip's hit area stays clear of the checkbox and the date", async ({
-    page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name !== "mobile", "touch layout");
-    await openList(page);
-    const target = row(page, "Call the plumber");
+const isAbove = async (page: Page, above: string, below: string) => {
+  const order = await page.locator("li > [data-task-id]").allTextContents();
+  return order.findIndex((t) => t.includes(above)) < order.findIndex((t) => t.includes(below));
+};
 
-    const grip = (await target.getByLabel("Drag to reorder").boundingBox())!;
-    expect(grip.height).toBeGreaterThanOrEqual(44);
-    // boundingBox() leaves out the ::after hit areas: the checkbox's -inset-3, the date's -inset-x-1.5
-    const checkbox = inflate((await target.getByRole("checkbox").boundingBox())!, 12, 12);
-    const date = inflate(
-      (await target.getByRole("button", { name: "Today", exact: true }).boundingBox())!,
-      6,
-      10,
+const mockIdOf = (title: string) => mockData().tasks.find((t) => t.title.startsWith(title))!.id;
+const FLIGHTS = mockIdOf("Book flights");
+const FARES = mockIdOf("Compare Tuesday");
+const BAGGAGE = "t-baggage";
+const byId = (page: Page, id: string) => page.locator(`[data-task-id="${id}"]`);
+const subtaskOrder = (page: Page) =>
+  byId(page, FLIGHTS)
+    .locator("[data-task-id]")
+    .evaluateAll((rows) => rows.map((r) => r.getAttribute("data-task-id")));
+
+// The mock's flights task has one open subtask; reordering needs two
+const withSecondSubtask = () => {
+  const data = mockData();
+  const fares = data.tasks.find((t) => t.id === FARES)!;
+  data.tasks.push({
+    ...fares,
+    id: BAGGAGE,
+    title: "Check the baggage allowance",
+    sortOrder: "a0z",
+  });
+  return data;
+};
+
+// Holds past dnd-kit's 250ms touch delay, then moves in small steps, as a finger would
+const longPressDrag = async (page: Page, from: Point, to: Point) => {
+  const { send } = await touch(page);
+  await send("touchStart", from.x, from.y);
+  await page.waitForTimeout(400);
+  const steps = Math.ceil(Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y)) / 8);
+  for (let i = 1; i <= steps; i++) {
+    await send(
+      "touchMove",
+      from.x + ((to.x - from.x) * i) / steps,
+      from.y + ((to.y - from.y) * i) / steps,
     );
-    expect(overlaps(grip, checkbox)).toBe(false);
-    expect(overlaps(grip, date)).toBe(false);
+    await page.waitForTimeout(16);
+  }
+  await send("touchEnd");
+};
+
+test.describe("dragging on touch", () => {
+  // eslint-disable-next-line no-empty-pattern
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "long press is the touch gesture");
   });
 
-  test("the desktop grip and the checkbox don't overlap", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "desktop", "the grip shows on desktop");
+  test("a long press anywhere on a task drags it", async ({ page }) => {
     await openList(page);
-    const target = row(page, "Renew passport");
-    await target.hover();
+    expect(await isAbove(page, "Call the plumber", "Renew passport")).toBe(true);
 
-    const grip = (await target.getByLabel("Drag to reorder").boundingBox())!;
-    const checkbox = (await target.getByRole("checkbox").boundingBox())!;
-    expect(overlaps(grip, checkbox)).toBe(false);
-  });
-
-  test("a long press on the grip drags the task", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "mobile", "long-press is the touch gesture");
-    await openList(page);
-    const positionOf = async (title: string) =>
-      (await page.locator("li > [data-task-id]").allTextContents()).findIndex((t) =>
-        t.includes(title),
-      );
-    expect(await positionOf("Renew passport")).toBeGreaterThan(
-      await positionOf("Call the plumber"),
-    );
-
-    const from = (await row(page, "Renew passport").getByLabel("Drag to reorder").boundingBox())!;
     const to = (await row(page, "Call the plumber").boundingBox())!;
+    await longPressDrag(page, await centreOf(titleOf(page, "Renew passport")), {
+      x: to.x + to.width / 2,
+      y: to.y,
+    });
+
+    await expect.poll(() => isAbove(page, "Renew passport", "Call the plumber")).toBe(true);
+  });
+
+  test("a tap still opens the task", async ({ page }) => {
+    await openList(page);
+    await titleOf(page, "Renew passport").tap();
+    await expect(page.locator('[data-slot="drawer-content"]')).toBeVisible();
+  });
+
+  test("a long press let go in place neither opens nor moves the task", async ({ page }) => {
+    await openList(page);
     const { send } = await touch(page);
-    const x = from.x + from.width / 2;
-    let y = from.y + from.height / 2;
-    await send("touchStart", x, y);
-    // Past dnd-kit's 250ms touch delay
+    const at = await centreOf(titleOf(page, "Renew passport"));
+    await send("touchStart", at.x, at.y);
     await page.waitForTimeout(400);
-    while (y > to.y) {
-      await send("touchMove", x, (y -= 8));
-      await page.waitForTimeout(16);
-    }
     await send("touchEnd");
 
-    await expect
-      .poll(
-        async () => (await positionOf("Renew passport")) < (await positionOf("Call the plumber")),
-      )
-      .toBe(true);
+    await page.waitForTimeout(300);
+    await expect(page.locator('[data-slot="drawer-content"]')).toHaveCount(0);
+    expect(await isAbove(page, "Call the plumber", "Renew passport")).toBe(true);
+  });
+
+  test("a quick flick doesn't drag", async ({ page }) => {
+    await openList(page);
+    const { send } = await touch(page);
+    const at = await centreOf(titleOf(page, "Renew passport"));
+    await send("touchStart", at.x, at.y);
+    for (let i = 1; i <= 10; i++) await send("touchMove", at.x, at.y - i * 12);
+    await send("touchEnd");
+
+    await page.waitForTimeout(300);
+    expect(await isAbove(page, "Call the plumber", "Renew passport")).toBe(true);
+  });
+
+  test("a sideways drag moves the task without opening its swipe tray", async ({ page }) => {
+    await openList(page);
+    const to = (await row(page, "Call the plumber").boundingBox())!;
+    const from = await centreOf(titleOf(page, "Renew passport"));
+    await longPressDrag(page, from, { x: from.x - 120, y: to.y });
+
+    await expect.poll(() => isAbove(page, "Renew passport", "Call the plumber")).toBe(true);
+    await expect(row(page, "Renew passport").locator("[data-swipe-tray]")).toHaveAttribute("inert");
+  });
+
+  test("a long press drags a subtask within its parent", async ({ page }) => {
+    await mockApi(page, { data: withSecondSubtask() });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(byId(page, BAGGAGE)).toBeVisible({ timeout: 15000 });
+    expect(await subtaskOrder(page)).toEqual([FARES, BAGGAGE]);
+
+    const to = (await byId(page, FARES).boundingBox())!;
+    await longPressDrag(page, await centreOf(byId(page, BAGGAGE)), {
+      x: to.x + to.width / 2,
+      y: to.y,
+    });
+
+    await expect.poll(() => subtaskOrder(page)).toEqual([BAGGAGE, FARES]);
+  });
+
+  test("a subtask dragged among the tasks stays under its parent", async ({ page }) => {
+    await mockApi(page, { data: withSecondSubtask() });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(byId(page, BAGGAGE)).toBeVisible({ timeout: 15000 });
+
+    await longPressDrag(
+      page,
+      await centreOf(byId(page, FARES)),
+      await centreOf(row(page, "Renew passport")),
+    );
+
+    // On its way out it passes its sibling, which may swap them; it just mustn't leave
+    await page.waitForTimeout(300);
+    expect(new Set(await subtaskOrder(page))).toEqual(new Set([FARES, BAGGAGE]));
+    await expect(page.locator(`li > [data-task-id="${FARES}"]`)).toHaveCount(0);
+  });
+});
+
+// Presses and moves in small steps; dnd-kit picks the row up once it has moved 5px
+const mouseDrag = async (page: Page, from: Point, to: Point) => {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 12 });
+  await page.mouse.up();
+};
+
+test.describe("dragging with a mouse", () => {
+  // eslint-disable-next-line no-empty-pattern
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "mouse gestures");
+  });
+
+  test("dragging a task's row moves it", async ({ page }) => {
+    await openList(page);
+    const to = (await row(page, "Call the plumber").boundingBox())!;
+    await mouseDrag(page, await centreOf(titleOf(page, "Renew passport")), {
+      x: to.x + to.width / 2,
+      y: to.y,
+    });
+
+    await expect.poll(() => isAbove(page, "Renew passport", "Call the plumber")).toBe(true);
+  });
+
+  test("a click still opens the task", async ({ page }) => {
+    await openList(page);
+    await titleOf(page, "Renew passport").click();
+    await expect(page.locator('[data-slot="drawer-content"]')).toBeVisible();
+    expect(await isAbove(page, "Call the plumber", "Renew passport")).toBe(true);
+  });
+
+  test("dragging a subtask moves it within its parent", async ({ page }) => {
+    await mockApi(page, { data: withSecondSubtask() });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(byId(page, BAGGAGE)).toBeVisible({ timeout: 15000 });
+
+    const to = (await byId(page, FARES).boundingBox())!;
+    await mouseDrag(page, await centreOf(byId(page, BAGGAGE)), {
+      x: to.x + to.width / 2,
+      y: to.y,
+    });
+
+    await expect.poll(() => subtaskOrder(page)).toEqual([BAGGAGE, FARES]);
   });
 });
