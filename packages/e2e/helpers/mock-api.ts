@@ -21,7 +21,7 @@ const isoDay = (offsetDays: number) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-const mockData = () => {
+export const mockData = () => {
   let order = 0;
   const task = (title: string, extra: Record<string, unknown> = {}) => {
     const n = order++;

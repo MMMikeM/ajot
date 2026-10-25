@@ -15,6 +15,7 @@ import { TaskRowsSkeleton } from "./rows-skeleton";
 import { finishStartup } from "~/lib/startup-timing";
 import { useTaskActions } from "./use-actions";
 import { handOffRowFocus } from "./focus-handoff";
+import { rowDragSensors } from "./row-drag";
 import { useTaskActions as useDndActions } from "~/lib/hooks/use-task-actions";
 import { canDeleteTask } from "~/lib/task-permissions";
 import type { Task } from "~/lib/types";
@@ -179,7 +180,13 @@ function SortableTask({
   index: number;
   children: (ref: RefCallback<HTMLElement>, handleRef: RefCallback<HTMLElement>) => ReactNode;
 }) {
-  const { ref, handleRef } = useSortable({ id, index, type: "task" });
+  const { ref, handleRef } = useSortable({
+    id,
+    index,
+    type: "task",
+    accept: "task",
+    sensors: rowDragSensors,
+  });
   return <>{children(ref, handleRef)}</>;
 }
 
@@ -214,7 +221,12 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
     .filter((t) => t.status !== "done")
     .sort((a, b) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? ""));
 
-  const { handleDragEnd } = useDndActions({ categories, activeCategoryId, activeTasks });
+  const { handleDragEnd } = useDndActions({
+    categories,
+    activeCategoryId,
+    activeTasks,
+    getSubtasks: actions.getSubtasks,
+  });
 
   const sharedCategoryIds = new Set(
     categories.filter((c) => c.collaborators && c.collaborators.length > 0).map((c) => c.id),

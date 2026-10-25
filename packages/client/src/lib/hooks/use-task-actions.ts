@@ -14,9 +14,15 @@ interface Params {
   categories: Category[];
   activeCategoryId: string | null;
   activeTasks: Task[];
+  getSubtasks: (parentId: string) => Task[];
 }
 
-export const useTaskActions = ({ categories, activeCategoryId, activeTasks }: Params) => {
+export const useTaskActions = ({
+  categories,
+  activeCategoryId,
+  activeTasks,
+  getSubtasks,
+}: Params) => {
   const handleReorder = (taskId: string, newIndex: number, groupTasks: Task[]) => {
     const filtered = groupTasks.filter((t) => t.id !== taskId);
     const prevOrder = newIndex > 0 ? (filtered[newIndex - 1]?.sortOrder ?? null) : null;
@@ -53,6 +59,13 @@ export const useTaskActions = ({ categories, activeCategoryId, activeTasks }: Pa
         const newIndex = categories.findIndex((c) => c.id === targetId);
         if (newIndex !== -1 && String(source.id) !== targetId) {
           handleReorderCategory(String(source.id), newIndex, categories);
+        }
+      } else if (source.type === "subtask") {
+        // Done subtasks aren't in the list, so the drop index counts only the open ones
+        const siblings = getSubtasks(String(source.group)).filter((t) => t.status !== "done");
+        const newIndex = siblings.findIndex((t) => t.id === targetId);
+        if (newIndex !== -1 && String(source.id) !== targetId) {
+          handleReorder(String(source.id), newIndex, siblings);
         }
       } else {
         const newIndex = activeTasks.findIndex((t) => t.id === targetId);

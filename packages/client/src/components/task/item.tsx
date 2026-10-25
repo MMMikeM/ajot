@@ -1,14 +1,23 @@
-import { useEffect, useRef, useState, type CSSProperties, type RefCallback } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type CSSProperties,
+  type RefCallback,
+} from "react";
+import { useSortable } from "@dnd-kit/react/sortable";
 import type { Task } from "~/lib/types";
 import { Button } from "~/components/ui/button";
 import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/field";
 import { cn } from "~/lib/utils";
-import { Calendar, GripVertical, Plus, Users, X } from "lucide-react";
+import { Calendar, Plus, Users, X } from "lucide-react";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { useSwipeReveal } from "~/lib/hooks/use-swipe-reveal";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { canDeleteTask } from "~/lib/task-permissions";
+import { rowDragSensors } from "./row-drag";
 
 // Read once: pointer type doesn't change during a session
 const IS_TOUCH = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -179,15 +188,24 @@ export function TaskItem({
   return (
     <div
       data-task-id={task.id}
-      // Lifted while dragged, so it doesn't read as text floating over the rows below
-      className="in-[[data-dnd-dragging]]:-mx-2 in-[[data-dnd-dragging]]:rounded-lg in-[[data-dnd-dragging]]:bg-popover in-[[data-dnd-dragging]]:px-2 in-[[data-dnd-dragging]]:shadow-md"
+      // Lifted while dragged, so it doesn't read as text floating over the rows below. Only the
+      // dragged row's own: a parent's subtasks ride along inside its lift.
+      className="[[data-dnd-dragging]>&]:-mx-2 [[data-dnd-dragging]>&]:rounded-lg [[data-dnd-dragging]>&]:bg-popover [[data-dnd-dragging]>&]:px-2 [[data-dnd-dragging]>&]:shadow-md"
     >
       <div
-        ref={containerRef}
+        ref={(el) => {
+          containerRef.current = el;
+          dragHandleRef?.(el);
+        }}
+        // The drag handle. Its own role and tabIndex keep dnd-kit from making it a button and a tab stop.
+        role={dragHandleRef ? "group" : undefined}
+        tabIndex={dragHandleRef ? -1 : undefined}
         className={cn(
           "-mx-2",
           entering && "animate-[task-enter_200ms_ease-out] motion-reduce:animate-none",
           swipeEnabled && "group/swipe relative overflow-hidden rounded-lg",
+          // A long press drags the row, so iOS mustn't select its text or show the callout first
+          dragHandleRef && "touch:select-none touch:[-webkit-touch-callout:none]",
         )}
       >
         {swipeEnabled && (
@@ -195,6 +213,7 @@ export function TaskItem({
           // focusable or announced until the row is swiped open.
           <div
             ref={trayRef}
+            data-swipe-tray
             className="invisible absolute top-0 right-0 grid h-full auto-cols-fr grid-flow-col bg-muted group-data-[swiping]/swipe:visible"
             inert={!isSwipeOpen}
           >
@@ -249,23 +268,6 @@ export function TaskItem({
             swipeEnabled && "rounded-none group-data-[swiping]/swipe:bg-card",
           )}
         >
-          {!isSubtask && (
-            // Desktop: hangs in the gutter. Touch: a 44px-tall grab target at the row's end, away from the checkbox.
-            <span
-              ref={dragHandleRef}
-              aria-label={dragHandleRef ? "Drag to reorder" : undefined}
-              className={cn(
-                "absolute top-2.5 -left-3.5 flex h-6 w-3.5 cursor-grab items-center justify-center rounded-sm text-transparent transition-colors group-hover/task:text-ghost focus-visible:text-hint active:cursor-grabbing touch:static touch:order-last touch:-my-2.5 touch:-mr-2 touch:h-11 touch:w-9 touch:text-hint",
-                // Done rows aren't sortable
-                isDone && "invisible touch:hidden",
-                // Swiped open, the title slides out of view; a grip left alone there reads as broken
-                "group-data-[swiping]/swipe:invisible",
-              )}
-              onTouchStart={(e) => e.stopPropagation()}
-            >
-              <GripVertical size={14} />
-            </span>
-          )}
           <Checkbox
             checked={looksDone}
             onCheckedChange={handleCheck}
@@ -388,9 +390,12 @@ export function TaskItem({
 
       {!isSubtask && (openSubtasks.length > 0 || doneSubtaskCount > 0) && (
         <div className="mt-1 ml-2 border-l border-ghost pl-[15px] touch:pl-[19px]">
-          {openSubtasks.map((sub) => (
-            <TaskItem
+          {openSubtasks.map((sub, index) => (
+            <SortableSubtask
               key={sub.id}
+              index={index}
+              // Done rows aren't sortable, and neither is what's under them
+              disabled={isDone}
               task={sub}
               parent={task}
               isSubtask
@@ -437,6 +442,30 @@ export function TaskItem({
           />
         </form>
       )}
+    </div>
+  );
+}
+
+// Sorts within its parent only: a subtask can't join the task list or another parent
+function SortableSubtask({
+  index,
+  disabled,
+  ...props
+}: { index: number; disabled: boolean } & ComponentProps<typeof TaskItem>) {
+  const parentId = props.task.parentId;
+  const { ref, handleRef } = useSortable({
+    id: props.task.id,
+    index,
+    group: parentId ?? undefined,
+    type: "subtask",
+    data: { parentId },
+    accept: (source) => source.type === "subtask" && source.data?.parentId === parentId,
+    sensors: rowDragSensors,
+    disabled,
+  });
+  return (
+    <div ref={ref}>
+      <TaskItem {...props} dragHandleRef={disabled ? undefined : handleRef} />
     </div>
   );
 }
