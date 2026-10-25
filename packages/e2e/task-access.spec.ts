@@ -30,6 +30,9 @@ const newTask = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
+const addTaskAs = async (token: string) =>
+  apiRequest<{ id: string }>("POST", "/api/tasks", newTask(), token);
+
 const newList = async (token: string, name: string) =>
   apiRequest<{ id: string }>(
     "POST",
@@ -60,14 +63,14 @@ test.describe("which lists and tasks you can add to or edit", () => {
   });
 
   test("not a subtask under someone else's task", async ({ user1Auth, user2Auth }) => {
-    const parent = await apiRequest<{ id: string }>("POST", "/api/tasks", newTask(), user1Auth.token);
+    const parent = await addTaskAs(user1Auth.token);
     expect(
       await status("POST", "/api/tasks", newTask({ parentId: parent.id }), user2Auth.token),
     ).toBe(403);
   });
 
   test("a subtask under a task shared with you", async ({ user1Auth, user2Auth }) => {
-    const parent = await apiRequest<{ id: string }>("POST", "/api/tasks", newTask(), user1Auth.token);
+    const parent = await addTaskAs(user1Auth.token);
     await apiRequest(
       "POST",
       "/api/tasks/share",
@@ -80,7 +83,7 @@ test.describe("which lists and tasks you can add to or edit", () => {
   });
 
   test("editing a task shared with you", async ({ user1Auth, user2Auth }) => {
-    const shared = await apiRequest<{ id: string }>("POST", "/api/tasks", newTask(), user1Auth.token);
+    const shared = await addTaskAs(user1Auth.token);
     await apiRequest(
       "POST",
       "/api/tasks/share",
@@ -98,7 +101,7 @@ test.describe("which lists and tasks you can add to or edit", () => {
   });
 
   test("not editing someone else's task", async ({ user1Auth, user2Auth }) => {
-    const theirs = await apiRequest<{ id: string }>("POST", "/api/tasks", newTask(), user1Auth.token);
+    const theirs = await addTaskAs(user1Auth.token);
     expect(
       await status(
         "PUT",
@@ -111,7 +114,7 @@ test.describe("which lists and tasks you can add to or edit", () => {
 
   test("not moving your task into someone else's list", async ({ user1Auth, user2Auth }) => {
     const list = await newList(user1Auth.token, "Not yours");
-    const mine = await apiRequest<{ id: string }>("POST", "/api/tasks", newTask(), user2Auth.token);
+    const mine = await addTaskAs(user2Auth.token);
     expect(
       await status(
         "PUT",
