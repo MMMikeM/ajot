@@ -8,8 +8,8 @@ on:
 
 jobs:
   e2e:
-    # Playwright's --with-deps knows this release's packages; the suite starts its own database
-    # in the runner's Docker
+    # This image ships Google Chrome, so Chromium's libraries are already there; the suite starts
+    # its own database in the runner's Docker
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -25,7 +25,9 @@ jobs:
 
       - run: pnpm test
 
-      - run: pnpm --filter @newtab-todo/e2e exec playwright install --with-deps chromium
+      # Without --with-deps: the runner already has Chromium's libraries, and the fonts and virtual
+      # display it adds took 7 minutes when Ubuntu's mirror was slow
+      - run: pnpm --filter @newtab-todo/e2e exec playwright install chromium
 
       - run: pnpm test:e2e
 
