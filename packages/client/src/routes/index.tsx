@@ -7,9 +7,12 @@ import { TaskView } from "~/components/task/view";
 import { CategoryHeader } from "~/components/category-nav/CategoryHeader";
 
 // Lazy-load: defers @base-ui/drawer, @tanstack/react-form (69KB)
-// Import starts immediately on route load; lazy() uses the same promise for Suspense integration
-const taskDetailModule = import("~/components/task/detail");
-const TaskDetail = lazy(() => taskDetailModule);
+// Prefetched on route load so the first open doesn't wait. Offline without a cached chunk the
+// prefetch fails, so opening a task loads it again rather than replaying that failure.
+const loadTaskDetail = () => import("~/components/task/detail");
+const prefetchedTaskDetail = loadTaskDetail();
+prefetchedTaskDetail.catch(() => {});
+const TaskDetail = lazy(() => prefetchedTaskDetail.catch(loadTaskDetail));
 
 function TaskListView() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -32,9 +35,12 @@ function TaskListView() {
         </Suspense>
         <div className="mt-2 flex flex-1 flex-col gap-4">
           <TaskView onSelectTask={setSelectedTaskId} />
-          <Suspense>
-            <TaskDetail taskId={selectedTaskId} open onClose={() => setSelectedTaskId(null)} />
-          </Suspense>
+          {/* Mounted only once a task is chosen: lazy() renders a failed load as an error */}
+          {selectedTaskId && (
+            <Suspense>
+              <TaskDetail taskId={selectedTaskId} open onClose={() => setSelectedTaskId(null)} />
+            </Suspense>
+          )}
         </div>
       </div>
       <Toast.Portal>
