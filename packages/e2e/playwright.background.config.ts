@@ -9,6 +9,8 @@ export default defineConfig({
   testMatch: ["extension.spec.ts", "pwa-background.spec.ts"],
   testIgnore: undefined,
   projects: base.projects?.filter((project) => project.name === "desktop"),
+  // What these test: the main suite blocks it
+  use: { ...base.use, serviceWorkers: "allow" },
   webServer: [
     ...(Array.isArray(base.webServer) ? base.webServer : []),
     {

@@ -18,8 +18,8 @@
     "screenshot": "pnpm --dir packages/e2e run screenshot",
     "cls": "pnpm --dir packages/e2e install --ignore-workspace && pnpm --dir packages/e2e run cls",
     "test": "pnpm --filter @newtab-todo/server test",
-    "test:e2e": "pnpm --filter @newtab-todo/e2e test",
-    "test:e2e:ui": "pnpm --filter @newtab-todo/e2e test:ui",
+    "test:e2e": "vp run @newtab-todo/e2e#test",
+    "test:e2e:ui": "vp run @newtab-todo/e2e#test:ui",
     "test:e2e:prerender": "vp run @newtab-todo/e2e#test:prerender",
     "test:e2e:background": "vp run @newtab-todo/e2e#test:background",
     "reset-password": "vp run @newtab-todo/server#reset-password"

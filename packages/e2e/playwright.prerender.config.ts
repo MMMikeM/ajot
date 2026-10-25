@@ -11,7 +11,7 @@ export default defineConfig({
   testIgnore: undefined,
   // The skeleton needs no accounts, and the preview server has no API to make them on
   globalSetup: undefined,
-  use: { ...base.use, baseURL: `http://localhost:${PORT}` },
+  use: { ...base.use, baseURL: `http://localhost:${PORT}`, serviceWorkers: "allow" },
   webServer: {
     // exec, so stopping the server stops vp itself rather than a shell around it
     command: `exec node_modules/.bin/vp preview --port ${PORT} --strictPort`,
