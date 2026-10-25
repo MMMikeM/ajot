@@ -3,10 +3,10 @@ import base from "./playwright.config";
 
 const PORT = 4174;
 
-// Specs that need the prerendered index.html, which only a production build has
+// Specs that need a production build: the prerendered index.html, or Vite's chunk-error event
 export default defineConfig({
   ...base,
-  testMatch: "skeleton.spec.ts",
+  testMatch: ["skeleton.spec.ts", "stale-chunk.spec.ts"],
   testIgnore: undefined,
   // The skeleton needs no accounts, and the preview server has no API to make them on
   globalSetup: undefined,
