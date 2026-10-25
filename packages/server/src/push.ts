@@ -50,10 +50,6 @@ export const sendPush = async (
   attempt = 0,
 ): Promise<number> => {
   const payload = fitted(message);
-  if (!payload) {
-    console.error(`Push [${message.type}] dropped: too large to send`);
-    return 0;
-  }
   const { delivered, gone, failed } = await sendPushBatch(
     subs.map((sub) => ({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } })),
     // The service workers parse our own PushPayload union, not the library's notification shape.

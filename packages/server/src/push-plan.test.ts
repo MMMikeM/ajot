@@ -122,7 +122,7 @@ describe("fitted", () => {
     expect(fitted({ type: "changes", rows: small })).toEqual({ type: "changes", rows: small });
   });
 
-  test("gives up on a push too long without rows", () => {
-    expect(fitted({ ...shared, taskTitle: "x".repeat(4000) })).toBeNull();
+  test("turns a push too long without rows into a plain one", () => {
+    expect(fitted({ ...shared, taskTitle: "x".repeat(4000), rows })).toEqual({ type: "changes" });
   });
 });
