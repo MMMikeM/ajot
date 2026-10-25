@@ -6,7 +6,8 @@ import {
   type SendPushOptions,
   type VapidConfig,
 } from "@mmmike/web-push/send";
-import type { PushPayload } from "@newtab-todo/shared";
+import type { PushPayload, PushTrigger } from "@newtab-todo/shared";
+import pushPreferenceRepo, { mutedKey } from "./db/push-preference.repo";
 import pushSubscriptionRepo from "./db/push-subscription.repo";
 
 const vapid: VapidConfig = {
@@ -85,6 +86,32 @@ export const sendPush = async (
   return delivered;
 };
 
+type Recipient = { userId: string | null; deviceId: string | null };
+
+/**
+ * Drops each subscription whose device muted the trigger it would get. Only the PWA uploads a
+ * device id, so the extensions' background sync can't be muted.
+ */
+export const withoutMuted = <S extends Recipient>(
+  subs: S[],
+  muted: Map<string, PushTrigger[]>,
+  triggerFor: (sub: S) => PushTrigger,
+) =>
+  subs.filter(
+    (sub) =>
+      sub.userId === null ||
+      sub.deviceId === null ||
+      !muted.get(mutedKey(sub.userId, sub.deviceId))?.includes(triggerFor(sub)),
+  );
+
+export const findRecipients = async (userIds: string[]) => {
+  const [subs, muted] = await Promise.all([
+    pushSubscriptionRepo.findForUsers(userIds),
+    pushPreferenceRepo.findMutedForUsers(userIds),
+  ]);
+  return { subs, muted };
+};
+
 /** Who made a change, and on which device. */
 export type ChangeSource = { userId?: string; deviceId?: string };
 
@@ -96,17 +123,21 @@ export type ChangeSource = { userId?: string; deviceId?: string };
  * Expired/invalid subscriptions (410 Gone) are cleaned up automatically.
  */
 export const notifyOtherDevices = async (userIds: string[], source: ChangeSource = {}) => {
-  const subs = await pushSubscriptionRepo.findForUsers(userIds);
+  const { subs, muted } = await findRecipients(userIds);
   const extensions = subs.filter((sub) => sub.kind === "extension");
   // Only a worker new enough to show "changes" uploads a device id; an older one would show
   // nothing, which is the silent push Chrome and Safari punish. That also leaves out rows with no
   // user, which get every user's pushes.
-  const web = subs.filter(
-    (sub) =>
-      sub.kind === "web" &&
-      sub.userId !== null &&
-      sub.deviceId !== null &&
-      sub.deviceId !== source.deviceId,
+  const web = withoutMuted(
+    subs.filter(
+      (sub) =>
+        sub.kind === "web" &&
+        sub.userId !== null &&
+        sub.deviceId !== null &&
+        sub.deviceId !== source.deviceId,
+    ),
+    muted,
+    (sub) => (sub.userId === source.userId ? "own-changes" : "others-changes"),
   );
 
   // A device that was offline only needs the latest one, not one per mutation.

@@ -15,7 +15,9 @@ import {
   createdAt,
   updatedAt,
   int,
+  json,
 } from "./columns";
+import type { PushTrigger } from "@newtab-todo/shared/push-payload";
 
 export const categories = sqliteTable("categories", {
   id: pk(),
@@ -98,6 +100,18 @@ export const pushSubscriptions = sqliteTable("push_subscriptions", {
   createdAt: createdAt(),
 });
 
+// Kept apart from push_subscriptions, whose row is replaced on every upload and deleted when a
+// device turns push off
+export const pushPreferences = sqliteTable(
+  "push_preferences",
+  {
+    userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
+    deviceId: string("device_id"),
+    muted: json<PushTrigger[]>("muted"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.deviceId] })],
+);
+
 // Two rows per connection (A→B and B→A) for simple WHERE userId = me queries.
 export const contacts = sqliteTable(
   "contacts",
@@ -160,6 +174,7 @@ export const relations = defineRelations(
     notes,
     categories,
     pushSubscriptions,
+    pushPreferences,
     sessions,
     taskShares,
     contacts,

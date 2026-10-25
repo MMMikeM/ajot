@@ -15,6 +15,8 @@ export const nullableOneOf = <T extends readonly [string, ...string[]]>(name: st
 export const int = (name: string) => integer(name).notNull();
 export const nullableInt = (name: string) => integer(name);
 
+export const json = <T>(name: string) => text(name, { mode: "json" }).$type<T>().notNull();
+
 export const bool = (name: string) => integer(name, { mode: "boolean" }).notNull();
 
 // The Z suffix makes JS parse these as UTC; SQLite's own datetime format has none

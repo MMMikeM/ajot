@@ -12,6 +12,42 @@ export type PushPayload =
   | { type: "reminder-due"; taskId: string; taskTitle: string; dueDate: string }
   | { type: "overdue-digest"; tasks: Array<{ id: string; title: string; dueDate: string }> };
 
+/**
+ * What can send a device a notification, each of which a person can turn off per device. Stored
+ * as what's muted, so a trigger added later starts on.
+ */
+export const PUSH_TRIGGERS = [
+  "own-changes",
+  "others-changes",
+  "shared",
+  "assigned",
+  "updated",
+  "completed",
+  "contact-accepted",
+  "reminder",
+  "overdue",
+] as const;
+export type PushTrigger = (typeof PUSH_TRIGGERS)[number];
+
+// Background sync for the extensions, so never something to turn off
+type SilentPushType = "sync" | "deploy";
+
+/** "changes" is either trigger, depending on who made the change. */
+export const NOTIFICATION_TRIGGERS: Record<
+  Exclude<PushPayload["type"], SilentPushType | "changes">,
+  PushTrigger
+> = {
+  "task-shared": "shared",
+  "task-sent": "shared",
+  "category-shared": "shared",
+  "task-assigned": "assigned",
+  "task-updated": "updated",
+  "task-completed": "completed",
+  "contact-accepted": "contact-accepted",
+  "reminder-due": "reminder",
+  "overdue-digest": "overdue",
+};
+
 export const toNotification = (
   payload: PushPayload,
 ): { title: string; body: string; url: string } | null => {

@@ -5,7 +5,9 @@ import {
   subscribe,
   unsubscribe,
 } from "@mmmike/web-push/client";
-import { apiHeaders } from "~/lib/api";
+import type { PushTrigger } from "@newtab-todo/shared/push-payload";
+import { apiHeaders, client } from "~/lib/api";
+import { getOrCreateDeviceId } from "~/lib/auth/current-user";
 import { fetchServerConfig } from "~/lib/server-config";
 import { getServerUrl } from "~/lib/server-url";
 import { getBuildTarget } from "~/lib/build-target";
@@ -71,3 +73,30 @@ export const unregisterPushSubscription = async (): Promise<void> => {
 
 export const isPushSubscribed = async (): Promise<boolean> =>
   ownsSubscription() && !!(await getCurrentSubscription());
+
+/** Why this device can't turn push on, if it can't. */
+export const pushBlocker = (): "unsupported" | "denied" | null => {
+  if (!("PushManager" in window) || !("Notification" in window)) return "unsupported";
+  return Notification.permission === "denied" ? "denied" : null;
+};
+
+const deviceHeader = () => ({ "x-device-id": getOrCreateDeviceId() });
+
+export const fetchMutedTriggers = async (): Promise<PushTrigger[]> => {
+  const res = await client.api.push.preferences.$get({ header: deviceHeader() });
+  if (!res.ok) throw new Error("Couldn't load notification settings");
+  return (await res.json()).muted;
+};
+
+const putMutedTriggers = async (muted: PushTrigger[]) => {
+  const res = await client.api.push.preferences.$put({ header: deviceHeader(), json: { muted } });
+  if (!res.ok) throw new Error("Couldn't save notification settings");
+};
+
+// One at a time, so a quick second change can't be overtaken by the first
+let saving: Promise<unknown> = Promise.resolve();
+export const saveMutedTriggers = (muted: PushTrigger[]) => {
+  const save = saving.then(() => putMutedTriggers(muted));
+  saving = save.catch(() => {});
+  return save;
+};
