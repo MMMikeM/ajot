@@ -11,20 +11,6 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json packages/server/
 COPY vite.config.ts tsconfig.base.json ./
 
-FROM manifests AS client
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm fetch
-COPY packages/client/package.json packages/client/
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm i --frozen-lockfile
-COPY . .
-# Stamps the build version shown in the app; changes every commit, so it comes after the installs
-ARG GITHUB_SHA
-RUN pnpm build:ext
-
-FROM scratch AS extension
-COPY --from=client /app/packages/client/dist-extension /
-
 FROM manifests AS server-build
 # Installs before the sources arrive, so a code change doesn't reinstall
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
@@ -49,7 +35,8 @@ FROM node:24-alpine AS server
 RUN apk add --no-cache ca-certificates tini
 WORKDIR /app
 COPY --from=server-build /app/deploy .
-COPY --from=client /app/packages/client/dist ./client/dist
+# Built and tested by CI's e2e job, which hands it over: run `pnpm build` before building this
+COPY packages/client/dist ./client/dist
 ENV CLIENT_DIST_PATH=/app/client/dist
 EXPOSE 3000
 # tini -g forwards signals to the whole process group (sh + node),
