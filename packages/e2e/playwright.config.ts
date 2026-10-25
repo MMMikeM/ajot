@@ -1,6 +1,17 @@
 import { defineConfig, devices } from "@playwright/test";
 import { API_PORT, BASE_URL, CLIENT_PORT } from "./helpers/stack";
 
+// Where the touch layout or gestures behave differently from desktop. The rest test behaviour
+// that's the same at any size, so they run on desktop only.
+const TOUCH_SPECS = [
+  "adapt-touch.spec.ts",
+  "category-nav.spec.ts",
+  "contrast.spec.ts",
+  "harden-edges.spec.ts",
+  "harden-trust.spec.ts",
+  "ui.spec.ts",
+];
+
 export default defineConfig({
   testDir: ".",
   testMatch: "*.spec.ts",
@@ -68,6 +79,7 @@ export default defineConfig({
     },
     {
       name: "mobile",
+      testMatch: TOUCH_SPECS,
       use: {
         ...devices["iPhone 14"],
         // The iPhone 14 preset defaults to WebKit, which would need installing
