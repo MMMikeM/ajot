@@ -23,6 +23,8 @@ type DraftId = keyof typeof DRAFTS;
 // The target rides in the menu item's id: a list's id, a contact's username or user id
 type DestinationKind = "inbox" | "list" | "share" | "send";
 type Destination = { kind: DestinationKind; target: string; title: string; done: string };
+// A titled group is a submenu, so a contact list doesn't make the menu twice as long per person
+type Group = { submenu?: { id: string; title: string }; destinations: Destination[] };
 
 type Draft = { title: string; description: string | null; note?: string };
 
@@ -89,8 +91,8 @@ const nextSortOrder = async (session: Session) => {
 
 const INBOX: Destination = { kind: "inbox", target: "", title: "Inbox", done: "Added to Inbox" };
 
-/** In groups, a separator between each: the Inbox, shared lists, sharing, sending. */
-const fetchDestinations = async (session: Session): Promise<Destination[][]> => {
+/** In groups, a separator between each: the Inbox, shared lists, then sharing and sending. */
+const fetchDestinations = async (session: Session): Promise<Group[]> => {
   const [categories, contacts] = await Promise.all([
     request<{ id: string; name: string; collaborators?: unknown[] }[]>(
       session,
@@ -105,22 +107,30 @@ const fetchDestinations = async (session: Session): Promise<Destination[][]> => 
   ]);
   const people = contacts.flatMap((c) => (c.contactUser ? [c.contactUser] : []));
   return [
-    [INBOX],
-    categories
-      .filter((c) => c.collaborators?.length)
-      .map((c) => ({ kind: "list", target: c.id, title: c.name, done: `Added to ${c.name}` })),
-    people.map((p) => ({
-      kind: "share",
-      target: p.username,
-      title: `Share with ${p.name}`,
-      done: `Added and shared with ${p.name}`,
-    })),
-    people.map((p) => ({
-      kind: "send",
-      target: p.id,
-      title: `Send to ${p.name}`,
-      done: `Sent to ${p.name}`,
-    })),
+    { destinations: [INBOX] },
+    {
+      destinations: categories
+        .filter((c) => c.collaborators?.length)
+        .map((c) => ({ kind: "list", target: c.id, title: c.name, done: `Added to ${c.name}` })),
+    },
+    {
+      submenu: { id: "share", title: "Share with" },
+      destinations: people.map((p) => ({
+        kind: "share",
+        target: p.username,
+        title: p.name,
+        done: `Added and shared with ${p.name}`,
+      })),
+    },
+    {
+      submenu: { id: "send", title: "Send to" },
+      destinations: people.map((p) => ({
+        kind: "send",
+        target: p.id,
+        title: p.name,
+        done: `Sent to ${p.name}`,
+      })),
+    },
   ];
 };
 
@@ -210,9 +220,11 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
 const create = (item: browser.contextMenus._CreateCreateProperties) =>
   ext.contextMenus.create(item);
 
-const buildMenu = (groups: Destination[][]) => {
-  const nonEmpty = groups.filter((group) => group.length > 0);
-  doneLabels = new Map(nonEmpty.flat().map((d) => [`${d.kind}|${d.target}`, d.done]));
+const buildMenu = (groups: Group[]) => {
+  const nonEmpty = groups.filter((group) => group.destinations.length > 0);
+  doneLabels = new Map(
+    nonEmpty.flatMap((group) => group.destinations).map((d) => [`${d.kind}|${d.target}`, d.done]),
+  );
   for (const [draftId, item] of Object.entries(DRAFTS)) {
     // Nowhere to choose from: the item itself adds to the Inbox
     if (nonEmpty.length === 1) {
@@ -220,14 +232,20 @@ const buildMenu = (groups: Destination[][]) => {
       continue;
     }
     create({ id: draftId, ...item });
-    nonEmpty.forEach((group, i) => {
+    nonEmpty.forEach(({ submenu, destinations }, i) => {
       const child = { parentId: draftId, contexts: item.contexts };
-      if (i > 0) create({ id: `${draftId}|separator-${i}`, type: "separator", ...child });
-      for (const d of group)
+      // Submenus sit together, with one separator before the first
+      if (i > 0 && !(submenu && nonEmpty[i - 1]!.submenu))
+        create({ id: `${draftId}|separator-${i}`, type: "separator", ...child });
+      // Outside the "draft|kind|target" ids, so clicking it adds nothing
+      const parentId = submenu ? `${draftId}:${submenu.id}` : draftId;
+      if (submenu) create({ id: parentId, title: submenu.title, ...child });
+      for (const d of destinations)
         create({
           id: [draftId, d.kind, d.target].filter(Boolean).join("|"),
           title: d.title,
-          ...child,
+          parentId,
+          contexts: item.contexts,
         });
     });
   }
@@ -248,7 +266,7 @@ const rebuild = () => {
       const groups = session
         ? await fetchDestinations(session).catch((err) => {
             console.error("[menu] couldn't load lists and contacts:", err);
-            return [[INBOX]];
+            return [{ destinations: [INBOX] }];
           })
         : null;
       await ext.contextMenus.removeAll();
