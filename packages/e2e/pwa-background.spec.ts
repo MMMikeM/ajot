@@ -15,7 +15,7 @@ let worker: Worker;
 const addTask = (token: string, title: string) => {
   const now = new Date().toISOString();
   const task = { id: crypto.randomUUID(), userId: "", title, createdAt: now, updatedAt: now };
-  return apiRequest("POST", "/api/tasks", task, token);
+  return apiRequest<{ id: string }>("POST", "/api/tasks", task, token);
 };
 
 test.beforeEach(async ({ browser, user1Auth }) => {
@@ -35,10 +35,10 @@ test.beforeEach(async ({ browser, user1Auth }) => {
 
 test.afterEach(() => context.close());
 
-const openInFlightMode = async (): Promise<Page> => {
+const openInFlightMode = async (path = "/"): Promise<Page> => {
   await context.setOffline(true);
   const page = await context.newPage();
-  await page.goto("/");
+  await page.goto(path);
   return page;
 };
 
@@ -61,6 +61,16 @@ test.describe("the PWA's worker saves the lists for the next launch", () => {
 
     const page = await openInFlightMode();
     await expect(page.getByText(title)).toBeVisible();
+  });
+
+  test("so a notification's task opens offline", async ({ user1Auth }) => {
+    const title = `Opened from a notification ${Date.now()}`;
+    const { id } = await addTask(user1Auth.token, title);
+    await deliverPush(context, ORIGIN, { type: "changes" });
+    await expect.poll(() => savedTitles(worker)).toContain(title);
+
+    const page = await openInFlightMode(`/task/${id}`);
+    await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue(title);
   });
 });
 

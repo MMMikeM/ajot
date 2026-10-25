@@ -56,60 +56,60 @@ export const toNotification = (
     case "deploy":
       return null;
     case "changes":
-      return { title: "Ajot", body: "Your lists were updated", url: "#/" };
+      return { title: "Ajot", body: "Your lists were updated", url: "/" };
     case "task-shared":
       return {
         title: payload.fromUser,
         body: `Shared "${payload.taskTitle}" with you`,
-        url: `#/tasks/${payload.taskId}`,
+        url: `/task/${payload.taskId}`,
       };
     case "task-sent":
       return {
         title: payload.fromUser,
         body: `Sent you "${payload.taskTitle}"`,
-        url: `#/tasks/${payload.taskId}`,
+        url: `/task/${payload.taskId}`,
       };
     case "task-updated":
       return {
         title: payload.fromUser,
         body: `Updated "${payload.taskTitle}": ${payload.changes}`,
-        url: `#/tasks/${payload.taskId}`,
+        url: `/task/${payload.taskId}`,
       };
     case "task-assigned":
       return {
         title: payload.fromUser,
         body: `Assigned "${payload.taskTitle}" to you`,
-        url: `#/tasks/${payload.taskId}`,
+        url: `/task/${payload.taskId}`,
       };
     case "task-completed":
       return {
         title: payload.byUser,
         body: `Completed "${payload.taskTitle}"`,
-        url: `#/tasks/${payload.taskId}`,
+        url: `/task/${payload.taskId}`,
       };
     case "category-shared":
       return {
         title: payload.fromUser,
         body: `Shared category "${payload.categoryName}" with you`,
-        url: `#/categories/${payload.categoryId}`,
+        url: `/list/${payload.categoryId}`,
       };
     case "contact-accepted":
       return {
         title: "Ajot",
         body: `${payload.contactName} accepted your contact request`,
-        url: "#/settings",
+        url: "/people",
       };
     case "reminder-due":
       return {
         title: "Reminder",
         body: `"${payload.taskTitle}" is due`,
-        url: `#/tasks/${payload.taskId}`,
+        url: `/task/${payload.taskId}`,
       };
     case "overdue-digest":
       return {
         title: "Overdue tasks",
         body: `You have ${payload.tasks.length} overdue task${payload.tasks.length === 1 ? "" : "s"}`,
-        url: "#/",
+        url: "/",
       };
   }
 };
