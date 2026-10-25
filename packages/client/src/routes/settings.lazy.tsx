@@ -18,6 +18,15 @@ import {
   type PushPreferences,
 } from "~/lib/sync/push";
 import { CategorySidebar } from "~/components/category-nav/CategorySidebar";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { listRowVariants } from "~/components/ui/list-row";
@@ -104,6 +113,7 @@ const BackgroundUpdates = () => {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [switching, setSwitching] = useState(false);
   const [blocker, setBlocker] = useState(pushBlocker);
+  const [blockedOpen, setBlockedOpen] = useState(false);
   const preferences = useQuery({ queryKey: PREFERENCES_KEY, queryFn: fetchPushPreferences });
 
   useEffect(() => {
@@ -111,14 +121,21 @@ const BackgroundUpdates = () => {
   }, []);
 
   const togglePush = async () => {
+    // A blocked site can't ask again, so say how to unblock it instead
+    if (!enabled && pushBlocker() === "denied") {
+      setBlockedOpen(true);
+      return;
+    }
     setSwitching(true);
     try {
       if (enabled) {
         await unregisterPushSubscription();
         setEnabled(false);
       } else {
-        setEnabled(await registerPushSubscription());
+        const subscribed = await registerPushSubscription();
+        setEnabled(subscribed);
         setBlocker(pushBlocker());
+        if (!subscribed && pushBlocker() === "denied") setBlockedOpen(true);
       }
     } finally {
       setSwitching(false);
@@ -159,12 +176,28 @@ const BackgroundUpdates = () => {
             label="Update in the background"
             detail="Keeps this device's lists current while Ajot is closed, so they're there offline. Browsers show a notification for each update."
             checked={!!enabled}
-            disabled={enabled === null || switching || (!enabled && blocker !== null)}
+            disabled={enabled === null || switching || (!enabled && blocker === "unsupported")}
             onCheckedChange={togglePush}
           />
         </div>
         {blocker && !enabled && <p className="text-sm text-hint">{BLOCKER_TEXT[blocker]}</p>}
       </section>
+
+      <AlertDialog open={blockedOpen} onOpenChange={setBlockedOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Notifications are blocked</AlertDialogTitle>
+            <AlertDialogDescription>
+              Browsers only let Ajot update in the background by showing a notification, and they're
+              blocked for Ajot. Allow notifications in your browser's site settings, then turn this
+              on again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>OK</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <TriggerGroup label="Delivery">
         <CheckRow

@@ -120,4 +120,16 @@ test.describe("settings", () => {
       page.getByRole("checkbox", { name: "Someone changes a list you share" }),
     ).toBeChecked();
   });
+
+  test("turning updates on with notifications blocked says how to unblock them", async () => {
+    await context.clearPermissions();
+    const page = await context.newPage();
+    await page.goto("/settings");
+    await page.evaluate(() => Notification.requestPermission());
+
+    await page.getByRole("checkbox", { name: "Update in the background" }).click();
+    await expect(
+      page.getByRole("alertdialog", { name: "Notifications are blocked" }),
+    ).toBeVisible();
+  });
 });
