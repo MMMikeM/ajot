@@ -14,6 +14,7 @@ Playwright test suite. Two projects: `desktop` (Chrome) and `mobile` (iPhone 14 
 - `ui.spec.ts` — UI behaviour and axe checks against mocked `/api` data; runs without the API server or database
 - `skeleton.spec.ts` — the prerendered loading skeleton against the loaded list. The dev server doesn't prerender, so `pnpm test:e2e:prerender` runs it: the `test:prerender` task in this package's `vite.config.ts` builds the client first, then `playwright.prerender.config.ts` serves the build with `vp preview`. Plain `pnpm test:e2e` skips it
 - `stale-chunk.spec.ts` — a lazy chunk removed by a deploy reloads the page once. Vite only fires `vite:preloadError` in a production build, so it runs with the prerender suite too
+- `perf.spec.ts` — a DOMContentLoaded budget, also in the prerender suite: on the dev server the time depends on how busy the machine is compiling modules. It keeps the fastest of three cold loads. CI runs the prerender suite after `pnpm test:e2e`
 - `filmstrip.ts` — standalone script, CDP screencast during page load
 - `startup-bench.ts` — standalone script: reloads a production build (`vp preview`) against mocked data and prints the median of each `[startup]` step, under 4× CPU throttling by default. Compare chunking or startup changes with it, not with byte counts
 
