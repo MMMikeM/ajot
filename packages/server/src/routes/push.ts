@@ -26,7 +26,13 @@ export const pushRoutes = authed()
     async (c) => {
       const { endpoint, keys } = c.req.valid("json");
       const { kind } = c.req.valid("query");
-      await pushSubscriptionRepo.upsert({ endpoint, ...keys, kind, userId: c.get("userId") });
+      await pushSubscriptionRepo.upsert({
+        endpoint,
+        ...keys,
+        kind,
+        userId: c.get("userId"),
+        deviceId: c.req.header("x-device-id") ?? null,
+      });
       return c.json({ ok: true as const }, 200);
     },
   )

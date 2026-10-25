@@ -93,6 +93,8 @@ export const pushSubscriptions = sqliteTable("push_subscriptions", {
   p256dh: string("p256dh"),
   auth: string("auth"),
   kind: oneOf("kind", pushSubscriptionKinds).default("web"),
+  // The device that subscribed, so a change it made isn't announced back to it
+  deviceId: nullableString("device_id"),
   createdAt: createdAt(),
 });
 

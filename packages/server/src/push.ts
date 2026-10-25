@@ -85,16 +85,35 @@ export const sendPush = async (
   return delivered;
 };
 
+/** Who made a change, and on which device. */
+export type ChangeSource = { userId?: string; deviceId?: string };
+
 /**
- * Send a silent sync push to the affected users' extensions. Web subscriptions are skipped: a push
- * that shows nothing makes Chrome show its own notification, and Safari revokes the permission.
+ * Wake the affected users' other devices to save the change, so each opens offline on it.
+ * Extensions get a silent push. A web push has to show something (otherwise Chrome shows its own
+ * notification and Safari revokes the permission), so the PWA gets a quiet one that replaces the
+ * last; the device that made the change is skipped, as it already has it.
  * Expired/invalid subscriptions (410 Gone) are cleaned up automatically.
  */
-export const notifyOtherDevices = async (userIds: string[]) => {
-  const subs = await pushSubscriptionRepo.findForUsers(userIds, "extension");
-  if (subs.length === 0) return;
+export const notifyOtherDevices = async (userIds: string[], source: ChangeSource = {}) => {
+  const subs = await pushSubscriptionRepo.findForUsers(userIds);
+  const extensions = subs.filter((sub) => sub.kind === "extension");
+  // Only a worker new enough to show "changes" uploads a device id; an older one would show
+  // nothing, which is the silent push Chrome and Safari punish. That also leaves out rows with no
+  // user, which get every user's pushes.
+  const web = subs.filter(
+    (sub) =>
+      sub.kind === "web" &&
+      sub.userId !== null &&
+      sub.deviceId !== null &&
+      sub.deviceId !== source.deviceId,
+  );
 
-  // A device that was offline only needs the latest sync, not one per mutation.
-  const sent = await sendPush(subs, { type: "sync" }, { topic: "sync" });
-  console.log(`Push: ${sent}/${subs.length} delivered`);
+  // A device that was offline only needs the latest one, not one per mutation.
+  const [silent, visible] = await Promise.all([
+    extensions.length > 0 ? sendPush(extensions, { type: "sync" }, { topic: "sync" }) : 0,
+    web.length > 0 ? sendPush(web, { type: "changes" }, { topic: "changes" }) : 0,
+  ]);
+  if (subs.length > 0)
+    console.log(`Push: ${silent}/${extensions.length} silent, ${visible}/${web.length} visible`);
 };

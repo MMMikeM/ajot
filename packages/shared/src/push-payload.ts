@@ -1,6 +1,7 @@
 export type PushPayload =
   | { type: "sync" }
   | { type: "deploy" }
+  | { type: "changes" }
   | { type: "task-shared"; taskId: string; taskTitle: string; fromUser: string }
   | { type: "task-sent"; taskId: string; taskTitle: string; fromUser: string }
   | { type: "task-updated"; taskId: string; taskTitle: string; fromUser: string; changes: string }
@@ -18,6 +19,8 @@ export const toNotification = (
     case "sync":
     case "deploy":
       return null;
+    case "changes":
+      return { title: "Ajot", body: "Your lists were updated", url: "#/" };
     case "task-shared":
       return {
         title: payload.fromUser,

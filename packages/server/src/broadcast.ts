@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { notifyOtherDevices } from "./push";
+import { notifyOtherDevices, type ChangeSource } from "./push";
 import type { MutationEvent, ModelName } from "@newtab-todo/shared";
 
 export type { MutationEvent };
@@ -29,10 +29,15 @@ const writeEvents = (events: MutationEvent[], userIds: string[]) => {
   }
 };
 
-export const notifyMutation = (event: MutationEvent, userIds: string[]) => {
+export const notifyMutation = (event: MutationEvent, userIds: string[], source?: ChangeSource) => {
   writeEvents([event], userIds);
-  notifyOtherDevices(userIds).catch(() => {});
+  notifyOtherDevices(userIds, source).catch(() => {});
 };
+
+const changeSource = (c: Context): ChangeSource => ({
+  userId: c.get("userId"),
+  deviceId: c.req.header("x-device-id"),
+});
 
 export const closeAllClients = () => {
   for (const writers of sseClients.values()) {
@@ -48,7 +53,11 @@ export const broadcast = (
   data: object,
   userIds: string[],
 ) => {
-  notifyMutation({ model, action, data, sourceClientId: c.req.header("x-client-id") }, userIds);
+  notifyMutation(
+    { model, action, data, sourceClientId: c.req.header("x-client-id") },
+    userIds,
+    changeSource(c),
+  );
 };
 
 type BroadcastEvent = Omit<MutationEvent, "sourceClientId">;
@@ -60,7 +69,7 @@ export const broadcastAll = (c: Context, events: BroadcastEvent[], userIds: stri
     events.map((event) => ({ ...event, sourceClientId })),
     userIds,
   );
-  notifyOtherDevices(userIds).catch(() => {});
+  notifyOtherDevices(userIds, changeSource(c)).catch(() => {});
 };
 
 /** Sends each user only the events addressed to them, with one push per user. */
