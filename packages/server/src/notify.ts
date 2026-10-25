@@ -1,11 +1,20 @@
-import pushSubscriptionRepo from "./db/push-subscription.repo";
 import userRepo from "./db/user.repo";
-import type { PushPayload } from "@newtab-todo/shared";
-import { sendPush } from "./push";
+import { NOTIFICATION_TRIGGERS, type PushPayload } from "@newtab-todo/shared";
+import { findRecipients, sendPush, withoutMuted } from "./push";
 
-/** A failed send to one device is counted, not thrown; a subscription the push service rejects is removed. */
-export const sendNotification = async (userId: string, payload: PushPayload) => {
-  const subs = await pushSubscriptionRepo.findForUsers([userId]);
+type NotificationPayload = Extract<PushPayload, { type: keyof typeof NOTIFICATION_TRIGGERS }>;
+
+/**
+ * Sent to each of the user's devices that hasn't muted it. A failed send to one device is counted,
+ * not thrown; a subscription the push service rejects is removed.
+ */
+export const sendNotification = async (userId: string, payload: NotificationPayload) => {
+  const recipients = await findRecipients([userId]);
+  const subs = withoutMuted(
+    recipients.subs,
+    recipients.muted,
+    () => NOTIFICATION_TRIGGERS[payload.type],
+  );
   if (subs.length === 0) return;
 
   const sent = await sendPush(subs, payload);

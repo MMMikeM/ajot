@@ -63,3 +63,39 @@ test.describe("the PWA's worker saves the lists for the next launch", () => {
     await expect(page.getByText(title)).toBeVisible();
   });
 });
+
+test.describe("settings", () => {
+  const FAKE_ENDPOINT = "https://fcm.googleapis.com/fcm/send/e2e-settings";
+
+  test.afterEach(({ user1Auth }) =>
+    apiRequest("POST", "/api/push/unsubscribe", { endpoint: FAKE_ENDPOINT }, user1Auth.token),
+  );
+
+  test("what a device turns off stays off on that device", async () => {
+    // Headless Chromium can't reach a push service to subscribe, so this device reports one
+    await context.addInitScript((endpoint) => {
+      const subscription = {
+        endpoint,
+        toJSON: () => ({ endpoint, keys: { p256dh: "e2e", auth: "e2e" } }),
+        unsubscribe: async () => true,
+      };
+      PushManager.prototype.getSubscription = async () =>
+        subscription as unknown as PushSubscription;
+    }, FAKE_ENDPOINT);
+    const page = await context.newPage();
+    await page.goto("/settings");
+
+    await expect(page.getByRole("checkbox", { name: "Update in the background" })).toBeChecked();
+    const due = page.getByRole("checkbox", { name: "A task is due" });
+    await expect(due).toBeChecked();
+    await due.click();
+    await expect(due).not.toBeChecked();
+
+    await page.reload();
+    await expect(page.getByRole("group", { name: "Reminders" })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: "A task is due" })).not.toBeChecked();
+    await expect(
+      page.getByRole("checkbox", { name: "Someone changes a list you share" }),
+    ).toBeChecked();
+  });
+});

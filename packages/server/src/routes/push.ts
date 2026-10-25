@@ -1,5 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { isPushServiceEndpoint } from "@mmmike/web-push/send";
+import pushPreferenceRepo, { pushPreferencesSchema } from "../db/push-preference.repo";
 import pushSubscriptionRepo from "../db/push-subscription.repo";
 import { pushSubscriptionKinds } from "../db/schema";
 import { authed } from "../middleware";
@@ -11,6 +12,9 @@ const subscriptionSchema = z.object({
   endpoint: z.url().refine(isPushServiceEndpoint, "Not a browser push service endpoint"),
   keys: z.object({ p256dh: z.string(), auth: z.string() }),
 });
+
+// Preferences are per device, since each device has its own subscription
+const deviceHeaders = z.object({ "x-device-id": z.string().min(1) });
 
 export const pushRoutes = authed()
   .openapi(
@@ -45,6 +49,35 @@ export const pushRoutes = authed()
     }),
     async (c) => {
       await pushSubscriptionRepo.remove(c.req.valid("json").endpoint);
+      return c.json({ ok: true as const }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/preferences",
+      request: { headers: deviceHeaders },
+      responses: withAuth({ 200: jsonContent(pushPreferencesSchema) }),
+    }),
+    async (c) =>
+      c.json(
+        await pushPreferenceRepo.find(c.get("userId"), c.req.valid("header")["x-device-id"]),
+        200,
+      ),
+  )
+  .openapi(
+    createRoute({
+      method: "put",
+      path: "/preferences",
+      request: { headers: deviceHeaders, ...jsonBody(pushPreferencesSchema) },
+      responses: withAuth({ 200: jsonContent(okSchema) }),
+    }),
+    async (c) => {
+      await pushPreferenceRepo.save(
+        c.get("userId"),
+        c.req.valid("header")["x-device-id"],
+        c.req.valid("json"),
+      );
       return c.json({ ok: true as const }, 200);
     },
   );
