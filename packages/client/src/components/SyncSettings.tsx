@@ -1,15 +1,10 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Check } from "lucide-react";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { Toast } from "@base-ui/react/toast";
 import { useAuthToken } from "~/lib/auth/token";
 import { useCurrentUser } from "~/lib/auth/current-user";
 import { clearSession, onSessionExpired } from "~/lib/auth/session";
-import {
-  registerPushSubscription,
-  unregisterPushSubscription,
-  isPushSubscribed,
-} from "~/lib/sync/push";
+import { unregisterPushSubscription } from "~/lib/sync/push";
 import { logout } from "~/lib/actions";
 import { getBuildTarget } from "~/lib/build-target";
 import { useSyncState, usePendingMutations } from "~/lib/sync/sse";
@@ -50,13 +45,8 @@ export const SyncSettings = () => {
   const hasPending = usePendingMutations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(false);
   const { canInstall, install } = useInstallPrompt();
   const toastManager = Toast.useToastManager();
-
-  useEffect(() => {
-    isPushSubscribed().then(setPushEnabled).catch(console.error);
-  }, []);
 
   useEffect(
     () =>
@@ -71,22 +61,11 @@ export const SyncSettings = () => {
     [],
   );
 
-  const handleTogglePush = async () => {
-    if (pushEnabled) {
-      await unregisterPushSubscription();
-      setPushEnabled(false);
-    } else {
-      const ok = await registerPushSubscription();
-      setPushEnabled(ok);
-    }
-  };
-
   const handleLogout = async () => {
     // The server only drops the subscription while the session is still valid.
     await unregisterPushSubscription();
     await logout();
     clearSession();
-    setPushEnabled(false);
     setOpen(false);
   };
 
@@ -165,18 +144,6 @@ export const SyncSettings = () => {
           {getBuildTarget() === "browser" && canInstall && (
             <MenuItem onClick={install}>Add to Home Screen</MenuItem>
           )}
-          {getBuildTarget() === "browser" && (
-            <MenuItem onClick={handleTogglePush}>
-              {pushEnabled ? (
-                <>
-                  Background sync on
-                  <Check data-icon="inline-end" className="ml-auto text-primary" />
-                </>
-              ) : (
-                "Enable background sync"
-              )}
-            </MenuItem>
-          )}
           <MenuItem
             onClick={() => {
               void router.navigate({ to: "/people" });
@@ -185,6 +152,16 @@ export const SyncSettings = () => {
           >
             People
           </MenuItem>
+          {getBuildTarget() === "browser" && (
+            <MenuItem
+              onClick={() => {
+                void router.navigate({ to: "/settings" });
+                setOpen(false);
+              }}
+            >
+              Settings
+            </MenuItem>
+          )}
           <MenuItem intent="destructive" onClick={handleLogout}>
             Sign out
           </MenuItem>

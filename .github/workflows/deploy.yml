@@ -23,12 +23,17 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - run: pnpm test
+
       - run: pnpm --filter @newtab-todo/e2e exec playwright install --with-deps chromium
 
       - run: pnpm test:e2e
 
       # The specs that need a production build: the prerendered skeleton, a stale chunk, load timing
       - run: pnpm test:e2e:prerender
+
+      # The extension's background and the PWA's worker, saving the lists for flight mode
+      - run: pnpm test:e2e:background
 
       - uses: actions/upload-artifact@v7
         if: failure()

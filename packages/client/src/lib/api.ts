@@ -3,6 +3,8 @@ import { hc } from "hono/client";
 import { getAuthToken } from "~/lib/auth/token";
 import { expireSession } from "~/lib/auth/session";
 import { clientId } from "~/lib/client-id";
+import { getOrCreateDeviceId } from "~/lib/auth/current-user";
+import { getBuildTarget } from "~/lib/build-target";
 import { getServerUrl } from "~/lib/server-url";
 import { markStartup } from "~/lib/startup-timing";
 
@@ -13,7 +15,13 @@ const ssrFetch = () =>
 
 export const apiHeaders = (): Record<string, string> => {
   const token = getAuthToken();
-  return { ...(token && { Authorization: `Bearer ${token}` }), "X-Client-Id": clientId };
+  return {
+    ...(token && { Authorization: `Bearer ${token}` }),
+    "X-Client-Id": clientId,
+    // Only the PWA has web push subscriptions to skip. Same origin, so a server too old to allow
+    // the header in CORS never sees a preflight for it.
+    ...(getBuildTarget() === "browser" && { "X-Device-Id": getOrCreateDeviceId() }),
+  };
 };
 
 const answeredPaths = new Set<string>();
