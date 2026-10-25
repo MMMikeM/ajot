@@ -86,6 +86,26 @@ test("a task sheet that failed to load offline keeps the list and loads on the n
   await expect(page.locator('[data-slot="drawer-content"]')).toBeVisible();
 });
 
+test("a list sheet that failed to load offline keeps the list and loads on the next open", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "the list sheet is the touch layout's");
+  let reachable = false;
+  await mockApi(page);
+  await page.route("**/category-nav/CategoryMobileSheet.tsx*", (route) =>
+    reachable ? route.continue() : route.abort("internetdisconnected"),
+  );
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("[data-task-id]", { timeout: 15000 });
+  // Long enough for the ahead-of-time fetch to have failed
+  await page.waitForTimeout(500);
+  await expect(syncButton(page)).toBeVisible();
+
+  reachable = true;
+  await page.getByTestId("category-nav-trigger").click();
+  await expect(page.getByRole("dialog", { name: "Lists" })).toBeVisible();
+});
+
 test.describe("focus after a row leaves the list", () => {
   const openList = async (page: Page) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
