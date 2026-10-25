@@ -9,12 +9,13 @@ import { useAuthToken } from "~/lib/auth/token";
 import { getBuildTarget } from "~/lib/build-target";
 import { useIsDesk } from "~/lib/hooks/use-is-desk";
 import {
-  fetchMutedTriggers,
+  fetchPushPreferences,
   isPushSubscribed,
   pushBlocker,
   registerPushSubscription,
-  saveMutedTriggers,
+  savePushPreferences,
   unregisterPushSubscription,
+  type PushPreferences,
 } from "~/lib/sync/push";
 import { CategorySidebar } from "~/components/category-nav/CategorySidebar";
 import { Button } from "~/components/ui/button";
@@ -48,7 +49,7 @@ const TRIGGER_GROUPS: { label: string; triggers: PushTrigger[] }[] = [
   { label: "Reminders", triggers: ["reminder", "overdue"] },
 ];
 
-const MUTED_KEY = ["push-muted"] as const;
+const PREFERENCES_KEY = ["push-preferences"] as const;
 
 const BLOCKER_TEXT = {
   unsupported:
@@ -103,7 +104,7 @@ const BackgroundUpdates = () => {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [switching, setSwitching] = useState(false);
   const [blocker, setBlocker] = useState(pushBlocker);
-  const muted = useQuery({ queryKey: MUTED_KEY, queryFn: fetchMutedTriggers });
+  const preferences = useQuery({ queryKey: PREFERENCES_KEY, queryFn: fetchPushPreferences });
 
   useEffect(() => {
     isPushSubscribed().then(setEnabled).catch(console.error);
@@ -124,14 +125,15 @@ const BackgroundUpdates = () => {
     }
   };
 
-  const toggleTrigger = async (trigger: PushTrigger, on: boolean) => {
-    const before = queryClient.getQueryData<PushTrigger[]>(MUTED_KEY) ?? [];
-    const after = on ? before.filter((t) => t !== trigger) : [...before, trigger];
-    queryClient.setQueryData(MUTED_KEY, after);
+  const update = async (change: (before: PushPreferences) => PushPreferences) => {
+    const before = queryClient.getQueryData<PushPreferences>(PREFERENCES_KEY);
+    if (!before) return;
+    const after = change(before);
+    queryClient.setQueryData(PREFERENCES_KEY, after);
     try {
-      await saveMutedTriggers(after);
+      await savePushPreferences(after);
     } catch {
-      queryClient.setQueryData(MUTED_KEY, before);
+      queryClient.setQueryData(PREFERENCES_KEY, before);
       toastManager.add({
         title: "Couldn't save that. Check your connection and try again.",
         timeout: 5000,
@@ -140,7 +142,14 @@ const BackgroundUpdates = () => {
     }
   };
 
-  const triggersDisabled = !enabled || !muted.data;
+  const toggleTrigger = (trigger: PushTrigger, on: boolean) =>
+    update(({ muted, urgent }) => ({
+      muted: on ? muted.filter((t) => t !== trigger) : [...muted, trigger],
+      urgent,
+    }));
+
+  const muted = preferences.data?.muted;
+  const preferencesDisabled = !enabled || !preferences.data;
 
   return (
     <>
@@ -157,14 +166,24 @@ const BackgroundUpdates = () => {
         {blocker && !enabled && <p className="text-sm text-hint">{BLOCKER_TEXT[blocker]}</p>}
       </section>
 
+      <TriggerGroup label="Delivery">
+        <CheckRow
+          label="Deliver right away"
+          detail="Wakes this device for each update, so its lists are current before you go offline. Turn off to save battery: an idle phone may hold updates until it next wakes."
+          checked={!!preferences.data?.urgent}
+          disabled={preferencesDisabled}
+          onCheckedChange={(urgent) => void update((before) => ({ ...before, urgent }))}
+        />
+      </TriggerGroup>
+
       {TRIGGER_GROUPS.map((group) => (
         <TriggerGroup key={group.label} label={group.label}>
           {group.triggers.map((trigger) => (
             <CheckRow
               key={trigger}
               label={TRIGGER_LABELS[trigger]}
-              checked={!!muted.data && !muted.data.includes(trigger)}
-              disabled={triggersDisabled}
+              checked={!!muted && !muted.includes(trigger)}
+              disabled={preferencesDisabled}
               onCheckedChange={(on) => void toggleTrigger(trigger, on)}
             />
           ))}
@@ -172,7 +191,7 @@ const BackgroundUpdates = () => {
       ))}
 
       <p className="text-sm text-hint">
-        {muted.isError
+        {preferences.isError
           ? "Can't load these right now. They load again once you're online."
           : "Turn one off and this device catches up when you next open Ajot instead."}
       </p>

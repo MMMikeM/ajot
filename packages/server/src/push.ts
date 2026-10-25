@@ -7,7 +7,11 @@ import {
   type VapidConfig,
 } from "@mmmike/web-push/send";
 import type { PushPayload, PushTrigger } from "@newtab-todo/shared";
-import pushPreferenceRepo, { mutedKey } from "./db/push-preference.repo";
+import pushPreferenceRepo, {
+  DEFAULT_PUSH_PREFERENCES,
+  deviceKey,
+  type PushPreferences,
+} from "./db/push-preference.repo";
 import pushSubscriptionRepo from "./db/push-subscription.repo";
 
 const vapid: VapidConfig = {
@@ -87,29 +91,47 @@ export const sendPush = async (
 };
 
 type Recipient = { userId: string | null; deviceId: string | null };
+type DevicePreferences = Map<string, PushPreferences>;
 
-/**
- * Drops each subscription whose device muted the trigger it would get. Only the PWA uploads a
- * device id, so the extensions' background sync can't be muted.
- */
+// Only the PWA uploads a device id, so the extensions always get the defaults
+const preferencesOf = (sub: Recipient, preferences: DevicePreferences) =>
+  (sub.userId !== null &&
+    sub.deviceId !== null &&
+    preferences.get(deviceKey(sub.userId, sub.deviceId))) ||
+  DEFAULT_PUSH_PREFERENCES;
+
+/** Drops each subscription whose device muted the trigger it would get. */
 export const withoutMuted = <S extends Recipient>(
   subs: S[],
-  muted: Map<string, PushTrigger[]>,
+  preferences: DevicePreferences,
   triggerFor: (sub: S) => PushTrigger,
-) =>
-  subs.filter(
-    (sub) =>
-      sub.userId === null ||
-      sub.deviceId === null ||
-      !muted.get(mutedKey(sub.userId, sub.deviceId))?.includes(triggerFor(sub)),
-  );
+) => subs.filter((sub) => !preferencesOf(sub, preferences).muted.includes(triggerFor(sub)));
+
+/**
+ * Sends at high urgency, which wakes an idle phone so it saves the lists before it goes offline,
+ * unless its device chose to wait: at normal urgency Android holds a push until it next wakes.
+ */
+export const sendToDevices = async <S extends StoredSubscription & Recipient>(
+  subs: S[],
+  preferences: DevicePreferences,
+  payload: PushPayload,
+  options?: SendPushOptions,
+) => {
+  const waiting = subs.filter((sub) => !preferencesOf(sub, preferences).urgent);
+  const urgent = subs.filter((sub) => !waiting.includes(sub));
+  const [now, later] = await Promise.all([
+    urgent.length > 0 ? sendPush(urgent, payload, { ...options, urgency: "high" }) : 0,
+    waiting.length > 0 ? sendPush(waiting, payload, { ...options, urgency: "normal" }) : 0,
+  ]);
+  return now + later;
+};
 
 export const findRecipients = async (userIds: string[]) => {
-  const [subs, muted] = await Promise.all([
+  const [subs, preferences] = await Promise.all([
     pushSubscriptionRepo.findForUsers(userIds),
-    pushPreferenceRepo.findMutedForUsers(userIds),
+    pushPreferenceRepo.findForUsers(userIds),
   ]);
-  return { subs, muted };
+  return { subs, preferences };
 };
 
 /** Who made a change, and on which device. */
@@ -123,7 +145,7 @@ export type ChangeSource = { userId?: string; deviceId?: string };
  * Expired/invalid subscriptions (410 Gone) are cleaned up automatically.
  */
 export const notifyOtherDevices = async (userIds: string[], source: ChangeSource = {}) => {
-  const { subs, muted } = await findRecipients(userIds);
+  const { subs, preferences } = await findRecipients(userIds);
   const extensions = subs.filter((sub) => sub.kind === "extension");
   // Only a worker new enough to show "changes" uploads a device id; an older one would show
   // nothing, which is the silent push Chrome and Safari punish. That also leaves out rows with no
@@ -136,14 +158,16 @@ export const notifyOtherDevices = async (userIds: string[], source: ChangeSource
         sub.deviceId !== null &&
         sub.deviceId !== source.deviceId,
     ),
-    muted,
+    preferences,
     (sub) => (sub.userId === source.userId ? "own-changes" : "others-changes"),
   );
 
   // A device that was offline only needs the latest one, not one per mutation.
   const [silent, visible] = await Promise.all([
-    extensions.length > 0 ? sendPush(extensions, { type: "sync" }, { topic: "sync" }) : 0,
-    web.length > 0 ? sendPush(web, { type: "changes" }, { topic: "changes" }) : 0,
+    extensions.length > 0
+      ? sendPush(extensions, { type: "sync" }, { topic: "sync", urgency: "high" })
+      : 0,
+    web.length > 0 ? sendToDevices(web, preferences, { type: "changes" }, { topic: "changes" }) : 0,
   ]);
   if (subs.length > 0)
     console.log(`Push: ${silent}/${extensions.length} silent, ${visible}/${web.length} visible`);

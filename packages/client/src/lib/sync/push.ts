@@ -5,7 +5,6 @@ import {
   subscribe,
   unsubscribe,
 } from "@mmmike/web-push/client";
-import type { PushTrigger } from "@newtab-todo/shared/push-payload";
 import { apiHeaders, client } from "~/lib/api";
 import { getOrCreateDeviceId } from "~/lib/auth/current-user";
 import { fetchServerConfig } from "~/lib/server-config";
@@ -82,21 +81,23 @@ export const pushBlocker = (): "unsupported" | "denied" | null => {
 
 const deviceHeader = () => ({ "x-device-id": getOrCreateDeviceId() });
 
-export const fetchMutedTriggers = async (): Promise<PushTrigger[]> => {
+export const fetchPushPreferences = async () => {
   const res = await client.api.push.preferences.$get({ header: deviceHeader() });
   if (!res.ok) throw new Error("Couldn't load notification settings");
-  return (await res.json()).muted;
+  return res.json();
 };
 
-const putMutedTriggers = async (muted: PushTrigger[]) => {
-  const res = await client.api.push.preferences.$put({ header: deviceHeader(), json: { muted } });
+export type PushPreferences = Awaited<ReturnType<typeof fetchPushPreferences>>;
+
+const putPushPreferences = async (preferences: PushPreferences) => {
+  const res = await client.api.push.preferences.$put({ header: deviceHeader(), json: preferences });
   if (!res.ok) throw new Error("Couldn't save notification settings");
 };
 
 // One at a time, so a quick second change can't be overtaken by the first
 let saving: Promise<unknown> = Promise.resolve();
-export const saveMutedTriggers = (muted: PushTrigger[]) => {
-  const save = saving.then(() => putMutedTriggers(muted));
+export const savePushPreferences = (preferences: PushPreferences) => {
+  const save = saving.then(() => putPushPreferences(preferences));
   saving = save.catch(() => {});
   return save;
 };

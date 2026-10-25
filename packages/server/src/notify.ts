@@ -1,6 +1,6 @@
 import userRepo from "./db/user.repo";
 import { NOTIFICATION_TRIGGERS, type PushPayload } from "@newtab-todo/shared";
-import { findRecipients, sendPush, withoutMuted } from "./push";
+import { findRecipients, sendToDevices, withoutMuted } from "./push";
 
 type NotificationPayload = Extract<PushPayload, { type: keyof typeof NOTIFICATION_TRIGGERS }>;
 
@@ -12,12 +12,12 @@ export const sendNotification = async (userId: string, payload: NotificationPayl
   const recipients = await findRecipients([userId]);
   const subs = withoutMuted(
     recipients.subs,
-    recipients.muted,
+    recipients.preferences,
     () => NOTIFICATION_TRIGGERS[payload.type],
   );
   if (subs.length === 0) return;
 
-  const sent = await sendPush(subs, payload);
+  const sent = await sendToDevices(subs, recipients.preferences, payload);
   console.log(`Notification [${payload.type}] to ${userId}: ${sent}/${subs.length} delivered`);
 };
 
