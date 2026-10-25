@@ -8,6 +8,8 @@ export default defineConfig({
   ...base,
   testMatch: "skeleton.spec.ts",
   testIgnore: undefined,
+  // The skeleton needs no accounts, and the preview server has no API to make them on
+  globalSetup: undefined,
   use: { ...base.use, baseURL: `http://localhost:${PORT}` },
   webServer: {
     // exec, so stopping the server stops vp itself rather than a shell around it

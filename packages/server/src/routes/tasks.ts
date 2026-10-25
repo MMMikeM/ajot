@@ -26,6 +26,10 @@ const shareSchema = z.object({
   permission: z.enum(["view", "edit"]).default("edit"),
 });
 
+const sendSchema = taskInsertSchema
+  .pick({ id: true, title: true, description: true, createdAt: true, updatedAt: true })
+  .extend({ recipientId: z.string() });
+
 const shareCategorySchema = z.object({
   taskId: z.string(),
   categoryId: z.string().nullable(),
@@ -85,6 +89,8 @@ export const taskRoutes = authed()
       }
 
       const result = await taskRepo.insert({ ...data, userId });
+      // A retry gets its own row back; an id someone else's task already has must not
+      if (result.userId !== userId) throw new HTTPException(409, { message: "Task id taken" });
       const taskWithRelations = { ...result, subtasks: [], shares: [] };
 
       const collabIds = effectiveCategoryId
@@ -225,6 +231,42 @@ export const taskRoutes = authed()
   .openapi(
     createRoute({
       method: "post",
+      path: "/send",
+      request: jsonBody(sendSchema),
+      responses: withAuth({
+        200: jsonContent(taskResponseSchema),
+        403: jsonContent(errorSchema, "Forbidden"),
+      }),
+    }),
+    async (c) => {
+      const { recipientId, ...data } = c.req.valid("json");
+      const userId = c.get("userId");
+      if (!(await contactRepo.exists(userId, recipientId)))
+        throw new HTTPException(403, { message: "Can only send to a contact" });
+
+      // The recipient owns it, as if they'd added it, so it lands in their Inbox and not the sender's
+      const result = await taskRepo.insert({
+        ...data,
+        userId: recipientId,
+        sortOrder: await taskRepo.nextSortOrder(recipientId),
+      });
+      if (result.userId !== recipientId) throw new HTTPException(409, { message: "Task id taken" });
+      broadcast(c, "tasks", "insert", { ...result, subtasks: [], shares: [] }, [recipientId]);
+
+      const actorName = await getUserName(userId);
+      sendNotification(recipientId, {
+        type: "task-sent",
+        taskId: result.id,
+        taskTitle: result.title,
+        fromUser: actorName,
+      }).catch(() => {});
+
+      return c.json(result, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "post",
       path: "/share",
       request: jsonBody(shareSchema),
       responses: withAuth({
@@ -271,7 +313,7 @@ export const taskRoutes = authed()
       responses: withAuth({ 200: jsonContent(taskShareResponseSchema) }),
     }),
     async (c) => {
-      const result = await taskRepo.removeShare(c.req.valid("json").id);
+      const result = await taskRepo.removeShare(c.req.valid("json").id, c.get("userId"));
       const task = await taskRepo.findById(result.taskId);
       broadcast(c, "tasks", "update", { id: result.taskId }, [
         task.userId,

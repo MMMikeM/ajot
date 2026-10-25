@@ -1,25 +1,32 @@
 import { useEffect, useRef, useState, type CSSProperties, type RefCallback } from "react";
 import type { Task } from "~/lib/types";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
+import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/field";
 import { cn } from "~/lib/utils";
-import { Calendar, GripVertical, Plus, X } from "lucide-react";
+import { Calendar, GripVertical, Plus, Users, X } from "lucide-react";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { useSwipeReveal } from "~/lib/hooks/use-swipe-reveal";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
+import { canDeleteTask } from "~/lib/task-permissions";
 
 // Read once: pointer type doesn't change during a session
 const IS_TOUCH = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
 
-const swipeActionClass =
-  "flex flex-1 flex-col items-center justify-center gap-1 text-hint transition-colors active:bg-secondary active:text-foreground";
+// The tray's grid gives every cell the widest one's width, so labels set the size and never clip
+const swipeCellClass =
+  "flex min-w-14 flex-col items-center justify-center gap-1 px-2.5 text-xs whitespace-nowrap";
+const swipeActionClass = cn(
+  swipeCellClass,
+  "text-hint transition-colors active:bg-secondary active:text-foreground",
+);
 
 // Long enough to see the tick and to undo a mis-click
 const COMPLETE_LINGER_MS = 450;
 
 // Must match the hover actions: size-6 buttons, gap-0.5, plus clearance from the meta
-const hoverActionsWidth = (count: number) => `${count * 1.5 + (count - 1) * 0.125 + 0.5}rem`;
+const hoverActionsWidth = (count: number) =>
+  count === 0 ? "0rem" : `${count * 1.5 + (count - 1) * 0.125 + 0.5}rem`;
 
 const formatDueDate = (dateStr: string) => {
   const date = Temporal.PlainDate.from(dateStr.slice(0, 10));
@@ -41,23 +48,26 @@ const formatDueDate = (dateStr: string) => {
 const ENTER_WINDOW_MS = 3000;
 const isJustCreated = (task: Task) => Date.now() - Date.parse(task.createdAt) < ENTER_WINDOW_MS;
 
-const sharedWithNames = (task: Task, currentUserId: string, isOwned: boolean) => {
-  const names: string[] = [];
-  if (!isOwned && task.user?.name) names.push(task.user.name);
-  for (const s of task.shares) {
-    if (s.sharedWithUser?.id !== currentUserId && s.sharedWithUser?.name)
-      names.push(s.sharedWithUser.name);
-  }
-  return names;
-};
+const listNames = new Intl.ListFormat(undefined, { type: "conjunction" });
 
-function ShareBadges({ names }: { names: string[] }) {
+// As in the sidebar: a face always means whose task it is, so a task you shared never shows a
+// recipient's face
+function ShareChip({ ownerName, sharedWith }: { ownerName?: string; sharedWith: string[] }) {
+  if (ownerName)
+    return (
+      <InitialsAvatar
+        name={ownerName}
+        label={`${ownerName}'s task`}
+        className="bg-collab text-collab-foreground"
+      />
+    );
+
+  const label = `Shared with ${listNames.format(sharedWith)}`;
   return (
-    <div className="flex items-center [&>:not(:first-child)]:-ml-1">
-      {names.map((name) => (
-        <InitialsAvatar key={name} name={name} className="bg-muted text-hint" />
-      ))}
-    </div>
+    <span title={label} className="flex size-5.5 shrink-0 items-center justify-center text-hint">
+      <Users size={14} aria-hidden="true" />
+      <span className="sr-only">{label}</span>
+    </span>
   );
 }
 
@@ -69,6 +79,7 @@ export function TaskItem({
   onSetDueDate,
   onAddSubtask,
   subtasks = [],
+  parent,
   hideDate,
   isSubtask,
   isInSharedCategory = false,
@@ -82,6 +93,7 @@ export function TaskItem({
   onSetDueDate: (task: Task, date: string | null) => void;
   onAddSubtask: (task: Task, title: string) => void;
   subtasks?: Task[];
+  parent?: Task;
   hideDate?: boolean;
   isSubtask?: boolean;
   isInSharedCategory?: boolean;
@@ -93,14 +105,20 @@ export function TaskItem({
   const isDone = task.status === "done";
   const due = task.dueDate ? formatDueDate(task.dueDate) : null;
   const showDate = !!due && (!hideDate || due.overdue);
-  const shareNames =
-    !isSubtask && !isInSharedCategory && task.shares.length > 0
-      ? sharedWithNames(task, currentUserId, isOwned)
+  const showsSharing = !isSubtask && !isInSharedCategory && task.shares.length > 0;
+  const ownerName = showsSharing && !isOwned ? task.user?.name : undefined;
+  const sharedWith =
+    showsSharing && isOwned
+      ? task.shares.flatMap((s) =>
+          s.sharedWithUser && s.sharedWithUser.id !== currentUserId ? [s.sharedWithUser.name] : [],
+        )
       : [];
-  const hasMeta = showDate || shareNames.length > 0 || !!task.assignee;
+  const hasShareChip = !!ownerName || sharedWith.length > 0;
+  const hasMeta = showDate || hasShareChip || !!task.assignee;
   const canSetDate = !isDone && !showDate;
   const canAddSubtask = !isSubtask && !isDone;
-  const hoverActionCount = 1 + Number(canSetDate) + Number(canAddSubtask);
+  const canDelete = canDeleteTask(currentUserId, task, parent);
+  const hoverActionCount = Number(canSetDate) + Number(canAddSubtask) + Number(canDelete);
   const dateRef = useRef<HTMLInputElement>(null);
   const [entering] = useState(() => isJustCreated(task));
   const [completing, setCompleting] = useState(false);
@@ -113,6 +131,7 @@ export function TaskItem({
   const {
     containerRef,
     contentRef,
+    trayRef,
     isOpen: isSwipeOpen,
     close: closeSwipe,
   } = useSwipeReveal(!IS_TOUCH || !!isSubtask, swipeHint);
@@ -153,8 +172,16 @@ export function TaskItem({
     }
   };
 
+  const openSubtasks = subtasks.filter((s) => s.status !== "done");
+  // Ticking a parent ticks its subtasks, so on a done row the count only repeats the tick
+  const doneSubtaskCount = isDone ? 0 : subtasks.length - openSubtasks.length;
+
   return (
-    <div data-task-id={task.id}>
+    <div
+      data-task-id={task.id}
+      // Lifted while dragged, so it doesn't read as text floating over the rows below
+      className="in-[[data-dnd-dragging]]:-mx-2 in-[[data-dnd-dragging]]:rounded-lg in-[[data-dnd-dragging]]:bg-popover in-[[data-dnd-dragging]]:px-2 in-[[data-dnd-dragging]]:shadow-md"
+    >
       <div
         ref={containerRef}
         className={cn(
@@ -167,7 +194,8 @@ export function TaskItem({
           // inert while closed: the tray sits under the row, so it must not be
           // focusable or announced until the row is swiped open.
           <div
-            className="invisible absolute top-0 right-0 flex h-full w-[148px] items-stretch bg-muted group-data-[swiping]/swipe:visible"
+            ref={trayRef}
+            className="invisible absolute top-0 right-0 grid h-full auto-cols-fr grid-flow-col bg-muted group-data-[swiping]/swipe:visible"
             inert={!isSwipeOpen}
           >
             <button
@@ -178,7 +206,7 @@ export function TaskItem({
               className={swipeActionClass}
             >
               <Calendar size={16} />
-              <span className="text-xs">Date</span>
+              Date
             </button>
             {!isDone && (
               <button
@@ -189,22 +217,24 @@ export function TaskItem({
                 className={swipeActionClass}
               >
                 <Plus size={16} />
-                <span className="text-xs">Subtask</span>
+                Subtask
               </button>
             )}
-            <button
-              onClick={() => {
-                onDelete(task);
-                closeSwipe();
-              }}
-              className={cn(
-                swipeActionClass,
-                "bg-destructive-subtle text-destructive active:bg-destructive/20",
-              )}
-            >
-              <X size={16} />
-              <span className="text-xs">Delete</span>
-            </button>
+            {canDelete && (
+              <button
+                onClick={() => {
+                  onDelete(task);
+                  closeSwipe();
+                }}
+                className={cn(
+                  swipeActionClass,
+                  "bg-destructive-subtle text-destructive active:bg-destructive/20",
+                )}
+              >
+                <X size={16} />
+                Delete
+              </button>
+            )}
           </div>
         )}
 
@@ -220,14 +250,16 @@ export function TaskItem({
           )}
         >
           {!isSubtask && (
-            // Desktop: hangs in the gutter. Touch: a 44px grab target on the first title line.
+            // Desktop: hangs in the gutter. Touch: a 44px-tall grab target at the row's end, away from the checkbox.
             <span
               ref={dragHandleRef}
               aria-label={dragHandleRef ? "Drag to reorder" : undefined}
               className={cn(
-                "absolute top-2.5 -left-3.5 flex h-6 w-3.5 cursor-grab items-center justify-center rounded-sm text-transparent transition-colors group-hover/task:text-ghost focus-visible:text-hint active:cursor-grabbing touch:static touch:-my-2.5 touch:-ml-1 touch:h-11 touch:w-6 touch:text-hint",
-                // Done rows aren't sortable; the box stays for alignment
-                isDone && "invisible",
+                "absolute top-2.5 -left-3.5 flex h-6 w-3.5 cursor-grab items-center justify-center rounded-sm text-transparent transition-colors group-hover/task:text-ghost focus-visible:text-hint active:cursor-grabbing touch:static touch:order-last touch:-my-2.5 touch:-mr-2 touch:h-11 touch:w-9 touch:text-hint",
+                // Done rows aren't sortable
+                isDone && "invisible touch:hidden",
+                // Swiped open, the title slides out of view; a grip left alone there reads as broken
+                "group-data-[swiping]/swipe:invisible",
               )}
               onTouchStart={(e) => e.stopPropagation()}
             >
@@ -242,6 +274,7 @@ export function TaskItem({
             className={cn(
               "mt-1 touch:mt-[3px] touch:size-[18px] touch:after:-inset-3",
               isSubtask && "mt-0.5 touch:mt-px",
+              isDone && checkboxDoneClass,
             )}
           />
           {onOpen ? (
@@ -295,8 +328,15 @@ export function TaskItem({
                   {due.label}
                 </button>
               )}
-              {shareNames.length > 0 && <ShareBadges names={shareNames} />}
-              {task.assignee && <InitialsAvatar name={task.assignee.name} size="sm" />}
+              {hasShareChip && <ShareChip ownerName={ownerName} sharedWith={sharedWith} />}
+              {/* Hollow, so an assignee doesn't read as the owner */}
+              {task.assignee && (
+                <InitialsAvatar
+                  name={task.assignee.name}
+                  label={`Assigned to ${task.assignee.name}`}
+                  className="bg-transparent text-hint ring-1 ring-ghost ring-inset"
+                />
+              )}
             </div>
           )}
           <div
@@ -329,27 +369,30 @@ export function TaskItem({
                 <Plus size={14} />
               </Button>
             )}
-            <Button
-              variant="subtle"
-              intent="destructive"
-              size="xs"
-              icon
-              onClick={() => onDelete(task)}
-              aria-label="Delete task"
-              title="Delete task"
-            >
-              <X size={14} />
-            </Button>
+            {canDelete && (
+              <Button
+                variant="subtle"
+                intent="destructive"
+                size="xs"
+                icon
+                onClick={() => onDelete(task)}
+                aria-label="Delete task"
+                title="Delete task"
+              >
+                <X size={14} />
+              </Button>
+            )}
           </div>
         </div>
       </div>
 
-      {!isSubtask && subtasks.length > 0 && (
-        <div className="mt-1 ml-2 border-l border-ghost pl-[15px] touch:ml-[38px] touch:pl-[19px]">
-          {subtasks.map((sub) => (
+      {!isSubtask && (openSubtasks.length > 0 || doneSubtaskCount > 0) && (
+        <div className="mt-1 ml-2 border-l border-ghost pl-[15px] touch:pl-[19px]">
+          {openSubtasks.map((sub) => (
             <TaskItem
               key={sub.id}
               task={sub}
+              parent={task}
               isSubtask
               onOpen={onOpen}
               onToggle={onToggle}
@@ -358,11 +401,22 @@ export function TaskItem({
               onAddSubtask={onAddSubtask}
             />
           ))}
+          {doneSubtaskCount > 0 && (
+            <button
+              type="button"
+              onClick={() => onOpen?.(task.id)}
+              disabled={!onOpen}
+              className="relative rounded-sm py-1 text-xs text-hint transition-colors after:absolute after:-inset-x-2 after:-inset-y-1.5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring touch:py-1.5"
+            >
+              {doneSubtaskCount} done
+              <span className="sr-only"> {doneSubtaskCount === 1 ? "subtask" : "subtasks"}</span>
+            </button>
+          )}
         </div>
       )}
       {addingSubtask && (
         <form
-          className="mb-1 ml-6 touch:ml-[58px]"
+          className="mb-1 ml-6 touch:ml-7"
           onSubmit={(e) => {
             e.preventDefault();
             submitSubtask();

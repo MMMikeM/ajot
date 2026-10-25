@@ -13,6 +13,7 @@ import { contactRoutes } from "./routes/contacts";
 import { notificationRoutes } from "./routes/notifications";
 import { deployRoutes } from "./routes/deploy";
 import { configRoutes } from "./routes/config";
+import { metricRoutes } from "./routes/metrics";
 
 const app = new OpenAPIHono();
 
@@ -81,7 +82,8 @@ const api = app
   .route("/api/invites", inviteRoutes)
   .route("/api/contacts", contactRoutes)
   .route("/api/notifications", notificationRoutes)
-  .route("/api/deploy", deployRoutes);
+  .route("/api/deploy", deployRoutes)
+  .route("/api/metrics", metricRoutes);
 
 app.doc("/api/openapi.json", {
   openapi: "3.0.0",

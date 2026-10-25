@@ -86,6 +86,12 @@ const mockData = () => {
     }),
     task("Sourdough", { categoryId: "c-groc" }),
   ];
+  const sharedWithMe = task("Pick a restaurant for Friday", {
+    userId: MOCK_SARAH.id,
+    user: { id: MOCK_SARAH.id, name: MOCK_SARAH.name },
+  });
+  sharedWithMe.shares = [shareWith(sharedWithMe.id, MOCK_ME)];
+  tasks.push(sharedWithMe);
 
   const category = (
     id: string,

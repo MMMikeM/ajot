@@ -1,20 +1,20 @@
-import { useRef, useState } from "react";
-import { Link } from "@tanstack/react-router";
-import { Trash2 } from "lucide-react";
-import type { Task, Note } from "~/lib/types";
+import { useRef, useState, type RefObject } from "react";
+import { flushSync } from "react-dom";
 import {
-  useNotes,
-  useContacts,
-  useCategories,
-  updateTask,
-  deleteTask,
-  addNote,
-  updateNote,
-  deleteNote,
-} from "~/lib/db/hooks";
-import { shareTask, removeTaskShare, updateShareCategory } from "~/lib/actions";
-import { addTask } from "~/lib/db/add-task";
-import { getCurrentUserId, useOptimisticUserId } from "~/lib/auth/current-user";
+  AlignLeft,
+  CalendarDays,
+  ListChecks,
+  ListPlus,
+  Plus,
+  StickyNote,
+  Trash2,
+  UserPlus,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
+import type { Task } from "~/lib/types";
+import { useNotes, updateTask } from "~/lib/db/hooks";
+import { useOptimisticUserId } from "~/lib/auth/current-user";
 import {
   Drawer,
   DrawerContent,
@@ -24,27 +24,22 @@ import {
 } from "~/components/ui/drawer";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
-import { Field, FieldLabel } from "~/components/ui/field";
-import { Input } from "~/components/ui/field";
 import { Textarea } from "~/components/ui/field";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  selectTriggerVariants,
-} from "~/components/ui/select";
-import { InitialsAvatar } from "~/components/ui/initials-avatar";
-import { ListRow } from "~/components/ui/list-row";
-import { DetailSection } from "~/components/ui/detail-section";
-import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
-import { TextStack } from "~/components/ui/text-stack";
-import { TogglePill } from "~/components/ui/toggle-pill";
 import { cn } from "~/lib/utils";
+import { keepOpenOnToastPress } from "~/components/sheet-open-change";
+import { canDeleteTask } from "~/lib/task-permissions";
 import { useTasks } from "~/lib/db/hooks";
+import { useTaskActions } from "~/components/task/use-actions";
+import { DetailRow, type DetailPiece } from "~/components/task/detail-row";
+import { Notes, Subtasks } from "~/components/task/detail-items";
+import {
+  AssigneeField,
+  ListField,
+  SharingField,
+  useListFiling,
+  useSharing,
+} from "~/components/task/detail-people";
 
-const INBOX_VALUE = "__inbox__";
 const TITLE_SLOT = "task-title";
 
 // Device locale; time and year only when they carry information
@@ -67,6 +62,9 @@ const autoGrow = (el: HTMLTextAreaElement | null) => {
   el.style.height = `${el.scrollHeight}px`;
 };
 
+// Underlined only while editing, so the title and description read as text, not a form
+const quietField = "border-transparent focus-visible:border-hint";
+
 function TaskDetail({
   taskId,
   open,
@@ -85,15 +83,29 @@ function TaskDetail({
   if (tasksLoading || !task) return null;
 
   return (
-    <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
-      {/* Sits over AppShell's column */}
-      <DrawerContent className="max-h-[88dvh] max-w-(--column-w) border-x touch:max-w-none touch:border-x-0 desk:translate-x-(--column-shift)">
+    <Drawer
+      open={open}
+      onOpenChange={keepOpenOnToastPress((next) => {
+        if (!next) onClose();
+      })}
+    >
+      {/* Over AppShell's column. On desktop it docks inside the sheet's inset, so the
+          detail reads as a page of the notepad rather than a drawer from the window edge.
+          Its top leaves room for the toast viewport, which moves above an open sheet. */}
+      <DrawerContent
+        className={cn(
+          "max-h-[calc(100dvh-env(safe-area-inset-top,0px)-4.5rem)] max-w-(--column-w) border-x touch:max-w-none touch:border-x-0",
+          "desk:mb-(--sheet-inset) desk:max-h-[calc(100dvh-2*var(--sheet-inset)-4rem)] desk:translate-x-(--column-shift) desk:rounded-2xl desk:border-b",
+          "desk:data-[ending-style]:[transform:translateY(calc(100%+var(--sheet-inset)+2px))] desk:data-[starting-style]:[transform:translateY(calc(100%+var(--sheet-inset)+2px))]",
+        )}
+      >
         <DrawerHeader className="sr-only">
           <DrawerTitle>{task.title}</DrawerTitle>
           <DrawerDescription>Task details</DrawerDescription>
         </DrawerHeader>
         <TaskDetailContent
           task={task}
+          parent={allTasks?.find((t) => t.id === task.parentId)}
           // From the live collection, not task.subtasks: that embedded copy only refreshes
           // on a server refetch, so ticking or deleting a subtask here looked like a no-op
           subtasks={(allTasks ?? []).filter((t) => t.parentId === task.id)}
@@ -104,20 +116,39 @@ function TaskDetail({
   );
 }
 
+type Offer = { key: DetailPiece | "date"; label: string; icon: LucideIcon };
+
 const TaskDetailContent = ({
   task,
+  parent,
   subtasks,
   onClose,
 }: {
   task: Task;
+  parent?: Task;
   subtasks: Task[];
   onClose: () => void;
 }) => {
+  const userId = useOptimisticUserId();
+  const { handleToggle, handleDelete } = useTaskActions();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
+  const [revealed, setRevealed] = useState<ReadonlySet<DetailPiece>>(new Set());
+  const [offering, setOffering] = useState(false);
+  // Rows shown when the sheet opened stay until it closes: unassigning would otherwise remove
+  // the row under the pointer, as hiding an added field on blur did
+  const [openedAssigned] = useState(() => !!task.assigneeId);
   const isDone = task.status === "done";
+  const isTopLevel = !task.parentId;
   const dateRef = useRef<HTMLInputElement>(null);
-  const dueLabel = task.dueDate ? formatDueDateTime(task.dueDate) : "Set date…";
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const subtaskRef = useRef<HTMLInputElement>(null);
+  const noteRef = useRef<HTMLInputElement>(null);
+  const focusOnReveal: Partial<Record<DetailPiece, RefObject<HTMLElement | null>>> = {
+    description: descriptionRef,
+    subtask: subtaskRef,
+    note: noteRef,
+  };
 
   // Sync local state when task changes externally (but not mid-edit)
   if (title !== task.title && document.activeElement?.getAttribute("data-slot") !== TITLE_SLOT) {
@@ -125,25 +156,64 @@ const TaskDetailContent = ({
   }
 
   const { data: allNotes = [] } = useNotes();
-  const taskNotes = allNotes.filter((n) => n.taskId === task.id);
+  const notes = allNotes.filter((n) => n.taskId === task.id);
+  const filing = useListFiling(task);
+  const sharing = useSharing(task);
 
-  const { data: rawCategories = [] } = useCategories();
-  const taskCategory = task.categoryId ? rawCategories.find((c) => c.id === task.categoryId) : null;
-  const isInSharedCategory = (taskCategory?.collaborators?.length ?? 0) > 0;
+  // Synchronous, so the field is focused inside the tap and a phone raises its keyboard.
+  // A revealed field stays until the sheet closes: hiding it on blur shifted the sheet
+  // under the pointer, so the press that blurred it landed on something else.
+  const reveal = (piece: DetailPiece) => {
+    flushSync(() => {
+      setRevealed((current) => new Set(current).add(piece));
+      setOffering(false);
+    });
+    focusOnReveal[piece]?.current?.focus();
+  };
+
+  // From the saved value too: clearing the draft must not unmount the field mid-edit, before
+  // its blur saves the empty description
+  const showDescription = !!task.description || description !== "" || revealed.has("description");
+  const canAssign = sharing.isOwner && isTopLevel && !task.assigneeId && sharing.others.length > 0;
+
+  const offers = [
+    !task.dueDate && { key: "date", label: "Date", icon: CalendarDays },
+    !showDescription && { key: "description", label: "Description", icon: AlignLeft },
+    isTopLevel && { key: "subtask", label: "Subtask", icon: ListChecks },
+    { key: "note", label: "Note", icon: StickyNote },
+    // Subtasks follow their parent's list
+    isTopLevel &&
+      !filing.category &&
+      filing.choices.length > 0 &&
+      !revealed.has("list") && { key: "list", label: "List", icon: ListPlus },
+    sharing.isOwner &&
+      isTopLevel &&
+      !sharing.sharedList &&
+      (!sharing.hasContacts || sharing.addableContacts.length > 0) &&
+      !revealed.has("share") && { key: "share", label: "Share", icon: UserPlus },
+    canAssign &&
+      !revealed.has("assignee") && { key: "assignee", label: "Assignee", icon: UserRound },
+  ].filter((offer): offer is Offer => !!offer);
+
+  const choose = (key: Offer["key"]) => {
+    if (key !== "date") return reveal(key);
+    setOffering(false);
+    dateRef.current?.showPicker();
+  };
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 pt-4 pb-[max(2rem,env(safe-area-inset-bottom))] touch:px-5">
+    <div className="relative mx-auto flex w-full max-w-2xl flex-col gap-5 px-6 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] touch:px-5">
       {/* A textarea so long titles wrap; Enter commits like a single-line field */}
       <div className="flex items-start gap-3">
         <Checkbox
           checked={isDone}
-          onCheckedChange={() => updateTask(task.id, { status: isDone ? "todo" : "done" })}
+          onCheckedChange={() => handleToggle(task)}
           aria-label="Mark done"
-          className="mt-3 touch:mt-[11px] touch:size-[18px] touch:after:-inset-3"
+          className="mt-3 touch:mt-[11px] touch:size-[18px] touch:after:-inset-[13px]"
         />
         {/* Bare control + aria-label: a raw <textarea> doesn't register with Base UI's
             Field, so a FieldLabel wouldn't be associated with it */}
-        <div className="flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
           <Textarea
             ref={autoGrow}
             data-slot={TITLE_SLOT}
@@ -167,489 +237,160 @@ const TaskDetailContent = ({
             }}
             className={cn(
               "py-2 text-lg leading-snug font-semibold md:text-lg",
+              quietField,
               isDone && "text-muted-foreground line-through",
             )}
           />
+          {!sharing.isOwner && task.user && (
+            <p className="text-sm text-hint">{task.user.name}’s task</p>
+          )}
         </div>
       </div>
 
-      <Field className="gap-2">
-        <FieldLabel className="text-sm font-medium text-hint">Description</FieldLabel>
-        <Textarea
-          aria-label="Description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          onBlur={() => {
-            const val = description.trim() || null;
-            if (val !== (task.description ?? null)) updateTask(task.id, { description: val });
-          }}
-          placeholder="Add a description…"
-          rows={3}
-        />
-      </Field>
-
-      <DetailSection label="Due date">
-        <div className="flex items-center gap-2">
-          {/* Hidden native picker: the browser supplies the date UI */}
-          <input
-            ref={dateRef}
-            type="datetime-local"
-            step="1800"
-            value={task.dueDate ?? ""}
-            tabIndex={-1}
-            onChange={(e) => updateTask(task.id, { dueDate: e.target.value || null })}
-            className="invisible absolute size-0"
+      {showDescription && (
+        <DetailRow className="-mt-3">
+          <Textarea
+            ref={(el) => {
+              descriptionRef.current = el;
+              autoGrow(el);
+            }}
+            aria-label="Description"
+            value={description}
+            onChange={(e) => {
+              setDescription(e.target.value);
+              autoGrow(e.target);
+            }}
+            onBlur={() => {
+              const val = description.trim() || null;
+              if (val !== (task.description ?? null)) updateTask(task.id, { description: val });
+            }}
+            placeholder="Description"
+            rows={1}
+            className={cn("py-1.5 text-muted-foreground", quietField)}
           />
-          <button
-            type="button"
-            onClick={() => dateRef.current?.showPicker()}
-            className={selectTriggerVariants({
-              variant: "underline",
-              class: cn(
-                "flex-1 cursor-pointer text-left touch:h-10",
-                task.dueDate ? "text-date" : "text-hint hover:text-foreground",
-              ),
-            })}
-            aria-label={`Due date: ${dueLabel}`}
+        </DetailRow>
+      )}
+
+      {/* Hidden native picker: the browser supplies the date UI. Absolute, so it takes no
+          gap in the column; the picker opens where it sits, by the date line. */}
+      <input
+        ref={dateRef}
+        type="datetime-local"
+        step="1800"
+        value={task.dueDate ?? ""}
+        tabIndex={-1}
+        aria-hidden
+        onChange={(e) => updateTask(task.id, { dueDate: e.target.value || null })}
+        className="invisible absolute size-0"
+      />
+
+      <div className="flex flex-col empty:hidden">
+        {task.dueDate && (
+          <DueDateRow
+            dueDate={task.dueDate}
+            onPick={() => dateRef.current?.showPicker()}
+            onClear={() => updateTask(task.id, { dueDate: null })}
+          />
+        )}
+        {isTopLevel && <ListField filing={filing} choosing={revealed.has("list")} />}
+        {isTopLevel && (
+          <SharingField task={task} sharing={sharing} adding={revealed.has("share")} />
+        )}
+        <AssigneeField
+          task={task}
+          sharing={sharing}
+          choosing={revealed.has("assignee") || openedAssigned}
+        />
+      </div>
+
+      {isTopLevel && (
+        <Subtasks
+          task={task}
+          subtasks={subtasks}
+          adding={revealed.has("subtask")}
+          inputRef={subtaskRef}
+          onToggle={handleToggle}
+        />
+      )}
+
+      <Notes taskId={task.id} notes={notes} adding={revealed.has("note")} inputRef={noteRef} />
+
+      <div className="flex flex-col gap-1">
+        {offering && (
+          <fieldset aria-label="Add to task" className="-ml-3 flex min-w-0 flex-wrap gap-x-1">
+            {offers.map(({ key, label, icon: Icon }) => (
+              <Button
+                key={key}
+                variant="subtle"
+                size="sm"
+                className="touch:h-11 touch:px-3.5"
+                onClick={() => choose(key)}
+              >
+                <Icon />
+                {label}
+              </Button>
+            ))}
+          </fieldset>
+        )}
+        <div className="flex items-center justify-between">
+          <Button
+            variant="subtle"
+            size="sm"
+            aria-expanded={offering}
+            onClick={() => setOffering((o) => !o)}
+            className="-ml-3 touch:h-11 touch:px-3.5"
           >
-            {dueLabel}
-          </button>
-          {task.dueDate && (
+            <Plus className={cn("transition-transform", offering && "rotate-45")} />
+            Add
+          </Button>
+          {canDeleteTask(userId, task, parent) && (
             <Button
               variant="subtle"
-              size="xs"
-              onClick={() => updateTask(task.id, { dueDate: null })}
-              className="-mr-2.5 touch:h-10 touch:text-sm"
+              intent="destructive"
+              size="sm"
+              aria-label="Delete task"
+              className="-mr-3 touch:h-11 touch:px-3.5"
+              onClick={() => {
+                handleDelete(task);
+                onClose();
+              }}
             >
-              clear
+              <Trash2 />
+              Delete
             </Button>
           )}
         </div>
-      </DetailSection>
-
-      {task.user && task.userId !== getCurrentUserId() && (
-        <DetailSection label="Created by">
-          <span className="text-sm text-foreground">{task.user.name}</span>
-        </DetailSection>
-      )}
-
-      {task.userId === getCurrentUserId() ? (
-        <OwnerCategorySection task={task} categories={rawCategories} />
-      ) : (
-        <RecipientCategorySection
-          task={task}
-          categoryName={taskCategory?.name}
-          categories={rawCategories}
-        />
-      )}
-
-      {!task.parentId && <SubtaskSection taskId={task.id} subtasks={subtasks} />}
-
-      {!task.parentId &&
-        (isInSharedCategory ? (
-          <DetailSection label="Sharing">
-            <span className="text-xs text-hint">Visible to all collaborators in this category</span>
-          </DetailSection>
-        ) : (
-          <ShareSection taskId={task.id} taskUserId={task.userId} shares={task.shares} />
-        ))}
-
-      {!task.parentId && (task.shares.length > 0 || isInSharedCategory) && (
-        <AssigneeSection task={task} />
-      )}
-
-      <DetailSection label="Notes">
-        {taskNotes.map((note) => (
-          <NoteItem key={note.id} note={note} />
-        ))}
-        <AddNoteInput taskId={task.id} />
-      </DetailSection>
-
-      <Button
-        variant="subtle"
-        intent="destructive"
-        size="xs"
-        className="-ml-2.5 self-start touch:h-10 touch:text-sm"
-        onClick={() => {
-          deleteTask(task.id);
-          onClose();
-        }}
-      >
-        <Trash2 />
-        Delete task
-      </Button>
+      </div>
     </div>
   );
 };
 
-const NoteItem = ({ note }: { note: Note }) => {
-  const [editing, setEditing] = useState(false);
-  const [content, setContent] = useState(note.content ?? "");
-
-  if (editing) {
-    return (
-      <div className="flex items-start gap-2">
-        <Textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onBlur={() => {
-            const val = content.trim();
-            if (val) updateNote(note.id, { content: val });
-            setEditing(false);
-          }}
-          // eslint-disable-next-line jsx-a11y/no-autofocus -- inline edit, user just clicked
-          autoFocus
-          rows={2}
-          className="flex-1 py-1"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <ListRow size="sm" className="-mx-2 items-start">
-      {/* touch:py-2 centres the first line on the h-9 touch buttons */}
-      <span className="flex-1 text-sm touch:py-2">{note.content || note.title}</span>
-      <RevealGroup className="items-start pt-1">
-        <RevealButton intent="neutral" onClick={() => setEditing(true)}>
-          edit
-        </RevealButton>
-        <RevealButton onClick={() => deleteNote(note.id)}>delete</RevealButton>
-      </RevealGroup>
-    </ListRow>
-  );
-};
-
-const AddNoteInput = ({ taskId }: { taskId: string }) => {
-  const [value, setValue] = useState("");
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const content = value.trim();
-        if (!content) return;
-        addNote({ userId: getCurrentUserId(), taskId, title: content, content });
-        setValue("");
-      }}
-    >
-      <Input
-        type="text"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="Add a note…"
-        className="md:h-8"
-      />
-    </form>
-  );
-};
-
-const SubtaskSection = ({
-  taskId,
-  subtasks: rawSubtasks,
+const DueDateRow = ({
+  dueDate,
+  onPick,
+  onClear,
 }: {
-  taskId: string;
-  subtasks: Task[];
+  dueDate: string;
+  onPick: () => void;
+  onClear: () => void;
 }) => {
-  const [value, setValue] = useState("");
-
-  const subtasks = [...rawSubtasks].sort((a, b) =>
-    (a.sortOrder ?? "").localeCompare(b.sortOrder ?? ""),
-  );
-
+  const label = formatDueDateTime(dueDate);
   return (
-    <DetailSection label={<>Subtasks{subtasks.length > 0 ? ` (${subtasks.length})` : ""}</>}>
-      {subtasks.map((sub) => (
-        <ListRow key={sub.id} size="sm" className="-mx-2">
-          <Checkbox
-            checked={sub.status === "done"}
-            aria-label={sub.title}
-            onCheckedChange={() =>
-              updateTask(sub.id, { status: sub.status === "done" ? "todo" : "done" })
-            }
-            className="size-3.5 touch:size-4 touch:after:-inset-3"
-          />
-          <span
-            className={cn(
-              "flex-1 text-sm",
-              sub.status === "done" && "text-muted-foreground line-through",
-            )}
-          >
-            {sub.title}
-          </span>
-          <RevealGroup>
-            <RevealButton onClick={() => deleteTask(sub.id)}>delete</RevealButton>
-          </RevealGroup>
-        </ListRow>
-      ))}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          const title = value.trim();
-          if (!title) return;
-          void addTask(title, null, taskId);
-          setValue("");
-        }}
-      >
-        <Input
-          type="text"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="Add a subtask…"
-          className="md:h-8"
-        />
-      </form>
-    </DetailSection>
-  );
-};
-
-const AssigneeSection = ({ task }: { task: Task }) => {
-  const currentUserId = useOptimisticUserId();
-  const { data: rawCategories = [] } = useCategories();
-  const isOwner = currentUserId === task.userId;
-
-  const seen = new Set<string>([task.userId]);
-  const others: { id: string; label: string }[] = [];
-
-  for (const s of task.shares) {
-    if (s.sharedWithUser && !seen.has(s.sharedWithUserId)) {
-      seen.add(s.sharedWithUserId);
-      others.push({ id: s.sharedWithUserId, label: s.sharedWithUser.name });
-    }
-  }
-
-  if (task.categoryId) {
-    const cat = rawCategories.find((c) => c.id === task.categoryId);
-    for (const collab of cat?.collaborators ?? []) {
-      if (collab.user && !seen.has(collab.user.id)) {
-        seen.add(collab.user.id);
-        others.push({ id: collab.user.id, label: collab.user.name });
-      }
-    }
-  }
-
-  const candidates = [{ id: task.userId, label: "Owner" }, ...others];
-
-  return (
-    <DetailSection label="Assignee">
-      <div className="flex flex-wrap gap-1.5 touch:gap-2" role="radiogroup" aria-label="Assignee">
-        <TogglePill
-          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- styled pills in an ARIA radiogroup
-          role="radio"
-          aria-checked={!task.assigneeId}
-          selected={!task.assigneeId}
-          onClick={() => isOwner && updateTask(task.id, { assigneeId: null })}
-          disabled={!isOwner}
-          className={!isOwner ? "cursor-default" : undefined}
+    <DetailRow icon={<CalendarDays />}>
+      <div className="flex items-center">
+        <button
+          type="button"
+          onClick={onPick}
+          aria-label={`Due date: ${label}`}
+          className="flex h-9 flex-1 cursor-pointer items-center rounded-md text-left text-sm text-date outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 touch:h-11 touch:text-base"
         >
-          Unassigned
-        </TogglePill>
-        {candidates.map((c) => (
-          <TogglePill
-            key={c.id}
-            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- styled pills in an ARIA radiogroup
-            role="radio"
-            aria-checked={task.assigneeId === c.id}
-            selected={task.assigneeId === c.id}
-            onClick={() => isOwner && updateTask(task.id, { assigneeId: c.id })}
-            disabled={!isOwner}
-            className={!isOwner ? "cursor-default" : undefined}
-          >
-            {c.label}
-          </TogglePill>
-        ))}
+          {label}
+        </button>
+        <Button variant="subtle" size="sm" onClick={onClear} className="-mr-3 touch:h-11">
+          Clear
+        </Button>
       </div>
-    </DetailSection>
-  );
-};
-
-const OwnerCategorySection = ({
-  task,
-  categories,
-}: {
-  task: Task;
-  categories: { id: string; name: string; userId: string }[];
-}) => {
-  const myCategories = categories.filter((c) => c.userId === task.userId);
-  if (myCategories.length === 0) return null;
-
-  const items = [
-    { value: INBOX_VALUE, label: "Inbox" },
-    ...myCategories.map((c) => ({ value: c.id, label: c.name })),
-  ];
-
-  return (
-    <DetailSection label="Category">
-      <Select
-        value={task.categoryId ?? INBOX_VALUE}
-        onValueChange={(v) => {
-          const id = v as string;
-          updateTask(task.id, { categoryId: id === INBOX_VALUE ? null : id });
-        }}
-        items={items}
-      >
-        <SelectTrigger variant="underline" aria-label="Category">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={INBOX_VALUE}>Inbox</SelectItem>
-          {myCategories.map((cat) => (
-            <SelectItem key={cat.id} value={cat.id}>
-              {cat.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </DetailSection>
-  );
-};
-
-const RecipientCategorySection = ({
-  task,
-  categoryName,
-  categories,
-}: {
-  task: Task;
-  categoryName?: string;
-  categories: { id: string; name: string; userId: string }[];
-}) => {
-  const currentUserId = useOptimisticUserId();
-
-  const myShare = task.shares.find((s) => s.sharedWithUserId === currentUserId);
-  if (!myShare) {
-    if (!categoryName) return null;
-    return (
-      <DetailSection label="Category">
-        <span className="text-sm text-foreground">{categoryName}</span>
-      </DetailSection>
-    );
-  }
-
-  const myCategories = categories.filter((c) => c.userId === currentUserId);
-
-  const items = [
-    { value: INBOX_VALUE, label: "Inbox" },
-    ...myCategories.map((c) => ({ value: c.id, label: c.name })),
-  ];
-
-  const handleChange = async (categoryId: unknown) => {
-    const id = categoryId as string;
-    const value = id === INBOX_VALUE ? null : id;
-    await updateShareCategory(task.id, value);
-  };
-
-  return (
-    <DetailSection label="Category">
-      <Select value={myShare.categoryId ?? INBOX_VALUE} onValueChange={handleChange} items={items}>
-        <SelectTrigger variant="underline" aria-label="Category">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={INBOX_VALUE}>Inbox</SelectItem>
-          {myCategories.map((cat) => (
-            <SelectItem key={cat.id} value={cat.id}>
-              {cat.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </DetailSection>
-  );
-};
-
-const ShareSection = ({
-  taskId,
-  taskUserId,
-  shares,
-}: {
-  taskId: string;
-  taskUserId: string;
-  shares: Task["shares"];
-}) => {
-  const currentUserId = useOptimisticUserId();
-  const isOwner = currentUserId === taskUserId;
-  const [selectedUsername, setSelectedUsername] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const { data: allContacts = [] } = useContacts();
-  const sharedWithIds = new Set(shares.map((s) => s.sharedWithUserId));
-  const addableContacts = allContacts.filter(
-    (c) => c.contactUser && !sharedWithIds.has(c.contactUserId),
-  );
-
-  const handleAdd = async () => {
-    if (!selectedUsername) return;
-    setAdding(true);
-    setError(null);
-    try {
-      await shareTask(taskId, selectedUsername, "edit");
-      setSelectedUsername("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to share");
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  return (
-    <DetailSection label={<>Shared with{shares.length > 0 ? ` (${shares.length})` : ""}</>}>
-      {shares.map((share) => (
-        <ListRow key={share.id} className="-mx-2">
-          <InitialsAvatar name={share.sharedWithUser?.name ?? "?"} size="md" />
-          <TextStack
-            title={share.sharedWithUser?.name ?? share.sharedWithUserId}
-            subtitle={
-              share.sharedWithUser?.username ? `@${share.sharedWithUser.username}` : undefined
-            }
-          />
-          {isOwner && (
-            <RevealGroup>
-              <RevealButton onClick={() => removeTaskShare(share.id)}>Remove</RevealButton>
-            </RevealGroup>
-          )}
-        </ListRow>
-      ))}
-      {isOwner && addableContacts.length > 0 && (
-        <div className="flex items-center gap-2">
-          <Select
-            value={selectedUsername}
-            onValueChange={(v) => {
-              setSelectedUsername(v as string);
-              setError(null);
-            }}
-          >
-            <SelectTrigger variant="underline" className="flex-1" aria-label="Share with">
-              <SelectValue placeholder="Share with…" />
-            </SelectTrigger>
-            <SelectContent>
-              {addableContacts.map((c) => (
-                <SelectItem key={c.contactUserId} value={c.contactUser!.username}>
-                  {c.contactUser!.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleAdd}
-            disabled={!selectedUsername || adding}
-          >
-            Share
-          </Button>
-        </div>
-      )}
-      {isOwner && allContacts.length === 0 && (
-        <p className="text-xs text-hint">
-          No contacts yet.{" "}
-          <Link to="/people" className="underline hover:text-foreground">
-            Invite someone
-          </Link>{" "}
-          to share this task.
-        </p>
-      )}
-      {error && <span className="text-xs text-destructive">{error}</span>}
-    </DetailSection>
+    </DetailRow>
   );
 };
 

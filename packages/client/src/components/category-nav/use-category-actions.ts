@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useState } from "react";
+import { useState } from "react";
 import { Toast } from "@base-ui/react/toast";
 import {
   useTasks,
@@ -38,17 +38,6 @@ export const useCategoryActions = () => {
     collaboratedCategoryIds,
   );
   const inboxCount = openCounts.get(null) ?? 0;
-  const showInbox = inboxCount > 0;
-
-  const autoSelectFirst = useEffectEvent(() => {
-    if (activeCategoryId === null && !showInbox && categories.length > 0) {
-      setActiveCategoryId(categories[0].id);
-    }
-  });
-
-  useEffect(() => {
-    autoSelectFirst();
-  }, [showInbox]);
 
   const handleAdd = (name: string) => {
     const cat = addCategory({
@@ -88,7 +77,7 @@ export const useCategoryActions = () => {
     }
 
     deleteAndMoveOn(cat, "uncategorise");
-    toastManager.add({ title: "Category deleted" });
+    toastManager.add({ title: "List deleted" });
   };
 
   const confirmDelete = (tasks: CategoryTaskAction) => {
@@ -96,16 +85,20 @@ export const useCategoryActions = () => {
     if (!pendingDelete) return;
     deleteAndMoveOn(pendingDelete.category, tasks);
     toastManager.add({
-      title:
-        tasks === "delete"
-          ? "Category and tasks deleted"
-          : "Category deleted, tasks moved to Inbox",
+      title: tasks === "delete" ? "List and tasks deleted" : "List deleted, tasks moved to Inbox",
     });
   };
 
   const handleLeave = async (categoryId: string) => {
     if (!authUserId) return;
-    await leaveCategory(categoryId, authUserId);
+    try {
+      await leaveCategory(categoryId, authUserId);
+    } catch (err) {
+      console.error("[leave] failed:", err);
+      const name = categories.find((c) => c.id === categoryId)?.name;
+      toastManager.add({ title: name ? `Couldn't leave “${name}”` : "Couldn't leave the list" });
+      return;
+    }
     const remaining = categories.filter((c) => c.id !== categoryId);
     setActiveCategoryId(remaining.length > 0 ? remaining[0].id : null);
   };
@@ -114,7 +107,6 @@ export const useCategoryActions = () => {
     categories,
     activeCategoryId,
     currentUserId,
-    showInbox,
     inboxCount,
     openCounts,
     handleAdd,

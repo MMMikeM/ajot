@@ -1,4 +1,4 @@
-const BASE_URL = process.env.BASE_URL ?? "http://localhost:5173";
+import { BASE_URL } from "./stack";
 
 type Task = { id: string; categoryId: string | null; [key: string]: unknown };
 

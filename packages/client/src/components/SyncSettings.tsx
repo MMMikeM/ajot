@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Check } from "lucide-react";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { Toast } from "@base-ui/react/toast";
@@ -18,13 +18,35 @@ import { Button } from "~/components/ui/button";
 import { MenuItem } from "~/components/ui/menu-item";
 import { Popover, PopoverTrigger, PopoverContent } from "~/components/ui/popover";
 import { cn } from "~/lib/utils";
+import { hitArea } from "~/components/hit-area";
 
-const SYNC_LABELS = { connecting: "Syncing…", disconnected: "Offline", connected: "Sync" } as const;
+// The device's own connection, as distinct from whether the sync server answers
+const subscribeOnline = (onChange: () => void) => {
+  window.addEventListener("online", onChange);
+  window.addEventListener("offline", onChange);
+  return () => {
+    window.removeEventListener("online", onChange);
+    window.removeEventListener("offline", onChange);
+  };
+};
+const useDeviceOnline = () =>
+  useSyncExternalStore(
+    subscribeOnline,
+    () => navigator.onLine,
+    () => true,
+  );
+
+const SYNC_LABELS = {
+  connecting: "Syncing…",
+  disconnected: "Offline · saved here",
+  connected: "Sync",
+} as const;
 
 export const SyncSettings = () => {
   const token = useAuthToken();
   const currentUser = useCurrentUser();
   const syncState = useSyncState();
+  const deviceOnline = useDeviceOnline();
   const hasPending = usePendingMutations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -76,7 +98,7 @@ export const SyncSettings = () => {
       <Button
         variant="ghost"
         size="xs"
-        className="relative touch:h-9 touch:px-3 touch:text-sm touch:after:absolute touch:after:inset-x-0 touch:after:-inset-y-1"
+        className={cn(hitArea, "touch:px-3 touch:text-sm")}
         onClick={() => router.navigate({ to: "/auth" })}
       >
         Sign in
@@ -84,8 +106,14 @@ export const SyncSettings = () => {
     );
   }
 
-  const syncLabel =
-    hasPending && syncState !== "disconnected" ? "Syncing…" : SYNC_LABELS[syncState];
+  const isOffline = syncState === "disconnected";
+  // Online but not syncing is the server or the sign-in, not something waiting will fix
+  const unreachable = isOffline && deviceOnline;
+  const syncLabel = unreachable
+    ? "Not syncing"
+    : hasPending && !isOffline
+      ? "Syncing…"
+      : SYNC_LABELS[syncState];
 
   return (
     <Popover open={open} onOpenChange={setOpen} modal>
@@ -94,28 +122,23 @@ export const SyncSettings = () => {
           <Button
             variant="ghost"
             size="xs"
-            className={cn(
-              // after: 44px touch target without growing the header
-              "relative gap-1.5 touch:h-9 touch:px-3 touch:after:absolute touch:after:inset-x-0 touch:after:-inset-y-1",
-              syncState === "disconnected"
-                ? "text-foreground"
-                : "text-hint hover:text-muted-foreground",
-            )}
-            aria-label={`Sync settings: ${syncLabel}`}
+            className={cn(hitArea, "gap-1.5 text-hint hover:text-muted-foreground touch:px-3")}
+            aria-label={`Sync settings: ${isOffline ? `${unreachable ? "not syncing" : "offline"}, changes saved on this device` : syncLabel}`}
           />
         }
       >
         <span
           className={cn(
             "size-1.5 shrink-0 rounded-full transition-colors",
-            syncState === "disconnected"
-              ? "bg-destructive"
+            // Hollow rather than red: offline loses nothing, so it shouldn't read as an error
+            isOffline
+              ? "border border-hint"
               : hasPending || syncState === "connecting"
                 ? "animate-pulse bg-pending"
                 : "bg-primary",
           )}
         />
-        <span className={cn(syncState === "disconnected" && "font-medium")}>{syncLabel}</span>
+        <span>{syncLabel}</span>
       </PopoverTrigger>
 
       {currentUser && (
@@ -131,6 +154,13 @@ export const SyncSettings = () => {
             <span className="text-sm font-medium text-foreground">{currentUser.name}</span>
             <span className="text-xs text-hint">@{currentUser.username}</span>
           </div>
+          {isOffline && (
+            <p className="max-w-52 px-2.5 pb-2 text-xs text-hint">
+              {unreachable
+                ? "Can't reach the sync server. Changes stay on this device and sync once it answers."
+                : "You're offline. Changes stay on this device and sync once you're back."}
+            </p>
+          )}
           <div className="mb-1 h-px bg-border" />
           {getBuildTarget() === "browser" && canInstall && (
             <MenuItem onClick={install}>Add to Home Screen</MenuItem>
@@ -159,7 +189,7 @@ export const SyncSettings = () => {
             Sign out
           </MenuItem>
           <div className="my-1 h-px bg-border" />
-          <span className="px-2.5 pb-0.5 text-[10px] text-hint">{__BUILD_VERSION__}</span>
+          <span className="px-2.5 pb-0.5 text-xs text-hint tabular-nums">{__BUILD_VERSION__}</span>
         </PopoverContent>
       )}
     </Popover>

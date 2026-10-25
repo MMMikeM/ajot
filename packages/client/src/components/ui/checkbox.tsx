@@ -31,4 +31,8 @@ function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
   );
 }
 
-export { Checkbox };
+/** Finished work recedes: a quiet check that doesn't outshine open tasks or the tick itself */
+const checkboxDoneClass =
+  "data-checked:animate-none data-checked:border-primary/35 data-checked:bg-primary-subtle data-checked:text-primary";
+
+export { Checkbox, checkboxDoneClass };

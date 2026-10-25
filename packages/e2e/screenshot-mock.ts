@@ -30,7 +30,7 @@ const openCategoryNav = async (page: Page) => {
     .locator(".group\\/pill")
     .filter({ hasText: "Work" });
   await pill.hover();
-  await pill.getByRole("button", { name: "Category options" }).click();
+  await pill.getByRole("button", { name: "List options" }).click();
 };
 
 const scenes: Record<string, (page: Page) => Promise<void>> = {

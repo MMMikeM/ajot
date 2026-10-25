@@ -57,7 +57,7 @@ export const leaveCategory = async (categoryId: string, userId: string) => {
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? "Failed to leave category");
+    throw new Error(body.error ?? "Failed to leave list");
   }
   await categoriesCollection.utils.writeDelete(categoryId as never);
 };
@@ -77,7 +77,7 @@ export const removeTaskShare = async (shareId: string) => {
 /** Files a task shared with this user under one of their own categories. */
 export const updateShareCategory = async (taskId: string, categoryId: string | null) => {
   const res = await client.api.tasks.share.$put({ json: { taskId, categoryId } });
-  if (!res.ok) throw new Error("Failed to update category");
+  if (!res.ok) throw new Error("Failed to file the shared task");
 };
 
 export const authenticate = async (

@@ -1,7 +1,6 @@
 import type { Page } from "@playwright/test";
+import { BASE_URL } from "./stack";
 import type { TestUser } from "./users";
-
-const BASE_URL = process.env.BASE_URL ?? "http://localhost:5173";
 
 export type AuthResult = {
   userId: string;
@@ -31,37 +30,33 @@ const createInvite = async (inviter: AuthResult) => {
   return ((await res.json()) as { token: string }).token;
 };
 
-/**
- * A 409 from signup means the account exists from an earlier run, so it logs in instead. A 403
- * means the server already has accounts, so a new one needs an invite from `inviter`.
- */
-export const getOrCreateUser = async (
-  user: TestUser,
-  inviter?: AuthResult,
-): Promise<AuthResult> => {
-  let signupRes = await signup(user);
-  if (signupRes.status === 403 && inviter)
-    signupRes = await signup(user, await createInvite(inviter));
-
-  if (signupRes.ok) return signupRes.json() as Promise<AuthResult>;
-  if (signupRes.status !== 409) {
-    throw new Error(
-      `Signup failed for ${user.username}: ${signupRes.status} ${await signupRes.text()}`,
-    );
-  }
-
-  const loginRes = await fetch(`${BASE_URL}/api/auth/login`, {
+const login = (user: TestUser) =>
+  fetch(`${BASE_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username: user.username, password: user.password }),
   });
 
-  if (!loginRes.ok) {
+/**
+ * Logs in, or signs the account up on its first run. A server that already has accounts only
+ * takes a signup through an invite, which `inviter` creates.
+ */
+export const getOrCreateUser = async (
+  user: TestUser,
+  inviter?: AuthResult,
+): Promise<AuthResult> => {
+  const loginRes = await login(user);
+  if (loginRes.ok) return loginRes.json() as Promise<AuthResult>;
+
+  let signupRes = await signup(user);
+  if (signupRes.status === 403 && inviter)
+    signupRes = await signup(user, await createInvite(inviter));
+  if (!signupRes.ok) {
     throw new Error(
-      `Login failed for ${user.username}: ${loginRes.status} ${await loginRes.text()}`,
+      `Signup failed for ${user.username}: ${signupRes.status} ${await signupRes.text()}`,
     );
   }
-  return loginRes.json() as Promise<AuthResult>;
+  return signupRes.json() as Promise<AuthResult>;
 };
 
 /** Takes effect on the next load: reload or navigate after calling it. */
