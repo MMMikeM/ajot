@@ -35,6 +35,17 @@ jobs:
       # The extension's background and the PWA's worker, saving the lists for flight mode
       - run: pnpm test:e2e:background
 
+      # The deploy ships the build these tests ran against rather than building it again
+      - uses: actions/upload-artifact@v7
+        if: github.event_name == 'push'
+        with:
+          name: client-build
+          path: |
+            packages/client/dist
+            packages/client/dist-extension
+          if-no-files-found: error
+          retention-days: 1
+
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -52,14 +63,15 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      # Every build below runs on the runner's own Docker, so each reuses the layers the ones
-      # before it built. (Restoring layers from the GitHub Actions cache instead was slower:
-      # the node_modules layers run to 200+ MB each.)
-      - name: Build the extensions
-        run: >
-          docker buildx build --target extension --build-arg GITHUB_SHA
-          --output type=local,dest=extension .
+      # The image copies the client from here; the zips below are the extensions
+      - uses: actions/download-artifact@v8
+        with:
+          name: client-build
+          path: packages/client
 
+      # Both builds below run on the runner's own Docker, so the second reuses the layers the
+      # first built. (Restoring layers from the GitHub Actions cache instead was slower: the
+      # node_modules layers run to 200+ MB each.)
       - name: Push database schema
         run: >
           docker buildx build --target schema --no-cache-filter schema
@@ -70,7 +82,7 @@ jobs:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
 
-      - run: flyctl deploy --local-only --build-arg GITHUB_SHA=${{ github.sha }}
+      - run: flyctl deploy --local-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
@@ -86,8 +98,8 @@ jobs:
       - name: Package for the stores
         run: |
           version=$(jq -r .version packages/client/package.json)
-          (cd extension/firefox && zip -r -X -q "$OLDPWD/ajot-$version-firefox.zip" .)
-          (cd extension/chrome && zip -r -X -q "$OLDPWD/ajot-$version-chrome.zip" .)
+          (cd packages/client/dist-extension/firefox && zip -r -X -q "$OLDPWD/ajot-$version-firefox.zip" .)
+          (cd packages/client/dist-extension/chrome && zip -r -X -q "$OLDPWD/ajot-$version-chrome.zip" .)
           git archive --format=zip -o "ajot-$version-source.zip" HEAD
 
       - uses: actions/upload-artifact@v7
