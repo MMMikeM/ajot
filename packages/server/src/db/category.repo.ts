@@ -10,7 +10,6 @@ import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { CATEGORY_TASK_ACTIONS, type CategoryTaskAction } from "@newtab-todo/shared/constants";
 
 export type CategoryInsert = typeof categories.$inferInsert;
-export type CategorySelect = typeof categories.$inferSelect;
 
 export const categorySelectSchema = createSelectSchema(categories).pick({ id: true });
 export const categoryDeleteSchema = categorySelectSchema.extend({
