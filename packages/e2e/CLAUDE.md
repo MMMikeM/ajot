@@ -1,6 +1,6 @@
 # E2E Tests (`packages/e2e`)
 
-Playwright test suite. Two projects: `desktop` (Chrome) and `mobile` (iPhone 14 via Chromium).
+Playwright test suite. Two projects: `desktop` (Chrome) runs every spec, and `mobile` (iPhone 14 via Chromium) only `TOUCH_SPECS` in `playwright.config.ts`, the specs where the touch layout or gestures differ. Add a spec there when it checks something the touch layout does its own way.
 
 ## The stack
 
