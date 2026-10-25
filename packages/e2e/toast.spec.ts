@@ -1,25 +1,28 @@
+import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
+import { mockApi } from "./helpers/mock-api";
 
-declare global {
-  interface Window {
-    __toastAdd?: (title: string) => string;
-  }
-}
+const tick = (page: Page, title: string) =>
+  page.locator("[data-task-id]", { hasText: title }).first().getByRole("checkbox").first().click();
+
+test.beforeEach(async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("[data-task-id]", { timeout: 15000 });
+});
 
 test.describe("toast stacking", () => {
-  test("single toast appears and is visible", async ({ user1Page: page }) => {
-    await page.evaluate(() => window.__toastAdd?.("Task deleted"));
+  test("single toast appears and is visible", async ({ page }) => {
+    await tick(page, "Renew passport");
 
     const toast = page.locator("[data-toast-undo]").first();
     await expect(toast).toBeVisible({ timeout: 3000 });
     await page.screenshot({ path: ".filmstrip/toast-single.png", fullPage: false });
   });
 
-  test("two stacked toasts are visible simultaneously", async ({ user1Page: page }) => {
-    // The dev helper bypasses the undo deduplication
-    await page.evaluate(() => window.__toastAdd?.("Task deleted"));
-    await page.waitForTimeout(80);
-    await page.evaluate(() => window.__toastAdd?.("Category deleted"));
+  test("two stacked toasts are visible simultaneously", async ({ page }) => {
+    await tick(page, "Renew passport");
+    await tick(page, "Pick up dry cleaning");
 
     const toasts = page.locator("[data-toast-undo]");
     await expect(toasts).toHaveCount(2, { timeout: 3000 });
@@ -27,13 +30,10 @@ test.describe("toast stacking", () => {
     await page.screenshot({ path: ".filmstrip/toast-two-stacked.png", fullPage: false });
   });
 
-  test("three stacked toasts show peek-behind effect", async ({ user1Page: page }) => {
-    await page.evaluate(() => window.__toastAdd?.("Task deleted"));
-    await page.waitForTimeout(80);
-    await page.evaluate(() => window.__toastAdd?.("Marked done"));
-    await page.waitForTimeout(80);
-    await page.evaluate(() => window.__toastAdd?.("Category deleted"));
-    await page.waitForTimeout(200);
+  test("three stacked toasts show peek-behind effect", async ({ page }) => {
+    await tick(page, "Renew passport");
+    await tick(page, "Pick up dry cleaning");
+    await tick(page, "Call the plumber about the kitchen tap");
 
     const toasts = page.locator("[data-toast-undo]");
     await expect(toasts).toHaveCount(3, { timeout: 3000 });

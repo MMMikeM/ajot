@@ -4,8 +4,8 @@ import { API_PORT, BASE_URL, CLIENT_PORT } from "./helpers/stack";
 export default defineConfig({
   testDir: ".",
   testMatch: "*.spec.ts",
-  // Run against a production build: playwright.prerender.config.ts and
-  // playwright.background.config.ts
+  // Run on their own: playwright.prerender.config.ts (no API or accounts) and
+  // playwright.background.config.ts (the service worker and the extension)
   testIgnore: [
     "skeleton.spec.ts",
     "stale-chunk.spec.ts",
@@ -38,7 +38,9 @@ export default defineConfig({
           stdout: "pipe",
         },
         {
-          command: `exec node_modules/.bin/vp dev --port ${CLIENT_PORT} --strictPort`,
+          // A production build: the dev server compiles each module as a page asks for it, which
+          // made every page load slow on CI's four cores. `pnpm test:e2e` builds it first.
+          command: `exec node_modules/.bin/vp preview --port ${CLIENT_PORT} --strictPort`,
           cwd: "../client",
           url: BASE_URL,
           env: { ...process.env, SERVER_URL: `http://localhost:${API_PORT}` } as Record<
@@ -55,6 +57,8 @@ export default defineConfig({
     colorScheme: "dark",
     screenshot: "only-on-failure",
     trace: "on-first-retry",
+    // The build's worker would serve its cached app shell and answer requests page.route mocks
+    serviceWorkers: "block",
   },
 
   projects: [
