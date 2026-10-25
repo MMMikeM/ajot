@@ -5,7 +5,7 @@ export default defineConfig({
   testDir: ".",
   testMatch: "*.spec.ts",
   // Runs against a production build: playwright.prerender.config.ts
-  testIgnore: ["skeleton.spec.ts", "stale-chunk.spec.ts"],
+  testIgnore: ["skeleton.spec.ts", "stale-chunk.spec.ts", "perf.spec.ts"],
   outputDir: ".output",
   snapshotDir: ".snapshots",
 
