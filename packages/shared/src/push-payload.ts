@@ -1,3 +1,5 @@
+import type { MutationEvent } from "./constants";
+
 export type PushPayload =
   | { type: "sync" }
   | { type: "deploy" }
@@ -10,7 +12,20 @@ export type PushPayload =
   | { type: "category-shared"; categoryId: string; categoryName: string; fromUser: string }
   | { type: "contact-accepted"; contactName: string }
   | { type: "reminder-due"; taskId: string; taskTitle: string; dueDate: string }
-  | { type: "overdue-digest"; tasks: Array<{ id: string; title: string; dueDate: string }> };
+  | {
+      type: "overdue-digest";
+      tasks: Array<{ id: string; title: string; dueDate: string }>;
+      // All of them, when a push only has room for some in tasks
+      total?: number;
+    };
+
+/**
+ * The changes behind a push, so a device whose fetch then fails still saves them. Only ever sent
+ * to the account they belong to, and left off a push they would make too large.
+ */
+export type PushRows = { userId: string; events: Omit<MutationEvent, "sourceClientId">[] };
+
+export type PushMessage = PushPayload & { rows?: PushRows };
 
 /**
  * What can send a device a notification, each of which a person can turn off per device. Stored
@@ -47,6 +62,9 @@ export const NOTIFICATION_TRIGGERS: Record<
   "reminder-due": "reminder",
   "overdue-digest": "overdue",
 };
+
+const overdueCount = (payload: Extract<PushPayload, { type: "overdue-digest" }>) =>
+  payload.total ?? payload.tasks.length;
 
 export const toNotification = (
   payload: PushPayload,
@@ -108,7 +126,7 @@ export const toNotification = (
     case "overdue-digest":
       return {
         title: "Overdue tasks",
-        body: `You have ${payload.tasks.length} overdue task${payload.tasks.length === 1 ? "" : "s"}`,
+        body: `You have ${overdueCount(payload)} overdue task${overdueCount(payload) === 1 ? "" : "s"}`,
         url: "/",
       };
   }

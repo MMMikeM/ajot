@@ -6,7 +6,11 @@
 // here (unlike in the PWA) and wake the worker even with no tabs open.
 
 import { sendSubscriptionToServer, subscribe, unsubscribe } from "@mmmike/web-push/client";
-import { toNotification, type PushPayload } from "@newtab-todo/shared/push-payload";
+import {
+  toNotification,
+  type PushMessage,
+  type PushPayload,
+} from "@newtab-todo/shared/push-payload";
 import { MSG_TOKEN_CHANGED, SERVER_URL_KEY, TOKEN_KEY } from "@newtab-todo/shared/constants";
 import { ext, getStoredSession, notifyTabs } from "~/lib/ext";
 import { fetchServerConfig } from "~/lib/server-config";
@@ -91,10 +95,12 @@ self.addEventListener("pushsubscriptionchange", (event) => {
 });
 
 self.addEventListener("push", (event: PushEvent) => {
-  const payload = event.data?.json() as PushPayload | undefined;
+  const payload = event.data?.json() as PushMessage | undefined;
   // Unpacked extensions can't update themselves, so a deploy needs no action here.
   if (!payload?.type || payload.type === "deploy") return;
-  event.waitUntil(Promise.all([showNotification(payload), notifyTabs(), prewarmSnapshot()]));
+  event.waitUntil(
+    Promise.all([showNotification(payload), notifyTabs(), prewarmSnapshot(payload.rows)]),
+  );
 });
 
 self.addEventListener("notificationclick", (event: NotificationEvent) => {

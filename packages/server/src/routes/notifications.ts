@@ -5,6 +5,8 @@ import notificationQueueRepo from "../db/notification-queue.repo";
 import taskRepo from "../db/task.repo";
 import { sendNotification } from "../notify";
 
+const DIGEST_TASKS = 10;
+
 const app = new Hono();
 
 app.post("/process", async (c) => {
@@ -55,7 +57,12 @@ app.post("/process", async (c) => {
 
   let digestCount = 0;
   for (const [userId, userTasks] of byUser) {
-    await sendNotification(userId, { type: "overdue-digest", tasks: userTasks });
+    // Only the count shows, and a long list wouldn't fit in a push
+    await sendNotification(userId, {
+      type: "overdue-digest",
+      tasks: userTasks.slice(0, DIGEST_TASKS),
+      total: userTasks.length,
+    });
     // Recorded so later cron runs today skip this user
     await notificationQueueRepo.insertSent({
       userId,

@@ -3,6 +3,7 @@ import { z } from "@hono/zod-openapi";
 import { PUSH_TRIGGERS } from "@newtab-todo/shared/push-payload";
 import { db } from "./client";
 import { pushPreferences } from "./schema";
+import { DEFAULT_PUSH_PREFERENCES, deviceKey, type DevicePreferences } from "../push-plan";
 
 export const pushPreferencesSchema = createInsertSchema(pushPreferences, {
   muted: z.array(z.enum(PUSH_TRIGGERS)),
@@ -10,8 +11,6 @@ export const pushPreferencesSchema = createInsertSchema(pushPreferences, {
 }).pick({ muted: true, urgent: true });
 
 export type PushPreferences = z.infer<typeof pushPreferencesSchema>;
-
-export const DEFAULT_PUSH_PREFERENCES: PushPreferences = { muted: [], urgent: true };
 
 const find = async (userId: string, deviceId: string): Promise<PushPreferences> => {
   const row = await db.query.pushPreferences.findFirst({
@@ -33,7 +32,7 @@ const save = async (userId: string, deviceId: string, preferences: PushPreferenc
 
 /** Each of these users' devices' preferences, keyed by `deviceKey`. */
 const findForUsers = async (userIds: string[]) => {
-  if (userIds.length === 0) return new Map<string, PushPreferences>();
+  if (userIds.length === 0) return new Map<string, DevicePreferences>();
   const rows = await db.query.pushPreferences.findMany({ where: { userId: { in: userIds } } });
   return new Map(
     rows.map((row) => [
@@ -42,7 +41,5 @@ const findForUsers = async (userIds: string[]) => {
     ]),
   );
 };
-
-export const deviceKey = (userId: string, deviceId: string) => `${userId}:${deviceId}`;
 
 export default { find, save, findForUsers };

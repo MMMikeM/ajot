@@ -1,8 +1,11 @@
 import { useSyncExternalStore } from "react";
 import { nanoid } from "nanoid";
+import { USER_ID_KEY } from "@newtab-todo/shared/constants";
+import { getBuildTarget } from "~/lib/build-target";
+import { ext } from "~/lib/ext";
 import { createExternalStore } from "~/lib/external-store";
 
-const ID_KEY = "newtab-todo-user-id";
+const ID_KEY = USER_ID_KEY;
 const INFO_KEY = "newtab-todo-user-info";
 const DEVICE_ID_KEY = "newtab-todo-device-id";
 
@@ -39,16 +42,32 @@ const loadUser = (): CurrentUser | null => {
 const store = createExternalStore<CurrentUser | null>(loadUser());
 
 export const getCurrentUserId = () => store.get()?.id ?? getOrCreateDeviceId();
+export const getSignedInUserId = () => store.get()?.id ?? null;
+export const subscribeCurrentUser = store.subscribe;
+
+// The extension's background can't read localStorage, so it gets a copy
+const storeUserForBackground = (userId: string | null) => {
+  if (getBuildTarget() !== "extension") return;
+  const write = userId
+    ? ext.storage.local.set({ [USER_ID_KEY]: userId })
+    : ext.storage.local.remove(USER_ID_KEY);
+  write.catch(console.error);
+};
+
+export const shareUserWithBackground = () => storeUserForBackground(getSignedInUserId());
+
 export const setCurrentUser = (user: CurrentUser) => {
   localStorage.setItem(ID_KEY, user.id);
   localStorage.setItem(INFO_KEY, JSON.stringify(user));
   store.set(user);
+  storeUserForBackground(user.id);
 };
 
 export const clearCurrentUser = () => {
   localStorage.removeItem(ID_KEY);
   localStorage.removeItem(INFO_KEY);
   store.set(null);
+  storeUserForBackground(null);
 };
 
 export const useCurrentUser = store.useStore;

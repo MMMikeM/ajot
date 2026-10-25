@@ -1,4 +1,9 @@
-import { TOKEN_KEY, SERVER_URL_KEY, MSG_SYNC_ALL } from "@newtab-todo/shared/constants";
+import {
+  TOKEN_KEY,
+  SERVER_URL_KEY,
+  USER_ID_KEY,
+  MSG_SYNC_ALL,
+} from "@newtab-todo/shared/constants";
 
 // Firefox exposes the WebExtension API as `browser`; Chrome only as `chrome`, whose MV3 calls
 // return promises for everything this app uses (runtime messaging, storage.local). Undefined
@@ -14,8 +19,12 @@ const getStored = async (key: string) =>
  * without a server, there's nowhere to sync to.
  */
 export const getStoredSession = async () => {
-  const [token, serverUrl] = await Promise.all([getStored(TOKEN_KEY), getStored(SERVER_URL_KEY)]);
-  return token && serverUrl ? { token, serverUrl } : null;
+  const [token, serverUrl, userId] = await Promise.all([
+    getStored(TOKEN_KEY),
+    getStored(SERVER_URL_KEY),
+    getStored(USER_ID_KEY),
+  ]);
+  return token && serverUrl ? { token, serverUrl, userId: userId ?? null } : null;
 };
 
 export const notifyTabs = () => ext.runtime.sendMessage({ type: MSG_SYNC_ALL }).catch(() => {});

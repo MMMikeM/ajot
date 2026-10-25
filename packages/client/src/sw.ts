@@ -4,7 +4,7 @@ import { cleanupOutdatedCaches, matchPrecache, precacheAndRoute } from "workbox-
 import { registerRoute, NavigationRoute } from "workbox-routing";
 import { NetworkFirst, CacheFirst } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
-import { toNotification, type PushPayload } from "@newtab-todo/shared/push-payload";
+import { toNotification, type PushMessage } from "@newtab-todo/shared/push-payload";
 import { MSG_SYNC_ALL } from "@newtab-todo/shared/constants";
 import { createPrewarm } from "~/lib/sync/prewarm";
 import { readWorkerSession } from "~/lib/sync/worker-session";
@@ -71,7 +71,7 @@ self.addEventListener("activate", (event: ExtendableEvent) => {
 
 // Push: web subscriptions only receive visible notifications; silent sync goes to extensions.
 self.addEventListener("push", (event: PushEvent) => {
-  const payload = event.data?.json() as PushPayload | undefined;
+  const payload = event.data?.json() as PushMessage | undefined;
   if (!payload?.type) return;
 
   const notification = toNotification(payload);
@@ -91,7 +91,7 @@ self.addEventListener("push", (event: PushEvent) => {
           client.postMessage({ type: MSG_SYNC_ALL });
         }
       }),
-      prewarm(),
+      prewarm(payload.rows),
     ]),
   );
 });
