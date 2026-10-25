@@ -75,6 +75,16 @@ const findByIdWithCollaborators = async (id: string) => {
   return row;
 };
 
+/** Whether the user may file tasks in this list: they own it or collaborate on it. */
+const canUse = async (id: string, userId: string) => {
+  const row = await db.query.categories.findFirst({
+    where: { id },
+    columns: { userId: true },
+    with: { collaborators: { columns: { userId: true } } },
+  });
+  return !!row && (row.userId === userId || row.collaborators.some((c) => c.userId === userId));
+};
+
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it
 const insert = async (data: CategoryInsert) => {
   const [row] = await db
@@ -142,4 +152,12 @@ const removeWithTasks = async (
     return { category, inCategory, deletedIds, movedTasks, unlinkedNotes, unfiledShares };
   });
 
-export default { list, findById, findByIdWithCollaborators, insert, update, removeWithTasks };
+export default {
+  list,
+  findById,
+  findByIdWithCollaborators,
+  canUse,
+  insert,
+  update,
+  removeWithTasks,
+};

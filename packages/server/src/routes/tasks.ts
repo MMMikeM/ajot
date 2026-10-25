@@ -12,6 +12,7 @@ import taskRepo, {
 } from "../db/task.repo";
 import userRepo from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
+import categoryRepo from "../db/category.repo";
 import categoryCollaboratorRepo from "../db/category-collaborator.repo";
 import { authed } from "../middleware";
 import { broadcast, broadcastAll, broadcastPerUser } from "../broadcast";
@@ -82,10 +83,17 @@ export const taskRoutes = authed()
       // Subtasks carry no categoryId; their collaborators come from the parent's category
       let effectiveCategoryId = data.categoryId;
       if (data.parentId) {
-        const parent = await taskRepo.findById(data.parentId);
+        const parent = await taskRepo.findByIdWithAccess(data.parentId, userId);
         if (parent.parentId)
           throw new HTTPException(400, { message: "Cannot nest subtasks more than one level" });
+        const canAddTo =
+          parent.userId === userId ||
+          parent.shares.some((s) => s.sharedWithUserId === userId) ||
+          !!parent.category?.collaborators.some((c) => c.userId === userId);
+        if (!canAddTo) throw new HTTPException(403, { message: "Not authorized" });
         effectiveCategoryId = parent.categoryId;
+      } else if (data.categoryId && !(await categoryRepo.canUse(data.categoryId, userId))) {
+        throw new HTTPException(403, { message: "Not your list" });
       }
 
       const result = await taskRepo.insert({ ...data, userId });
@@ -111,22 +119,27 @@ export const taskRoutes = authed()
       const { id, updatedAt, ...fields } = c.req.valid("json");
       const userId = c.get("userId");
 
-      const [task, isContact] = await Promise.all([
+      const [task, isContact, canUseList] = await Promise.all([
         taskRepo.findByIdWithAccess(id, userId),
         fields.assigneeId ? contactRepo.exists(userId, fields.assigneeId) : Promise.resolve(true),
+        fields.categoryId ? categoryRepo.canUse(fields.categoryId, userId) : Promise.resolve(true),
       ]);
 
       const collabUserIds = [
         ...(task.category?.collaborators.map((c) => c.userId) ?? []),
         ...(task.parent?.category?.collaborators.map((c) => c.userId) ?? []),
       ];
-      const parentShareUserIds = task.parent?.shares?.map((s) => s.sharedWithUserId) ?? [];
+      const shareUserIds = [
+        ...task.shares.map((s) => s.sharedWithUserId),
+        ...(task.parent?.shares?.map((s) => s.sharedWithUserId) ?? []),
+      ];
       const isOwner = task.userId === userId || task.parent?.userId === userId;
       const isCollab = collabUserIds.includes(userId);
-      const isParentShareRecipient = parentShareUserIds.includes(userId);
-      if (!isOwner && !isCollab && !isParentShareRecipient)
+      const isShareRecipient = shareUserIds.includes(userId);
+      if (!isOwner && !isCollab && !isShareRecipient)
         throw new HTTPException(403, { message: "Not authorized" });
       if (!isContact) throw new HTTPException(400, { message: "Can only assign to a contact" });
+      if (!canUseList) throw new HTTPException(403, { message: "Not your list" });
 
       const result = await taskRepo.update(id, updatedAt, fields);
       broadcast(c, "tasks", "update", result, taskUserIds(task));
