@@ -13,11 +13,14 @@ export type DevicePreferences = { muted: PushTrigger[]; urgent: boolean };
 // throws for anything longer, before sending to anyone
 const MAX_PAYLOAD_BYTES = 3993;
 
-/** The message, without its rows if they make it too long; null if it's too long without them. */
-export const fitted = (message: PushMessage): PushMessage | null => {
+/**
+ * The message, without its rows if they make it too long. Still too long, it becomes a plain
+ * "changes": that still makes the device fetch the lists, which is what every push is for.
+ */
+export const fitted = (message: PushMessage): PushMessage => {
   if (Buffer.byteLength(JSON.stringify(message)) <= MAX_PAYLOAD_BYTES) return message;
   const { rows, ...withoutRows } = message;
-  return rows ? fitted(withoutRows) : null;
+  return rows ? fitted(withoutRows) : { type: "changes" };
 };
 
 export const DEFAULT_PUSH_PREFERENCES: DevicePreferences = { muted: [], urgent: true };
