@@ -1,16 +1,13 @@
-import pushSubscriptionRepo from "./db/push-subscription.repo";
 import userRepo from "./db/user.repo";
-import type { PushPayload } from "@newtab-todo/shared";
-import { sendPush } from "./push";
+import type { NotificationPayload } from "./push-plan";
+import { queueNotification } from "./push-queue";
 
-/** A failed send to one device is counted, not thrown; a subscription the push service rejects is removed. */
-export const sendNotification = async (userId: string, payload: PushPayload) => {
-  const subs = await pushSubscriptionRepo.findForUsers([userId]);
-  if (subs.length === 0) return;
-
-  const sent = await sendPush(subs, payload);
-  console.log(`Notification [${payload.type}] to ${userId}: ${sent}/${subs.length} delivered`);
-};
+/**
+ * Sent within a second, with any changes waiting for the same user, to each of their devices that
+ * hasn't turned it off. Never throws: a failed send is logged.
+ */
+export const sendNotification = async (userId: string, payload: NotificationPayload) =>
+  queueNotification(userId, payload);
 
 export const getUserName = async (userId: string): Promise<string> => {
   try {

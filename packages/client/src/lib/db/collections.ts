@@ -7,6 +7,7 @@ import type { Task, Category, Contact, Note } from "~/lib/types";
 import { getBuildTarget } from "../build-target";
 import { markStartup } from "~/lib/startup-timing";
 import { restoreSnapshot } from "~/lib/db/snapshot";
+import { SNAPSHOT_KEYS } from "~/lib/snapshot-store";
 
 // Guard: IndexedDB requires browser APIs — not available in Node.js (SSR prerender).
 // Lazy route components that consume these collections suspend in SSR before rendering,
@@ -15,7 +16,7 @@ import { restoreSnapshot } from "~/lib/db/snapshot";
 const openSnapshot = async () => {
   markStartup("snapshot-read-start");
   try {
-    await restoreSnapshot(queryClient, ["tasks", "categories", "notes", "contacts"]);
+    await restoreSnapshot(queryClient, SNAPSHOT_KEYS);
     markStartup("snapshot-read-end");
   } catch (err) {
     console.warn("[db] snapshot unavailable, loading from the server:", err);

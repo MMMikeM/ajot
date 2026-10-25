@@ -2,6 +2,10 @@
 
 Hono API server with Drizzle ORM (Turso/libSQL). Package boundaries prevent server code from leaking into the client bundle.
 
+## Tests
+
+`pnpm test` runs the unit tests (`*.test.ts`, `vp test`); CI runs them before the e2e suites. `push-plan.ts` decides what each device is sent with no I/O, so it's tested directly; `push-queue.test.ts` mocks `./push` and uses fake timers for the one-second grouping.
+
 ## API routes
 
 Routes are in `src/routes/`. Each file exports Hono route handlers.

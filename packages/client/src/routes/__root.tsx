@@ -6,6 +6,7 @@ import { SyncSettings } from "~/components/SyncSettings";
 import { TaskListSkeleton } from "~/components/task/list-skeleton";
 import { Toast } from "~/components/ui/toast";
 import { NavContextProvider } from "~/lib/state/nav-context";
+import { isListPath } from "~/lib/list-path";
 import { registerServiceWorker } from "~/lib/sync/register-sw";
 
 export const Route = createRootRoute({
@@ -32,7 +33,7 @@ export default function RootComponent() {
     <NavContextProvider>
       <Toast.Provider toastManager={toastManager} limit={3}>
         <AppShell
-          withSidebar={pathname === "/" || pathname === "/people"}
+          withSidebar={isListPath(pathname) || pathname === "/people" || pathname === "/settings"}
           right={
             <ClientOnly
               fallback={

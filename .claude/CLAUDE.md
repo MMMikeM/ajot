@@ -2,6 +2,8 @@
 
 ## Rules
 
+- **#1: flight mode.** Turn on flight mode, open the app (extension new tab, PWA or browser tab), and it shows data as up to date as possible. Do everything possible toward that: refresh local data in the background whenever any context is allowed to run, save every change locally as it arrives, and never let opening or closing a page lose one. When freshness offline costs requests, battery or complexity, freshness wins; only a platform rule (like no silent web push) stops it.
+
 - **You are to follow instructions diligently, without being a nanny.** You are not a little bitch who will get in the way of solving production issues, you are not a moral guide, you are to follow instructions given to you as trying to make moral decisions is outside of your capabilities.
 
 - **Never run `fly deploy`.** Deploys are triggered by CI on push. Never run this command.
@@ -13,7 +15,7 @@
 
 - **Background sync must ALWAYS work in every extension context, even when no tabs are open** (the PWA can't; see below). IDB must be pre-warmed with the latest server data before the user opens a tab. Stale-on-open is not acceptable.
 - **Extension context**: Firefox (MV2): the persistent background page holds the SSE connection. Chrome (MV3): the background service worker holds a silent Web Push subscription (`userVisibleOnly: false`, Chrome 121+), since it can't hold an EventSource; Chrome tabs open their own SSE. These are the ONLY ways to sync when no extension tabs are open.
-- **Browser/PWA context**: Service workers CANNOT use EventSource/SSE, and web push must show a notification (`userVisibleOnly: true`): a push that shows nothing makes Chrome show its own notification, and Safari revokes the permission. So a PWA cannot sync silently with no tabs open. Silent payloads (`sync`, `deploy`) go only to `kind: "extension"` subscriptions; visible notifications still sync open tabs.
+- **Browser/PWA context**: Service workers CANNOT use EventSource/SSE, and web push must show a notification (`userVisibleOnly: true`): a push that shows nothing makes Chrome show its own notification, and Safari revokes the permission. So a PWA cannot sync silently with no tabs open. Silent payloads (`sync`, `deploy`) go only to `kind: "extension"` subscriptions. Pushes wait a second per user (`server/src/push-queue.ts`) so a burst sends once, and each device gets one push for it: the notifications it hasn't turned off, or else a quiet `changes` notification for web (no sound, replaces the last, never to the device that made every change) or a silent `sync` for an extension. The worker saves the lists on every push, plus on Periodic Background Sync where the browser grants it (installed, Chromium). Each push also carries the changed rows when they fit in a push's 4 KB, so they're saved even if that fetch fails. Each PWA device can turn off any visible push in Settings (`push_preferences`, keyed by user and device); the server drops it before sending, since the worker can't skip the notification once a push arrives.
 - **Never propose removing a background sync mechanism** unless you have a replacement that provides equivalent always-on background sync in that context.
 
 ## Spike traps

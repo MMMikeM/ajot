@@ -5,7 +5,8 @@ import {
   subscribe,
   unsubscribe,
 } from "@mmmike/web-push/client";
-import { apiHeaders } from "~/lib/api";
+import { apiHeaders, client } from "~/lib/api";
+import { getOrCreateDeviceId } from "~/lib/auth/current-user";
 import { fetchServerConfig } from "~/lib/server-config";
 import { getServerUrl } from "~/lib/server-url";
 import { getBuildTarget } from "~/lib/build-target";
@@ -44,6 +45,16 @@ export const registerPushSubscription = async (): Promise<boolean> => {
   }
 };
 
+/**
+ * Uploads this device's subscription again, now with its device id, so the server can send it
+ * changes made elsewhere and not its own. Never subscribes, so it can't prompt.
+ */
+export const refreshPushSubscription = async () => {
+  if (!ownsSubscription()) return;
+  const subscription = await getCurrentSubscription();
+  if (subscription) await uploadSubscription(subscription);
+};
+
 export const unregisterPushSubscription = async (): Promise<void> => {
   if (!ownsSubscription()) return;
   try {
@@ -61,3 +72,32 @@ export const unregisterPushSubscription = async (): Promise<void> => {
 
 export const isPushSubscribed = async (): Promise<boolean> =>
   ownsSubscription() && !!(await getCurrentSubscription());
+
+/** Why this device can't turn push on, if it can't. */
+export const pushBlocker = (): "unsupported" | "denied" | null => {
+  if (!("PushManager" in window) || !("Notification" in window)) return "unsupported";
+  return Notification.permission === "denied" ? "denied" : null;
+};
+
+const deviceHeader = () => ({ "x-device-id": getOrCreateDeviceId() });
+
+export const fetchPushPreferences = async () => {
+  const res = await client.api.push.preferences.$get({ header: deviceHeader() });
+  if (!res.ok) throw new Error("Couldn't load notification settings");
+  return res.json();
+};
+
+export type PushPreferences = Awaited<ReturnType<typeof fetchPushPreferences>>;
+
+const putPushPreferences = async (preferences: PushPreferences) => {
+  const res = await client.api.push.preferences.$put({ header: deviceHeader(), json: preferences });
+  if (!res.ok) throw new Error("Couldn't save notification settings");
+};
+
+// One at a time, so a quick second change can't be overtaken by the first
+let saving: Promise<unknown> = Promise.resolve();
+export const savePushPreferences = (preferences: PushPreferences) => {
+  const save = saving.then(() => putPushPreferences(preferences));
+  saving = save.catch(() => {});
+  return save;
+};

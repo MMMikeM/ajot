@@ -12,6 +12,7 @@ import { Input } from "~/components/ui/field";
 import { ColorDot } from "~/components/ui/color-dot";
 import { setActiveCategoryId } from "~/lib/state/active-category";
 import { useCurrentUserId } from "~/lib/auth/current-user";
+import { isListPath } from "~/lib/list-path";
 import { cn } from "~/lib/utils";
 import type { Category } from "~/lib/types";
 import { useCategoryNavState } from "./use-category-nav-state";
@@ -97,7 +98,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
   const signedIn = useCurrentUserId() !== null;
 
   const navigate = useNavigate();
-  const onListPage = useRouterState({ select: (s) => s.location.pathname === "/" });
+  const onListPage = useRouterState({ select: (s) => isListPath(s.location.pathname) });
   const openList = (categoryId: string | null) => {
     setActiveCategoryId(categoryId);
     if (!onListPage) void navigate({ to: "/" });

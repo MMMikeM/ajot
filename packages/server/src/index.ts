@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import app from "./app";
 import { closeAllClients } from "./broadcast";
+import { flushPushes } from "./push-queue";
 
 // Prevent silent crashes from async errors (e.g. a dead socket surfacing on a
 // just-restored network after Fly suspend/resume).
@@ -37,7 +38,8 @@ const shutdown = (signal: string) => {
   console.log(`[${signal}] shutting down`);
   // Close SSE streams first — they hold the server open indefinitely.
   closeAllClients();
-  server.close(() => process.exit(0));
+  // Pushes wait a moment to group changes, so send any still waiting first
+  void flushPushes().finally(() => server.close(() => process.exit(0)));
   setTimeout(() => {
     console.error("[shutdown] forced exit after timeout");
     process.exit(1);

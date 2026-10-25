@@ -1,7 +1,12 @@
 import { useSyncExternalStore } from "react";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
+import {
+  getSignedInUserId,
+  shareUserWithBackground,
+  subscribeCurrentUser,
+} from "~/lib/auth/current-user";
 import { tasksCollection, categoriesCollection, notesCollection } from "~/lib/db/collections";
-import { registerPushSubscription } from "~/lib/sync/push";
+import { refreshPushSubscription, registerPushSubscription } from "~/lib/sync/push";
 import { createBackoff } from "~/lib/sync/backoff";
 import { getBuildTarget } from "~/lib/build-target";
 import { getServerUrl } from "~/lib/server-url";
@@ -17,6 +22,7 @@ import type { MutationEvent } from "~/lib/constants";
 import { createExternalStore } from "~/lib/external-store";
 import { offline } from "~/lib/db/offline";
 import { trackSyncState, type SyncState } from "~/lib/sync/sync-state";
+import { shareSessionWithWorker } from "~/lib/sync/worker-session";
 
 let es: EventSource | null = null;
 
@@ -208,9 +214,18 @@ export const initSync = () => {
     subscribeAuthToken(reconnect);
     listenNetworkChanges();
   }
-  if (target === "browser") listenSwMessages();
+  if (target === "browser") {
+    listenSwMessages();
+    const shareSession = () => void shareSessionWithWorker(getAuthToken(), getSignedInUserId());
+    shareSession();
+    if (getAuthToken()) refreshPushSubscription().catch(console.error);
+    subscribeAuthToken(shareSession);
+    subscribeCurrentUser(shareSession);
+  }
   if (target === "extension") {
     listenExtensionMessages();
+    // Installs signed in before the background needed the account
+    shareUserWithBackground();
     if (!backgroundHoldsSse()) return;
     // Probe the background page for its current SSE connection state so the
     // indicator isn't stuck at "Offline" on fresh tab load. It broadcasts later changes.
