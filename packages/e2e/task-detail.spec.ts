@@ -205,3 +205,54 @@ test.describe("task detail — functionality", () => {
     await expect(d.getByRole("textbox", { name: "Description" })).toHaveValue("My description");
   });
 });
+
+test.describe("addresses", () => {
+  const addTask = (token: string, title: string) => {
+    const now = new Date().toISOString();
+    const task = { id: crypto.randomUUID(), userId: "", title, createdAt: now, updatedAt: now };
+    return apiRequest<{ id: string }>("POST", "/api/tasks", task, token);
+  };
+
+  test("an open task has its own address, and closing it goes back to the list", async ({
+    user1Page: page,
+  }) => {
+    await createTask(page, "Addressed task");
+    await openFirstTaskDetail(page);
+    const id = await page.locator("[data-task-id]").first().getAttribute("data-task-id");
+    await expect(page).toHaveURL(new RegExp(`/task/${id}$`));
+
+    await page.keyboard.press("Escape");
+    await expect(drawer(page)).toBeHidden();
+    await expect(page).toHaveURL(/\/$/);
+  });
+
+  test("a task's address opens it over the list", async ({ user1Page: page, user1Auth }) => {
+    const task = await addTask(user1Auth.token, "Linked task");
+    await page.goto(`/task/${task.id}`);
+    await expect(drawer(page).getByRole("textbox", { name: "Title" })).toHaveValue("Linked task");
+
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator("[data-task-id]").getByText("Linked task")).toBeVisible();
+  });
+
+  test("an address for a task that's gone lands on the list", async ({ user1Page: page }) => {
+    await page.goto("/task/no-such-task");
+    await expect(page).toHaveURL(/\/$/);
+    await expect(drawer(page)).toHaveCount(0);
+  });
+
+  test("a list's address switches to that list", async ({ user1Page: page, user1Auth }) => {
+    const now = new Date().toISOString();
+    const name = `Linked list ${Date.now()}`;
+    const category = { id: crypto.randomUUID(), userId: "", name, createdAt: now, updatedAt: now };
+    await apiRequest("POST", "/api/categories", category, user1Auth.token);
+    try {
+      await page.goto(`/list/${category.id}`);
+      await expect(page).toHaveURL(/\/$/);
+      await expect(page.getByRole("heading", { level: 2 })).toContainText(name);
+    } finally {
+      await apiRequest("DELETE", "/api/categories", { id: category.id }, user1Auth.token);
+    }
+  });
+});

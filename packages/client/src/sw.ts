@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
+import { cleanupOutdatedCaches, matchPrecache, precacheAndRoute } from "workbox-precaching";
 import { registerRoute, NavigationRoute } from "workbox-routing";
 import { NetworkFirst, CacheFirst } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
@@ -26,6 +26,9 @@ registerRoute(
           maxEntries: 50,
           maxAgeSeconds: 24 * 60 * 60,
         }),
+        // Offline, a page never opened before (a notification's /task/<id>) has nothing cached.
+        // Every path is the same app shell, as the server serves index.html for all of them.
+        { handlerDidError: () => matchPrecache("/index.html") },
       ],
     }),
   ),
@@ -103,7 +106,7 @@ self.addEventListener("periodicsync", (event) => {
 
 self.addEventListener("notificationclick", (event: NotificationEvent) => {
   event.notification.close();
-  const url = (event.notification.data as { url?: string })?.url ?? "#/";
+  const url = (event.notification.data as { url?: string })?.url ?? "/";
 
   event.waitUntil(
     self.clients.matchAll({ type: "window" }).then((clients) => {

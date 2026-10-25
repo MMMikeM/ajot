@@ -64,6 +64,7 @@ const showNotification = (payload: PushPayload) => {
   return self.registration.showNotification(notification.title, {
     body: notification.body,
     icon: ext.runtime.getURL("icons/icon-192.png"),
+    data: { url: notification.url },
   });
 };
 
@@ -96,8 +97,8 @@ self.addEventListener("push", (event: PushEvent) => {
   event.waitUntil(Promise.all([showNotification(payload), notifyTabs(), prewarmSnapshot()]));
 });
 
-// Notification deep links (#/tasks/<id>) have no matching route yet, so open the app itself.
 self.addEventListener("notificationclick", (event: NotificationEvent) => {
   event.notification.close();
-  event.waitUntil(self.clients.openWindow(ext.runtime.getURL("index.html")));
+  const url = (event.notification.data as { url?: string })?.url ?? "/";
+  event.waitUntil(self.clients.openWindow(ext.runtime.getURL(`index.html#${url}`)));
 });

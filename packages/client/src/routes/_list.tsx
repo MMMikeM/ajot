@@ -1,21 +1,13 @@
-import { Suspense, useState, lazy } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { Suspense } from "react";
+import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { TaskInputBar } from "~/components/task/input-bar";
 import { SyncHint } from "~/components/SyncHint";
 import { Toast, Toasts } from "~/components/ui/toast";
 import { TaskView } from "~/components/task/view";
 import { CategoryHeader } from "~/components/category-nav/CategoryHeader";
 
-// Lazy-load: defers @base-ui/drawer, @tanstack/react-form (69KB)
-// Prefetched on route load so the first open doesn't wait. Offline without a cached chunk the
-// prefetch fails, so opening a task loads it again rather than replaying that failure.
-const loadTaskDetail = () => import("~/components/task/detail");
-const prefetchedTaskDetail = loadTaskDetail();
-prefetchedTaskDetail.catch(() => {});
-const TaskDetail = lazy(() => prefetchedTaskDetail.catch(loadTaskDetail));
-
 function TaskListView() {
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   return (
     <>
@@ -34,13 +26,10 @@ function TaskListView() {
           <SyncHint />
         </Suspense>
         <div className="mt-2 flex flex-1 flex-col gap-4">
-          <TaskView onSelectTask={setSelectedTaskId} />
-          {/* Mounted only once a task is chosen: lazy() renders a failed load as an error */}
-          {selectedTaskId && (
-            <Suspense>
-              <TaskDetail taskId={selectedTaskId} open onClose={() => setSelectedTaskId(null)} />
-            </Suspense>
-          )}
+          <TaskView
+            onSelectTask={(taskId) => navigate({ to: "/task/$taskId", params: { taskId } })}
+          />
+          <Outlet />
         </div>
       </div>
       <Toast.Portal>
@@ -54,6 +43,6 @@ function TaskListView() {
   );
 }
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_list")({
   component: TaskListView,
 });
