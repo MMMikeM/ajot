@@ -11,7 +11,8 @@ export default defineConfig({
 
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // The GitHub runner has 4 cores; each worker has its own accounts, so they don't collide
+  workers: process.env.CI ? 4 : undefined,
 
   reporter: [["list"], ["html", { outputFolder: ".report", open: "never" }]],
 
