@@ -23,6 +23,10 @@ app.use("/assets/*", async (c, next) => {
 
 app.use("*", serveStatic({ root: clientDist }));
 
+// A chunk from an earlier deploy is gone. Without this it would get index.html with a 200, and the
+// import would fail on the MIME type instead of a clean 404 the client can recover from.
+app.get("/assets/*", (c) => c.notFound());
+
 app.get("*", serveStatic({ root: clientDist, path: "index.html" }));
 
 const port = Number(process.env.PORT || 3000);

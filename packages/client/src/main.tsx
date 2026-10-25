@@ -7,6 +7,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { queryClient } from "~/lib/db/query-client";
 import { getRouter } from "./router";
 import { initSync } from "~/lib/sync/sse";
+import { reloadOnStaleChunk } from "~/lib/stale-chunk";
 import "./app.css";
 
 // Firefox 139 and Chrome 144 ship Temporal; elsewhere the polyfill loads before the first render
@@ -14,6 +15,7 @@ if (!("Temporal" in globalThis)) await import("temporal-polyfill/global");
 
 markStartup("modules-loaded");
 initSync();
+reloadOnStaleChunk();
 
 console.log(`[build] ${__BUILD_VERSION__}`);
 
