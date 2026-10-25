@@ -66,9 +66,9 @@ test.describe("the PWA's worker saves the lists for the next launch", () => {
   test("from the rows a push carries, when its fetch fails", async ({ user1Auth }) => {
     await deliverPush(context, ORIGIN, { type: "changes" });
     await expect.poll(() => savedTitles(worker)).not.toBeNull();
-    // The server's own row, so the page gets the shape it reads
     const title = `Saved from the push ${Date.now()}`;
-    const task = await addTask(user1Auth.token, title);
+    // As the server sends a new task (routes/tasks.ts): its row, with the lists the page reads
+    const task = { ...(await addTask(user1Auth.token, title)), subtasks: [], shares: [] };
     const pushRows = (userId: string, data: object) =>
       deliverPush(context, ORIGIN, {
         type: "changes",
