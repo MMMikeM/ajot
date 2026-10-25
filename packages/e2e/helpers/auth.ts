@@ -59,11 +59,16 @@ export const getOrCreateUser = async (
   return signupRes.json() as Promise<AuthResult>;
 };
 
-/** Takes effect on the next load: reload or navigate after calling it. */
+/**
+ * Takes effect on the next load: reload or navigate after calling it. Also marks the one-time
+ * swipe peek as seen: on touch it slides the first row aside, and a click on it then lands on
+ * the inert tray.
+ */
 export const signIn = async (page: Page, auth: AuthResult): Promise<void> => {
   await page.evaluate(({ userId, token, name, username }) => {
     localStorage.setItem("newtab-todo-token", token);
     localStorage.setItem("newtab-todo-user-id", userId);
     localStorage.setItem("newtab-todo-user-info", JSON.stringify({ id: userId, name, username }));
+    localStorage.setItem("newtab-todo-swipe-hint-seen", "1");
   }, auth);
 };
