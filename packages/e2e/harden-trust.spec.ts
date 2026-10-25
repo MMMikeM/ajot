@@ -69,6 +69,23 @@ test.describe("sync status", () => {
   });
 });
 
+test("a task sheet that failed to load offline keeps the list and loads on the next open", async ({
+  page,
+}) => {
+  let reachable = false;
+  await mockApi(page);
+  await page.route("**/components/task/detail.tsx*", (route) =>
+    reachable ? route.continue() : route.abort("internetdisconnected"),
+  );
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("[data-task-id]", { timeout: 15000 });
+  await expect(syncButton(page)).toBeVisible();
+
+  reachable = true;
+  await row(page, "Renew passport").getByRole("button", { name: "Renew passport" }).click();
+  await expect(page.locator('[data-slot="drawer-content"]')).toBeVisible();
+});
+
 test.describe("focus after a row leaves the list", () => {
   const openList = async (page: Page) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });

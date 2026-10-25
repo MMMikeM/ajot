@@ -16,6 +16,8 @@ const lastReload = () => {
  */
 export const reloadOnStaleChunk = () => {
   window.addEventListener("vite:preloadError", (event) => {
+    // Offline it isn't stale, just unreachable, and a reload would land on the browser's offline page
+    if (!navigator.onLine) return;
     if (Date.now() - lastReload() < RELOAD_COOLDOWN_MS) return;
     try {
       sessionStorage.setItem(RELOADED_AT_KEY, String(Date.now()));
