@@ -7,6 +7,8 @@ export default {
     "packages/server/src/db/columns.ts",
     // Vendored Impeccable skill (managed by `npx impeccable update`)
     ".claude/skills/impeccable/**",
+    // Run by hand from the before-after skill, so nothing imports them
+    ".claude/skills/before-after/scripts/**",
   ],
   workspaces: {
     ".": {

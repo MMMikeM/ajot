@@ -24,3 +24,4 @@ packages/e2e/.snapshots/
 packages/e2e/screenshots/
 .worktrees/
 .impeccable/
+.evidence/
