@@ -5,6 +5,8 @@ export default {
     "packages/e2e/**",
     "packages/client/src/lib/gradients.ts",
     "packages/server/src/db/columns.ts",
+    // Run by hand from the before-after skill, so nothing imports them
+    ".claude/skills/before-after/scripts/**",
   ],
   workspaces: {
     ".": {

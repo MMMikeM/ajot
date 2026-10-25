@@ -23,3 +23,4 @@ packages/e2e/.filmstrip/
 packages/e2e/.snapshots/
 packages/e2e/screenshots/
 .worktrees/
+.evidence/
