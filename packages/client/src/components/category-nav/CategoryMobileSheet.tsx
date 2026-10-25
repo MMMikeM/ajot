@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/field";
 import { ColorDot } from "~/components/ui/color-dot";
 import { setActiveCategoryId } from "~/lib/state/active-category";
+import { useCurrentUserId } from "~/lib/auth/current-user";
 import { useNavContext } from "~/lib/state/nav-context";
 import { cn } from "~/lib/utils";
 import type { Category } from "~/lib/types";
@@ -18,6 +19,7 @@ import { useCategoryActions } from "./use-category-actions";
 import { CategoryOptionsContent } from "./CategoryOptionsContent";
 import { DeleteCategoryDialog } from "./DeleteCategoryDialog";
 import { SharedWithMeGroup } from "./SharedWithMeGroup";
+import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 
 const rowClass = (isActive: boolean) =>
   cn(
@@ -42,7 +44,6 @@ function CategoryMobileSheet() {
     categories,
     activeCategoryId,
     currentUserId,
-    showInbox,
     inboxCount,
     openCounts,
     handleAdd,
@@ -63,6 +64,7 @@ function CategoryMobileSheet() {
     renameRef,
   } = useCategoryNavState(handleRename);
   const { navOpen, setNavOpen } = useNavContext();
+  const signedIn = useCurrentUserId() !== null;
 
   useEffect(() => {
     if (adding) addRef.current?.focus();
@@ -93,7 +95,7 @@ function CategoryMobileSheet() {
           <Input
             ref={renameRef}
             type="text"
-            aria-label="Category name"
+            aria-label="List name"
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={submitRename}
@@ -109,8 +111,9 @@ function CategoryMobileSheet() {
           aria-current={isActive ? "true" : undefined}
           className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3 text-left"
         >
-          <ColorDot color={cat.color ?? undefined} />
-          <span className="min-w-0 flex-1 truncate">
+          {/* Long names wrap: touch has no hover to reveal a truncated one */}
+          <ColorDot color={cat.color ?? undefined} className="mt-1.5 self-start" />
+          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
             {cat.name}
             {!isOwned && cat.user?.name && (
               <span className="ml-1 text-xs font-normal text-hint">· {cat.user.name}</span>
@@ -126,7 +129,7 @@ function CategoryMobileSheet() {
             render={
               <button
                 className="flex size-11 shrink-0 items-center justify-center rounded-lg text-hint transition-colors active:bg-secondary active:text-foreground"
-                aria-label="Category options"
+                aria-label="List options"
               />
             }
           >
@@ -151,27 +154,25 @@ function CategoryMobileSheet() {
 
   return (
     <>
-      <Drawer open={navOpen} onOpenChange={setNavOpen}>
+      <Drawer open={navOpen} onOpenChange={keepOpenOnToastPress(setNavOpen)}>
         <DrawerContent>
           <DrawerTitle className="px-5 pt-3 pb-2 text-xs font-medium tracking-wide text-hint uppercase">
-            Categories
+            Lists
           </DrawerTitle>
 
-          {showInbox && (
-            <div className={rowClass(activeCategoryId === null)}>
-              <button
-                onClick={() => selectAndClose(null)}
-                aria-current={activeCategoryId === null ? "true" : undefined}
-                className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3 text-left"
-              >
-                <ColorDot color={INBOX_COLOR} />
-                <span className="flex-1">Inbox</span>
-                <OpenCount count={inboxCount} />
-              </button>
-              {/* Spacer matching the options button so counts line up */}
-              <span className="w-11 shrink-0" aria-hidden="true" />
-            </div>
-          )}
+          <div className={rowClass(activeCategoryId === null)}>
+            <button
+              onClick={() => selectAndClose(null)}
+              aria-current={activeCategoryId === null ? "true" : undefined}
+              className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3 text-left"
+            >
+              <ColorDot color={INBOX_COLOR} />
+              <span className="flex-1">Inbox</span>
+              <OpenCount count={inboxCount} />
+            </button>
+            {/* Spacer matching the options button so counts line up */}
+            <span className="w-11 shrink-0" aria-hidden="true" />
+          </div>
 
           {ownedCategories.map(renderRow)}
 
@@ -198,10 +199,10 @@ function CategoryMobileSheet() {
               <Input
                 ref={addRef}
                 type="text"
-                aria-label="New category name"
+                aria-label="New list name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Category name..."
+                placeholder="List name..."
                 enterKeyHint="done"
                 onBlur={() => {
                   if (!newName.trim()) setAdding(false);
@@ -216,18 +217,20 @@ function CategoryMobileSheet() {
               className="mx-2 h-12 w-[calc(100%-1rem)] justify-start gap-3 rounded-lg px-3 active:bg-secondary active:text-foreground"
             >
               <Plus size={16} />
-              Add category
+              Add list
             </Button>
           )}
 
-          <Link
-            to="/people"
-            onClick={() => setNavOpen(false)}
-            className="mx-2 flex h-12 items-center gap-3 rounded-lg px-3 text-sm text-hint transition-colors active:bg-secondary active:text-foreground"
-          >
-            <Users size={16} />
-            People
-          </Link>
+          {signedIn && (
+            <Link
+              to="/people"
+              onClick={() => setNavOpen(false)}
+              className="mx-2 flex h-12 items-center gap-3 rounded-lg px-3 text-sm text-hint transition-colors active:bg-secondary active:text-foreground"
+            >
+              <Users size={16} />
+              People
+            </Link>
+          )}
 
           <div className="h-[max(0.75rem,env(safe-area-inset-bottom,0px))]" />
         </DrawerContent>

@@ -99,7 +99,7 @@ const openCategoryOptionsPopover = async (
   const pill = categoryBtn.locator("..");
   await pill.hover();
   // The trigger is opacity-0 until hover; force skips the visibility check
-  await pill.getByRole("button", { name: "Category options" }).click({ force: true });
+  await pill.getByRole("button", { name: "List options" }).click({ force: true });
 };
 
 test("desktop: category options popover is visible above main content", async ({
@@ -125,7 +125,7 @@ test("desktop: category options popover Rename item is not obscured by main cont
   await createCategory(page, "LayerTest", "sidebar");
   await openCategoryOptionsPopover(page, "LayerTest");
 
-  const renameBtn = page.getByRole("button", { name: "Rename" }).first();
+  const renameBtn = page.getByRole("button", { name: "Rename", exact: true });
   await expect(renameBtn).toBeVisible({ timeout: 3000 });
 
   // elementFromPoint at the center of the Rename button must resolve to an
@@ -166,7 +166,8 @@ test("desktop: clicking Rename in category options starts rename flow", async ({
   await createCategory(page, "RenameMe", "sidebar");
   await openCategoryOptionsPopover(page, "RenameMe");
 
-  const renameBtn = page.getByRole("button", { name: "Rename" }).first();
+  // Exact: "RenameMe" is a button too
+  const renameBtn = page.getByRole("button", { name: "Rename", exact: true });
   await expect(renameBtn).toBeVisible({ timeout: 3000 });
   // locator.click() dispatches CDP pointer events which interfere with
   // floating-ui's useDismiss insideReactTree flag. Use element.click() instead.
@@ -185,7 +186,8 @@ test("desktop: clicking Delete in category options removes the category", async 
   await createCategory(page, "DeleteMe", "sidebar");
   await openCategoryOptionsPopover(page, "DeleteMe");
 
-  const deleteBtn = page.getByRole("button", { name: "Delete" }).first();
+  // Exact: "DeleteMe" and each task's "Delete task" are buttons too
+  const deleteBtn = page.getByRole("button", { name: "Delete", exact: true });
   await expect(deleteBtn).toBeVisible({ timeout: 3000 });
   // Same floating-ui/CDP issue as Rename above — use element.click()
   await deleteBtn.evaluate((el) => (el as HTMLElement).click());
@@ -200,8 +202,8 @@ test("mobile: tapping header trigger opens sheet", async ({ page, isMobile }) =>
 
   await page.getByTestId("category-nav-trigger").tap();
 
-  // Sheet is open — the Add category button is always present
-  await expect(page.getByRole("button", { name: "Add category" })).toBeVisible({ timeout: 3000 });
+  // Sheet is open — the Add list button is always present
+  await expect(page.getByRole("button", { name: "Add list" })).toBeVisible({ timeout: 3000 });
 });
 
 test("mobile: selecting a category from the sheet closes it and updates trigger", async ({
@@ -213,15 +215,15 @@ test("mobile: selecting a category from the sheet closes it and updates trigger"
   const trigger = page.getByTestId("category-nav-trigger");
 
   await trigger.tap();
-  await page.getByRole("button", { name: "Add category" }).tap();
-  await page.locator('input[placeholder="Category name..."]').fill("Errands");
+  await page.getByRole("button", { name: "Add list" }).tap();
+  await page.locator('input[placeholder="List name..."]').fill("Errands");
   await page.keyboard.press("Enter");
 
   // The sheet stays open after adding
   await page.getByRole("button", { name: "Errands" }).tap();
 
   await expect(trigger).toContainText("Errands");
-  await expect(page.getByRole("button", { name: "Add category" })).toBeHidden({ timeout: 3000 });
+  await expect(page.getByRole("button", { name: "Add list" })).toBeHidden({ timeout: 3000 });
 });
 
 test("mobile: input chip visible with active category", async ({ page, isMobile }) => {
@@ -234,8 +236,8 @@ test("mobile: input chip visible with active category", async ({ page, isMobile 
   await expect(chip).toContainText("Inbox");
 
   await page.getByTestId("category-nav-trigger").tap();
-  await page.getByRole("button", { name: "Add category" }).tap();
-  await page.locator('input[placeholder="Category name..."]').fill("Personal");
+  await page.getByRole("button", { name: "Add list" }).tap();
+  await page.locator('input[placeholder="List name..."]').fill("Personal");
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Personal" }).tap();
 
@@ -247,8 +249,8 @@ test("mobile: tapping input chip opens the category sheet", async ({ page, isMob
 
   await page.getByTestId("category-input-chip").tap();
 
-  // Sheet is open — the Add category button is always present
-  await expect(page.getByRole("button", { name: "Add category" })).toBeVisible({ timeout: 3000 });
+  // Sheet is open — the Add list button is always present
+  await expect(page.getByRole("button", { name: "Add list" })).toBeVisible({ timeout: 3000 });
 });
 
 test("mobile: header trigger and input chip stay visible while scrolling", async ({

@@ -1,6 +1,21 @@
 import { defineRelations } from "drizzle-orm";
-import { sqliteTable, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
-import { pk, string, nullableString, oneOf, fk, nullableFk, createdAt, updatedAt } from "./columns";
+import {
+  primaryKey,
+  sqliteTable,
+  uniqueIndex,
+  type AnySQLiteColumn,
+} from "drizzle-orm/sqlite-core";
+import {
+  pk,
+  string,
+  nullableString,
+  oneOf,
+  fk,
+  nullableFk,
+  createdAt,
+  updatedAt,
+  int,
+} from "./columns";
 
 export const categories = sqliteTable("categories", {
   id: pk(),
@@ -125,6 +140,17 @@ export const notificationQueue = sqliteTable("notification_queue", {
   createdAt: createdAt(),
 });
 
+// Usage counts per UTC day, with nothing about who: enough to see which features get used
+export const metricCounts = sqliteTable(
+  "metric_counts",
+  {
+    name: string("name"),
+    day: string("day"),
+    count: int("count").default(0),
+  },
+  (t) => [primaryKey({ columns: [t.name, t.day] })],
+);
+
 export const relations = defineRelations(
   {
     tasks,
@@ -138,6 +164,7 @@ export const relations = defineRelations(
     inviteTokens,
     categoryCollaborators,
     notificationQueue,
+    metricCounts,
   },
   (r) => ({
     users: {

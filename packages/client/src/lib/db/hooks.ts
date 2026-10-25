@@ -26,18 +26,21 @@ export const updateTask = (id: string, fields: Partial<Task>) => {
 };
 
 /** Returns an undo that brings back the task, its subtasks and their notes' links. */
-export const deleteTask = (id: string) => {
-  console.log(`[mutation] deleteTask id=${id}`);
+/** Deletes the tasks and their subtasks in one transaction, so one Undo restores them all. */
+export const deleteTasks = (ids: string[]) => {
+  console.log(`[mutation] deleteTasks ids=${ids.join(",")}`);
+  const roots = new Set(ids);
+  // Parents first, so Undo re-inserts them before their subtasks
   const deleted = [...(tasksCollection.state?.values() ?? [])]
-    .filter((t) => t.id === id || t.parentId === id)
-    .sort((a, b) => Number(b.id === id) - Number(a.id === id));
+    .filter((t) => roots.has(t.id) || (t.parentId !== null && roots.has(t.parentId)))
+    .sort((a, b) => Number(roots.has(b.id)) - Number(roots.has(a.id)));
   const deletedIds = new Set(deleted.map((t) => t.id));
   const noteLinks = [...(notesCollection.state?.values() ?? [])].flatMap((n) =>
     n.taskId && deletedIds.has(n.taskId) ? [{ id: n.id, taskId: n.taskId }] : [],
   );
   const tx = offline.createOfflineTransaction({
     mutationFnName: "deleteTask",
-    metadata: { taskId: id } satisfies TaskDeleteMetadata,
+    metadata: { taskIds: ids } satisfies TaskDeleteMetadata,
   });
   tx.mutate(() => {
     tasksCollection.delete([...deletedIds]);
@@ -49,6 +52,8 @@ export const deleteTask = (id: string) => {
   console.log("[mutation] optimistic applied, tx queued");
   return () => restoreTasks(deleted, noteLinks);
 };
+
+export const deleteTask = (id: string) => deleteTasks([id]);
 
 // Shares were deleted with the task and don't come back
 const restoreTasks = (tasks: Task[], noteLinks: { id: string; taskId: string }[]) => {
@@ -145,9 +150,16 @@ export const updateNote = (id: string, fields: Partial<Note>) => {
   console.log("[mutation] optimistic applied, tx queued");
 };
 
+/** Returns an undo that brings the note back under its original id. */
 export const deleteNote = (id: string) => {
   console.log(`[mutation] deleteNote id=${id}`);
+  const deleted = notesCollection.get(id);
   const tx = offline.createOfflineTransaction({ mutationFnName: "syncNotes" });
   tx.mutate(() => notesCollection.delete(id));
   console.log("[mutation] optimistic applied, tx queued");
+  return () => {
+    if (!deleted) return;
+    const restore = offline.createOfflineTransaction({ mutationFnName: "syncNotes" });
+    restore.mutate(() => notesCollection.insert({ ...deleted, updatedAt: now() }));
+  };
 };

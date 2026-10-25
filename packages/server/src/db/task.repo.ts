@@ -1,4 +1,5 @@
-import { and, eq, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { generateKeyBetween } from "fractional-indexing";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db, inTransaction } from "./client";
@@ -120,6 +121,16 @@ const update = async (id: string, updatedAt: string, fields: Partial<TaskInsert>
   return row;
 };
 
+// After the user's other top-level tasks, where the app puts a task they add themselves
+const nextSortOrder = async (userId: string) => {
+  const last = await db.query.tasks.findFirst({
+    where: { userId, parentId: { isNull: true }, sortOrder: { isNotNull: true } },
+    columns: { sortOrder: true },
+    orderBy: { sortOrder: "desc" },
+  });
+  return generateKeyBetween(last?.sortOrder ?? null, null);
+};
+
 // parent_id would cascade, but naming the subtasks here returns their ids for the broadcast
 const remove = async (id: string) =>
   inTransaction(async (tx) => {
@@ -146,8 +157,13 @@ const insertShare = async (data: TaskShareInsert) => {
   return row;
 };
 
-const removeShare = async (id: string) => {
-  const [row] = await db.delete(taskShares).where(eq(taskShares.id, id)).returning();
+// Someone else's share reads as missing, so its id can't be probed
+const removeShare = async (id: string, ownerId: string) => {
+  const ownedTaskIds = db.select({ id: tasks.id }).from(tasks).where(eq(tasks.userId, ownerId));
+  const [row] = await db
+    .delete(taskShares)
+    .where(and(eq(taskShares.id, id), inArray(taskShares.taskId, ownedTaskIds)))
+    .returning();
   if (!row) throw new NotFoundError("task share", id);
   return row;
 };
@@ -202,6 +218,7 @@ export default {
   insert,
   update,
   remove,
+  nextSortOrder,
   insertShare,
   removeShare,
   updateShareCategory,

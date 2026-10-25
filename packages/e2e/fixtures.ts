@@ -1,16 +1,13 @@
 import { test as base, type Page } from "@playwright/test";
+import { ensureMutualContacts } from "./helpers/api";
 import { getOrCreateUser, signIn, type AuthResult } from "./helpers/auth";
 import { waitForAppReady } from "./helpers/app";
 import { createSyncTracker, type SyncTracker } from "./helpers/sync";
-import { USER_1, USER_2 } from "./helpers/users";
+import { USER_1, USER_2, type TestUser } from "./helpers/users";
 
 type Fixtures = {
   /** Navigated to "/" and ready — use for unauthenticated tests. */
   appPage: Page;
-  /** Resolved credentials for USER_1 (created on first run, reused thereafter). */
-  user1Auth: AuthResult;
-  /** Resolved credentials for USER_2 (created on first run, reused thereafter). */
-  user2Auth: AuthResult;
   /** Page signed in as USER_1 in the default browser context. */
   user1Page: Page;
   /**
@@ -26,20 +23,43 @@ type Fixtures = {
   syncTracker: SyncTracker;
 };
 
-export const test = base.extend<Fixtures>({
+type WorkerFixtures = {
+  /** This worker's Alice, invited by USER_1. */
+  user1Auth: AuthResult;
+  /** This worker's Bob, invited by and a contact of this worker's Alice. */
+  user2Auth: AuthResult;
+};
+
+// One pair of accounts per worker: specs clear their account's tasks and lists before each test,
+// which on a shared account deleted what tests in other workers had just made
+const forWorker = (user: TestUser, workerIndex: number): TestUser => ({
+  ...user,
+  username: `${user.username}_${workerIndex}`,
+});
+
+export const test = base.extend<Fixtures, WorkerFixtures>({
   appPage: async ({ page }, use) => {
     await waitForAppReady(page);
     await use(page);
   },
 
-  // eslint-disable-next-line no-empty-pattern
-  user1Auth: async ({}, use) => {
-    await use(await getOrCreateUser(USER_1));
-  },
+  user1Auth: [
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use, workerInfo) => {
+      const root = await getOrCreateUser(USER_1);
+      await use(await getOrCreateUser(forWorker(USER_1, workerInfo.workerIndex), root));
+    },
+    { scope: "worker" },
+  ],
 
-  user2Auth: async ({ user1Auth }, use) => {
-    await use(await getOrCreateUser(USER_2, user1Auth));
-  },
+  user2Auth: [
+    async ({ user1Auth }, use, workerInfo) => {
+      const user2 = await getOrCreateUser(forWorker(USER_2, workerInfo.workerIndex), user1Auth);
+      await ensureMutualContacts(user1Auth.token, user2.token);
+      await use(user2);
+    },
+    { scope: "worker" },
+  ],
 
   user1Page: async ({ page, user1Auth }, use) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });

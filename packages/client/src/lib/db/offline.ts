@@ -114,7 +114,9 @@ const syncCategory = syncMutation("categories", client.api.categories, categorie
 ]);
 const syncNote = syncMutation("notes", client.api.notes, notesCollection);
 
-export type TaskDeleteMetadata = { taskId: string };
+export type TaskDeleteMetadata = { taskIds: string[] };
+// What a single delete queued before batches; an outbox can still hold one after an update
+type LegacyTaskDeleteMetadata = { taskId: string };
 
 // One request for the task: the server deletes its subtasks with it, so a DELETE per subtask
 // would 404. It also unlinks the notes on them, which this transaction did locally.
@@ -124,9 +126,12 @@ const deleteTaskWithSubtasks = async ({
   transaction: { metadata: Record<string, unknown>; mutations: PendingWrite[] };
 }) => {
   assertSignedIn();
-  const { taskId } = transaction.metadata as TaskDeleteMetadata;
-  console.log(`[sync:tasks] DELETE → id=${taskId} with subtasks`);
-  await assertDeleted(await client.api.tasks.$delete({ json: { id: taskId } }));
+  const metadata = transaction.metadata as TaskDeleteMetadata | LegacyTaskDeleteMetadata;
+  const taskIds = "taskIds" in metadata ? metadata.taskIds : [metadata.taskId];
+  for (const taskId of taskIds) {
+    console.log(`[sync:tasks] DELETE → id=${taskId} with subtasks`);
+    await assertDeleted(await client.api.tasks.$delete({ json: { id: taskId } }));
+  }
   for (const m of transaction.mutations) {
     if (m.collection === notesCollection)
       await notesCollection.utils.writeUpdate({ id: m.key, taskId: null } as never);

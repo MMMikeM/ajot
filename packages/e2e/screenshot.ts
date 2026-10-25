@@ -90,10 +90,10 @@ await forBothViewports(
     if (isMobile) {
       await page.getByTestId("category-nav-trigger").tap();
       await page.waitForTimeout(400);
-      const catOptions = page.locator('[aria-label="Category options"]');
+      const catOptions = page.locator('[aria-label="List options"]');
       if ((await catOptions.count()) === 0) {
-        await page.getByRole("button", { name: "Add category" }).tap();
-        await page.locator('input[placeholder="Category name..."]').fill("Work");
+        await page.getByRole("button", { name: "Add list" }).tap();
+        await page.locator('input[placeholder="List name..."]').fill("Work");
         await page.keyboard.press("Enter");
         await page.waitForTimeout(400);
         await page.getByTestId("category-nav-trigger").tap();
@@ -110,7 +110,7 @@ await forBothViewports(
       const sidebar = page.getByTestId("category-sidebar");
       const pills = sidebar.locator(".group\\/pill");
       if ((await pills.count()) === 0) {
-        await sidebar.getByLabel("Add category").click();
+        await sidebar.getByLabel("Add list").click();
         await page.locator('input[placeholder="Name..."]').fill("Work");
         await page.keyboard.press("Enter");
         await page.waitForTimeout(400);
@@ -118,7 +118,7 @@ await forBothViewports(
       const pill = sidebar.locator(".group\\/pill").first();
       await pill.hover();
       await page.waitForTimeout(200);
-      await pill.locator('[aria-label="Category options"]').click();
+      await pill.locator('[aria-label="List options"]').click();
       await page.waitForTimeout(300);
       // page.evaluate bypasses inert/overlay interception — dispatches directly on the element
       await page.evaluate(() =>

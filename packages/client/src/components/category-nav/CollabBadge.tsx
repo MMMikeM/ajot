@@ -17,7 +17,7 @@ export function CollabBadge({
     return (
       <>
         <span aria-hidden="true" className="shrink-0">
-          <InitialsAvatar name={owner} className="bg-collab text-collab-foreground" />
+          <InitialsAvatar name={owner} className="-my-px bg-collab text-collab-foreground" />
         </span>
         <span className="sr-only">{owner}'s list</span>
       </>

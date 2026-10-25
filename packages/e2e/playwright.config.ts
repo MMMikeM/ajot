@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { API_PORT, BASE_URL, CLIENT_PORT } from "./helpers/stack";
 
 export default defineConfig({
   testDir: ".",
@@ -14,8 +15,35 @@ export default defineConfig({
 
   reporter: [["list"], ["html", { outputFolder: ".report", open: "never" }]],
 
+  // Without BASE_URL the suite brings its own stack, with an empty database each run
+  webServer: process.env.BASE_URL
+    ? undefined
+    : [
+        {
+          // exec, so stopping it stops the script and its exit handler removes the container
+          command: "exec node_modules/.bin/tsx api-stack.ts",
+          url: `http://localhost:${API_PORT}/health`,
+          timeout: 120_000,
+          reuseExistingServer: false,
+          // Playwright otherwise sends SIGKILL, which skips the script removing its container
+          gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
+          stdout: "pipe",
+        },
+        {
+          command: `exec node_modules/.bin/vp dev --port ${CLIENT_PORT} --strictPort`,
+          cwd: "../client",
+          url: BASE_URL,
+          env: { ...process.env, SERVER_URL: `http://localhost:${API_PORT}` } as Record<
+            string,
+            string
+          >,
+          reuseExistingServer: false,
+        },
+      ],
+  globalSetup: "./global-setup.ts",
+
   use: {
-    baseURL: process.env.BASE_URL || "http://localhost:5173",
+    baseURL: BASE_URL,
     colorScheme: "dark",
     screenshot: "only-on-failure",
     trace: "on-first-retry",

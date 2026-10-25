@@ -37,7 +37,7 @@ const firefoxManifest = {
   },
   chrome_url_overrides: { newtab: "index.html" },
   content_security_policy: `script-src 'self'; object-src 'self'; ${CONNECT_SRC}`,
-  permissions: ["storage"],
+  permissions: ["storage", "notifications", "contextMenus", "activeTab"],
   background: { scripts: ["background.js"], persistent: true },
 };
 
@@ -52,7 +52,7 @@ const chromeManifest = {
   content_security_policy: {
     extension_pages: `script-src 'self'; object-src 'self'; ${CONNECT_SRC}`,
   },
-  permissions: ["storage", "notifications"],
+  permissions: ["storage", "notifications", "contextMenus", "activeTab"],
   background: { service_worker: "background.js" },
 };
 

@@ -11,6 +11,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/field";
 import { ColorDot } from "~/components/ui/color-dot";
 import { setActiveCategoryId } from "~/lib/state/active-category";
+import { useCurrentUserId } from "~/lib/auth/current-user";
 import { cn } from "~/lib/utils";
 import type { Category } from "~/lib/types";
 import { useCategoryNavState } from "./use-category-nav-state";
@@ -73,7 +74,6 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
     categories,
     activeCategoryId,
     currentUserId,
-    showInbox,
     inboxCount,
     openCounts,
     handleAdd,
@@ -93,6 +93,8 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
     startRename,
     renameRef,
   } = useCategoryNavState(handleRename);
+
+  const signedIn = useCurrentUserId() !== null;
 
   const navigate = useNavigate();
   const onListPage = useRouterState({ select: (s) => s.location.pathname === "/" });
@@ -159,7 +161,9 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
                     />
                   )}
                   <ColorDot size="sm" color={cat.color ?? undefined} />
-                  <span className="min-w-0 truncate">{cat.name}</span>
+                  <span className="min-w-0 truncate" title={cat.name}>
+                    {cat.name}
+                  </span>
                   <CollabBadge category={cat} currentUserId={currentUserId} />
                   <OpenCount
                     count={openCounts.get(cat.id) ?? 0}
@@ -174,7 +178,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
                       <button
                         data-slot="category-options"
                         className="pointer-events-none absolute top-1/2 right-3 flex size-5 -translate-y-1/2 items-center justify-center rounded text-hint opacity-0 transition-opacity group-hover/pill:pointer-events-auto group-hover/pill:opacity-100 hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 data-[popup-open]:pointer-events-auto data-[popup-open]:text-foreground data-[popup-open]:opacity-100"
-                        aria-label="Category options"
+                        aria-label="List options"
                       />
                     }
                   >
@@ -207,24 +211,22 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
         data-testid="category-sidebar"
         className="fixed top-(--sheet-inset) left-(--panel-left) z-10 hidden h-[calc(100dvh-2*var(--sheet-inset))] w-(--sidebar-w) flex-col overflow-y-auto py-8 pr-1 pl-3 desk:flex"
       >
-        {showInbox && (
-          <button
-            onClick={() => openList(null)}
-            className={cn(
-              "relative flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
-              onListPage && activeCategoryId === null
-                ? "text-foreground"
-                : "text-hint hover:text-foreground",
-            )}
-          >
-            {onListPage && activeCategoryId === null && (
-              <span className="absolute top-1/2 left-0 h-3.5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
-            )}
-            <ColorDot size="sm" color={INBOX_COLOR} />
-            <span className="text-left">Inbox</span>
-            <OpenCount count={inboxCount} />
-          </button>
-        )}
+        <button
+          onClick={() => openList(null)}
+          className={cn(
+            "relative flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
+            onListPage && activeCategoryId === null
+              ? "text-foreground"
+              : "text-hint hover:text-foreground",
+          )}
+        >
+          {onListPage && activeCategoryId === null && (
+            <span className="absolute top-1/2 left-0 h-3.5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
+          )}
+          <ColorDot size="sm" color={INBOX_COLOR} />
+          <span className="text-left">Inbox</span>
+          <OpenCount count={inboxCount} />
+        </button>
 
         {ownedCategories.map((cat, index) => renderPill(cat, index))}
 
@@ -259,7 +261,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
             size="xs"
             onClick={() => setAdding(true)}
             className="h-auto justify-start gap-2 px-3 py-1.5"
-            aria-label="Add category"
+            aria-label="Add list"
           >
             <span className="flex w-1.5 justify-center">
               <Plus className="size-2.5" />
@@ -275,14 +277,16 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
         )}
 
         <div className="flex-1" />
-        <div className="mt-2 border-t border-ghost/15 pt-2">
-          <Link
-            to="/people"
-            className="flex items-center px-3 py-1.5 text-sm text-hint transition-colors hover:text-foreground data-[status=active]:text-foreground"
-          >
-            People
-          </Link>
-        </div>
+        {signedIn && (
+          <div className="mt-2 border-t border-ghost/15 pt-2">
+            <Link
+              to="/people"
+              className="flex items-center px-3 py-1.5 text-sm text-hint transition-colors hover:text-foreground data-[status=active]:text-foreground"
+            >
+              People
+            </Link>
+          </div>
+        )}
       </nav>
 
       {sharingCategoryId && (

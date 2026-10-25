@@ -86,12 +86,38 @@ test.describe("task rows", () => {
 
   test("avatars use first and last initials", async ({ page }) => {
     await openList(page);
-    await expect(row(page, "Sort out the car insurance").getByTitle("Sam Okafor")).toHaveText("SO");
-    await expect(row(page, "Write a thank-you note").getByTitle("Sarah Murray")).toHaveText("SM");
+    await expect(
+      row(page, "Sort out the car insurance").getByTitle("Assigned to Sam Okafor"),
+    ).toHaveText(/^SO/);
+    await expect(
+      row(page, "Pick a restaurant for Friday").getByTitle("Sarah Murray's task"),
+    ).toHaveText(/^SM/);
   });
 });
 
 test.describe("navigation", () => {
+  test("an empty Inbox stays open and listed", async ({ page }, testInfo) => {
+    const data = await mockApi(page);
+    await page.route("**/api/tasks", (route) =>
+      route.request().method() === "GET"
+        ? route.fulfill({ json: data.tasks.filter((t) => t.categoryId) })
+        : route.fallback(),
+    );
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("type something")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Inbox" })).toHaveCount(1);
+
+    if (testInfo.project.name !== "desktop") await page.getByTestId("category-nav-trigger").click();
+    await page.getByRole("button", { name: /^Work/ }).first().click();
+    await expect(page.getByRole("heading", { level: 2, name: "Work" })).toHaveCount(1);
+    if (testInfo.project.name !== "desktop") await page.getByTestId("category-nav-trigger").click();
+    await page
+      .getByRole("button", { name: /^Inbox/ })
+      .first()
+      .click();
+    await expect(page.getByRole("heading", { level: 2, name: "Inbox" })).toHaveCount(1);
+  });
+
   test("the list title renders once", async ({ page }, testInfo) => {
     await openList(page);
     await expect(page.getByRole("heading", { level: 2, name: "Inbox" })).toHaveCount(1);
@@ -116,7 +142,7 @@ test.describe("navigation", () => {
     test.skip(testInfo.project.name !== "desktop", "the sidebar is desktop-only");
     await openList(page);
     const sidebar = page.getByTestId("category-sidebar");
-    await expect(sidebar.getByRole("button", { name: /^Inbox/ })).toContainText("6");
+    await expect(sidebar.getByRole("button", { name: /^Inbox/ })).toContainText("7");
     await expect(sidebar.getByRole("button", { name: /^Work/ })).toContainText("2");
   });
 
@@ -143,7 +169,7 @@ test.describe("navigation", () => {
 
     await expect(page.getByTestId("category-sidebar")).toHaveCount(0);
     await page.getByTestId("category-nav-trigger").click();
-    await expect(page.getByRole("button", { name: "Add category" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add list" })).toBeVisible();
   });
 });
 
@@ -154,10 +180,10 @@ test.describe("deleting a category", () => {
     const categoryRow = page
       .locator("div")
       .filter({ has: page.getByRole("button", { name: new RegExp(`^${name}`) }) })
-      .filter({ has: page.getByRole("button", { name: "Category options" }) })
+      .filter({ has: page.getByRole("button", { name: "List options" }) })
       .last();
     if (isDesktop) await categoryRow.hover();
-    await categoryRow.getByRole("button", { name: "Category options" }).click();
+    await categoryRow.getByRole("button", { name: "List options" }).click();
   };
 
   const deleteRequest = (page: Page) =>
@@ -212,7 +238,7 @@ test.describe("deleting a category", () => {
       taskIds: [],
     });
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
-    await expect(page.getByText("Category deleted")).toBeVisible();
+    await expect(page.getByText("List deleted")).toBeVisible();
   });
 
   test("a refused delete says so and brings the category back", async ({ page }, testInfo) => {
@@ -227,6 +253,50 @@ test.describe("deleting a category", () => {
 
     await expect(page.getByText("Couldn't delete “Home”")).toBeVisible();
     await expect(page.getByRole("button", { name: /^Home/ }).first()).toBeVisible();
+  });
+});
+
+// The server refuses to delete a task for anyone but its owner, or the owner of its parent
+test.describe("deleting someone else's task", () => {
+  // Hidden too: the hover buttons sit at opacity 0 and the swipe actions stay invisible until swiped
+  const deleteControls = (page: Page, title: string) =>
+    row(page, title).getByRole("button", { name: /^Delete/, includeHidden: true });
+
+  const openGroceries = async (page: Page, isDesktop: boolean) => {
+    if (!isDesktop) await page.getByTestId("category-nav-trigger").click();
+    await page
+      .getByRole("group", { name: "Shared with me" })
+      .getByRole("button", { name: /^Groceries/ })
+      .click();
+  };
+
+  // By name: on touch the category sheet is still closing when the task's sheet opens
+  const openDetail = async (page: Page, title: string) => {
+    await row(page, title).getByRole("button", { name: title, exact: true }).click();
+    const detail = page.getByRole("dialog", { name: title });
+    await expect(detail).toBeVisible();
+    return detail.getByRole("button", { name: "Delete task" });
+  };
+
+  test("your own task offers delete", async ({ page }) => {
+    await openList(page);
+    await expect(deleteControls(page, "Pick up dry cleaning")).not.toHaveCount(0);
+    await expect(await openDetail(page, "Pick up dry cleaning")).toHaveCount(1);
+  });
+
+  test("a task shared with you offers no delete", async ({ page }) => {
+    await openList(page);
+    await expect(deleteControls(page, "Pick a restaurant for Friday")).toHaveCount(0);
+    await expect(await openDetail(page, "Pick a restaurant for Friday")).toHaveCount(0);
+  });
+
+  test("a collaborator's task in a list shared with you offers no delete", async ({
+    page,
+  }, testInfo) => {
+    await openList(page);
+    await openGroceries(page, testInfo.project.name === "desktop");
+    await expect(deleteControls(page, "Eggs")).toHaveCount(0);
+    await expect(await openDetail(page, "Eggs")).toHaveCount(0);
   });
 });
 
@@ -346,11 +416,11 @@ test.describe("accessibility", () => {
         .locator(".group\\/pill")
         .filter({ hasText: "Work" });
       await pill.hover();
-      await pill.getByRole("button", { name: "Category options" }).click();
+      await pill.getByRole("button", { name: "List options" }).click();
       await expect(page.getByRole("button", { name: "Rename" })).toBeVisible();
     } else {
       await page.getByTestId("category-nav-trigger").click();
-      await expect(page.getByRole("button", { name: "Add category" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Add list" })).toBeVisible();
     }
     await expectNoAxeViolations(page);
   });
