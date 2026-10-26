@@ -1,10 +1,39 @@
-import { ComponentProps } from "react";
+import { ComponentProps, createContext, use, useEffect, useState } from "react";
 import { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 
 import { cn } from "~/lib/utils";
 
-const Drawer = ({ ...props }: ComponentProps<typeof DrawerPrimitive.Root>) => {
-  return <DrawerPrimitive.Root data-slot="drawer" {...props} />;
+/** Whether the sheet has finished sliding in and isn't on its way out */
+const RestingContext = createContext(false);
+
+// Base UI skips the enter transition for a drawer that mounts already open, and ours do (a task's
+// route mounts its sheet open), so they appeared at once instead of sliding in. Opening a frame
+// after mounting gives the slide its starting frame.
+const Drawer = ({
+  open,
+  onOpenChangeComplete,
+  ...props
+}: ComponentProps<typeof DrawerPrimitive.Root>) => {
+  const [mounted, setMounted] = useState(false);
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  const isOpen = open === undefined ? undefined : open && mounted;
+  return (
+    <RestingContext value={settled && isOpen !== false}>
+      <DrawerPrimitive.Root
+        data-slot="drawer"
+        open={isOpen}
+        onOpenChangeComplete={(next) => {
+          setSettled(next);
+          onOpenChangeComplete?.(next);
+        }}
+        {...props}
+      />
+    </RestingContext>
+  );
 };
 
 const DrawerContent = ({
@@ -12,11 +41,16 @@ const DrawerContent = ({
   children,
   ...props
 }: ComponentProps<typeof DrawerPrimitive.Popup>) => {
+  const resting = use(RestingContext);
   return (
     <DrawerPrimitive.Portal>
+      {/* Re-blurring the page every frame dropped frames on phones, so the backdrop only blurs
+          while the sheet rests, and stops the moment it moves (closing, or dragged). Three
+          values per list: the build writes backdrop-filter out as two properties. */}
       <DrawerPrimitive.Backdrop
         data-slot="drawer-backdrop"
-        className="fixed inset-0 z-50 bg-backdrop transition-opacity duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)] data-[ending-style]:opacity-0 data-[ending-style]:duration-[calc(var(--drawer-swipe-strength,1)*400ms)] data-[starting-style]:opacity-0 data-[swiping]:duration-0 supports-backdrop-filter:backdrop-blur-xs"
+        data-resting={resting || undefined}
+        className="fixed inset-0 z-50 bg-backdrop transition-[opacity,backdrop-filter] duration-[450ms,180ms,180ms] ease-[cubic-bezier(0.32,0.72,0,1),ease-out,ease-out] data-[ending-style]:opacity-0 data-[ending-style]:duration-[calc(var(--drawer-swipe-strength,1)*400ms),0ms,0ms] data-[starting-style]:opacity-0 data-[swiping]:backdrop-blur-none data-[swiping]:duration-0 supports-backdrop-filter:data-[resting]:backdrop-blur-xs"
       />
       <DrawerPrimitive.Viewport className="fixed inset-0 z-50 flex touch-none items-end justify-center">
         <DrawerPrimitive.Popup
