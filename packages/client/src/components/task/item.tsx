@@ -248,7 +248,7 @@ function TaskRow({
           ref={contentRef}
           style={{ "--actions-w": hoverActionsWidth(hoverActionCount) } as CSSProperties}
           className={cn(
-            "group/task relative flex items-start gap-2 rounded-lg px-2 py-2.5 transition-[background-color,opacity] duration-300 hover:bg-muted/50 touch:gap-2.5",
+            "group/task relative flex items-start gap-2 rounded-lg px-2 py-2.5 transition-[background-color,opacity] duration-300 hover:bg-muted/50 has-[>button:focus-visible]:outline-2 has-[>button:focus-visible]:-outline-offset-2 touch:gap-2.5",
             completing && "opacity-60",
             isSubtask && "py-1.5",
             // Opaque only while swiping, to cover the tray. rounded-none: the container owns the corners.
@@ -269,7 +269,7 @@ function TaskRow({
           {onOpen ? (
             <button
               type="button"
-              className={cn(titleColumnClass, "cursor-pointer")}
+              className={cn(titleColumnClass, "cursor-pointer focus-visible:outline-none")}
               onClick={() => onOpen(task.id)}
             >
               <span className={titleClass}>{task.title}</span>
