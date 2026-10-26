@@ -253,6 +253,13 @@
   }
 }
 
+@keyframes done-count-land {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5em);
+  }
+}
+
 @keyframes toast-progress {
   from {
     transform: scaleX(1);
