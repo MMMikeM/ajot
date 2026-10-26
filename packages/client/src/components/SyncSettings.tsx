@@ -97,7 +97,7 @@ export const SyncSettings = () => {
       <Button
         variant="ghost"
         size="xs"
-        className={cn(hitArea, "touch:px-3 touch:text-sm")}
+        className={cn(hitArea, "touch:px-3 touch:text-sm desk:-mr-2.5")}
         onClick={() => router.navigate({ to: "/auth" })}
       >
         Sign in
@@ -121,7 +121,10 @@ export const SyncSettings = () => {
           <Button
             variant="ghost"
             size="xs"
-            className={cn(hitArea, "gap-1.5 text-hint hover:text-muted-foreground touch:px-3")}
+            className={cn(
+              hitArea,
+              "gap-1.5 text-hint hover:text-muted-foreground touch:px-3 desk:-mr-2.5",
+            )}
             aria-label={`Sync settings: ${isOffline ? `${unreachable ? "not syncing" : "offline"}, changes saved on this device` : syncLabel}`}
           />
         }

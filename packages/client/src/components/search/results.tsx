@@ -33,7 +33,10 @@ function ResultRow({
   const due = !done && task.dueDate ? formatDueDate(task.dueDate) : null;
 
   return (
-    <li data-task-id={task.id} className="flex items-start gap-2 py-2.5 touch:gap-2.5">
+    <li
+      data-task-id={task.id}
+      className="-mx-2 flex items-start gap-2 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/50 has-[>button:focus-visible]:outline-2 has-[>button:focus-visible]:-outline-offset-2 touch:gap-2.5"
+    >
       <Checkbox
         checked={done}
         onCheckedChange={() => onToggle(task)}
@@ -47,7 +50,7 @@ function ResultRow({
       <button
         type="button"
         onClick={() => onOpen(task.id)}
-        className="-my-2.5 flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5 py-2.5 text-left"
+        className="-my-2.5 flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5 py-2.5 text-left focus-visible:outline-none"
       >
         <span
           className={cn(

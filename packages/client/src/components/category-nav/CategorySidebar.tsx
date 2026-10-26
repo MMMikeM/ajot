@@ -2,12 +2,11 @@ import { useEffect, useState, type ReactNode, type RefCallback } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { useDroppable } from "@dnd-kit/react";
-import { Ellipsis, Plus, Search } from "lucide-react";
+import { Ellipsis, Plus, Search, UsersRound } from "lucide-react";
 import { INBOX_COLOR, CATEGORY_DROP_PREFIX } from "~/lib/constants";
 import { Popover, PopoverTrigger, PopoverContent } from "~/components/ui/popover";
 import { CategoryCollabSheet } from "~/components/CategoryCollabSheet";
 import { CollabBadge } from "./CollabBadge";
-import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/field";
 import { ColorDot } from "~/components/ui/color-dot";
 import { setActiveCategoryId } from "~/lib/state/active-category";
@@ -31,6 +30,18 @@ const OpenCount = ({ count, className }: { count: number; className?: string }) 
       </>
     )}
   </span>
+);
+
+const ActiveBar = ({ color }: { color?: string | null }) => (
+  <span
+    className="absolute top-1/2 left-0 h-3.5 w-0.5 -translate-y-1/2 rounded-full"
+    style={{ backgroundColor: color ?? "var(--primary)" }}
+  />
+);
+
+/** An icon in the colour dots' column, so the labels beside it line up with the list names */
+const NavIcon = ({ children }: { children: ReactNode }) => (
+  <span className="flex w-1.5 shrink-0 justify-center [&_svg]:shrink-0">{children}</span>
 );
 
 function SortablePill({
@@ -172,17 +183,12 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
                   }}
                   onClick={() => openList(cat.id)}
                   className={cn(
-                    "flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors",
+                    "flex min-w-0 flex-1 items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition-colors",
                     isActive ? "text-foreground" : "text-hint hover:text-foreground",
-                    isDropTarget && "rounded-md ring-1 ring-primary/30",
+                    isDropTarget && "ring-1 ring-primary/30",
                   )}
                 >
-                  {isActive && (
-                    <span
-                      className="absolute top-1/2 left-0 h-3.5 w-0.5 -translate-y-1/2 rounded-full"
-                      style={{ backgroundColor: cat.color ?? "var(--primary)" }}
-                    />
-                  )}
+                  {isActive && <ActiveBar color={cat.color} />}
                   <ColorDot size="sm" color={cat.color ?? undefined} />
                   <span className="min-w-0 truncate" title={cat.name}>
                     {cat.name}
@@ -232,15 +238,17 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
       <nav
         aria-label="Lists"
         data-testid="category-sidebar"
-        className="fixed top-(--sheet-inset) left-(--panel-left) z-10 hidden h-[calc(100dvh-2*var(--sheet-inset))] w-(--sidebar-w) flex-col overflow-y-auto py-8 pr-1 pl-3 desk:flex"
+        className="fixed top-(--sheet-inset) left-(--panel-left) z-10 hidden h-[calc(100dvh-2*var(--sheet-inset))] w-(--sidebar-w) flex-col overflow-y-auto px-2 py-8 desk:flex"
       >
         <Link
           to="/search"
           className="group/search mb-3 flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-hint transition-colors hover:text-foreground data-[status=active]:bg-muted data-[status=active]:text-foreground"
         >
-          <Search className="size-3.5" aria-hidden="true" />
+          <NavIcon>
+            <Search className="size-3.5" aria-hidden="true" />
+          </NavIcon>
           <span>Search</span>
-          <kbd className="ml-auto flex h-4.5 min-w-4.5 items-center justify-center rounded-[5px] border border-ghost px-1 font-sans text-xs text-hint group-data-[status=active]/search:hidden">
+          <kbd className="ml-auto flex h-4.5 min-w-4.5 items-center justify-center rounded-sm border border-ghost px-1 font-sans text-xs text-hint group-data-[status=active]/search:hidden">
             <span className="sr-only">Shortcut: </span>/
           </kbd>
         </Link>
@@ -248,15 +256,13 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
         <button
           onClick={() => openList(null)}
           className={cn(
-            "relative flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
+            "relative flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
             onListPage && activeCategoryId === null
               ? "text-foreground"
               : "text-hint hover:text-foreground",
           )}
         >
-          {onListPage && activeCategoryId === null && (
-            <span className="absolute top-1/2 left-0 h-3.5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
-          )}
+          {onListPage && activeCategoryId === null && <ActiveBar />}
           <ColorDot size="sm" color={INBOX_COLOR} />
           <span className="text-left">Inbox</span>
           <OpenCount count={inboxCount} />
@@ -290,18 +296,16 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
             />
           </form>
         ) : (
-          <Button
-            variant="subtle"
-            size="xs"
+          <button
             onClick={() => setAdding(true)}
-            className="h-auto justify-start gap-2 px-3 py-1.5"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-hint transition-colors hover:text-foreground"
             aria-label="Add list"
           >
-            <span className="flex w-1.5 justify-center">
-              <Plus className="size-2.5" />
-            </span>
+            <NavIcon>
+              <Plus className="size-2.5" aria-hidden="true" />
+            </NavIcon>
             <span>Add</span>
-          </Button>
+          </button>
         )}
 
         {sharedCategories.length > 0 && (
@@ -315,9 +319,17 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
           <div className="mt-2 border-t border-ghost/15 pt-2">
             <Link
               to="/people"
-              className="flex items-center px-3 py-1.5 text-sm text-hint transition-colors hover:text-foreground data-[status=active]:text-foreground"
+              className="relative flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-hint transition-colors hover:text-foreground data-[status=active]:text-foreground"
             >
-              People
+              {({ isActive }) => (
+                <>
+                  {isActive && <ActiveBar />}
+                  <NavIcon>
+                    <UsersRound className="size-3.5" aria-hidden="true" />
+                  </NavIcon>
+                  People
+                </>
+              )}
             </Link>
           </div>
         )}
