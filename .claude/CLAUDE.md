@@ -49,7 +49,7 @@ Cross-package imports use `@newtab-todo/shared` and `@newtab-todo/server` (type-
 - `pnpm typecheck` — `vp check --no-fmt --no-lint` (TypeScript 7 via tsgolint; there is no per-package `tsc`)
 - `pnpm check` — `vp check` (fmt + lint + type-aware lint + typecheck) + knip + dependency-cruiser (`pnpm deps:check`; import-graph rules in `.dependency-cruiser.cjs`) (CI gate)
 - Server bundles with `vp pack` (tsdown); config is the `pack` block in `packages/server/vite.config.ts`
-- `pnpm --filter @newtab-todo/server db:push` — push schema to Turso. CI's e2e job runs it on pushes to `main` once the suites pass, before the deploy job; a rename or data-loss change fails that step and has to be pushed by hand
+- `pnpm --filter @newtab-todo/server db:push` — push schema to Turso. CI's e2e job runs it on pushes to `main` once the suites pass, before the deploy job; a rename or data-loss change fails that step and has to be pushed by hand. A change SQLite can't make in place (a column becoming NOT NULL, a foreign key changing) rebuilds the table: copy into a new one, drop the old, rename, statement by statement with no transaction. A row that breaks the new rule fails the copy, the drop and rename still run, and the table comes back empty. Before merging one, clear such rows and copy the database (`turso db create <copy> --from-db <db>`)
 - Screenshots: `SCREENSHOT_DIR=./screenshots pnpm screenshot` — **never use `/tmp`**; output goes in `packages/e2e/screenshots/` or a project-local path
 
 ## CLAUDE.md hygiene
