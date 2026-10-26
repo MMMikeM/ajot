@@ -24,7 +24,7 @@ import { hitArea } from "~/components/hit-area";
 const INBOX_VALUE = "__inbox__";
 
 const rowTrigger =
-  "h-9 w-full justify-between border-0 py-0 text-sm hover:text-foreground touch:h-11 touch:text-base";
+  "h-9 w-full min-w-0 justify-between border-0 py-0 text-sm hover:text-foreground touch:h-11 touch:text-base";
 
 type Person = { id: string; name: string };
 
@@ -66,7 +66,7 @@ export const ListField = ({ filing, choosing }: { filing: Filing; choosing: bool
   if (choices.length === 0)
     return (
       <DetailRow icon={icon} label="List">
-        <span className="flex h-9 items-center text-sm touch:h-11 touch:text-base">
+        <span className="truncate text-sm leading-9 touch:text-base touch:leading-11">
           {category?.name}
         </span>
       </DetailRow>
@@ -89,7 +89,7 @@ export const ListField = ({ filing, choosing }: { filing: Filing; choosing: bool
         items={items}
       >
         <SelectTrigger variant="underline" aria-label="List" className={rowTrigger}>
-          <SelectValue />
+          <SelectValue className="truncate" />
         </SelectTrigger>
         <SelectContent>
           {items.map((item) => (
@@ -223,7 +223,7 @@ const AddShare = ({ taskId, sharing }: { taskId: string; sharing: Sharing }) => 
         onValueChange={(v) => void share(v as string)}
       >
         <SelectTrigger variant="underline" aria-label="Share with" className={rowTrigger}>
-          <SelectValue placeholder={pending ? "Sharing…" : "Share with…"} />
+          <SelectValue className="truncate" placeholder={pending ? "Sharing…" : "Share with…"} />
         </SelectTrigger>
         <SelectContent>
           {sharing.addableContacts.map((c) => (
