@@ -92,7 +92,7 @@ export const categoryRoutes = authed()
         ...cat.collaborators.flatMap((c) => (c.user ? [c.user.id] : [])),
       ];
 
-      const { category, inCategory, deletedIds, movedTasks, unlinkedNotes, unfiledShares } =
+      const { category, inCategory, deletedIds, movedTasks, unfiledShares } =
         await categoryRepo.removeWithTasks(id, taskAction, taskIds);
 
       const taskEvents = [
@@ -134,8 +134,9 @@ export const categoryRoutes = authed()
         ...new Set(unfiled.map((s) => s.taskId)),
       ]);
       const sharesByTask = new Map(unfiledTasks.map((t) => [t.id, t.shares]));
-      broadcastPerUser(c, [
-        ...unfiled.map((s) => ({
+      broadcastPerUser(
+        c,
+        unfiled.map((s) => ({
           userId: s.sharedWithUserId,
           event: {
             model: "tasks" as const,
@@ -143,11 +144,7 @@ export const categoryRoutes = authed()
             data: { id: s.taskId, shares: sharesByTask.get(s.taskId) ?? [] },
           },
         })),
-        ...unlinkedNotes.map((note) => ({
-          userId: note.userId,
-          event: { model: "notes" as const, action: "update" as const, data: note },
-        })),
-      ]);
+      );
 
       return c.json(category, 200);
     },

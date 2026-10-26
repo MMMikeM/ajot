@@ -2,7 +2,6 @@ import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db, inTransaction } from "./client";
-import noteRepo from "./note.repo";
 import { categories, tasks, taskShares } from "./schema";
 import { BadRequestError, InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
 import { now } from "@newtab-todo/shared/iso";
@@ -114,11 +113,11 @@ const removeWithTasks = async (
 ) =>
   inTransaction(async (tx) => {
     const inCategory = await tx.query.tasks.findMany({
-      where: { categoryId: id },
+      where: { categoryId: id, deletedAt: { isNull: true } },
       columns: { id: true, userId: true },
       with: {
         shares: { columns: { sharedWithUserId: true } },
-        subtasks: { columns: { id: true, userId: true } },
+        subtasks: { where: { deletedAt: { isNull: true } }, columns: { id: true, userId: true } },
       },
     });
     if (inCategory.length > 0 && !action)
@@ -130,8 +129,14 @@ const removeWithTasks = async (
     const deletedIds = doomed.flatMap((t) => [t.id, ...t.subtasks.map((s) => s.id)]);
     const movedIds = inCategory.filter((t) => !doomed.includes(t)).map((t) => t.id);
 
-    const unlinkedNotes = await noteRepo.unlinkFromTasks(tx, deletedIds);
-    if (deletedIds.length > 0) await tx.delete(tasks).where(inArray(tasks.id, deletedIds));
+    // Hidden, as deleting one task does; the category itself goes, so a restore lands in the Inbox
+    if (deletedIds.length > 0) {
+      const at = now();
+      await tx
+        .update(tasks)
+        .set({ deletedAt: at, updatedAt: at })
+        .where(inArray(tasks.id, deletedIds));
+    }
     const movedTasks =
       movedIds.length > 0
         ? await tx
@@ -148,7 +153,7 @@ const removeWithTasks = async (
 
     const [category] = await tx.delete(categories).where(eq(categories.id, id)).returning();
     if (!category) throw new NotFoundError("category", id);
-    return { category, inCategory, deletedIds, movedTasks, unlinkedNotes, unfiledShares };
+    return { category, inCategory, deletedIds, movedTasks, unfiledShares };
   });
 
 export default {

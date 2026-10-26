@@ -20,3 +20,4 @@ Single Turso instance with embedded replica. `syncInterval: 60` keeps local SQLi
 - **Drizzle v1 `where` uses object syntax**, not `eq()` operators: `where: { id: someId }`.
 - **`db.insert()` / `db.update()` / `db.delete()`** (classic API) are fine for writes.
 - Check existing repos in `src/db/` for the canonical patterns before writing new queries.
+- **Tasks are never removed, only hidden** (`deletedAt`), so Undo restores a task with its shares, notes and reminders for everyone. Every read of tasks filters `deletedAt: { isNull: true }`, a `subtasks` relation included; only a restore reads a deleted one. Notes of a deleted task drop out of the notes list with it.

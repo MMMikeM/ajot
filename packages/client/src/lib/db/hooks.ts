@@ -10,6 +10,7 @@ import { getCurrentUserId } from "~/lib/auth/current-user";
 import type { CategoryTaskAction } from "~/lib/constants";
 import type { Task, Category, Note } from "~/lib/types";
 import { now } from "~/lib/utils";
+import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 export { contactsCollection };
 export const useTasks = () => useLiveQuery(tasksCollection);
 export const useCategories = () => useLiveQuery(categoriesCollection);
@@ -18,14 +19,17 @@ export const useContacts = () => useLiveQuery(contactsCollection);
 
 export const updateTask = (id: string, fields: Partial<Task>) => {
   console.log(`[mutation] updateTask id=${id}`, fields);
+  const at = now();
+  const stamps = taskChangeStamps(fields, at);
   const tx = offline.createOfflineTransaction({ mutationFnName: "syncTasks" });
   tx.mutate(() =>
-    tasksCollection.update(id, (draft) => Object.assign(draft, { ...fields, updatedAt: now() })),
+    tasksCollection.update(id, (draft) =>
+      Object.assign(draft, { ...stamps, ...fields, updatedAt: at }),
+    ),
   );
   console.log("[mutation] optimistic applied, tx queued");
 };
 
-/** Returns an undo that brings back the task, its subtasks and their notes' links. */
 /** Deletes the tasks and their subtasks in one transaction, so one Undo restores them all. */
 export const deleteTasks = (ids: string[]) => {
   console.log(`[mutation] deleteTasks ids=${ids.join(",")}`);
@@ -35,35 +39,34 @@ export const deleteTasks = (ids: string[]) => {
     .filter((t) => roots.has(t.id) || (t.parentId !== null && roots.has(t.parentId)))
     .sort((a, b) => Number(roots.has(b.id)) - Number(roots.has(a.id)));
   const deletedIds = new Set(deleted.map((t) => t.id));
-  const noteLinks = [...(notesCollection.state?.values() ?? [])].flatMap((n) =>
-    n.taskId && deletedIds.has(n.taskId) ? [{ id: n.id, taskId: n.taskId }] : [],
-  );
   const tx = offline.createOfflineTransaction({
     mutationFnName: "deleteTask",
     metadata: { taskIds: ids } satisfies TaskDeleteMetadata,
   });
-  tx.mutate(() => {
-    tasksCollection.delete([...deletedIds]);
-    for (const link of noteLinks)
-      notesCollection.update(link.id, (draft) =>
-        Object.assign(draft, { taskId: null, updatedAt: now() }),
-      );
-  });
+  tx.mutate(() => tasksCollection.delete([...deletedIds]));
   console.log("[mutation] optimistic applied, tx queued");
-  return () => restoreTasks(deleted, noteLinks);
+  return () => restoreTasks(deleted);
 };
 
 export const deleteTask = (id: string) => deleteTasks([id]);
 
-// Shares were deleted with the task and don't come back
-const restoreTasks = (tasks: Task[], noteLinks: { id: string; taskId: string }[]) => {
+// A row read from a collection also carries its virtual $ fields, which the notes API rejects
+const noteRow = ({ id, userId, title, content, taskId, createdAt }: Note): Note => ({
+  id,
+  userId,
+  title,
+  content,
+  taskId,
+  createdAt,
+  updatedAt: now(),
+});
+
+// The server kept the tasks with their shares and notes, so this only puts them back on screen
+// until the restore lands
+const restoreTasks = (tasks: Task[]) => {
   const tx = offline.createOfflineTransaction({ mutationFnName: "restoreTasks" });
   tx.mutate(() => {
-    for (const task of tasks) tasksCollection.insert({ ...task, shares: [], updatedAt: now() });
-    for (const link of noteLinks)
-      notesCollection.update(link.id, (draft) =>
-        Object.assign(draft, { taskId: link.taskId, updatedAt: now() }),
-      );
+    for (const task of tasks) tasksCollection.insert({ ...task, updatedAt: now() });
   });
 };
 
@@ -160,6 +163,6 @@ export const deleteNote = (id: string) => {
   return () => {
     if (!deleted) return;
     const restore = offline.createOfflineTransaction({ mutationFnName: "syncNotes" });
-    restore.mutate(() => notesCollection.insert({ ...deleted, updatedAt: now() }));
+    restore.mutate(() => notesCollection.insert(noteRow(deleted)));
   };
 };

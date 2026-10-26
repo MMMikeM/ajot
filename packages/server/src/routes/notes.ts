@@ -8,6 +8,7 @@ import noteRepo, {
 import { authed } from "../middleware";
 import { broadcast } from "../broadcast";
 import { jsonBody, jsonContent, withAuth } from "./crud";
+import { markTaskEdited } from "./task-users";
 
 export const noteRoutes = authed()
   .openapi(
@@ -26,8 +27,10 @@ export const noteRoutes = authed()
       responses: withAuth({ 200: jsonContent(noteResponseSchema) }),
     }),
     async (c) => {
-      const result = await noteRepo.insert({ ...c.req.valid("json"), userId: c.get("userId") });
-      broadcast(c, "notes", "insert", result, [c.get("userId")]);
+      const userId = c.get("userId");
+      const result = await noteRepo.insert({ ...c.req.valid("json"), userId });
+      broadcast(c, "notes", "insert", result, [userId]);
+      if (result.taskId) await markTaskEdited(c, result.taskId, userId, result.updatedAt);
       return c.json(result, 200);
     },
   )
@@ -40,8 +43,10 @@ export const noteRoutes = authed()
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
+      const userId = c.get("userId");
       const result = await noteRepo.update(id, updatedAt, fields);
-      broadcast(c, "notes", "update", result, [c.get("userId")]);
+      broadcast(c, "notes", "update", result, [userId]);
+      if (result.taskId) await markTaskEdited(c, result.taskId, userId, updatedAt);
       return c.json(result, 200);
     },
   )

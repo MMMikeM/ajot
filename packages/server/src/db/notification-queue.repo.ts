@@ -19,7 +19,7 @@ const findPending = async (beforeOrAt: string) =>
       scheduledFor: { lte: beforeOrAt },
     },
     with: {
-      task: { columns: { id: true, title: true, dueDate: true, status: true } },
+      task: { columns: { id: true, title: true, dueDate: true, status: true, deletedAt: true } },
     },
   });
 
