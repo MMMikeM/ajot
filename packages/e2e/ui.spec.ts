@@ -300,6 +300,21 @@ test.describe("deleting someone else's task", () => {
   });
 });
 
+test("an iPhone that hasn't installed Ajot is told how, until it's dismissed", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "the offer is for Safari's Add to Home Screen");
+  await mockApi(page, { setupHintSeen: false });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const offer = page.getByText("tap Share, then Add to Home Screen");
+  await expect(offer).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: "Dismiss" }).click();
+  await expect(offer).toHaveCount(0);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.locator("#add-task-input")).toBeVisible({ timeout: 15000 });
+  await expect(offer).toHaveCount(0);
+});
+
 test.describe("signing up", () => {
   const signedOutAt = async (page: Page, path: string, awaitingFirstUser = false) => {
     await mockApi(page, { signedIn: false });
@@ -309,26 +324,30 @@ test.describe("signing up", () => {
     const config = page.waitForResponse("**/api/config");
     await page.goto(path, { waitUntil: "domcontentloaded" });
     await config;
-    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   };
 
   test("a server with accounts only takes signups through an invite", async ({ page }) => {
     await signedOutAt(page, "/auth");
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+    await expect(page.getByText("New here? Ask someone on this server")).toBeVisible();
     await expect(page.getByRole("button", { name: "Create an account" })).toHaveCount(0);
   });
 
-  test("a new server offers its first account", async ({ page }) => {
+  test("a new server opens on its first account", async ({ page }) => {
     await signedOutAt(page, "/auth", true);
-    await page.getByRole("button", { name: "Create an account" }).click();
     await expect(
       page.getByRole("heading", { name: "Create the server's first account" }),
     ).toBeVisible();
+    await page.getByRole("button", { name: "I already have an account" }).click();
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   });
 
-  test("an invite link signs up with its invite", async ({ page }) => {
+  test("an invite link opens on signing up with its invite", async ({ page }) => {
     await signedOutAt(page, "/invite/abc");
     await expect(page).toHaveURL(/\/auth$/);
-    await page.getByRole("button", { name: "Create an account" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Sarah Murray invited you to Ajot" }),
+    ).toBeVisible();
     await page.getByLabel("Name", { exact: true }).fill("Sam Okafor");
     await page.getByLabel("Username").fill("sam");
     await page.getByLabel("Password").fill("correct horse");
@@ -336,6 +355,14 @@ test.describe("signing up", () => {
     const signup = page.waitForRequest((r) => r.url().endsWith("/api/auth/signup"));
     await page.getByRole("button", { name: "Create account" }).click();
     expect((await signup).postDataJSON()).toMatchObject({ username: "sam", invite: "abc" });
+  });
+
+  test("an invite that can't be looked up still signs up with it", async ({ page }) => {
+    const lookup = page.waitForResponse("**/api/auth/invites/expired");
+    await signedOutAt(page, "/invite/expired");
+    await lookup;
+    await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
+    await expect(page.getByText("Signing up accepts your invite.")).toBeVisible();
   });
 });
 

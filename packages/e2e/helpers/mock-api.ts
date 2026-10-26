@@ -157,22 +157,31 @@ type MockApiOptions = {
   data?: MockData;
   /** Suppress the one-time swipe peek, which would otherwise move the first row on touch */
   swipeHintSeen?: boolean;
+  /** Suppress the install and background-update offers, which would otherwise sit above the list */
+  setupHintSeen?: boolean;
 };
 
 export const mockApi = async (
   page: Page,
-  { signedIn = true, data = mockData(), swipeHintSeen = true }: MockApiOptions = {},
+  {
+    signedIn = true,
+    data = mockData(),
+    swipeHintSeen = true,
+    setupHintSeen = true,
+  }: MockApiOptions = {},
 ) => {
   await page.addInitScript(
-    ({ me, signedIn, swipeHintSeen }) => {
+    ({ me, signedIn, swipeHintSeen, setupHintSeen }) => {
       if (signedIn) {
         localStorage.setItem("newtab-todo-token", "mock-token");
         localStorage.setItem("newtab-todo-user-id", me.id);
         localStorage.setItem("newtab-todo-user-info", JSON.stringify(me));
       }
       if (swipeHintSeen) localStorage.setItem("newtab-todo-swipe-hint-seen", "1");
+      if (setupHintSeen)
+        localStorage.setItem("newtab-todo-setup-hint-dismissed", '["install","background"]');
     },
-    { me: MOCK_ME, signedIn, swipeHintSeen },
+    { me: MOCK_ME, signedIn, swipeHintSeen, setupHintSeen },
   );
 
   const collections: Record<string, unknown> = {
@@ -196,6 +205,12 @@ export const mockApi = async (
     if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
     if (path.startsWith("/api/events"))
       return route.fulfill({ status: 204, headers: cors, body: "" });
+
+    // Every invite is Sarah's, except one called "expired"
+    if (path.startsWith("/api/auth/invites/"))
+      return path.endsWith("/expired")
+        ? route.fulfill({ status: 404, headers: cors, json: { error: "Invite not found" } })
+        : route.fulfill({ status: 200, headers: cors, json: { inviterName: MOCK_SARAH.name } });
 
     let body: unknown = {};
     if (request.method() === "GET") body = collections[path] ?? {};

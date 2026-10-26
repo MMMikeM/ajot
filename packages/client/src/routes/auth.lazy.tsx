@@ -9,6 +9,7 @@ import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/field";
 import { Input } from "~/components/ui/field";
 import { getBuildTarget } from "~/lib/build-target";
+import { useInviterName } from "~/lib/hooks/use-inviter-name";
 import { ext, requestSyncDataConsent } from "~/lib/ext";
 import { TOKEN_KEY, MSG_TOKEN_CHANGED } from "~/lib/constants";
 import { getServerUrl, setServerUrl } from "~/lib/server-url";
@@ -64,16 +65,13 @@ const connectToServer = async (input: string) => {
 
 const AuthView = () => {
   const router = useRouter();
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [pendingInvite] = useState(readPendingInvite);
+  const inviterName = useInviterName(pendingInvite);
+  // Someone following an invite link is most likely new here
+  const [mode, setMode] = useState<"login" | "signup">(pendingInvite ? "signup" : "login");
   const [serverError, setServerError] = useState<string | null>(null);
   const [config, setConfig] = useState<ServerConfig | null>(null);
-  const [pendingInvite] = useState(readPendingInvite);
   const syncConsent = useRef<Promise<boolean>>(Promise.resolve(true));
-
-  useEffect(() => {
-    if (choosesServer && !getServerUrl()) return;
-    fetchServerConfig(getServerUrl()).then(setConfig).catch(console.error);
-  }, []);
 
   // Past its first account, a server only takes signups through an invite. Until the config
   // arrives, offer it anyway: the server's refusal explains itself.
@@ -117,16 +115,43 @@ const AuthView = () => {
     },
   });
 
+  useEffect(() => {
+    if (choosesServer && !getServerUrl()) return;
+    fetchServerConfig(getServerUrl())
+      .then((fetched) => {
+        setConfig(fetched);
+        // A new server has no one to sign in as, so open on its first account
+        if (fetched.awaitingFirstUser && !form.state.isDirty) setMode("signup");
+      })
+      .catch(console.error);
+  }, []);
+
+  const signupClosed = mode === "login" && !canSignUp;
+  const subline = pendingInvite
+    ? mode === "signup"
+      ? inviterName
+        ? "Create your account to accept."
+        : "Signing up accepts your invite."
+      : `You'll accept ${inviterName ? `${inviterName}'s` : "the"} invite next.`
+    : mode === "signup" && config?.awaitingFirstUser
+      ? "Everyone after you joins with an invite from someone here."
+      : null;
+
   return (
     <div className="flex flex-col items-center justify-start pt-[20vh] pb-16 touch:flex-1 touch:overflow-y-auto touch:pt-[12vh] touch:pb-10">
-      <div className="w-full max-w-xs">
-        <h2 className="mb-8 font-display text-[1.75rem] leading-tight text-balance text-foreground">
-          {mode === "login"
-            ? "Sign in to sync across devices"
-            : config?.awaitingFirstUser
-              ? "Create the server's first account"
-              : "Create your account"}
-        </h2>
+      <div className="w-full max-w-xs touch:max-w-none">
+        <div className="mb-8 flex flex-col gap-2">
+          <h2 className="font-display text-[1.75rem] leading-tight text-balance text-foreground">
+            {mode === "login"
+              ? "Sign in to sync across devices"
+              : inviterName
+                ? `${inviterName} invited you to Ajot`
+                : config?.awaitingFirstUser
+                  ? "Create the server's first account"
+                  : "Create your account"}
+          </h2>
+          {subline && <p className="text-sm text-pretty text-hint">{subline}</p>}
+        </div>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -244,7 +269,7 @@ const AuthView = () => {
                     setServerError(null);
                   }}
                 >
-                  {mode === "login" ? "Create an account" : "Already have an account?"}
+                  {mode === "login" ? "Create an account" : "I already have an account"}
                 </Button>
               )}
               <Button
@@ -257,6 +282,12 @@ const AuthView = () => {
                 Skip
               </Button>
             </div>
+            {signupClosed && (
+              <p className="mt-2 text-center text-sm text-pretty text-hint">
+                New here? Ask someone on this server for an invite link, or skip to keep tasks on
+                this device.
+              </p>
+            )}
           </div>
         </form>
       </div>
