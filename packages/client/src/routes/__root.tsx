@@ -9,6 +9,7 @@ import { NavContextProvider } from "~/lib/state/nav-context";
 import { isListPath } from "~/lib/list-path";
 import { registerServiceWorker } from "~/lib/sync/register-sw";
 import { toastManager } from "~/lib/undo-toast";
+import { useLeaveGuard } from "~/lib/hooks/use-leave-guard";
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -20,6 +21,7 @@ export default function RootComponent() {
   useEffect(() => {
     registerServiceWorker();
   }, []);
+  useLeaveGuard();
 
   return (
     <NavContextProvider>
