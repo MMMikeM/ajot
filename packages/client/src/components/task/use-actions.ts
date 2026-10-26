@@ -1,5 +1,5 @@
 import { flushSync } from "react-dom";
-import { useNotes, updateTask, deleteTask, deleteTasks } from "~/lib/db/hooks";
+import { updateTask, deleteTask, deleteTasks } from "~/lib/db/hooks";
 import { tasksCollection } from "~/lib/db/collections";
 import { addTask } from "~/lib/db/add-task";
 import { pushUndoToast as pushUndo } from "~/lib/undo-toast";
@@ -10,9 +10,6 @@ import type { Task } from "~/lib/types";
 const currentTasks = () => [...(tasksCollection.state?.values() ?? [])];
 
 export const useTaskActions = () => {
-  // Keeps notes loaded: deleting a task unlinks its notes, and Undo links them back
-  useNotes();
-
   const handleToggle = (task: Task) => {
     const newStatus = task.status === "done" ? "todo" : "done";
     updateTask(task.id, { status: newStatus });

@@ -44,6 +44,7 @@ export const addTask = async (
       updatedAt: timestamp,
       editedAt: null,
       completedAt: null,
+      deletedAt: null,
       subtasks: [],
       shares: [],
       assignee: null,

@@ -10,6 +10,7 @@ import { client } from "~/lib/api";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
 import { getCurrentUserId } from "~/lib/auth/current-user";
 import type { CategoryTaskAction } from "~/lib/constants";
+import type { ISODateString } from "@newtab-todo/shared/iso";
 import type { Collection } from "@tanstack/db";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- transaction mutation payloads are untyped
@@ -119,7 +120,7 @@ export type TaskDeleteMetadata = { taskIds: string[] };
 type LegacyTaskDeleteMetadata = { taskId: string };
 
 // One request for the task: the server deletes its subtasks with it, so a DELETE per subtask
-// would 404. It also unlinks the notes on them, which this transaction did locally.
+// would 404
 const deleteTaskWithSubtasks = async ({
   transaction,
 }: {
@@ -132,14 +133,25 @@ const deleteTaskWithSubtasks = async ({
     console.log(`[sync:tasks] DELETE → id=${taskId} with subtasks`);
     await assertDeleted(await client.api.tasks.$delete({ json: { id: taskId } }));
   }
-  for (const m of transaction.mutations) {
-    if (m.collection === notesCollection)
-      await notesCollection.utils.writeUpdate({ id: m.key, taskId: null } as never);
+  for (const m of transaction.mutations)
+    // A delete queued before deletes kept notes also unlinked them here; the server no longer does
+    if (m.collection === notesCollection) await notesCollection.utils.refetch();
     else await writeDeleted(tasksCollection, m.key);
-  }
 };
 
-// Tasks before the notes linking back to them, which the server checks against tasks
+// A delete only hid the task on the server, so Undo clears that rather than adding it again
+const restoreTask = async (m: PendingWrite) => {
+  console.log(`[sync:tasks] restore key=${m.key}`);
+  const res = await assertOk(
+    await client.api.tasks.$put({
+      json: { id: m.key, deletedAt: null, updatedAt: m.modified.updatedAt as ISODateString },
+    }),
+  );
+  await tasksCollection.utils.writeUpsert({ ...m.modified, ...(await res.json()) } as never);
+};
+
+// Parents before their subtasks, which the server restores one by one. A restore queued before
+// deletes kept notes also relinks notes.
 const restoreTasksAndNotes = async ({
   transaction,
 }: {
@@ -147,7 +159,7 @@ const restoreTasksAndNotes = async ({
 }) => {
   assertSignedIn();
   for (const m of transaction.mutations)
-    await (m.collection === notesCollection ? syncNote : syncTask)(m);
+    await (m.collection === notesCollection ? syncNote(m) : restoreTask(m));
 };
 
 export type CategoryDeleteMetadata = {
