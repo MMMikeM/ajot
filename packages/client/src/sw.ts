@@ -106,18 +106,23 @@ self.addEventListener("periodicsync", (event) => {
 
 self.addEventListener("notificationclick", (event: NotificationEvent) => {
   event.notification.close();
-  const url = (event.notification.data as { url?: string })?.url ?? "/";
+  const path = (event.notification.data as { url?: string })?.url ?? "/";
+  const url = new URL(path, self.location.origin).href;
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window" }).then((clients) => {
-      for (const client of clients) {
-        if ("focus" in client) {
-          void (client as WindowClient).focus();
-          void (client as WindowClient).navigate(new URL(url, self.location.origin).href);
-          return;
+    (async () => {
+      for (const client of await self.clients.matchAll({ type: "window" })) {
+        // Firefox for Android can come to the front without switching to the tab, or refuse to.
+        // Unless the tab really has focus, open the task in a window of its own.
+        try {
+          const focused = await client.focus();
+          if (!focused.focused) continue;
+          if (await focused.navigate(url)) return;
+        } catch {
+          // Try the next window, else open one
         }
       }
-      return self.clients.openWindow(url);
-    }),
+      await self.clients.openWindow(url);
+    })(),
   );
 });
