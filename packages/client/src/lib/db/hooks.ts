@@ -55,6 +55,17 @@ export const deleteTasks = (ids: string[]) => {
 
 export const deleteTask = (id: string) => deleteTasks([id]);
 
+// A row read from a collection also carries its virtual $ fields, which the notes API rejects
+const noteRow = ({ id, userId, title, content, taskId, createdAt }: Note): Note => ({
+  id,
+  userId,
+  title,
+  content,
+  taskId,
+  createdAt,
+  updatedAt: now(),
+});
+
 // Shares were deleted with the task and don't come back
 const restoreTasks = (tasks: Task[], noteLinks: { id: string; taskId: string }[]) => {
   const tx = offline.createOfflineTransaction({ mutationFnName: "restoreTasks" });
@@ -160,6 +171,6 @@ export const deleteNote = (id: string) => {
   return () => {
     if (!deleted) return;
     const restore = offline.createOfflineTransaction({ mutationFnName: "syncNotes" });
-    restore.mutate(() => notesCollection.insert({ ...deleted, updatedAt: now() }));
+    restore.mutate(() => notesCollection.insert(noteRow(deleted)));
   };
 };
