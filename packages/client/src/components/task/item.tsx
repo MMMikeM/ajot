@@ -18,6 +18,7 @@ import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { useSwipeReveal } from "~/lib/hooks/use-swipe-reveal";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { canDeleteTask } from "~/lib/task-permissions";
+import { isReadyToTick } from "~/lib/ready-to-tick";
 import { rowDragSensors } from "./row-drag";
 import { formatDueDate } from "~/lib/due-date";
 
@@ -171,6 +172,7 @@ function TaskRow({
   const openSubtasks = subtasks.filter((s) => s.status !== "done");
   // Ticking a parent ticks its subtasks, so on a done row the count only repeats the tick
   const doneSubtaskCount = isDone ? 0 : subtasks.length - openSubtasks.length;
+  const readyToTick = isReadyToTick(task, subtasks);
 
   return (
     <div
@@ -264,6 +266,7 @@ function TaskRow({
               "mt-1 touch:mt-[3px] touch:size-[18px] touch:after:-inset-3",
               isSubtask && "mt-0.5 touch:mt-px",
               isDone && checkboxDoneClass,
+              readyToTick && "border-primary",
             )}
           />
           {onOpen ? (

@@ -39,13 +39,37 @@ const writeDoneOpen = (open: boolean) => {
   }
 };
 
+/**
+ * A task moving from the list into Done, here or on another device. Ticking a row removes it from
+ * the list, and on a phone Done is usually closed, so the count drops in to show where it went;
+ * ticking the last one settles "All done." in. Loading, switching lists, Clear and its Undo don't
+ * move one across, so they show either at once.
+ */
+const useLandingInDone = (doneCount: number, activeCount: number, listId: string | null) => {
+  const [seen, setSeen] = useState({ doneCount, activeCount, listId });
+  const [landings, setLandings] = useState(0);
+  const [landing, setLanding] = useState(false);
+  if (doneCount !== seen.doneCount || activeCount !== seen.activeCount || listId !== seen.listId) {
+    const landed =
+      listId === seen.listId && doneCount > seen.doneCount && activeCount < seen.activeCount;
+    setSeen({ doneCount, activeCount, listId });
+    setLanding(landed);
+    if (landed) setLandings(landings + 1);
+  }
+  return { landings, landing, onLanded: () => setLanding(false) };
+};
+
+type Landing = ReturnType<typeof useLandingInDone>;
+
 const DoneSection = ({
   count,
+  countLanding,
   onClear,
   clearsAll,
   children,
 }: {
   count: number;
+  countLanding: Landing;
   /** Absent when none of the done tasks are yours to delete */
   onClear?: () => void;
   /** Clear empties the section, so it unmounts with the button */
@@ -79,6 +103,8 @@ const DoneSection = ({
           size="xs"
           onClick={toggle}
           aria-expanded={open}
+          // The count's inline-block would read as "Done ( 3 )"
+          aria-label={`Done (${count})`}
           className="-ml-2.5 font-medium tracking-wider text-muted-foreground uppercase hover:text-foreground aria-expanded:bg-transparent touch:h-11"
         >
           <ChevronRight
@@ -86,7 +112,21 @@ const DoneSection = ({
             className="transition-transform"
             style={{ transform: open ? "rotate(90deg)" : "none" }}
           />
-          Done ({count})
+          <span>
+            Done (
+            <span
+              key={countLanding.landings}
+              onAnimationEnd={countLanding.onLanded}
+              className={cn(
+                "inline-block tabular-nums",
+                countLanding.landing &&
+                  "animate-[done-count-land_320ms_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none",
+              )}
+            >
+              {count}
+            </span>
+            )
+          </span>
         </Button>
         {open && onClear && (
           <Button
@@ -113,21 +153,46 @@ const getEmptyPhrase = () => {
   return "All quiet.";
 };
 
-const EmptySection = ({ activeTasks, doneTasks }: { activeTasks: Task[]; doneTasks: Task[] }) => {
+const settleIn =
+  "animate-[cleared-settle_700ms_cubic-bezier(0.16,1,0.3,1)_both] motion-reduce:animate-none";
+const settleInAfter =
+  "animate-[cleared-settle_700ms_cubic-bezier(0.16,1,0.3,1)_150ms_both] motion-reduce:animate-none";
+
+const EmptySection = ({
+  activeTasks,
+  doneTasks,
+  clearedAt,
+  justFinished,
+}: {
+  activeTasks: Task[];
+  doneTasks: Task[];
+  /** When this list's done tasks were last cleared, if they were */
+  clearedAt?: number;
+  /** The last open task has just moved into Done */
+  justFinished: boolean;
+}) => {
   if (activeTasks.length !== 0) return null;
+  if (doneTasks.length === 0) return <EmptyState clearedAt={clearedAt} />;
+  return <ClearedState justFinished={justFinished} />;
+};
 
-  if (doneTasks.length === 0)
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center pb-8 touch:pb-0">
-        <p className="font-display text-2xl text-muted-foreground">{getEmptyPhrase()}</p>
-        <p className="mt-1 text-sm text-hint">
-          type something <span className="touch:hidden">above</span>
-          <span className="hidden touch:inline">below</span> to begin
-        </p>
-      </div>
-    );
+// Clearing an all-done list hands "All done." over to the resting phrase, so that settles in too
+const EmptyState = ({ clearedAt }: { clearedAt?: number }) => {
+  const [settling] = useState(
+    () => clearedAt !== undefined && Date.now() - clearedAt < CLEARED_WINDOW_MS,
+  );
 
-  return <ClearedState doneTasks={doneTasks} />;
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center pb-8 touch:pb-0">
+      <p className={cn("font-display text-2xl text-muted-foreground", settling && settleIn)}>
+        {getEmptyPhrase()}
+      </p>
+      <p className={cn("mt-1 text-sm text-hint", settling && settleInAfter)}>
+        type something <span className="touch:hidden">above</span>
+        <span className="hidden touch:inline">below</span> to begin
+      </p>
+    </div>
+  );
 };
 
 const getClearedLine = () => {
@@ -138,38 +203,22 @@ const getClearedLine = () => {
   return "Rest well.";
 };
 
-// Settles in only when the last task was ticked moments ago, here or on another device. A list
-// that was already clear (on load, or switching lists) shows it at once.
 const CLEARED_WINDOW_MS = 3000;
-const wasJustCleared = (doneTasks: Task[]) =>
-  doneTasks.some((t) => Date.now() - Date.parse(t.updatedAt) < CLEARED_WINDOW_MS);
 
-const ClearedState = ({ doneTasks }: { doneTasks: Task[] }) => {
-  const [settling] = useState(() => wasJustCleared(doneTasks));
+const ClearedState = ({ justFinished }: { justFinished: boolean }) => {
+  const [settling] = useState(justFinished);
 
   return (
     <div className="flex flex-col items-center py-6 touch:flex-1 touch:justify-center touch:py-0">
-      <p
-        className={cn(
-          "font-display text-2xl text-muted-foreground",
-          settling &&
-            "animate-[cleared-settle_700ms_cubic-bezier(0.16,1,0.3,1)_both] motion-reduce:animate-none",
-        )}
-      >
+      <p className={cn("font-display text-2xl text-muted-foreground", settling && settleIn)}>
         All done.
       </p>
-      <p
-        className={cn(
-          "mt-1 text-sm text-hint",
-          settling &&
-            "animate-[cleared-settle_700ms_cubic-bezier(0.16,1,0.3,1)_150ms_both] motion-reduce:animate-none",
-        )}
-      >
-        {getClearedLine()}
-      </p>
+      <p className={cn("mt-1 text-sm text-hint", settling && settleInAfter)}>{getClearedLine()}</p>
     </div>
   );
 };
+
+const stampClear = (listId: string | null) => ({ listId, at: Date.now() });
 
 const SortableTask = memo(function SortableTask({
   index,
@@ -213,6 +262,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   // that id by addTask) still count as owned and show up in the list.
   const userId = useOptimisticUserId();
   const actions = useTaskActions();
+  const [lastClear, setLastClear] = useState<{ listId: string | null; at: number }>();
   const activeListRef = useRef<HTMLUListElement>(null);
   // Not built by a shared wrapper: the compiler won't cache a call's result that reads a ref, and a
   // new handler each render would render every row again
@@ -239,6 +289,11 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   );
 
   const activeTasks = categoryTasks.filter((t) => t.status !== "done").sort(bySortOrder);
+  const landing = useLandingInDone(
+    categoryTasks.length - activeTasks.length,
+    activeTasks.length,
+    activeCategoryId,
+  );
   const subtasksByParent = groupSubtasks(allTasks ?? []);
 
   const { handleDragEnd } = useDndActions({
@@ -292,13 +347,22 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
           ))}
         </ul>
 
-        <EmptySection activeTasks={activeTasks} doneTasks={doneTasks} />
+        <EmptySection
+          activeTasks={activeTasks}
+          doneTasks={doneTasks}
+          clearedAt={lastClear?.listId === activeCategoryId ? lastClear.at : undefined}
+          justFinished={landing.landing}
+        />
 
         <DoneSection
           count={doneTasks.length}
+          countLanding={landing}
           onClear={
             clearableDoneTasks.length > 0
-              ? () => actions.handleClearDone(clearableDoneTasks)
+              ? () => {
+                  setLastClear(stampClear(activeCategoryId));
+                  actions.handleClearDone(clearableDoneTasks);
+                }
               : undefined
           }
           clearsAll={clearableDoneTasks.length === doneTasks.length}

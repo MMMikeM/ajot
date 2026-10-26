@@ -12,7 +12,7 @@ const inboxTask = (id: string, title: string, status: "todo" | "done") => ({
   userId: "u-mike",
   categoryId: null,
   assigneeId: null,
-  parentId: null,
+  parentId: null as string | null,
   title,
   description: null,
   status,
@@ -109,4 +109,110 @@ test("done checkboxes recede next to a freshly ticked one", async ({ page }) => 
   const tickedFill = await activeBox.evaluate((el) => getComputedStyle(el).backgroundColor);
 
   expect(doneFill).not.toEqual(tickedFill);
+});
+
+// Recorded as they start: the drop is over before a poll after the 450ms hold would see it
+const recordAnimationStarts = (page: Page) =>
+  page.evaluateHandle(() => {
+    const names: string[] = [];
+    document.addEventListener("animationstart", (e) => names.push(e.animationName));
+    return names;
+  });
+
+const doneToggle = (page: Page, count: number) =>
+  page.getByRole("button", { name: `Done (${count})`, exact: true });
+
+const doneCount = (page: Page, count: number) =>
+  doneToggle(page, count).getByText(String(count), { exact: true });
+
+test("a ticked task drops into the Done count, which stays still on load", async ({ page }) => {
+  await openInbox(page, [
+    inboxTask("o1", "Water the plants", "todo"),
+    inboxTask("o2", "Call the dentist", "todo"),
+    ...doneTasks,
+  ]);
+  expect(await runningAnimations(doneCount(page, 2))).toEqual([]);
+  const started = await recordAnimationStarts(page);
+
+  await checkboxOf(page, "Water the plants").click();
+
+  await expect(doneToggle(page, 3)).toBeVisible();
+  expect(await started.jsonValue()).toContain("done-count-land");
+});
+
+test("with reduced motion the Done count changes without moving", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openInbox(page, [inboxTask("o1", "Water the plants", "todo"), ...doneTasks]);
+  const started = await recordAnimationStarts(page);
+
+  await checkboxOf(page, "Water the plants").click();
+
+  await expect(doneToggle(page, 3)).toBeVisible();
+  expect(await started.jsonValue()).not.toContain("done-count-land");
+});
+
+test("clearing an all-done list settles the resting phrase in, and Undo doesn't drop the count", async ({
+  page,
+}) => {
+  await openInbox(page, doneTasks);
+  await doneToggle(page, 2).click();
+
+  await page.getByRole("button", { name: "Clear done tasks" }).click();
+
+  const hint = page.getByText(/to begin/);
+  await expect(hint).toBeVisible();
+  expect(await runningAnimations(hint)).toContain("cleared-settle");
+  const started = await recordAnimationStarts(page);
+
+  await page
+    .getByRole("dialog", { name: /cleared 2 done tasks/i })
+    .getByRole("button", { name: "Undo" })
+    .click();
+  await expect(doneToggle(page, 2)).toBeVisible();
+  expect(await started.jsonValue()).not.toContain("done-count-land");
+});
+
+test("undoing a Clear brings All done. back without settling it in again", async ({ page }) => {
+  await openInbox(page, doneTasks);
+  await doneToggle(page, 2).click();
+  await page.getByRole("button", { name: "Clear done tasks" }).click();
+  // Past the resting phrase's own settle, so only what Undo starts is recorded
+  await expect(page.getByText(/to begin/)).toHaveCSS("opacity", "1");
+  const started = await recordAnimationStarts(page);
+
+  await page
+    .getByRole("dialog", { name: /cleared 2 done tasks/i })
+    .getByRole("button", { name: "Undo" })
+    .click();
+
+  await expect(clearedHeadline(page)).toBeVisible();
+  await expect(clearedHeadline(page)).toHaveCSS("opacity", "1");
+  expect(await started.jsonValue()).not.toContain("cleared-settle");
+});
+
+test("a task whose subtasks are all done reads as ready to tick, in the list and its sheet", async ({
+  page,
+}) => {
+  const parent = inboxTask("p1", "Pack for the weekend", "todo");
+  await openInbox(page, [
+    parent,
+    { ...inboxTask("s1", "Chargers", "done"), parentId: "p1" },
+    { ...inboxTask("s2", "Raincoat", "todo"), parentId: "p1" },
+    ...doneTasks,
+  ]);
+  const parentBox = page.getByRole("checkbox", { name: "Pack for the weekend", exact: true });
+  const restingEdge = await parentBox.evaluate((el) => getComputedStyle(el).borderColor);
+
+  await page.getByRole("checkbox", { name: "Raincoat", exact: true }).click();
+
+  await expect(page.getByRole("button", { name: /2 done/ })).toBeVisible();
+  await expect(parentBox).not.toHaveCSS("border-color", restingEdge);
+  await expect(parentBox).not.toHaveAttribute("data-checked", "");
+  const readyEdge = await parentBox.evaluate((el) => getComputedStyle(el).borderColor);
+
+  await page.getByRole("button", { name: "Pack for the weekend", exact: true }).click();
+
+  const sheetBox = page.getByRole("checkbox", { name: "Mark done" });
+  await expect(sheetBox).toHaveCSS("border-color", readyEdge);
+  await expect(sheetBox).not.toHaveAttribute("data-checked", "");
 });
