@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { createLazyFileRoute, useRouter } from "@tanstack/react-router";
 import { acceptInvite } from "~/lib/actions";
 import { useAuthToken } from "~/lib/auth/token";
+import { useInviterName } from "~/lib/hooks/use-inviter-name";
 import { Button } from "~/components/ui/button";
 
 export const Route = createLazyFileRoute("/invite/$token")({
@@ -17,6 +18,7 @@ export function InviteAcceptPage() {
   const { token } = Route.useParams();
   const router = useRouter();
   const authToken = useAuthToken();
+  const inviterName = useInviterName(authToken ? token : null);
   const [isPending, setIsPending] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -45,9 +47,15 @@ export function InviteAcceptPage() {
 
   return (
     <div className="flex flex-col items-center justify-start pt-[20vh] pb-16 touch:flex-1 touch:overflow-y-auto touch:pt-[12vh] touch:pb-10">
-      <div className="flex w-full max-w-xs flex-col gap-8">
+      <div className="flex w-full max-w-xs flex-col gap-8 touch:max-w-none">
         <h2 className="font-display text-[1.75rem] leading-tight text-balance text-foreground">
-          {isSuccess ? "You're connected." : "You're invited to share tasks and lists."}
+          {isSuccess
+            ? inviterName
+              ? `You're connected with ${inviterName}.`
+              : "You're connected."
+            : inviterName
+              ? `${inviterName} invited you to share tasks and lists.`
+              : "You're invited to share tasks and lists."}
         </h2>
         {isSuccess ? (
           <Button

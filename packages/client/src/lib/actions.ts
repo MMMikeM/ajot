@@ -27,6 +27,17 @@ export const createInvite = async (): Promise<{ token: string; expiresAt: string
   return res.json() as Promise<{ token: string; expiresAt: string }>;
 };
 
+/** Who made an invite, or null when it's unusable or the server can't be reached. */
+export const fetchInviterName = async (token: string): Promise<string | null> => {
+  try {
+    const res = await client.api.auth.invites[":token"].$get({ param: { token } });
+    if (!res.ok) return null;
+    return (await res.json()).inviterName;
+  } catch {
+    return null;
+  }
+};
+
 export const acceptInvite = async (token: string) => {
   const res = await reach(client.api.invites[":token"].accept.$post({ param: { token } }));
   if (!res.ok) throw await errorFrom(res, "Couldn't accept the invite. Try again.");

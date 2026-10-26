@@ -28,6 +28,16 @@ const findValid = async (token: string) =>
 
 type InviteToken = NonNullable<Awaited<ReturnType<typeof findValid>>>;
 
+/** The display name of whoever made a still-usable invite, or null. */
+const findInviterName = async (token: string) => {
+  const invite = await db.query.inviteTokens.findFirst({
+    columns: {},
+    where: { id: token, usedAt: { isNull: true }, expiresAt: { gt: now() } },
+    with: { createdByUser: { columns: { name: true } } },
+  });
+  return invite?.createdByUser?.name ?? null;
+};
+
 // Marks the invite used in one statement, so two signups racing on the same link can't both
 // pass. consume() records who used it once their account exists.
 const claim = async (token: string) => {
@@ -69,4 +79,4 @@ const consume = async (invite: InviteToken, usedByUserId: string) => {
   });
 };
 
-export default { create, findById, findValid, claim, release, consume };
+export default { create, findById, findValid, findInviterName, claim, release, consume };

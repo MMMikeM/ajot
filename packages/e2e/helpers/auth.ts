@@ -62,7 +62,8 @@ export const getOrCreateUser = async (
 /**
  * Takes effect on the next load: reload or navigate after calling it. Also marks the one-time
  * swipe peek as seen: on touch it slides the first row aside, and a click on it then lands on
- * the inert tray.
+ * the inert tray. The install and background-update offers are dismissed too, so the list
+ * starts where specs expect it.
  */
 export const signIn = async (page: Page, auth: AuthResult): Promise<void> => {
   await page.evaluate(({ userId, token, name, username }) => {
@@ -70,5 +71,6 @@ export const signIn = async (page: Page, auth: AuthResult): Promise<void> => {
     localStorage.setItem("newtab-todo-user-id", userId);
     localStorage.setItem("newtab-todo-user-info", JSON.stringify({ id: userId, name, username }));
     localStorage.setItem("newtab-todo-swipe-hint-seen", "1");
+    localStorage.setItem("newtab-todo-setup-hint-dismissed", '["install","background"]');
   }, auth);
 };
