@@ -168,7 +168,7 @@ function TaskRow({
   );
 
   const titleColumnClass = cn(
-    "flex min-w-0 flex-1 flex-col text-left group-hover/task:fade-under-actions group-has-[:focus-visible]/task:fade-under-actions",
+    "flex min-w-0 flex-1 flex-col text-left group-hover/task:fade-under-actions task-focus-visible:fade-under-actions",
     // Hit area spans the row's vertical padding
     isSubtask ? "-my-1.5 py-1.5" : "-my-2.5 py-2.5",
   );
@@ -311,7 +311,7 @@ function TaskRow({
           {hasMeta && (
             <div
               className={cn(
-                "flex shrink-0 items-center gap-2 transition-transform duration-150 ease-out group-hover/task:translate-x-[calc(var(--actions-w)*-1)] group-has-[:focus-visible]/task:translate-x-[calc(var(--actions-w)*-1)] motion-reduce:transition-none",
+                "flex shrink-0 items-center gap-2 transition-transform duration-150 ease-out group-hover/task:translate-x-[calc(var(--actions-w)*-1)] motion-reduce:transition-none task-focus-visible:translate-x-[calc(var(--actions-w)*-1)]",
                 isSubtask ? "h-5" : "h-6",
               )}
             >
@@ -344,7 +344,7 @@ function TaskRow({
           )}
           <div
             className={cn(
-              "pointer-events-none absolute right-2 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/task:pointer-events-auto group-hover/task:opacity-100 group-has-[:focus-visible]/task:pointer-events-auto group-has-[:focus-visible]/task:opacity-100 touch:hidden",
+              "pointer-events-none absolute right-2 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/task:pointer-events-auto group-hover/task:opacity-100 touch:hidden task-focus-visible:pointer-events-auto task-focus-visible:opacity-100",
               isSubtask ? "top-1.5 h-5" : "top-2.5 h-6",
             )}
           >
