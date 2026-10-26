@@ -166,7 +166,8 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 13%);
   --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.6 0.04 258);
+  /* The primitives draw focus at 50% (ring-ring/50): this lightness keeps that 3:1 on popover */
+  --ring: oklch(0.8 0.04 258);
   --date: oklch(0.8 0.06 75);
   --hint: oklch(0.71 0.016 255);
   --ghost: oklch(0.38 0.014 262);
@@ -252,6 +253,13 @@
   }
 }
 
+@keyframes done-count-land {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5em);
+  }
+}
+
 @keyframes toast-progress {
   from {
     transform: scaleX(1);
@@ -320,14 +328,12 @@
   to {
     opacity: 0;
     transform: scale(0.85);
-    filter: blur(4px);
   }
 }
 @keyframes undo-morph-grow {
   from {
     opacity: 0;
     transform: scale(0.9);
-    filter: blur(6px);
   }
 }
 @media (prefers-reduced-motion: reduce) {

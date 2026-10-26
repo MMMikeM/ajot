@@ -7,6 +7,7 @@ import { mockApi } from "./helpers/mock-api";
 test.use({ serviceWorkers: "block" });
 
 const syncButton = (page: Page) => page.getByRole("button", { name: /^Sync settings/ });
+const syncStatus = (page: Page) => page.getByTestId("sync-status");
 
 const row = (page: Page, title: string) =>
   page.locator("[data-task-id]", { hasText: title }).first();
@@ -42,10 +43,12 @@ test.describe("sync status", () => {
     await page.route("**/api/events**", (route) => route.continue({ url: streamUrl }));
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(syncButton(page)).toHaveText("Sync", { timeout: 15000 });
+    await expect(syncStatus(page)).toHaveText("");
 
     await context.setOffline(true);
     await page.evaluate(() => window.dispatchEvent(new Event("offline")));
     await expect(syncButton(page)).toHaveText("Offline · saved here");
+    await expect(syncStatus(page)).toHaveText("Offline");
     await expect(syncButton(page)).toHaveAccessibleName(/offline, changes saved on this device/);
     await expect(syncButton(page).locator(".animate-pulse")).toHaveCount(0);
 
@@ -56,6 +59,7 @@ test.describe("sync status", () => {
     await context.setOffline(false);
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
     await expect(syncButton(page)).toHaveText("Sync");
+    await expect(syncStatus(page)).toHaveText("Back online");
   });
 
   test("a server that keeps refusing reads as not syncing, not offline", async ({ page }) => {
@@ -64,6 +68,8 @@ test.describe("sync status", () => {
     await mockApi(page);
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(syncButton(page)).toHaveText("Not syncing", { timeout: 15000 });
+    // The state the page opens in isn't announced
+    await expect(syncStatus(page)).toHaveText("");
     await syncButton(page).click();
     await expect(page.getByText("Can't reach the sync server.", { exact: false })).toBeVisible();
   });

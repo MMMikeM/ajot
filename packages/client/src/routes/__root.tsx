@@ -8,7 +8,7 @@ import { Toast, Toasts } from "~/components/ui/toast";
 import { NavContextProvider } from "~/lib/state/nav-context";
 import { isListPath } from "~/lib/list-path";
 import { registerServiceWorker } from "~/lib/sync/register-sw";
-import { toastManager } from "~/lib/undo-toast";
+import { UndoShortcut, toastManager } from "~/lib/undo-toast";
 import { useLeaveGuard } from "~/lib/hooks/use-leave-guard";
 
 export const Route = createRootRoute({
@@ -59,6 +59,7 @@ export default function RootComponent() {
               <Toasts />
             </Toast.Viewport>
           </Toast.Portal>
+          <UndoShortcut />
         </ClientOnly>
       </Toast.Provider>
     </NavContextProvider>

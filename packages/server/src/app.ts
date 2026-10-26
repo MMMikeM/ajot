@@ -32,10 +32,10 @@ app.onError((err, c) => {
     cause.message.includes("FOREIGN KEY")
   ) {
     console.error("[db] FK constraint failed:", cause.message);
-    return c.json({ error: "Referenced record does not exist" }, 422);
+    return c.json({ error: "Part of this no longer exists, so it wasn't saved." }, 422);
   }
   console.error(err);
-  return c.json({ error: "Internal server error" }, 500);
+  return c.json({ error: "Something went wrong on the server. Try again." }, 500);
 });
 
 // Compress all responses except SSE (streamSSE is a streaming response — buffered

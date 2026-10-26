@@ -108,13 +108,13 @@ export const toNotification = (
     case "category-shared":
       return {
         title: payload.fromUser,
-        body: `Shared category "${payload.categoryName}" with you`,
+        body: `Shared the list "${payload.categoryName}" with you`,
         url: `/list/${payload.categoryId}`,
       };
     case "contact-accepted":
       return {
         title: "Ajot",
-        body: `${payload.contactName} accepted your contact request`,
+        body: `${payload.contactName} accepted your invite`,
         url: "/people",
       };
     case "reminder-due":

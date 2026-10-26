@@ -132,6 +132,7 @@ test("ticking in the sheet offers Undo, and Undo restores it", async ({ page }) 
 
   await toast(page).getByRole("button", { name: "Undo" }).click();
   await expect(checkbox).not.toBeChecked();
+  await expect(toast(page)).toHaveCount(0);
   // Pressing the toast isn't a press outside the sheet
   await expect(sheet).toBeVisible();
 });
@@ -174,6 +175,9 @@ test("Delete task closes the sheet and offers Undo", async ({ page }) => {
   await expect(row(page, "Pick up dry cleaning")).toHaveCount(0);
   await toast(page).getByRole("button", { name: "Undo" }).click();
   await expect(row(page, "Pick up dry cleaning")).toBeVisible();
+  // Undo closes its toast, so the task can't be restored a second time
+  await expect(toast(page)).toHaveCount(0);
+  await expect(page.locator("[data-task-id]", { hasText: "Pick up dry cleaning" })).toHaveCount(1);
 });
 
 test("on desktop the sheet docks inside the notepad's inset", async ({ page }, testInfo) => {

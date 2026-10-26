@@ -16,6 +16,7 @@ export const int = (name: string) => integer(name).notNull();
 export const nullableInt = (name: string) => integer(name);
 
 export const json = <T>(name: string) => text(name, { mode: "json" }).$type<T>().notNull();
+export const nullableJson = <T>(name: string) => text(name, { mode: "json" }).$type<T>();
 
 export const bool = (name: string) => integer(name, { mode: "boolean" }).notNull();
 

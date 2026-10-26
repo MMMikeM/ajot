@@ -46,6 +46,51 @@ test("a long list name stays readable", async ({ page }, testInfo) => {
   expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   const { height } = (await name.boundingBox())!;
   expect(height).toBeGreaterThan(30);
+
+  // The list title is the only other full view of the name on touch, so it wraps too
+  await name.tap();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  const title = page.getByTestId("category-nav-trigger");
+  await expect(title.getByText(LONG_NAME)).toBeVisible();
+  const box = (await title.boundingBox())!;
+  expect(box.height).toBeGreaterThan(60);
+  expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+});
+
+test("a long URL or list name keeps the task sheet's controls on screen", async ({ page }) => {
+  const URL = "https://example.com/" + "longpathsegment/".repeat(8) + "?with=query";
+  const data = await mockApi(page);
+  data.categories.push({ ...data.categories[0]!, id: "c-long", name: LONG_NAME, sortOrder: "a3" });
+  const flights = data.tasks[0]!;
+  flights.categoryId = "c-long";
+  data.tasks[1]!.categoryId = "c-long";
+  data.tasks[1]!.title = URL;
+  data.notes.push({
+    id: "n-url",
+    userId: flights.userId,
+    taskId: flights.id,
+    title: URL,
+    content: URL,
+    createdAt: flights.createdAt,
+    updatedAt: flights.createdAt,
+  });
+  await page.goto(`/task/${flights.id}`, { waitUntil: "domcontentloaded" });
+  const sheet = page.locator('[data-slot="drawer-content"]');
+  await expect(sheet.getByText(URL).first()).toBeVisible({ timeout: 15000 });
+
+  const sheetRight = await sheet.evaluate((el) => el.getBoundingClientRect().right);
+  const controls = [
+    sheet.getByRole("combobox", { name: "List" }),
+    sheet.getByRole("group", { name: "Subtasks" }).getByRole("button", { name: "Delete" }),
+    sheet.getByRole("group", { name: "Notes" }).getByRole("button", { name: "Edit" }),
+    sheet.getByRole("group", { name: "Notes" }).getByRole("button", { name: "Delete" }),
+  ];
+  for (const control of controls) {
+    for (const each of await control.all()) {
+      const right = await each.evaluate((el) => el.getBoundingClientRect().right);
+      expect(right).toBeLessThanOrEqual(sheetRight);
+    }
+  }
 });
 
 test.describe("done section", () => {

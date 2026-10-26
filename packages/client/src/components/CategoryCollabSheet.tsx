@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useCategories, useContacts } from "~/lib/db/hooks";
 import { addCollaborator, removeCollaborator } from "~/lib/actions";
 import { useAuthToken } from "~/lib/auth/token";
+import { pushUndoToast } from "~/lib/undo-toast";
 import {
   Drawer,
   DrawerContent,
@@ -10,7 +11,6 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "~/components/ui/drawer";
-import { Button } from "~/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -39,7 +39,6 @@ export function CategoryCollabSheet({
   useBackToClose(open, onClose);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [selectedUsername, setSelectedUsername] = useState("");
 
   const { data: allCategories = [] } = useCategories();
   const { data: allContacts = [] } = useContacts();
@@ -53,25 +52,27 @@ export function CategoryCollabSheet({
     ? allContacts.filter((c) => c.contactUser && !collabIds.has(c.contactUserId))
     : [];
 
-  const handleAdd = async () => {
-    if (!selectedUsername) return;
+  const handleAdd = async (username: string) => {
+    const contact = addableContacts.find((c) => c.contactUser?.username === username)?.contactUser;
     setAdding(true);
     setError(null);
     try {
-      await addCollaborator(categoryId, selectedUsername);
-      setSelectedUsername("");
+      await addCollaborator(categoryId, username);
+      if (contact)
+        pushUndoToast(`Shared with ${contact.name}`, () => void handleRemove(contact.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add");
+      setError(err instanceof Error ? err.message : "Couldn't add them. Try again.");
     } finally {
       setAdding(false);
     }
   };
 
   const handleRemove = async (userId: string) => {
+    setError(null);
     try {
       await removeCollaborator(categoryId, userId);
-    } catch {
-      // Nothing changed locally, so there is nothing to roll back
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't remove them. Try again.");
     }
   };
 
@@ -85,7 +86,7 @@ export function CategoryCollabSheet({
       <DrawerContent className="max-w-(--column-w) border-x touch:max-w-none touch:border-x-0 desk:translate-x-(--column-shift)">
         <DrawerHeader className="gap-1 px-6 pt-4 pb-2 touch:px-5">
           <DrawerTitle className="font-display text-2xl leading-tight font-normal">
-            Share category
+            Share list
           </DrawerTitle>
           {category && (
             <DrawerDescription className="flex items-center gap-2">
@@ -110,19 +111,19 @@ export function CategoryCollabSheet({
             </div>
           )}
 
-          {addableContacts.length > 0 && (
+          {(addableContacts.length > 0 || error) && (
             <div className="flex flex-col gap-2">
-              <SectionLabel>Add collaborator</SectionLabel>
-              <div className="flex items-center gap-2">
+              {addableContacts.length > 0 && (
                 <Select
-                  value={selectedUsername}
-                  onValueChange={(v) => {
-                    setSelectedUsername(v as string);
-                    setError(null);
-                  }}
+                  value=""
+                  disabled={adding}
+                  onValueChange={(v) => void handleAdd(v as string)}
                 >
-                  <SelectTrigger className="flex-1" aria-label="Add collaborator">
-                    <SelectValue placeholder="Select a contact…" />
+                  <SelectTrigger
+                    className="self-start touch:h-10 touch:px-4"
+                    aria-label="Add someone"
+                  >
+                    <SelectValue placeholder={adding ? "Adding…" : "Add someone…"} />
                   </SelectTrigger>
                   <SelectContent>
                     {addableContacts.map((c) => (
@@ -132,16 +133,7 @@ export function CategoryCollabSheet({
                     ))}
                   </SelectContent>
                 </Select>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleAdd}
-                  disabled={!selectedUsername || adding}
-                  className="bg-primary-subtle px-4 text-primary hover:bg-primary-selected hover:text-primary touch:h-10"
-                >
-                  Add
-                </Button>
-              </div>
+              )}
               {error && <p className="text-xs text-destructive">{error}</p>}
             </div>
           )}
@@ -152,7 +144,7 @@ export function CategoryCollabSheet({
               <Link to="/people" className="underline hover:text-foreground">
                 Invite someone
               </Link>{" "}
-              to share this category.
+              to share this list with them.
             </p>
           )}
         </div>

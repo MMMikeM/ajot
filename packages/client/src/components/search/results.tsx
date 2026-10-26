@@ -33,7 +33,10 @@ function ResultRow({
   const due = !done && task.dueDate ? formatDueDate(task.dueDate) : null;
 
   return (
-    <li data-task-id={task.id} className="flex items-start gap-2 py-2.5 touch:gap-2.5">
+    <li
+      data-task-id={task.id}
+      className="-mx-2 flex items-start gap-2 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/50 has-[>button:focus-visible]:outline-2 has-[>button:focus-visible]:-outline-offset-2 touch:gap-2.5"
+    >
       <Checkbox
         checked={done}
         onCheckedChange={() => onToggle(task)}
@@ -47,7 +50,7 @@ function ResultRow({
       <button
         type="button"
         onClick={() => onOpen(task.id)}
-        className="-my-2.5 flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5 py-2.5 text-left"
+        className="-my-2.5 flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5 py-2.5 text-left focus-visible:outline-none"
       >
         <span
           className={cn(
@@ -118,7 +121,7 @@ export function SearchResults({
         const list = listOf(listId);
         return (
           <section key={listId ?? "inbox"} aria-label={list.name}>
-            <h2 className="flex items-center gap-2 text-xs font-medium tracking-wide text-hint uppercase">
+            <h2 className="flex items-center gap-2 text-xs font-medium tracking-wider text-hint uppercase">
               <ColorDot size="sm" color={list.color} />
               {list.name}
             </h2>
@@ -141,7 +144,7 @@ export function SearchResults({
           aria-label="Done"
           className={cn(results.groups.length > 0 && "border-t border-border pt-3")}
         >
-          <h2 className="text-xs font-medium tracking-wide text-hint uppercase">Done</h2>
+          <h2 className="text-xs font-medium tracking-wider text-hint uppercase">Done</h2>
           <ul className="flex flex-col">
             {results.done.map((hit) => (
               <ResultRow

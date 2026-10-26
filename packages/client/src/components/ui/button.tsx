@@ -39,7 +39,7 @@ const buttonVariants = tv({
     { intent: "destructive", variant: "subtle", class: "text-hint hover:text-destructive" },
     {
       intent: "destructive",
-      class: "focus-visible:border-destructive/40 focus-visible:ring-destructive/40",
+      class: "focus-visible:border-destructive/70 focus-visible:ring-destructive/70",
     },
     { icon: true, size: "default", class: "size-9" },
     { icon: true, size: "xs", class: "size-6 [&_svg:not([class*='size-'])]:size-3" },

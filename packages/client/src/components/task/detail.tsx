@@ -28,6 +28,7 @@ import { Textarea } from "~/components/ui/field";
 import { cn } from "~/lib/utils";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 import { canDeleteTask } from "~/lib/task-permissions";
+import { isReadyToTick } from "~/lib/ready-to-tick";
 import { useTasks } from "~/lib/db/hooks";
 import { useTaskActions } from "~/components/task/use-actions";
 import { DetailRow, type DetailPiece } from "~/components/task/detail-row";
@@ -209,7 +210,10 @@ const TaskDetailContent = ({
           checked={isDone}
           onCheckedChange={() => handleToggle(task)}
           aria-label="Mark done"
-          className="mt-3 touch:mt-[11px] touch:size-[18px] touch:after:-inset-[13px]"
+          className={cn(
+            "mt-3 touch:mt-[11px] touch:size-[18px] touch:after:-inset-[13px]",
+            isReadyToTick(task, subtasks) && "border-primary",
+          )}
         />
         {/* Bare control + aria-label: a raw <textarea> doesn't register with Base UI's
             Field, so a FieldLabel wouldn't be associated with it */}

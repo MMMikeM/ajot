@@ -14,7 +14,7 @@ export function SharedWithMeGroup({
     <fieldset className="m-0 min-w-0 border-0 p-0">
       <legend
         className={cn(
-          "float-left w-full text-xs font-medium tracking-wide text-hint uppercase",
+          "float-left w-full text-xs font-medium tracking-wider text-hint uppercase",
           headingClassName,
         )}
       >
