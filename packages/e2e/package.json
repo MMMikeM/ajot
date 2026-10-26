@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "screenshot": "tsx screenshot.ts",
-    "screenshot:mock": "tsx screenshot-mock.ts",
-    "cls": "tsx cls.ts"
+    "screenshot:mock": "tsx screenshot-mock.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

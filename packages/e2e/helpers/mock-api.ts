@@ -30,7 +30,7 @@ export const mockData = () => {
       userId: MOCK_ME.id,
       categoryId: null,
       assigneeId: null,
-      parentId: null,
+      parentId: null as string | null,
       title,
       description: null,
       status: "todo",
