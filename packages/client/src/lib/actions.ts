@@ -45,9 +45,13 @@ export const addCollaborator = async (categoryId: string, username: string) => {
 
 /** Owner only; a collaborator removes themselves with leaveCategory. */
 export const removeCollaborator = async (categoryId: string, userId: string) => {
-  await client.api.categories[":id"].collaborators[":userId"].$delete({
+  const res = await client.api.categories[":id"].collaborators[":userId"].$delete({
     param: { id: categoryId, userId },
   });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? "Failed to remove collaborator");
+  }
   await categoriesCollection.utils.refetch();
 };
 
