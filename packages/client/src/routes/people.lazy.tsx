@@ -37,7 +37,7 @@ export function PeoplePage() {
       const url = `${origin}/invite/${token}`;
       if (navigator.share) {
         try {
-          await navigator.share({ title: "Join me on Todo", url });
+          await navigator.share({ title: "Join me on Ajot", url });
           return;
         } catch (err) {
           if (err instanceof DOMException && err.name === "AbortError") return;
@@ -49,6 +49,9 @@ export function PeoplePage() {
       } catch {
         toastManager.add({ title: `Copy this invite link: ${url}`, timeout: 0, data: {} });
       }
+    } catch (err) {
+      const title = err instanceof Error ? err.message : "Couldn't make an invite link. Try again.";
+      toastManager.add({ title, timeout: 5000, data: {} });
     } finally {
       setInviting(false);
     }
@@ -90,7 +93,9 @@ export function PeoplePage() {
       <div className="-mx-2 flex flex-col gap-1">
         {isLoading && <p className="text-sm text-hint">Loading…</p>}
         {!isLoading && contacts.length === 0 && (
-          <p className="text-sm text-hint">No contacts yet. Invite someone to get started.</p>
+          <p className="text-sm text-hint">
+            No contacts yet. Invite someone to share tasks and lists with them.
+          </p>
         )}
         {contacts.map((contact) => (
           <ListRow key={contact.id}>

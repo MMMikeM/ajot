@@ -35,7 +35,7 @@ export function InviteAcceptPage() {
       await acceptInvite(token);
       setIsSuccess(true);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Failed to accept invite");
+      setErrorMsg(err instanceof Error ? err.message : "Couldn't accept the invite. Try again.");
     } finally {
       setIsPending(false);
     }
@@ -47,7 +47,7 @@ export function InviteAcceptPage() {
     <div className="flex flex-col items-center justify-start pt-[20vh] pb-16 touch:flex-1 touch:overflow-y-auto touch:pt-[12vh] touch:pb-10">
       <div className="flex w-full max-w-xs flex-col gap-8">
         <h2 className="font-display text-[1.75rem] leading-tight text-balance text-foreground">
-          {isSuccess ? "You're now connected!" : "You've been invited to connect."}
+          {isSuccess ? "You're connected." : "You're invited to share tasks and lists."}
         </h2>
         {isSuccess ? (
           <Button
@@ -77,7 +77,7 @@ export function InviteAcceptPage() {
               className="self-center touch:h-10 touch:text-sm"
               onClick={() => router.navigate({ to: "/" })}
             >
-              Go to app
+              Not now
             </Button>
           </div>
         )}

@@ -121,7 +121,7 @@ const removeWithTasks = async (
       },
     });
     if (inCategory.length > 0 && !action)
-      throw new BadRequestError("Move or delete all tasks before removing this category");
+      throw new BadRequestError("Move or delete this list's tasks first.");
 
     // A client from before confirmed ids were sent meant everything in the category
     const confirmed = new Set(confirmedIds ?? inCategory.map((t) => t.id));

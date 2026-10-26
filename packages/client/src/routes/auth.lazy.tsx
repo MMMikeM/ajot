@@ -15,14 +15,14 @@ import { getServerUrl, setServerUrl } from "~/lib/server-url";
 import { fetchServerConfig, normalizeServerUrl, type ServerConfig } from "~/lib/server-config";
 
 const loginSchema = z.object({
-  username: z.string().check(z.minLength(1, "Username is required")),
-  password: z.string().check(z.minLength(1, "Password is required")),
+  username: z.string().check(z.minLength(1, "Enter your username")),
+  password: z.string().check(z.minLength(1, "Enter your password")),
 });
 
 const signupSchema = z.object({
-  username: z.string().check(z.minLength(3, "Username must be at least 3 characters")),
-  password: z.string().check(z.minLength(8, "Password must be at least 8 characters")),
-  name: z.string().check(z.minLength(1, "Name is required")),
+  username: z.string().check(z.minLength(3, "Use at least 3 characters")),
+  password: z.string().check(z.minLength(8, "Use at least 8 characters")),
+  name: z.string().check(z.minLength(1, "Enter your name")),
 });
 
 const persistToken = (token: string) => {
@@ -35,7 +35,7 @@ const persistToken = (token: string) => {
   }
 };
 
-const serverSchema = z.string().check(z.minLength(1, "Server address is required"));
+const serverSchema = z.string().check(z.minLength(1, "Enter your sync server's address"));
 
 const readPendingInvite = () => {
   try {
@@ -87,7 +87,7 @@ const AuthView = () => {
       let result: { userId: string; token: string; name: string; username: string };
       try {
         if (!(await syncConsent.current)) {
-          setServerError("Firefox needs your permission to send your account to the server.");
+          setServerError("Allow Firefox to send your account to the server, then try again.");
           return;
         }
         if (choosesServer) setConfig(await connectToServer(value.server));
@@ -98,7 +98,7 @@ const AuthView = () => {
           ...(mode === "signup" && pendingInvite && { invite: pendingInvite }),
         });
       } catch (err) {
-        setServerError(err instanceof Error ? err.message : "Authentication failed");
+        setServerError(err instanceof Error ? err.message : "Couldn't sign in. Try again.");
         return;
       }
       persistToken(result.token);

@@ -57,7 +57,7 @@ export const useCategoryActions = () => {
   const deleteAndMoveOn = (cat: Category, tasks: CategoryTaskAction) => {
     const wasActive = cat.id === activeCategoryId;
     deleteCategory(cat.id, tasks).isPersisted.promise.catch(() => {
-      toastManager.add({ title: `Couldn't delete “${cat.name}”` });
+      toastManager.add({ title: `Couldn't delete “${cat.name}”. Try again.` });
       if (wasActive) setActiveCategoryId(cat.id);
     });
     if (!wasActive) return;
@@ -96,7 +96,11 @@ export const useCategoryActions = () => {
     } catch (err) {
       console.error("[leave] failed:", err);
       const name = categories.find((c) => c.id === categoryId)?.name;
-      toastManager.add({ title: name ? `Couldn't leave “${name}”` : "Couldn't leave the list" });
+      toastManager.add({
+        title: name
+          ? `Couldn't leave “${name}”. Try again.`
+          : "Couldn't leave the list. Try again.",
+      });
       return;
     }
     const remaining = categories.filter((c) => c.id !== categoryId);

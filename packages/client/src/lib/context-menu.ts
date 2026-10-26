@@ -141,8 +141,8 @@ const notify = (title: string, message: string) =>
 
 const failureMessage = (err: unknown) => {
   if (err instanceof RequestError && err.status === 401) return "Sign in to Ajot again.";
-  if (err instanceof RequestError) return `The server answered ${err.status}.`;
-  return "Couldn't reach the server.";
+  if (err instanceof RequestError) return "The server couldn't save it. Try again.";
+  return "Couldn't reach the server. Check your connection and try again.";
 };
 
 /** Adds the task, then whatever goes with it; returns the parts of that which failed. */
@@ -173,7 +173,7 @@ const addDraft = async (session: Session, draft: Draft, kind: DestinationKind, t
   const extras: [string, Promise<unknown>][] = [];
   if (kind === "share")
     extras.push([
-      "the share",
+      "sharing",
       request(session, "POST", "/api/tasks/share", { taskId: task.id, username: target }),
     ]);
   if (draft.note)
@@ -210,7 +210,7 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
     const failed = await addDraft(session, draft, kind as DestinationKind, target);
     void count(session, `menu:${draftId}:${kind}`);
     const done = doneLabels.get(`${kind}|${target}`) ?? "Added to Ajot";
-    await notify(failed.length ? `Added, without ${failed.join(" or ")}` : done, draft.title);
+    await notify(failed.length ? `Added, but ${failed.join(" and ")} failed` : done, draft.title);
   } catch (err) {
     console.error("[menu] add failed:", err);
     await notify("Not added", failureMessage(err));
