@@ -199,7 +199,7 @@ A near-monochrome ink palette: blue-black surfaces, slate secondary text and war
 
 ## Elevation & Depth
 
-Flat at rest. Depth comes from tonal layering (background, then surface, surface-muted and surface-raised) over a textured backdrop: SVG fractal noise blended with `soft-light` to dither the gradients, a cool, moonlit radial bloom from the top, darkening towards the bottom, and soft side vignettes. Shadows appear only on floating layers: `shadow-sheet` (a white hairline ring plus a long, soft drop) under the desktop sheet, `shadow-md` on popovers and `shadow-lg` on toasts. Bottom sheets sit over a dim, lightly blurred backdrop (`oklch(0.06 0.012 262 / 40%)`).
+Flat at rest. Depth comes from tonal layering (background, then surface, surface-muted and surface-raised) over a textured backdrop: SVG fractal noise blended with `soft-light`, a cool, moonlit radial bloom from the top, darkening towards the bottom, and soft side vignettes. The gradients paint first as CSS (`index.html`), then a WebGL canvas (`lib/desk.ts`) redraws them in floats with one level of dither, since the CSS ones band into stripes on 8-bit screens; the two must stay matched, and the CSS stays where WebGL is unavailable. Shadows appear only on floating layers: `shadow-sheet` (a white hairline ring plus a long, soft drop) under the desktop sheet, `shadow-md` on popovers and `shadow-lg` on toasts. Bottom sheets sit over a dim, lightly blurred backdrop (`oklch(0.06 0.012 262 / 40%)`).
 
 ## Shapes
 
