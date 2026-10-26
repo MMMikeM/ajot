@@ -2,6 +2,7 @@ import { type CSSProperties } from "react";
 import { Toast } from "@base-ui/react/toast";
 import { X } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { UNDO_KEYS, pressUndo } from "~/lib/undo-toast";
 import { cn } from "~/lib/utils";
 
 const DURATION = 5000;
@@ -26,7 +27,8 @@ export const Toasts = () => {
           "[--height:var(--toast-frontmost-height,var(--toast-height))]",
           "absolute right-0 bottom-0 left-0 w-full origin-bottom select-none",
           "z-[calc(1000-var(--toast-index))]",
-          "[transform:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-(var(--shrink)*var(--height))))_scale(var(--scale))]",
+          "[--stacked:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-(var(--shrink)*var(--height))))_scale(var(--scale))]",
+          "[transform:var(--stacked)]",
           // Hover-gap bridge so pointer can reach lower toasts
           "after:absolute after:top-full after:left-0 after:h-[calc(var(--gap)+1px)] after:w-full after:content-['']",
           "overflow-hidden rounded-lg border border-border bg-card shadow-lg",
@@ -40,6 +42,8 @@ export const Toasts = () => {
           "data-[ending-style]:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]",
           "data-[ending-style]:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]",
           "[transition:transform_0.5s_cubic-bezier(0.22,1,0.36,1),opacity_0.5s,height_0.15s]",
+          "motion-reduce:data-[starting-style]:[transform:var(--stacked)] motion-reduce:data-[starting-style]:opacity-0",
+          "motion-reduce:[&[data-ending-style]:not([data-limited]):not([data-swipe-direction])]:[transform:var(--stacked)]",
         )}
       >
         <Toast.Content className="py-2.5 pr-2.5 pl-4">
@@ -49,7 +53,8 @@ export const Toasts = () => {
             {toast.data?.onUndo && (
               <Toast.Action
                 render={<Button variant="link" className="h-8 px-2 touch:h-9" />}
-                onClick={() => toast.data.onUndo()}
+                aria-keyshortcuts={UNDO_KEYS}
+                onClick={() => pressUndo(toast.id, toast.data.onUndo)}
               >
                 Undo
               </Toast.Action>
