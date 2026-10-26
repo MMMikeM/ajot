@@ -1,9 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { Toast } from "@base-ui/react/toast";
 import { createLazyFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { PushTrigger } from "@newtab-todo/shared/push-payload";
 import { useAuthToken } from "~/lib/auth/token";
 import { getBuildTarget } from "~/lib/build-target";
@@ -58,6 +58,8 @@ const TRIGGER_GROUPS: { label: string; triggers: PushTrigger[] }[] = [
   { label: "Reminders", triggers: ["reminder", "overdue"] },
 ];
 
+const ALL_TRIGGERS = TRIGGER_GROUPS.flatMap((group) => group.triggers);
+
 const PREFERENCES_KEY = ["push-preferences"] as const;
 
 const BLOCKER_TEXT = {
@@ -74,7 +76,7 @@ export function SettingsPage() {
 
   return (
     // AppShell already provides the column and gutters; on touch this is the scroll area
-    <div className="flex flex-col gap-6 pt-1 touch:min-h-0 touch:flex-1 touch:overflow-y-auto touch:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
+    <div className="flex flex-col gap-6 pt-1 touch:-mx-2 touch:min-h-0 touch:flex-1 touch:overflow-x-hidden touch:overflow-y-auto touch:px-2 touch:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
       {isDesk && (
         <DragDropProvider>
           <CategorySidebar reorderable={false} />
@@ -166,7 +168,7 @@ const BackgroundUpdates = () => {
     }));
 
   const muted = preferences.data?.muted;
-  const preferencesDisabled = !enabled || !preferences.data;
+  const preferencesDisabled = !preferences.data;
 
   return (
     <>
@@ -179,6 +181,22 @@ const BackgroundUpdates = () => {
             disabled={enabled === null || switching || (!enabled && blocker === "unsupported")}
             onCheckedChange={togglePush}
           />
+          {enabled && (
+            <div className="flex flex-col pl-7">
+              <CheckRow
+                label="Deliver right away"
+                detail="Wakes this device for each update, so its lists are current before you go offline. Turn off to save battery: an idle phone may hold updates until it next wakes."
+                checked={!!preferences.data?.urgent}
+                disabled={preferencesDisabled}
+                onCheckedChange={(urgent) => void update((before) => ({ ...before, urgent }))}
+              />
+              <NotificationChoices
+                muted={muted}
+                failed={preferences.isError}
+                onToggle={(trigger, on) => void toggleTrigger(trigger, on)}
+              />
+            </div>
+          )}
         </div>
         {blocker && !enabled && <p className="text-sm text-hint">{BLOCKER_TEXT[blocker]}</p>}
       </section>
@@ -198,42 +216,86 @@ const BackgroundUpdates = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <TriggerGroup label="Delivery">
-        <CheckRow
-          label="Deliver right away"
-          detail="Wakes this device for each update, so its lists are current before you go offline. Turn off to save battery: an idle phone may hold updates until it next wakes."
-          checked={!!preferences.data?.urgent}
-          disabled={preferencesDisabled}
-          onCheckedChange={(urgent) => void update((before) => ({ ...before, urgent }))}
-        />
-      </TriggerGroup>
-
-      {TRIGGER_GROUPS.map((group) => (
-        <TriggerGroup key={group.label} label={group.label}>
-          {group.triggers.map((trigger) => (
-            <CheckRow
-              key={trigger}
-              label={TRIGGER_LABELS[trigger]}
-              checked={!!muted && !muted.includes(trigger)}
-              disabled={preferencesDisabled}
-              onCheckedChange={(on) => void toggleTrigger(trigger, on)}
-            />
-          ))}
-        </TriggerGroup>
-      ))}
-
-      <p className="text-sm text-hint">
-        {preferences.isError
-          ? "Can't load these right now. They load again once you're online."
-          : "Turn one off and this device catches up when you next open Ajot instead."}
-      </p>
     </>
   );
 };
 
+const NotificationChoices = ({
+  muted,
+  failed,
+  onToggle,
+}: {
+  muted: PushTrigger[] | undefined;
+  failed: boolean;
+  onToggle: (trigger: PushTrigger, on: boolean) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const choicesId = useId();
+  const total = ALL_TRIGGERS.length;
+  const on = ALL_TRIGGERS.filter((trigger) => !muted?.includes(trigger)).length;
+  const summary = failed
+    ? "Can't load these right now. They load again once you're online."
+    : !muted
+      ? undefined
+      : on === total
+        ? "All on"
+        : on === 0
+          ? "All off"
+          : `${on} of ${total} on`;
+
+  return (
+    <div className="flex flex-col">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={choicesId}
+        disabled={!muted}
+        onClick={() => setOpen(!open)}
+        className={cn(
+          listRowVariants(),
+          "cursor-pointer items-start text-left focus-visible:bg-muted disabled:cursor-not-allowed disabled:hover:bg-transparent touch:py-3",
+        )}
+      >
+        <ChevronRight
+          aria-hidden="true"
+          className={cn(
+            "mt-0.5 size-4 shrink-0 text-hint transition-transform",
+            open && "rotate-90",
+          )}
+        />
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className={cn("text-sm font-medium", muted ? "text-foreground" : "text-hint")}>
+            Notifications
+          </span>
+          {summary && <span className="text-xs text-hint">{summary}</span>}
+        </span>
+      </button>
+      {open && muted && (
+        <div id={choicesId} className="flex flex-col gap-3 pt-1 pb-2 pl-9">
+          {TRIGGER_GROUPS.map((group) => (
+            <TriggerGroup key={group.label} label={group.label}>
+              {group.triggers.map((trigger) => (
+                <CheckRow
+                  key={trigger}
+                  label={TRIGGER_LABELS[trigger]}
+                  checked={!muted.includes(trigger)}
+                  disabled={false}
+                  onCheckedChange={(next) => onToggle(trigger, next)}
+                />
+              ))}
+            </TriggerGroup>
+          ))}
+          <p className="text-sm text-hint">
+            Turn one off and this device catches up when you next open Ajot instead.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const TriggerGroup = ({ label, children }: { label: string; children: ReactNode }) => (
-  <fieldset className="flex flex-col gap-1">
+  <fieldset className="flex min-w-0 flex-col gap-1">
     <legend className="contents">
       <SectionLabel>{label}</SectionLabel>
     </legend>
