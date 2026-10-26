@@ -10,6 +10,7 @@ import { getCurrentUserId } from "~/lib/auth/current-user";
 import type { CategoryTaskAction } from "~/lib/constants";
 import type { Task, Category, Note } from "~/lib/types";
 import { now } from "~/lib/utils";
+import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 export { contactsCollection };
 export const useTasks = () => useLiveQuery(tasksCollection);
 export const useCategories = () => useLiveQuery(categoriesCollection);
@@ -18,9 +19,13 @@ export const useContacts = () => useLiveQuery(contactsCollection);
 
 export const updateTask = (id: string, fields: Partial<Task>) => {
   console.log(`[mutation] updateTask id=${id}`, fields);
+  const at = now();
+  const stamps = taskChangeStamps(fields, at);
   const tx = offline.createOfflineTransaction({ mutationFnName: "syncTasks" });
   tx.mutate(() =>
-    tasksCollection.update(id, (draft) => Object.assign(draft, { ...fields, updatedAt: now() })),
+    tasksCollection.update(id, (draft) =>
+      Object.assign(draft, { ...stamps, ...fields, updatedAt: at }),
+    ),
   );
   console.log("[mutation] optimistic applied, tx queued");
 };

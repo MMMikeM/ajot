@@ -45,6 +45,8 @@ export const tasks = sqliteTable("tasks", {
   sortOrder: nullableString("sort_order"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
+  editedAt: nullableString("edited_at"),
+  completedAt: nullableString("completed_at"),
 });
 
 export const users = sqliteTable("users", {
