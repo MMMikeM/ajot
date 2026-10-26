@@ -10,6 +10,17 @@
 /* Room for the sidebar + column panel with a margin; matches lib/hooks/use-is-desk.ts */
 @custom-variant desk (@media (pointer: fine) and (width >= 44rem));
 
+/*
+ * In place of group-has-*: Tailwind writes those as `:is(:where(.group):has(…) *)`, which Chrome
+ * can't narrow, so every focus move restyled the whole page (7,000+ elements on a long list).
+ * A plain descendant selector restyles only the elements carrying the class.
+ */
+@custom-variant task-focus-visible (:where(.group\/task):has(:focus-visible) &);
+@custom-variant row-focus-visible (:where(.group\/row):has(:focus-visible) &);
+@custom-variant field-disabled (:where(.group\/field):has(:disabled) &);
+@custom-variant pill-popup-open (:where(.group\/pill):has([data-popup-open]) &);
+@custom-variant pill-options-focus-visible (:where(.group\/pill):has([data-slot="category-options"]:focus-visible) &);
+
 @theme inline {
   --font-display: "DM Serif Display", serif;
   --font-heading: "Figtree Variable", sans-serif;
@@ -201,6 +212,13 @@
 
   html {
     @apply bg-background font-sans text-foreground antialiased;
+  }
+
+  /* Base UI pins a checkbox's hidden input with position: fixed unless it has a name, and a fixed
+     element in a scrolling list is a compositor layer of its own: one per task row, which made
+     every animation frame slower. The 1px clipped input needs no more than what named ones get. */
+  [data-slot="checkbox"] + input[aria-hidden="true"] {
+    position: absolute !important;
   }
 }
 

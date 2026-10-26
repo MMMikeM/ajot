@@ -168,7 +168,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
                   <CollabBadge category={cat} currentUserId={currentUserId} />
                   <OpenCount
                     count={openCounts.get(cat.id) ?? 0}
-                    className="transition-opacity group-hover/pill:opacity-0 group-has-[[data-popup-open]]/pill:opacity-0 group-has-[[data-slot=category-options]:focus-visible]/pill:opacity-0"
+                    className="transition-opacity group-hover/pill:opacity-0 pill-popup-open:opacity-0 pill-options-focus-visible:opacity-0"
                   />
                 </button>
 

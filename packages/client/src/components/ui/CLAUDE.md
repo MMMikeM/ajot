@@ -11,7 +11,7 @@ These are unmodified shadcn output. Do not add app opinions here.
 | `input.tsx`        | `Input`                                | Box-style, Base UI InputPrimitive                                                                                                                |
 | `textarea.tsx`     | `Textarea`                             | Box-style, raw `<textarea>`                                                                                                                      |
 | `button.tsx`       | `Button`                               | —                                                                                                                                                |
-| `checkbox.tsx`     | `Checkbox`                             | —                                                                                                                                                |
+| `checkbox.tsx`     | `Checkbox`                             | `group-has-disabled/field` swapped for `field-disabled` after each regenerate: see the rule on `group-has-*` below                               |
 | `select.tsx`       | `Select`, `SelectTrigger`, …           | —                                                                                                                                                |
 | `drawer.tsx`       | `Drawer`, `DrawerContent`, …           | —                                                                                                                                                |
 | `alert-dialog.tsx` | `AlertDialog`, `AlertDialogContent`, … | Added by hand: `shadcn add` would overwrite `button.tsx`. Only the parts in use are exported (knip); backdrop uses `bg-backdrop` like the drawer |
@@ -60,6 +60,10 @@ A lint rule enforces this. The only file that may import from `ui/input` or `ui/
 | `FormField` + `Input`                       | TanStack Form field — has label, validation, error display                                                           |
 | `Field` + `FieldLabel` + `Input`/`Textarea` | Static labeled field — no TanStack, but needs accessible label                                                       |
 | Bare `Input` with `aria-label`              | Inline editing only — label is implicit from surrounding UI (e.g. task title). Suppress lint warning with a comment. |
+
+### No `group-has-*` variants
+
+Tailwind writes `group-has-[…]/name:` as `:is(:where(.group\/name):has(…) *)`, which Chrome can't narrow: every focus move or disabled change restyled the whole page, 7,000+ elements on a long list. Use a variant from `app.css` instead (`task-focus-visible`, `row-focus-visible`, `field-disabled`, `pill-popup-open`, …), or add one there in the same shape. `shadcn add` brings them back, so swap any it adds. A plain `has-[…]:`, with `:has()` on the element itself, is fine.
 
 ### Abstractions stay out of the `ui/` folder
 
