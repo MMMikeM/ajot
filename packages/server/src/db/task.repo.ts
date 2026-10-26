@@ -3,7 +3,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db } from "./client";
-import { tasks, taskShares, users } from "./schema";
+import { categories, tasks, taskShares, users } from "./schema";
 import { InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { now } from "@newtab-todo/shared/iso";
@@ -168,6 +168,10 @@ const remove = async (id: string) => {
   return { task, subtaskIds: rows.filter((row) => row.id !== id).map((row) => row.id) };
 };
 
+// Null when the task's list has been deleted since, so the task comes back in the Inbox
+const liveCategoryId = sql<string | null>`(select ${categories.id} from ${categories}
+  where ${categories.id} = ${tasks.categoryId} and ${categories.deletedAt} is null)`;
+
 /**
  * Undoes a delete. It skips the stale check update makes: the delete was stamped by the server's
  * clock and the restore by the device's, and a restore always comes after the delete it undoes.
@@ -175,30 +179,44 @@ const remove = async (id: string) => {
 const restore = async (id: string, updatedAt: string) => {
   const [row] = await db
     .update(tasks)
-    .set({ deletedAt: null, updatedAt: sql`max(${tasks.updatedAt}, ${updatedAt})` })
+    .set({
+      deletedAt: null,
+      categoryId: liveCategoryId,
+      updatedAt: sql`max(${tasks.updatedAt}, ${updatedAt})`,
+    })
     .where(eq(tasks.id, id))
     .returning();
   if (!row) throw new NotFoundError("task", id);
   return row;
 };
 
+const listItemWith = {
+  user: { columns: { id: true, name: true } },
+  subtasks: { where: { deletedAt: { isNull: true } } },
+  shares: {
+    with: {
+      sharedWithUser: { columns: { id: true, name: true, username: true } },
+    },
+  },
+  assignee: { columns: { id: true, name: true, username: true } },
+} as const;
+
 /** A task in the shape the list sends, for broadcasting one that's back. */
 const findListItem = async (id: string) => {
   const row = await db.query.tasks.findFirst({
     where: { id, deletedAt: { isNull: true } },
-    with: {
-      user: { columns: { id: true, name: true } },
-      subtasks: { where: { deletedAt: { isNull: true } } },
-      shares: {
-        with: {
-          sharedWithUser: { columns: { id: true, name: true, username: true } },
-        },
-      },
-      assignee: { columns: { id: true, name: true, username: true } },
-    },
+    with: listItemWith,
   });
   if (!row) throw new NotFoundError("task", id);
   return row;
+};
+
+const findListItems = async (ids: string[]) => {
+  if (ids.length === 0) return [];
+  return db.query.tasks.findMany({
+    where: { id: { in: ids }, deletedAt: { isNull: true } },
+    with: listItemWith,
+  });
 };
 
 export type TaskWithRelations = Awaited<ReturnType<typeof list>>[number];
@@ -274,6 +292,7 @@ export default {
   remove,
   restore,
   findListItem,
+  findListItems,
   nextSortOrder,
   insertShare,
   removeShare,
