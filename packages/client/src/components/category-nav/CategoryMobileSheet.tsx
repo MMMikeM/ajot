@@ -21,6 +21,7 @@ import { DeleteCategoryDialog } from "./DeleteCategoryDialog";
 import { SharedWithMeGroup } from "./SharedWithMeGroup";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 import { holdKeyboard } from "~/lib/keyboard-bridge";
+import { useBackToClose } from "~/lib/hooks/use-back-to-close";
 
 const rowClass = (isActive: boolean) =>
   cn(
@@ -65,6 +66,7 @@ function CategoryMobileSheet() {
     renameRef,
   } = useCategoryNavState(handleRename);
   const { navOpen, setNavOpen } = useNavContext();
+  useBackToClose(navOpen, () => setNavOpen(false));
   const signedIn = useCurrentUserId() !== null;
 
   useEffect(() => {
@@ -80,7 +82,7 @@ function CategoryMobileSheet() {
   const openSearch = () => {
     holdKeyboard();
     setNavOpen(false);
-    void navigate({ to: "/search" });
+    void navigate({ to: "/search", replace: true });
   };
 
   const ownedCategories = categories.filter((c) => c.userId === currentUserId);
@@ -241,6 +243,7 @@ function CategoryMobileSheet() {
           {signedIn && (
             <Link
               to="/people"
+              replace
               onClick={() => setNavOpen(false)}
               className="mx-2 flex h-12 items-center gap-3 rounded-lg px-3 text-sm text-hint transition-colors active:bg-secondary active:text-foreground"
             >

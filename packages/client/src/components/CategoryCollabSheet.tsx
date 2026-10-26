@@ -25,6 +25,7 @@ import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { TextStack } from "~/components/ui/text-stack";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
+import { useBackToClose } from "~/lib/hooks/use-back-to-close";
 
 export function CategoryCollabSheet({
   categoryId,
@@ -35,6 +36,7 @@ export function CategoryCollabSheet({
   open: boolean;
   onClose: () => void;
 }) {
+  useBackToClose(open, onClose);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [selectedUsername, setSelectedUsername] = useState("");
