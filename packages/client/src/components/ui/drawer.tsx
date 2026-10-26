@@ -1,10 +1,10 @@
-import { ComponentProps, createContext, use, useEffect, useState } from "react";
+import { ComponentProps, createContext, use, useEffect, useRef, useState } from "react";
 import { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 
 import { cn } from "~/lib/utils";
 
-/** Whether the sheet has finished sliding in and isn't on its way out */
-const RestingContext = createContext(false);
+/** Whether the sheet is open (not on its way out), and whether it has finished sliding in */
+const SheetContext = createContext({ open: false, settled: false });
 
 // Base UI skips the enter transition for a drawer that mounts already open, and ours do (a task's
 // route mounts its sheet open), so they appeared at once instead of sliding in. Opening a frame
@@ -22,7 +22,7 @@ const Drawer = ({
   }, []);
   const isOpen = open === undefined ? undefined : open && mounted;
   return (
-    <RestingContext value={settled && isOpen !== false}>
+    <SheetContext value={{ open: isOpen !== false, settled }}>
       <DrawerPrimitive.Root
         data-slot="drawer"
         open={isOpen}
@@ -32,22 +32,54 @@ const Drawer = ({
         }}
         {...props}
       />
-    </RestingContext>
+    </SheetContext>
   );
 };
+
+/**
+ * Blurs the page above the sheet, once the sheet covers about half the screen: blurring the whole
+ * page through the slide dropped frames on phones. It watches the sheet's top edge while it
+ * slides; a sheet shorter than half the screen blurs once it settles. Sliding, it reaches the top
+ * of the screen; settled, it shrinks to the strip left showing, since the opaque sheet hides the
+ * rest.
+ */
+function SheetBlur() {
+  const { open, settled } = use(SheetContext);
+  const ref = useRef<HTMLDivElement>(null);
+  const [halfway, setHalfway] = useState(false);
+  useEffect(() => {
+    if (halfway || !open) return;
+    let frame = requestAnimationFrame(function check() {
+      const sheetTop = ref.current?.parentElement?.getBoundingClientRect().top ?? Infinity;
+      if (sheetTop <= window.innerHeight / 2) setHalfway(true);
+      else frame = requestAnimationFrame(check);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [halfway, open]);
+  const blurred = open && (halfway || settled);
+  return (
+    <div
+      ref={ref}
+      aria-hidden="true"
+      data-blurred={blurred || undefined}
+      data-settled={settled || undefined}
+      className="pointer-events-none absolute inset-x-0 bottom-full h-dvh transition-[backdrop-filter] duration-180 ease-out data-[settled]:h-[calc(100dvh-100%)] supports-backdrop-filter:data-[blurred]:backdrop-blur-xs desk:hidden [[data-swiping]>&]:backdrop-blur-none"
+    />
+  );
+}
 
 const DrawerContent = ({
   className,
   children,
   ...props
 }: ComponentProps<typeof DrawerPrimitive.Popup>) => {
-  const resting = use(RestingContext);
+  const { open, settled } = use(SheetContext);
+  const resting = open && settled;
   return (
     <DrawerPrimitive.Portal>
-      {/* Re-blurring the page every frame dropped frames on phones, so the page only blurs while
-          the sheet rests, and stops the moment it moves (closing, or dragged). Three values per
-          list: the build writes backdrop-filter out as two properties. On touch the sheet is
-          full width, so the blur sits above it instead (below), never under it. */}
+      {/* On touch the sheet is full width, so the page blurs above it instead (SheetBlur). On
+          desktop it blurs here once the sheet rests, and stops the moment it moves (closing).
+          Three values per list: the build writes backdrop-filter out as two properties. */}
       <DrawerPrimitive.Backdrop
         data-slot="drawer-backdrop"
         data-resting={resting || undefined}
@@ -68,12 +100,7 @@ const DrawerContent = ({
           )}
           {...props}
         >
-          {/* Exactly the page left showing above the sheet: the opaque sheet hides the rest */}
-          <div
-            aria-hidden="true"
-            data-resting={resting || undefined}
-            className="pointer-events-none absolute inset-x-0 bottom-full h-[calc(100dvh-100%)] transition-[backdrop-filter] duration-180 ease-out supports-backdrop-filter:data-[resting]:backdrop-blur-xs desk:hidden [[data-swiping]>&]:backdrop-blur-none"
-          />
+          <SheetBlur />
           <div className="mx-auto mt-4 h-1.5 w-[100px] shrink-0 rounded-full bg-muted" />
           <DrawerPrimitive.Content className="overflow-y-auto overscroll-contain">
             {children}

@@ -13,7 +13,7 @@ These are unmodified shadcn output. Do not add app opinions here.
 | `button.tsx`       | `Button`                               | —                                                                                                                                                                                  |
 | `checkbox.tsx`     | `Checkbox`                             | `group-has-disabled/field` swapped for `field-disabled` after each regenerate: see the rule on `group-has-*` below                                                                 |
 | `select.tsx`       | `Select`, `SelectTrigger`, …           | —                                                                                                                                                                                  |
-| `drawer.tsx`       | `Drawer`, `DrawerContent`, …           | Opens a frame after mounting, so a sheet that mounts open still slides in; blurs only once it rests, and on touch only the page above the sheet. Keep all of it after a regenerate |
+| `drawer.tsx`       | `Drawer`, `DrawerContent`, …           | Opens a frame after mounting, so a sheet that mounts open still slides in; on touch it blurs above the sheet from half covered, on desktop at rest. Keep it all after a regenerate |
 | `alert-dialog.tsx` | `AlertDialog`, `AlertDialogContent`, … | Added by hand: `shadcn add` would overwrite `button.tsx`. Only the parts in use are exported (knip); backdrop uses `bg-backdrop` like the drawer                                   |
 
 Regenerate any of these with: `npx shadcn@latest add <name> --overwrite`
