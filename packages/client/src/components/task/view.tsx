@@ -11,6 +11,7 @@ import { CategoryNav } from "~/components/category-nav";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { TaskItem, sameRowProps } from "./item";
+import { FlipList } from "./flip-list";
 import { TaskRowsSkeleton } from "./rows-skeleton";
 import { finishStartup } from "~/lib/startup-timing";
 import { useTaskActions } from "./use-actions";
@@ -95,7 +96,7 @@ const DoneSection = ({
   };
 
   return (
-    <div className="mt-1 border-t border-border pt-2">
+    <div data-flip-key="done" className="mt-1 border-t border-border pt-2">
       <div className="flex items-center justify-between">
         <Button
           ref={toggleRef}
@@ -183,7 +184,10 @@ const EmptyState = ({ clearedAt }: { clearedAt?: number }) => {
   );
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center pb-8 touch:pb-0">
+    <div
+      data-flip-key="empty"
+      className="flex flex-1 flex-col items-center justify-center pb-8 touch:pb-0"
+    >
       <p className={cn("font-display text-2xl text-muted-foreground", settling && settleIn)}>
         {getEmptyPhrase()}
       </p>
@@ -209,7 +213,10 @@ const ClearedState = ({ justFinished }: { justFinished: boolean }) => {
   const [settling] = useState(justFinished);
 
   return (
-    <div className="flex flex-col items-center py-6 touch:flex-1 touch:justify-center touch:py-0">
+    <div
+      data-flip-key="empty"
+      className="flex flex-col items-center py-6 touch:flex-1 touch:justify-center touch:py-0"
+    >
       <p className={cn("font-display text-2xl text-muted-foreground", settling && settleIn)}>
         All done.
       </p>
@@ -232,7 +239,7 @@ const SortableTask = memo(function SortableTask({
     sensors: rowDragSensors,
   });
   return (
-    <li ref={ref}>
+    <li ref={ref} data-flip-key={props.task.id}>
       <TaskItem {...props} dragHandleRef={handleRef} />
     </li>
   );
@@ -264,6 +271,8 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   const actions = useTaskActions();
   const [lastClear, setLastClear] = useState<{ listId: string | null; at: number }>();
   const activeListRef = useRef<HTMLUListElement>(null);
+  const columnRef = useRef<HTMLDivElement>(null);
+  const doneListRef = useRef<HTMLUListElement>(null);
   // Not built by a shared wrapper: the compiler won't cache a call's result that reads a ref, and a
   // new handler each render would render every row again
   const toggleActive = (task: Task) => {
@@ -328,63 +337,71 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
 
   return (
     <DragDropProvider onDragEnd={handleDragEnd}>
-      <div className="flex flex-1 flex-col gap-4">
-        <ul ref={activeListRef} className="flex flex-col gap-1">
-          {activeTasks.map((task, index) => (
-            <SortableTask
-              key={task.id}
-              index={index}
-              task={task}
-              subtasks={subtasksByParent.get(task.id) ?? NO_SUBTASKS}
-              onOpen={onSelectTask}
-              onToggle={toggleActive}
-              onDelete={deleteActive}
-              onSetDueDate={actions.handleSetDueDate}
-              onAddSubtask={actions.handleAddSubtask}
-              isInSharedCategory={!!task.categoryId && sharedCategoryIds.has(task.categoryId)}
-              swipeHint={index === 0}
-            />
-          ))}
-        </ul>
-
-        <EmptySection
-          activeTasks={activeTasks}
-          doneTasks={doneTasks}
-          clearedAt={lastClear?.listId === activeCategoryId ? lastClear.at : undefined}
-          justFinished={landing.landing}
-        />
-
-        <DoneSection
-          count={doneTasks.length}
-          countLanding={landing}
-          onClear={
-            clearableDoneTasks.length > 0
-              ? () => {
-                  setLastClear(stampClear(activeCategoryId));
-                  actions.handleClearDone(clearableDoneTasks);
-                }
-              : undefined
-          }
-          clearsAll={clearableDoneTasks.length === doneTasks.length}
-        >
-          <ul className="mt-2 flex flex-col">
-            {doneTasks.map((task) => (
-              <li key={task.id}>
-                <TaskItem
+      <FlipList list={columnRef} resetKey={activeCategoryId}>
+        <div ref={columnRef} className="flex flex-1 flex-col gap-4">
+          <FlipList list={activeListRef} resetKey={activeCategoryId} arrivals>
+            <ul ref={activeListRef} data-flip-key="active" className="flex flex-col gap-1">
+              {activeTasks.map((task, index) => (
+                <SortableTask
+                  key={task.id}
+                  index={index}
                   task={task}
                   subtasks={subtasksByParent.get(task.id) ?? NO_SUBTASKS}
                   onOpen={onSelectTask}
-                  onToggle={actions.handleToggle}
-                  onDelete={actions.handleDelete}
+                  onToggle={toggleActive}
+                  onDelete={deleteActive}
                   onSetDueDate={actions.handleSetDueDate}
                   onAddSubtask={actions.handleAddSubtask}
                   isInSharedCategory={!!task.categoryId && sharedCategoryIds.has(task.categoryId)}
+                  swipeHint={index === 0}
                 />
-              </li>
-            ))}
-          </ul>
-        </DoneSection>
-      </div>
+              ))}
+            </ul>
+          </FlipList>
+
+          <EmptySection
+            activeTasks={activeTasks}
+            doneTasks={doneTasks}
+            clearedAt={lastClear?.listId === activeCategoryId ? lastClear.at : undefined}
+            justFinished={landing.landing}
+          />
+
+          <DoneSection
+            count={doneTasks.length}
+            countLanding={landing}
+            onClear={
+              clearableDoneTasks.length > 0
+                ? () => {
+                    setLastClear(stampClear(activeCategoryId));
+                    actions.handleClearDone(clearableDoneTasks);
+                  }
+                : undefined
+            }
+            clearsAll={clearableDoneTasks.length === doneTasks.length}
+          >
+            <FlipList list={doneListRef} arrivals>
+              <ul ref={doneListRef} className="mt-2 flex flex-col">
+                {doneTasks.map((task) => (
+                  <li key={task.id} data-flip-key={task.id}>
+                    <TaskItem
+                      task={task}
+                      subtasks={subtasksByParent.get(task.id) ?? NO_SUBTASKS}
+                      onOpen={onSelectTask}
+                      onToggle={actions.handleToggle}
+                      onDelete={actions.handleDelete}
+                      onSetDueDate={actions.handleSetDueDate}
+                      onAddSubtask={actions.handleAddSubtask}
+                      isInSharedCategory={
+                        !!task.categoryId && sharedCategoryIds.has(task.categoryId)
+                      }
+                    />
+                  </li>
+                ))}
+              </ul>
+            </FlipList>
+          </DoneSection>
+        </div>
+      </FlipList>
       {/* After the list so keyboard focus reaches the tasks first */}
       <CategoryNav />
     </DragDropProvider>
