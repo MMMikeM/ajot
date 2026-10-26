@@ -13,6 +13,19 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # GitHub lists every commit author and Co-authored-by as a contributor, and a contributor
+      # stays listed even after the commits are rewritten
+      - name: Only Mike's commits
+        run: |
+          others=$(git log --format='%an' | sort -u | grep -vx 'Mike Murray' || true)
+          coauthors=$(git log --format='%(trailers:key=Co-authored-by,valueonly)' | grep . | sort -u || true)
+          if [ -n "$others$coauthors" ]; then
+            echo "::error::Commits by someone else: $others $coauthors"
+            exit 1
+          fi
 
       - uses: pnpm/action-setup@v6
 
