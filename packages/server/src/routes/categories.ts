@@ -151,6 +151,69 @@ export const categoryRoutes = authed()
   )
   .openapi(
     createRoute({
+      method: "post",
+      path: "/:id/restore",
+      responses: withAuth({
+        200: jsonContent(categoryResponseSchema),
+        403: jsonContent(errorSchema, "Forbidden"),
+        404: jsonContent(errorSchema, "Not found"),
+      }),
+    }),
+    async (c) => {
+      const { id } = c.req.param();
+      const { category, restoredIds, movedBack, refiled, memberIds } = await categoryRepo.restore(
+        id,
+        c.get("userId"),
+      );
+      broadcast(c, "categories", "insert", category, memberIds);
+
+      // Each task goes only to the people who can see it, as the task list would send it
+      const backTasks = await taskRepo.findListItems([
+        ...restoredIds,
+        ...movedBack.map((t) => t.id),
+      ]);
+      const viewers = new Map(
+        backTasks.map((t) => [
+          t.id,
+          [
+            t.userId,
+            ...t.shares.map((s) => s.sharedWithUserId),
+            ...(t.categoryId === id ? memberIds : []),
+          ],
+        ]),
+      );
+      // A subtask is seen by whoever sees its parent
+      const viewersOf = (t: (typeof backTasks)[number]) =>
+        new Set((t.parentId && viewers.get(t.parentId)) || viewers.get(t.id) || []);
+      const back = new Set(backTasks.map((t) => t.id));
+      const refiledTasks = await taskRepo.listSharesForTasks([
+        ...new Set(refiled.filter((s) => !back.has(s.taskId)).map((s) => s.taskId)),
+      ]);
+      const sharesOf = new Map(refiledTasks.map((t) => [t.id, t.shares]));
+      broadcastPerUser(c, [
+        ...backTasks.flatMap((task) =>
+          [...viewersOf(task)].map((userId) => ({
+            userId,
+            event: { model: "tasks" as const, action: "insert" as const, data: task },
+          })),
+        ),
+        ...refiled
+          .filter((s) => sharesOf.has(s.taskId))
+          .map((s) => ({
+            userId: s.sharedWithUserId,
+            event: {
+              model: "tasks" as const,
+              action: "update" as const,
+              data: { id: s.taskId, shares: sharesOf.get(s.taskId) },
+            },
+          })),
+      ]);
+
+      return c.json(category, 200);
+    },
+  )
+  .openapi(
+    createRoute({
       method: "get",
       path: "/:id/collaborators",
       responses: withAuth({
@@ -203,13 +266,16 @@ export const categoryRoutes = authed()
         userRepo.findByUsername(username.toLowerCase()),
       ]);
 
-      if (cat.userId !== userId) throw new HTTPException(403, { message: "Not authorized" });
+      if (cat.userId !== userId)
+        throw new HTTPException(403, { message: "Only the list's owner can share it." });
       if (targetUser.id === userId)
-        throw new HTTPException(400, { message: "Cannot add yourself as a collaborator" });
+        throw new HTTPException(400, { message: "That's you. Choose someone else." });
 
       const isContact = await contactRepo.exists(userId, targetUser.id);
       if (!isContact)
-        throw new HTTPException(400, { message: "Can only add contacts as collaborators" });
+        throw new HTTPException(400, {
+          message: "You can only share lists with your contacts. Invite them first.",
+        });
 
       await categoryCollaboratorRepo.add(id, targetUser.id);
 

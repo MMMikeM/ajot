@@ -259,3 +259,145 @@ test("a subtask's notes go and come back with it", async ({ user1Auth }) => {
   expect(await findTask(user1Auth.token, "Book the hotel")).toBeTruthy();
   expect((await notesOf(user1Auth.token)).find((n) => n.id === note.id)?.taskId).toBe(subtask.id);
 });
+
+type List = { id: string; name: string; collaborators: { user: { id: string } | null }[] };
+type Contact = { id: string; contactUserId: string };
+const listsOf = (token: string) => apiRequest<List[]>("GET", "/api/categories", undefined, token);
+const contactsOf = (token: string) =>
+  apiRequest<Contact[]>("GET", "/api/contacts", undefined, token);
+
+/** A list of user1's shared with user2, holding a task of each. */
+const sharedList = async (
+  user1: { token: string; userId: string },
+  user2: { token: string; userId: string; username: string },
+) => {
+  await ensureMutualContacts(user1.token, user2.token);
+  const at = new Date().toISOString();
+  const id = crypto.randomUUID();
+  await apiRequest(
+    "POST",
+    "/api/categories",
+    { id, userId: user1.userId, name: `Shared ${Date.now()}`, createdAt: at, updatedAt: at },
+    user1.token,
+  );
+  await apiRequest(
+    "POST",
+    `/api/categories/${id}/collaborators`,
+    { username: user2.username },
+    user1.token,
+  );
+  const task = (auth: { token: string; userId: string }, title: string) =>
+    apiRequest<Task>(
+      "POST",
+      "/api/tasks",
+      {
+        id: `${title}-${Date.now()}`,
+        userId: auth.userId,
+        categoryId: id,
+        title,
+        createdAt: at,
+        updatedAt: at,
+      },
+      auth.token,
+    );
+  return { id, mine: await task(user1, "Pack"), theirs: await task(user2, "Charger") };
+};
+
+for (const tasks of ["delete", "uncategorise"] as const) {
+  test(`Undo of a list deleted with "${tasks}" puts back its sharing and everyone's tasks`, async ({
+    user1Auth,
+    user2Auth,
+  }) => {
+    const list = await sharedList(user1Auth, user2Auth);
+    await apiRequest(
+      "DELETE",
+      "/api/categories",
+      { id: list.id, tasks, taskIds: [list.mine.id, list.theirs.id] },
+      user1Auth.token,
+    );
+    expect((await listsOf(user2Auth.token)).some((l) => l.id === list.id)).toBe(false);
+
+    // Only the owner can undo it
+    await expect(
+      apiRequest("POST", `/api/categories/${list.id}/restore`, undefined, user2Auth.token),
+    ).rejects.toThrow(/403/);
+    await apiRequest("POST", `/api/categories/${list.id}/restore`, undefined, user1Auth.token);
+
+    const theirView = (await listsOf(user2Auth.token)).find((l) => l.id === list.id);
+    expect(theirView?.collaborators.map((c) => c.user?.id)).toEqual([user2Auth.userId]);
+    const inList = async (token: string, id: string) =>
+      (await tasksOf(token)).find((t) => t.id === id)?.categoryId;
+    expect(await inList(user1Auth.token, list.mine.id)).toBe(list.id);
+    expect(await inList(user2Auth.token, list.theirs.id)).toBe(list.id);
+    // A replay after a lost response changes nothing
+    await apiRequest("POST", `/api/categories/${list.id}/restore`, undefined, user1Auth.token);
+  });
+}
+
+test("Undo of removing a contact puts back both sides and the lists they shared", async ({
+  user1Auth,
+  user2Auth,
+}) => {
+  const list = await sharedList(user1Auth, user2Auth);
+  const contact = (await contactsOf(user1Auth.token)).find(
+    (c) => c.contactUserId === user2Auth.userId,
+  )!;
+  await apiRequest("DELETE", `/api/contacts/${contact.id}`, undefined, user1Auth.token);
+  expect(
+    (await contactsOf(user2Auth.token)).some((c) => c.contactUserId === user1Auth.userId),
+  ).toBe(false);
+  expect((await listsOf(user2Auth.token)).some((l) => l.id === list.id)).toBe(false);
+
+  // Only the person who removed it can undo it
+  await expect(
+    apiRequest("POST", `/api/contacts/${contact.id}/restore`, undefined, user2Auth.token),
+  ).rejects.toThrow(/404/);
+  await apiRequest("POST", `/api/contacts/${contact.id}/restore`, undefined, user1Auth.token);
+
+  expect((await contactsOf(user1Auth.token)).map((c) => c.id)).toContain(contact.id);
+  expect(
+    (await contactsOf(user2Auth.token)).some((c) => c.contactUserId === user1Auth.userId),
+  ).toBe(true);
+  expect((await listsOf(user2Auth.token)).some((l) => l.id === list.id)).toBe(true);
+  await expect(
+    apiRequest("POST", `/api/contacts/${contact.id}/restore`, undefined, user1Auth.token),
+  ).rejects.toThrow(/404/);
+});
+
+test("Undo in the app brings back a shared list deleted with its tasks", async ({
+  user1Page: page,
+  user1Auth,
+  user2Auth,
+}) => {
+  const list = await sharedList(user1Auth, user2Auth);
+  const name = (await listsOf(user1Auth.token)).find((l) => l.id === list.id)!.name;
+  await page.reload();
+  // Open, so Undo has to bring the view back to it too
+  await page
+    .getByRole("button", { name: new RegExp(`^${name}`) })
+    .first()
+    .click();
+
+  const listRow = page
+    .locator("div")
+    .filter({ has: page.getByRole("button", { name: new RegExp(`^${name}`) }) })
+    .filter({ has: page.getByRole("button", { name: "List options" }) })
+    .last();
+  await listRow.hover();
+  await listRow.getByRole("button", { name: "List options" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete tasks" }).click();
+  await expect
+    .poll(async () => (await listsOf(user2Auth.token)).some((l) => l.id === list.id))
+    .toBe(false);
+
+  await page
+    .locator("[data-toast-undo]", { hasText: "List and tasks deleted" })
+    .getByRole("button", { name: "Undo" })
+    .click();
+  await expect
+    .poll(async () => (await tasksOf(user2Auth.token)).find((t) => t.id === list.theirs.id))
+    .toMatchObject({ categoryId: list.id });
+  await expect(page.getByRole("button", { name: new RegExp(`^${name}`) }).first()).toBeVisible();
+  await expect(page.locator("[data-task-id]", { hasText: "Pack" })).toBeVisible();
+});

@@ -157,22 +157,31 @@ type MockApiOptions = {
   data?: MockData;
   /** Suppress the one-time swipe peek, which would otherwise move the first row on touch */
   swipeHintSeen?: boolean;
+  /** Suppress the install and background-update offers, which would otherwise sit above the list */
+  setupHintSeen?: boolean;
 };
 
 export const mockApi = async (
   page: Page,
-  { signedIn = true, data = mockData(), swipeHintSeen = true }: MockApiOptions = {},
+  {
+    signedIn = true,
+    data = mockData(),
+    swipeHintSeen = true,
+    setupHintSeen = true,
+  }: MockApiOptions = {},
 ) => {
   await page.addInitScript(
-    ({ me, signedIn, swipeHintSeen }) => {
+    ({ me, signedIn, swipeHintSeen, setupHintSeen }) => {
       if (signedIn) {
         localStorage.setItem("newtab-todo-token", "mock-token");
         localStorage.setItem("newtab-todo-user-id", me.id);
         localStorage.setItem("newtab-todo-user-info", JSON.stringify(me));
       }
       if (swipeHintSeen) localStorage.setItem("newtab-todo-swipe-hint-seen", "1");
+      if (setupHintSeen)
+        localStorage.setItem("newtab-todo-setup-hint-dismissed", '["install","background"]');
     },
-    { me: MOCK_ME, signedIn, swipeHintSeen },
+    { me: MOCK_ME, signedIn, swipeHintSeen, setupHintSeen },
   );
 
   const collections: Record<string, unknown> = {
@@ -181,6 +190,32 @@ export const mockApi = async (
     "/api/contacts": data.contacts,
     "/api/notes": data.notes,
     "/api/config": { vapidPublicKey: "", awaitingFirstUser: false },
+  };
+
+  // Lists and contacts go and come back, so a refetch after a delete or an Undo shows it
+  const removed = new Map<string, { from: { id: string }[]; row: { id: string } }>();
+  const take = (from: { id: string }[], id: string) => {
+    const index = from.findIndex((row) => row.id === id);
+    if (index < 0) return null;
+    const [row] = from.splice(index, 1);
+    removed.set(id, { from, row });
+    return row;
+  };
+  const putBack = (id: string) => {
+    const entry = removed.get(id);
+    if (!entry) return null;
+    removed.delete(id);
+    entry.from.push(entry.row);
+    return entry.row;
+  };
+  const removals = (method: string, path: string, json: () => { id?: string } | null) => {
+    if (method === "DELETE" && path === "/api/categories")
+      return take(data.categories, json()?.id ?? "") ?? {};
+    const contact = path.match(/^\/api\/contacts\/([^/]+)$/);
+    if (method === "DELETE" && contact) return take(data.contacts, contact[1]) ?? {};
+    const restore = path.match(/^\/api\/(?:categories|contacts)\/([^/]+)\/restore$/);
+    if (method === "POST" && restore) return putBack(restore[1]) ?? {};
+    return null;
   };
 
   // The extension calls its server cross-origin, so answer preflights and allow the origin
@@ -197,8 +232,16 @@ export const mockApi = async (
     if (path.startsWith("/api/events"))
       return route.fulfill({ status: 204, headers: cors, body: "" });
 
+    // Every invite is Sarah's, except one called "expired"
+    if (path.startsWith("/api/auth/invites/"))
+      return path.endsWith("/expired")
+        ? route.fulfill({ status: 404, headers: cors, json: { error: "Invite not found" } })
+        : route.fulfill({ status: 200, headers: cors, json: { inviterName: MOCK_SARAH.name } });
+
     let body: unknown = {};
-    if (request.method() === "GET") body = collections[path] ?? {};
+    const removal = removals(request.method(), path, request.postDataJSON.bind(request));
+    if (removal) body = removal;
+    else if (request.method() === "GET") body = collections[path] ?? {};
     else {
       try {
         body = request.postDataJSON() ?? {};

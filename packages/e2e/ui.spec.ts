@@ -241,6 +241,22 @@ test.describe("deleting a category", () => {
     await expect(page.getByText("List deleted")).toBeVisible();
   });
 
+  test("Undo brings a deleted list back", async ({ page }, testInfo) => {
+    await openList(page);
+    await openOptions(page, "Home", testInfo.project.name === "desktop");
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    const toast = page.locator("[data-toast-undo]", { hasText: "List deleted" });
+    await expect(toast).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Home/ })).toHaveCount(0);
+
+    const restore = page.waitForRequest(
+      (r) => r.method() === "POST" && r.url().endsWith("/api/categories/c-home/restore"),
+    );
+    await toast.getByRole("button", { name: "Undo" }).click();
+    await restore;
+    await expect(page.getByRole("button", { name: /^Home/ }).first()).toBeVisible();
+  });
+
   test("a refused delete says so and brings the category back", async ({ page }, testInfo) => {
     await openList(page);
     await page.route("**/api/categories", (route) =>
@@ -300,6 +316,21 @@ test.describe("deleting someone else's task", () => {
   });
 });
 
+test("an iPhone that hasn't installed Ajot is told how, until it's dismissed", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "the offer is for Safari's Add to Home Screen");
+  await mockApi(page, { setupHintSeen: false });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const offer = page.getByText("tap Share, then Add to Home Screen");
+  await expect(offer).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: "Dismiss" }).click();
+  await expect(offer).toHaveCount(0);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.locator("#add-task-input")).toBeVisible({ timeout: 15000 });
+  await expect(offer).toHaveCount(0);
+});
+
 test.describe("signing up", () => {
   const signedOutAt = async (page: Page, path: string, awaitingFirstUser = false) => {
     await mockApi(page, { signedIn: false });
@@ -309,26 +340,30 @@ test.describe("signing up", () => {
     const config = page.waitForResponse("**/api/config");
     await page.goto(path, { waitUntil: "domcontentloaded" });
     await config;
-    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   };
 
   test("a server with accounts only takes signups through an invite", async ({ page }) => {
     await signedOutAt(page, "/auth");
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+    await expect(page.getByText("New here? Ask someone on this server")).toBeVisible();
     await expect(page.getByRole("button", { name: "Create an account" })).toHaveCount(0);
   });
 
-  test("a new server offers its first account", async ({ page }) => {
+  test("a new server opens on its first account", async ({ page }) => {
     await signedOutAt(page, "/auth", true);
-    await page.getByRole("button", { name: "Create an account" }).click();
     await expect(
       page.getByRole("heading", { name: "Create the server's first account" }),
     ).toBeVisible();
+    await page.getByRole("button", { name: "I already have an account" }).click();
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   });
 
-  test("an invite link signs up with its invite", async ({ page }) => {
+  test("an invite link opens on signing up with its invite", async ({ page }) => {
     await signedOutAt(page, "/invite/abc");
     await expect(page).toHaveURL(/\/auth$/);
-    await page.getByRole("button", { name: "Create an account" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Sarah Murray invited you to Ajot" }),
+    ).toBeVisible();
     await page.getByLabel("Name", { exact: true }).fill("Sam Okafor");
     await page.getByLabel("Username").fill("sam");
     await page.getByLabel("Password").fill("correct horse");
@@ -336,6 +371,14 @@ test.describe("signing up", () => {
     const signup = page.waitForRequest((r) => r.url().endsWith("/api/auth/signup"));
     await page.getByRole("button", { name: "Create account" }).click();
     expect((await signup).postDataJSON()).toMatchObject({ username: "sam", invite: "abc" });
+  });
+
+  test("an invite that can't be looked up still signs up with it", async ({ page }) => {
+    const lookup = page.waitForResponse("**/api/auth/invites/expired");
+    await signedOutAt(page, "/invite/expired");
+    await lookup;
+    await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
+    await expect(page.getByText("Signing up accepts your invite.")).toBeVisible();
   });
 });
 
@@ -393,6 +436,43 @@ test("due dates and the detail sheet work where the browser lacks Temporal", asy
   expect(errors).toEqual([]);
 });
 
+test.describe("list sharing", () => {
+  test("choosing a contact shares the list with them, and Undo removes them", async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "opens the list's options from the sidebar");
+    await openList(page);
+    const pill = page
+      .getByTestId("category-sidebar")
+      .locator(".group\\/pill")
+      .filter({ hasText: "Home" });
+    await pill.hover();
+    await pill.getByRole("button", { name: "List options" }).click();
+    await page.getByTestId("category-share-btn").click();
+
+    const sheet = page.getByRole("dialog", { name: "Share list" });
+    await expect(sheet.getByText("Sam Okafor", { exact: true })).toBeVisible();
+    const added = page.waitForRequest(
+      (req) =>
+        req.url().endsWith("/api/categories/c-home/collaborators") && req.method() === "POST",
+    );
+    await sheet.getByRole("combobox", { name: "Add someone" }).click();
+    await page.getByRole("option", { name: /^Sarah Murray/ }).click();
+    expect((await added).postDataJSON()).toEqual({ username: "sarah" });
+
+    const toast = page.locator("[data-toast-undo]", { hasText: "Shared with Sarah Murray" });
+    await expect(toast).toBeVisible();
+    const removed = page.waitForRequest(
+      (req) =>
+        req.url().endsWith("/api/categories/c-home/collaborators/u-sarah") &&
+        req.method() === "DELETE",
+    );
+    await toast.getByRole("button", { name: "Undo" }).click();
+    await removed;
+    await expect(sheet).toBeVisible();
+  });
+});
+
 test.describe("accessibility", () => {
   test("task list", async ({ page }) => {
     await openList(page);
@@ -425,6 +505,42 @@ test.describe("accessibility", () => {
     await expectNoAxeViolations(page);
   });
 
+  test("⌘Z / Ctrl+Z reaches a toast's Undo from inside the sheet", async ({ page }) => {
+    await openList(page);
+    await row(page, "Book flights")
+      .getByRole("button", { name: /^Book flights/ })
+      .click();
+    const sheet = page.locator('[data-slot="drawer-content"]');
+    const subtask = sheet.getByRole("checkbox", { name: "Compare Tuesday and Wednesday fares" });
+    await subtask.click();
+    await expect(subtask).toBeChecked();
+    await expect(page.getByRole("button", { name: "Undo" })).toHaveAttribute(
+      "aria-keyshortcuts",
+      /Control\+Z/,
+    );
+
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(subtask).not.toBeChecked();
+    await expect(page.locator("[data-toast-undo]")).toHaveCount(0);
+    await expect(sheet).toBeVisible();
+  });
+
+  test("the sheet's Close shows on keyboard focus and closes it", async ({ page }) => {
+    await openList(page);
+    await row(page, "Book flights")
+      .getByRole("button", { name: /^Book flights/ })
+      .click();
+    const sheet = page.locator('[data-slot="drawer-content"]');
+    const close = sheet.getByRole("button", { name: "Close" });
+    expect((await close.boundingBox())?.width).toBeLessThanOrEqual(1);
+    await sheet.getByRole("button", { name: "Delete task" }).focus();
+    await page.keyboard.press("Tab");
+    await expect(close).toBeFocused();
+    expect((await close.boundingBox())?.width).toBeGreaterThan(20);
+    await page.keyboard.press("Enter");
+    await expect(sheet).toHaveCount(0);
+  });
+
   test("people", async ({ page }) => {
     await mockApi(page);
     await page.goto("/people", { waitUntil: "domcontentloaded" });
@@ -437,5 +553,53 @@ test.describe("accessibility", () => {
     await page.goto("/auth", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: /sign in/i })).toBeVisible({ timeout: 15000 });
     await expectNoAxeViolations(page);
+  });
+});
+
+test.describe("removing a contact", () => {
+  const openPeople = async (page: Page) => {
+    await mockApi(page);
+    await page.goto("/people", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("@sarah")).toBeVisible();
+  };
+
+  const remove = async (page: Page, name: string) => {
+    const contactRow = page
+      .locator("div")
+      .filter({ hasText: name })
+      .filter({ has: page.getByRole("button", { name: "Remove" }) });
+    await contactRow.last().hover();
+    await contactRow.last().getByRole("button", { name: "Remove" }).click();
+  };
+
+  test("Undo brings them back", async ({ page }) => {
+    await openPeople(page);
+    await remove(page, "Sarah Murray");
+
+    const toast = page.locator("[data-toast-undo]", { hasText: "Removed Sarah Murray" });
+    await expect(toast).toBeVisible();
+    await expect(page.getByText("@sarah")).toHaveCount(0);
+
+    const restore = page.waitForRequest(
+      (r) => r.method() === "POST" && r.url().endsWith("/api/contacts/ct-u-sarah/restore"),
+    );
+    await toast.getByRole("button", { name: "Undo" }).click();
+    await restore;
+    await expect(page.getByText("@sarah")).toBeVisible();
+  });
+
+  test("a failed remove says so and keeps them", async ({ page }) => {
+    await openPeople(page);
+    await page.route("**/api/contacts/*", (route) =>
+      route.request().method() === "DELETE"
+        ? route.fulfill({ status: 500, contentType: "application/json", body: '{"error":"no"}' })
+        : route.fallback(),
+    );
+    await remove(page, "Sarah Murray");
+
+    await expect(
+      page.getByText("Couldn't remove Sarah Murray. Check your connection and try again."),
+    ).toBeVisible();
+    await expect(page.getByText("@sarah")).toBeVisible();
   });
 });

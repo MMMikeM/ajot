@@ -18,8 +18,10 @@ import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { useSwipeReveal } from "~/lib/hooks/use-swipe-reveal";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { canDeleteTask } from "~/lib/task-permissions";
+import { isReadyToTick } from "~/lib/ready-to-tick";
 import { rowDragSensors } from "./row-drag";
 import { formatDueDate } from "~/lib/due-date";
+import { FlipList } from "./flip-list";
 
 // Read once: pointer type doesn't change during a session
 const IS_TOUCH = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -34,6 +36,8 @@ const swipeActionClass = cn(
 
 // Long enough to see the tick and to undo a mis-click
 const COMPLETE_LINGER_MS = 450;
+// Then it fades and drops towards Done, matching the outer row's duration-150
+const COMPLETE_LEAVE_MS = 150;
 
 // Must match the hover actions: size-6 buttons, gap-0.5, plus clearance from the meta
 const hoverActionsWidth = (count: number) =>
@@ -118,11 +122,18 @@ function TaskRow({
   const dateRef = useRef<HTMLInputElement>(null);
   const [entering] = useState(() => isJustCreated(task));
   const [completing, setCompleting] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const completeTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(completeTimer.current), []);
   const looksDone = isDone || completing;
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState("");
+  // The field closes in the render that adds the subtask, so the rows below move once, not twice
+  const [subtaskCountAtSubmit, setSubtaskCountAtSubmit] = useState<number | null>(null);
+  if (subtaskCountAtSubmit !== null && subtasks.length > subtaskCountAtSubmit) {
+    setSubtaskCountAtSubmit(null);
+    setAddingSubtask(false);
+  }
 
   const {
     containerRef,
@@ -140,10 +151,14 @@ function TaskRow({
     if (completing) {
       window.clearTimeout(completeTimer.current);
       setCompleting(false);
+      setLeaving(false);
       return;
     }
     setCompleting(true);
-    completeTimer.current = window.setTimeout(() => onToggle(task), COMPLETE_LINGER_MS);
+    completeTimer.current = window.setTimeout(() => {
+      setLeaving(true);
+      completeTimer.current = window.setTimeout(() => onToggle(task), COMPLETE_LEAVE_MS);
+    }, COMPLETE_LINGER_MS);
   };
 
   const titleClass = cn(
@@ -164,20 +179,25 @@ function TaskRow({
     if (title) {
       onAddSubtask(task, title);
       setSubtaskTitle("");
-      setAddingSubtask(false);
+      setSubtaskCountAtSubmit(subtasks.length);
     }
   };
 
+  const subtaskListRef = useRef<HTMLDivElement>(null);
   const openSubtasks = subtasks.filter((s) => s.status !== "done");
   // Ticking a parent ticks its subtasks, so on a done row the count only repeats the tick
   const doneSubtaskCount = isDone ? 0 : subtasks.length - openSubtasks.length;
+  const readyToTick = isReadyToTick(task, subtasks);
 
   return (
     <div
       data-task-id={task.id}
       // Lifted while dragged, so it doesn't read as text floating over the rows below. Only the
       // dragged row's own: a parent's subtasks ride along inside its lift.
-      className="[[data-dnd-dragging]>&]:-mx-2 [[data-dnd-dragging]>&]:rounded-lg [[data-dnd-dragging]>&]:bg-popover [[data-dnd-dragging]>&]:px-2 [[data-dnd-dragging]>&]:shadow-md"
+      className={cn(
+        "transition-[opacity,translate,scale] duration-150 ease-out [[data-dnd-dragging]>&]:-mx-2 [[data-dnd-dragging]>&]:scale-[1.02] [[data-dnd-dragging]>&]:rounded-lg [[data-dnd-dragging]>&]:bg-popover [[data-dnd-dragging]>&]:px-2 [[data-dnd-dragging]>&]:shadow-md motion-reduce:[[data-dnd-dragging]>&]:scale-100",
+        leaving && !isDone && "translate-y-1 opacity-0 ease-in motion-reduce:translate-y-0",
+      )}
     >
       <div
         ref={(el) => {
@@ -187,6 +207,7 @@ function TaskRow({
         // The drag handle. Its own role and tabIndex keep dnd-kit from making it a button and a tab stop.
         role={dragHandleRef ? "group" : undefined}
         tabIndex={dragHandleRef ? -1 : undefined}
+        data-entering={entering || undefined}
         className={cn(
           "-mx-2",
           entering && "animate-[task-enter_200ms_ease-out] motion-reduce:animate-none",
@@ -248,7 +269,7 @@ function TaskRow({
           ref={contentRef}
           style={{ "--actions-w": hoverActionsWidth(hoverActionCount) } as CSSProperties}
           className={cn(
-            "group/task relative flex items-start gap-2 rounded-lg px-2 py-2.5 transition-[background-color,opacity] duration-300 hover:bg-muted/50 touch:gap-2.5",
+            "group/task relative flex items-start gap-2 rounded-lg px-2 py-2.5 transition-[background-color,opacity] duration-300 hover:bg-muted/50 has-[>button:focus-visible]:outline-2 has-[>button:focus-visible]:-outline-offset-2 touch:gap-2.5",
             completing && "opacity-60",
             isSubtask && "py-1.5",
             // Opaque only while swiping, to cover the tray. rounded-none: the container owns the corners.
@@ -264,12 +285,13 @@ function TaskRow({
               "mt-1 touch:mt-[3px] touch:size-[18px] touch:after:-inset-3",
               isSubtask && "mt-0.5 touch:mt-px",
               isDone && checkboxDoneClass,
+              readyToTick && "border-primary",
             )}
           />
           {onOpen ? (
             <button
               type="button"
-              className={cn(titleColumnClass, "cursor-pointer")}
+              className={cn(titleColumnClass, "cursor-pointer focus-visible:outline-none")}
               onClick={() => onOpen(task.id)}
             >
               <span className={titleClass}>{task.title}</span>
@@ -376,35 +398,41 @@ function TaskRow({
       </div>
 
       {!isSubtask && (openSubtasks.length > 0 || doneSubtaskCount > 0) && (
-        <div className="mt-1 ml-2 border-l border-ghost pl-[15px] touch:pl-[19px]">
-          {openSubtasks.map((sub, index) => (
-            <SortableSubtask
-              key={sub.id}
-              index={index}
-              // Done rows aren't sortable, and neither is what's under them
-              disabled={isDone}
-              task={sub}
-              parent={task}
-              isSubtask
-              onOpen={onOpen}
-              onToggle={onToggle}
-              onDelete={onDelete}
-              onSetDueDate={onSetDueDate}
-              onAddSubtask={onAddSubtask}
-            />
-          ))}
-          {doneSubtaskCount > 0 && (
-            <button
-              type="button"
-              onClick={() => onOpen?.(task.id)}
-              disabled={!onOpen}
-              className="relative rounded-sm py-1 text-xs text-hint transition-colors after:absolute after:-inset-x-2 after:-inset-y-1.5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring touch:py-1.5"
-            >
-              {doneSubtaskCount} done
-              <span className="sr-only"> {doneSubtaskCount === 1 ? "subtask" : "subtasks"}</span>
-            </button>
-          )}
-        </div>
+        <FlipList list={subtaskListRef} arrivals>
+          <div
+            ref={subtaskListRef}
+            className="mt-1 ml-2 border-l border-ghost pl-[15px] touch:pl-[19px]"
+          >
+            {openSubtasks.map((sub, index) => (
+              <SortableSubtask
+                key={sub.id}
+                index={index}
+                // Done rows aren't sortable, and neither is what's under them
+                disabled={isDone}
+                task={sub}
+                parent={task}
+                isSubtask
+                onOpen={onOpen}
+                onToggle={onToggle}
+                onDelete={onDelete}
+                onSetDueDate={onSetDueDate}
+                onAddSubtask={onAddSubtask}
+              />
+            ))}
+            {doneSubtaskCount > 0 && (
+              <button
+                type="button"
+                data-flip-key="done-count"
+                onClick={() => onOpen?.(task.id)}
+                disabled={!onOpen}
+                className="relative rounded-sm py-1 text-xs text-hint transition-colors after:absolute after:-inset-x-2 after:-inset-y-1.5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring touch:py-1.5"
+              >
+                {doneSubtaskCount} done
+                <span className="sr-only"> {doneSubtaskCount === 1 ? "subtask" : "subtasks"}</span>
+              </button>
+            )}
+          </div>
+        </FlipList>
       )}
       {addingSubtask && (
         <form
@@ -418,7 +446,7 @@ function TaskRow({
             type="text"
             value={subtaskTitle}
             onChange={(e) => setSubtaskTitle(e.target.value)}
-            placeholder="Subtask title..."
+            placeholder="New subtask"
             // Phones keep the primitive's 16px so iOS doesn't zoom on focus
             className="md:h-7 md:text-xs"
             // eslint-disable-next-line jsx-a11y/no-autofocus
@@ -470,7 +498,7 @@ function SortableSubtask({
     disabled,
   });
   return (
-    <div ref={ref}>
+    <div ref={ref} data-flip-key={props.task.id}>
       <TaskItem {...props} dragHandleRef={disabled ? undefined : handleRef} />
     </div>
   );

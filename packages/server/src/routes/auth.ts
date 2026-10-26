@@ -2,6 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 import { login, signup } from "../auth-service";
 import sessionRepo from "../db/session.repo";
+import inviteTokenRepo from "../db/invite-token.repo";
 import { extractToken, validateSession } from "../auth";
 import { errorSchema, okSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent } from "./crud";
@@ -28,6 +29,8 @@ const authResponseSchema = z.object({
   name: z.string(),
   username: z.string(),
 });
+
+const inviterSchema = z.object({ inviterName: z.string() });
 
 const setAuthCookie = (c: { header: (name: string, value: string) => void }, token: string) => {
   c.header(
@@ -89,6 +92,23 @@ export const authRoutes = new OpenAPIHono()
       }
       setAuthCookie(c, session.token);
       return c.json(session, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/invites/:token",
+      responses: {
+        200: jsonContent(inviterSchema),
+        404: jsonContent(errorSchema, "No usable invite"),
+      },
+    }),
+    // Before signing up, so it can't ask for a session. It names only the inviter, and an
+    // invite that's unknown, used or expired answers the same way.
+    async (c) => {
+      const inviterName = await inviteTokenRepo.findInviterName(c.req.param("token"));
+      if (!inviterName) throw new HTTPException(404, { message: "Invite not found" });
+      return c.json({ inviterName }, 200);
     },
   )
   .openapi(

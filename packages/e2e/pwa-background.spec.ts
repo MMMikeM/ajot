@@ -121,6 +121,7 @@ test.describe("settings", () => {
     await page.goto("/settings");
 
     await expect(page.getByRole("checkbox", { name: "Update in the background" })).toBeChecked();
+    await page.getByRole("button", { name: "Notifications" }).click();
     const due = page.getByRole("checkbox", { name: "A task is due" });
     const rightAway = page.getByRole("checkbox", { name: "Deliver right away" });
     await expect(due).toBeChecked();
@@ -138,6 +139,8 @@ test.describe("settings", () => {
     await savedAgain;
 
     await page.reload();
+    await expect(page.getByRole("button", { name: "Notifications" })).toContainText("8 of 9 on");
+    await page.getByRole("button", { name: "Notifications" }).click();
     await expect(page.getByRole("group", { name: "Reminders" })).toBeVisible();
     await expect(page.getByRole("checkbox", { name: "A task is due" })).not.toBeChecked();
     await expect(page.getByRole("checkbox", { name: "Deliver right away" })).not.toBeChecked();

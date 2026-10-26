@@ -18,6 +18,8 @@ These are unmodified shadcn output. Do not add app opinions here.
 
 Regenerate any of these with: `npx shadcn@latest add <name> --overwrite`
 
+`drawer.tsx` also ends every sheet with a Close that shows only on keyboard focus, for screen readers on a phone, which can't swipe a sheet away. Keep it after a regenerate.
+
 ## Tier 2 — App-level compositions (app opinions live here)
 
 `field.tsx` is the single import for all text-input work in this app:

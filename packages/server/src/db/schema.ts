@@ -16,6 +16,7 @@ import {
   updatedAt,
   int,
   json,
+  nullableJson,
   bool,
 } from "./columns";
 import type { PushTrigger } from "@newtab-todo/shared/push-payload";
@@ -28,7 +29,18 @@ export const categories = sqliteTable("categories", {
   sortOrder: nullableString("sort_order"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
+  // Deleting hides a list rather than removing it, so Undo brings back its collaborators and
+  // its tasks for everyone
+  deletedAt: nullableString("deleted_at"),
+  deletion: nullableJson<CategoryDeletion>("deletion"),
 });
+
+/** What deleting a list changed beyond the list itself, so Undo can put exactly that back. */
+export type CategoryDeletion = {
+  deletedTaskIds: string[];
+  movedTaskIds: string[];
+  unfiledShares: { taskId: string; sharedWithUserId: string }[];
+};
 
 export const taskStatuses = ["todo", "in_progress", "done"] as const;
 
@@ -131,6 +143,19 @@ export const contacts = sqliteTable(
   (t) => [uniqueIndex("contacts_user_contact_idx").on(t.userId, t.contactUserId)],
 );
 
+type ContactRow = typeof contacts.$inferSelect;
+type CollaboratorRow = typeof categoryCollaborators.$inferSelect;
+
+// Removing a contact deletes both rows and the lists they shared; this keeps them for Undo
+export const removedContacts = sqliteTable("removed_contacts", {
+  // The remover's contact row id, which their Undo names
+  id: pk(),
+  userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
+  contacts: json<ContactRow[]>("contacts"),
+  collaborators: json<CollaboratorRow[]>("collaborators"),
+  removedAt: createdAt("removed_at"),
+});
+
 export const inviteTokens = sqliteTable("invite_tokens", {
   id: pk(),
   createdByUserId: fk("created_by_user_id", () => users.id, { onDelete: "cascade" }),
@@ -185,6 +210,7 @@ export const relations = defineRelations(
     sessions,
     taskShares,
     contacts,
+    removedContacts,
     inviteTokens,
     categoryCollaborators,
     notificationQueue,

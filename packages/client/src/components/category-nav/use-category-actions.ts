@@ -11,6 +11,7 @@ import { useActiveCategoryId, setActiveCategoryId } from "~/lib/state/active-cat
 import { useCurrentUserId, useOptimisticUserId } from "~/lib/auth/current-user";
 import { useCollaboratedCategoryIds } from "~/lib/hooks/use-collaborated-categories";
 import { leaveCategory } from "~/lib/actions";
+import { pushUndoToast } from "~/lib/undo-toast";
 import { countOpenTasksByCategory } from "~/lib/effective-category";
 import type { CategoryTaskAction } from "~/lib/constants";
 import type { Category } from "~/lib/types";
@@ -54,10 +55,19 @@ export const useCategoryActions = () => {
 
   const handleSetColor = (id: string, color: string | null) => updateCategory(id, { color });
 
-  const deleteAndMoveOn = (cat: Category, tasks: CategoryTaskAction) => {
+  const deleteAndMoveOn = (cat: Category, tasks: CategoryTaskAction, title: string) => {
     const wasActive = cat.id === activeCategoryId;
-    deleteCategory(cat.id, tasks).isPersisted.promise.catch(() => {
-      toastManager.add({ title: `Couldn't delete “${cat.name}”` });
+    const { transaction, undo } = deleteCategory(cat.id, tasks);
+    const undoToastId = pushUndoToast(title, () => {
+      undo().catch((err) => {
+        console.error("[category] restore failed:", err);
+        toastManager.add({ title: `Couldn't bring back “${cat.name}”. Try again.` });
+      });
+      if (wasActive) setActiveCategoryId(cat.id);
+    });
+    transaction.isPersisted.promise.catch(() => {
+      toastManager.close(undoToastId);
+      toastManager.add({ title: `Couldn't delete “${cat.name}”. Try again.` });
       if (wasActive) setActiveCategoryId(cat.id);
     });
     if (!wasActive) return;
@@ -76,17 +86,17 @@ export const useCategoryActions = () => {
       return;
     }
 
-    deleteAndMoveOn(cat, "uncategorise");
-    toastManager.add({ title: "List deleted" });
+    deleteAndMoveOn(cat, "uncategorise", "List deleted");
   };
 
   const confirmDelete = (tasks: CategoryTaskAction) => {
     setConfirmingDelete(false);
     if (!pendingDelete) return;
-    deleteAndMoveOn(pendingDelete.category, tasks);
-    toastManager.add({
-      title: tasks === "delete" ? "List and tasks deleted" : "List deleted, tasks moved to Inbox",
-    });
+    deleteAndMoveOn(
+      pendingDelete.category,
+      tasks,
+      tasks === "delete" ? "List and tasks deleted" : "List deleted, tasks moved to Inbox",
+    );
   };
 
   const handleLeave = async (categoryId: string) => {
@@ -96,7 +106,11 @@ export const useCategoryActions = () => {
     } catch (err) {
       console.error("[leave] failed:", err);
       const name = categories.find((c) => c.id === categoryId)?.name;
-      toastManager.add({ title: name ? `Couldn't leave “${name}”` : "Couldn't leave the list" });
+      toastManager.add({
+        title: name
+          ? `Couldn't leave “${name}”. Try again.`
+          : "Couldn't leave the list. Try again.",
+      });
       return;
     }
     const remaining = categories.filter((c) => c.id !== categoryId);

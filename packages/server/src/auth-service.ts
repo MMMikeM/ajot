@@ -12,11 +12,14 @@ import { hashPassword, verifyPassword } from "./password";
 const admit = async (inviteToken: string | undefined) => {
   if (inviteToken) {
     const invite = await inviteTokenRepo.claim(inviteToken);
-    if (!invite) throw new ForbiddenError("Invite link has expired or already been used");
+    if (!invite)
+      throw new ForbiddenError("This invite link has expired or been used. Ask for a new one.");
     return invite;
   }
   if ((await userRepo.count()) > 0) {
-    throw new ForbiddenError("Ask someone on this server for an invite link to sign up");
+    throw new ForbiddenError(
+      "Signing up needs an invite link. Ask someone on this server for one.",
+    );
   }
   return null;
 };
@@ -58,7 +61,7 @@ export const signup = async (
   } catch (e) {
     if (!(e instanceof NotFoundError)) throw e;
   }
-  if (existing) throw new ConflictError("Username already taken");
+  if (existing) throw new ConflictError("That username is taken. Try another.");
 
   const invite = await admit(inviteToken);
   let user;
@@ -87,12 +90,12 @@ export const login = async (username: string, password: string) => {
     console.log(
       `[login] user not found username=${normalized} error=${e instanceof Error ? e.message : String(e)}`,
     );
-    throw new HTTPException(401, { message: "Invalid username or password" });
+    throw new HTTPException(401, { message: "Wrong username or password." });
   }
 
   const valid = await verifyPassword(user.passwordHash, password);
   console.log(`[login] password valid=${valid} userId=${user.id}`);
-  if (!valid) throw new HTTPException(401, { message: "Invalid username or password" });
+  if (!valid) throw new HTTPException(401, { message: "Wrong username or password." });
 
   const token = await sessionRepo.insert(user.id);
   return { userId: user.id, token, name: user.name, username: user.username };

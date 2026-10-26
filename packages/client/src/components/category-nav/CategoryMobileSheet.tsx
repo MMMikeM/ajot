@@ -175,7 +175,7 @@ function CategoryMobileSheet() {
             <Search size={18} aria-hidden="true" />
             Search all lists
           </button>
-          <DrawerTitle className="px-5 pt-3 pb-2 text-xs font-medium tracking-wide text-hint uppercase">
+          <DrawerTitle className="px-5 pt-3 pb-2 text-xs font-medium tracking-wider text-hint uppercase">
             Lists
           </DrawerTitle>
 

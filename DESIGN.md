@@ -58,11 +58,15 @@ typography:
     fontFamily: "Figtree Variable, Inter Variable, sans-serif"
     fontSize: "0.875rem"
     lineHeight: 1.43
+  meta:
+    fontFamily: "Figtree Variable, Inter Variable, sans-serif"
+    fontSize: "0.75rem"
+    lineHeight: 1.33
   label:
     fontFamily: "Figtree Variable, Inter Variable, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 500
-    letterSpacing: "0.025em"
+    letterSpacing: "0.05em"
 rounded:
   sm: "0.27rem"
   md: "0.36rem"
@@ -177,11 +181,13 @@ A near-monochrome ink palette: blue-black surfaces, slate secondary text and war
 
 - **Wordmark** (DM Serif Display, 1.125rem, uppercase, tracking 0.28em): "AJOT" in the header. Kept small so the list title leads.
 - **Headline** (DM Serif Display, 1.75rem, 1.25): the active category as the list title, with its colour dot and open count, on both targets. Page titles (People, sign-in) use the same style.
+- **Display** (DM Serif Display, 1.5rem): the empty-list phrases and the sharing sheet's title. A step under the headline and in `muted-foreground` on the list, so an empty list's phrase never competes with the list title above it.
 - **Capture** (Figtree, 1.125rem): the "What needs doing?" input.
 - **Title** (Figtree 600, 1.125rem, 1.375): the task title in the detail sheet.
 - **Body** (Figtree 500, 1rem, 1.5): task titles in the list, wrapping to at most two lines.
-- **Body Small** (Figtree, 0.875rem): subtasks, notes and sheet rows.
-- **Label** (Figtree 500, 0.75rem, tracking 0.025em, uppercase): section toggles such as "Done (2)" and sheet headings.
+- **Body Small** (Figtree, 0.875rem): subtasks in the list, and the detail sheet's rows, subtasks and notes on desktop. On touch the sheet's rows, subtasks and notes all step up to 1rem, the size of the fields that edit them, so a note or subtask doesn't change size between reading and editing it.
+- **Meta** (Figtree 400, 0.75rem, 1.33): due dates, row descriptions, the "2 done" subtask fold and the sidebar's counts. Counts that stack in a column (header, sidebar, lists sheet) use tabular figures; left-aligned counts and date labels keep Figtree's proportional ones, whose narrow "1" reads better in running text.
+- **Label** (Figtree 500, 0.75rem, tracking 0.05em, uppercase): group headings in lists, such as "Done (2)", the lists sheet's "Lists", "Shared with me" and search's groups. Page sections on People, Settings and the sharing sheet use a sentence-case `SectionLabel` (Figtree 500, 0.875rem, `hint`) instead.
 - **Avatar initials** (Figtree 600, 11px, tight tracking) in a 22px circle; the 28px `md` size uses 12px. Nothing smaller.
 
 ## Layout
@@ -228,8 +234,8 @@ Flat at rest. Depth comes from tonal layering (background, then surface, surface
 - **Desktop quick actions:** hover or keyboard focus reveals Set due date (only when undated), Add subtask and Delete as `hint` icon buttons floating over the row's end. Nothing reserves space for them at rest: the title's tail fades out beneath them (`fade-under-actions`, sized by the row's `--actions-w`) and the meta slides left to clear them.
 - **Touch quick actions:** swipe left to reveal a tray on `surface-muted` with Date and Subtask (not on done rows), plus Delete on `destructive-subtle`. The tray is as wide as its actions, each cell as wide as the widest label and at least 56px, and the row slides by exactly that width. When the task isn't yours to delete, the tray simply has no Delete; the owner's face in the row already says whose it is. The row is transparent at rest and turns opaque only while swiping (`data-swiping`), so rows never read as stacked cards. On a device's first visit, the top row slides open once to show the tray.
 - **Completing:** a ticked row holds its checked, struck-through, faded state for 450ms before it moves to Done, so the tick is seen and a mis-click can be undone by ticking again in that window. Once in Done, its checkbox recedes. With the keyboard, focus moves to the next row's checkbox (else the previous one, else the capture input) before the row leaves; pointer focus stays put, so a tap never raises the on-screen keyboard.
-- **Subtasks:** the thread drops from the centre of the parent checkbox, and subtask checkboxes align with the parent title. Done subtasks fold into a `hint` line at the end of the thread ("2 done") that opens the task; it is left out on done parents.
-- **Done section:** a "Done (n)" label toggle that remembers being open or closed per device. While open, a subtle "Clear" at its right end deletes the done tasks you're allowed to delete, with Undo and no confirmation; others' done tasks in shared lists stay.
+- **Subtasks:** the thread drops from the centre of the parent checkbox, and subtask checkboxes align with the parent title. Done subtasks fold into a `hint` line at the end of the thread ("2 done") that opens the task; it is left out on done parents. Once every subtask is done, the open parent's checkbox takes a `primary` edge, in the list and the detail sheet: ready to tick.
+- **Done section:** a "Done (n)" label toggle that remembers being open or closed per device. While open, a subtle "Clear" at its right end deletes the done tasks you're allowed to delete, with Undo and no confirmation; others' done tasks in shared lists stay. When a task moves from the list into Done (here or on another device), the count drops in (opacity and a half-line fall, 320ms), so a closed section still shows where it went; not on load, a list switch, Clear or Undo, and not under reduced motion.
 - **List rows elsewhere** (detail sheet, People, sharing): hover-revealed actions sit in a `RevealGroup`, which floats over the row's end on the row's hover colour on desktop and stays in flow on touch.
 
 ### Navigation
@@ -250,7 +256,7 @@ Flat at rest. Depth comes from tonal layering (background, then surface, surface
 ### Empty List
 
 - A time-of-day phrase ("Morning.", "All clear.", "Evening.", "All quiet.") in DM Serif Display at 1.5rem in `muted-foreground`, with a `hint` line pointing at the capture input (above on desktop, below on touch).
-- When every task in a list is done, the list shows "All done." in the same style, over a `hint` time-of-day line ("Nothing left for tonight.", "Rest well."). It centres above the input bar on touch and sits under the input on desktop. It settles in (opacity and a 6px rise, 700ms) only when the list has just been cleared, never on load, and appears without motion under reduced motion.
+- When every task in a list is done, the list shows "All done." in the same style, over a `hint` time-of-day line ("Nothing left for tonight.", "Rest well."). It centres above the input bar on touch and sits under the input on desktop. It settles in (opacity and a 6px rise, 700ms) only when the last open task has just moved into Done (here or on another device), never on load, a list switch or an Undo of Clear, and appears without motion under reduced motion. Clearing an all-done list settles the resting phrase in the same way.
 
 ### Task Detail Sheet
 
@@ -260,7 +266,7 @@ Flat at rest. Depth comes from tonal layering (background, then surface, surface
 
 ### Toasts
 
-- Surface card, bottom centre, with a countdown bar (`primary` at 40%, so it reads against the card) animated with `scaleX`. The bar follows the toast's own timeout, pauses while the stack is hovered or focused, and is absent for toasts without a timeout and under reduced motion. Dismiss is an icon button. On desktop they sit inside the sheet, centred on the list column; on touch they sit above the input bar (`--input-bar-h`). While a sheet is open they move above it, to the top of the screen (or of the desktop sheet's inset), on a layer above the sheet so Undo can be pressed without dismissing it.
+- Surface card, bottom centre, with a countdown bar (`primary` at 40%, so it reads against the card) animated with `scaleX`. The bar follows the toast's own timeout, pauses while the stack is hovered or focused, and is absent for toasts without a timeout and under reduced motion. Dismiss is an icon button. On desktop they sit inside the sheet, centred on the list column; on touch they sit above the input bar (`--input-bar-h`). While a sheet is open they move above it, to the top of the screen (or of the desktop sheet's inset), on a layer above the sheet so Undo can be pressed without dismissing it. ⌘Z / Ctrl+Z presses the newest Undo, outside a field holding text, since an open sheet keeps Tab inside it.
 
 ### Sync Status
 
