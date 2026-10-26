@@ -74,26 +74,27 @@ export const Subtasks = ({
       {subtasks.map((sub) => {
         const done = sub.status === "done";
         return (
-          <ListRow key={sub.id} size="sm" className="-mx-2 min-h-9 touch:min-h-11">
+          <ListRow key={sub.id} size="sm" className="-mx-2 min-h-9 items-start touch:min-h-11">
+            {/* Checkbox, title and Delete centre on the title's first line */}
             <Checkbox
               checked={done}
               aria-label={sub.title}
               onCheckedChange={() => onToggle(sub)}
               className={cn(
-                "size-3.5 touch:size-4 touch:after:-inset-3.5",
+                "mt-[7px] size-3.5 touch:mt-2.5 touch:size-4 touch:after:-inset-3.5",
                 done && checkboxDoneClass,
               )}
             />
             <span
               className={cn(
-                "flex-1 text-sm touch:text-base",
+                "min-w-0 flex-1 py-1 text-sm [overflow-wrap:anywhere] touch:py-1.5 touch:text-base",
                 done && "text-muted-foreground line-through",
               )}
             >
               {sub.title}
             </span>
             {canDeleteTask(userId, sub, task) && (
-              <RevealGroup>
+              <RevealGroup className="items-start pt-1.5 touch:pt-0">
                 <RevealButton
                   className={hitArea}
                   onClick={() => pushUndoToast("Subtask deleted", deleteTask(sub.id))}
@@ -142,7 +143,7 @@ const NoteItem = ({ note }: { note: Note }) => {
   return (
     <ListRow size="sm" className="-mx-2 min-h-9 items-start touch:min-h-11">
       {/* touch:py-1.5 centres the first line on the h-9 touch buttons */}
-      <span className="flex-1 py-1 text-sm whitespace-pre-wrap touch:py-1.5 touch:text-base">
+      <span className="min-w-0 flex-1 py-1 text-sm [overflow-wrap:anywhere] whitespace-pre-wrap touch:py-1.5 touch:text-base">
         {note.content || note.title}
       </span>
       <RevealGroup className="items-start pt-0.5 touch:pt-0">
