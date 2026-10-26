@@ -4,7 +4,7 @@
  * (collections.ts, offline.ts, push.ts) are exempt.
  */
 import { client } from "~/lib/api";
-import { categoriesCollection, contactsCollection } from "~/lib/db/collections";
+import { categoriesCollection, contactsCollection, tasksCollection } from "~/lib/db/collections";
 
 const UNREACHABLE = "Couldn't reach the server. Check your connection and try again.";
 const TIMED_OUT = "The server took too long to answer. Check your connection and try again.";
@@ -48,10 +48,22 @@ export const acceptInvite = async (token: string) => {
   contactsCollection.utils.refetch().catch(console.error);
 };
 
-/** Removes the contact for both people, not only this user. */
+/** Removes the contact for both people, not only this user, and the lists they shared. */
 export const removeContact = async (id: string) => {
-  await client.api.contacts[":id"].$delete({ param: { id } });
-  await contactsCollection.utils.refetch();
+  const res = await client.api.contacts[":id"].$delete({ param: { id } });
+  if (!res.ok) throw new Error("Failed to remove contact");
+  await Promise.all([contactsCollection.utils.refetch(), categoriesCollection.utils.refetch()]);
+};
+
+/** Undoes removeContact: both people are contacts again, sharing the same lists. */
+export const restoreContact = async (id: string) => {
+  const res = await client.api.contacts[":id"].restore.$post({ param: { id } });
+  if (!res.ok) throw new Error("Failed to restore contact");
+  await Promise.all([
+    contactsCollection.utils.refetch(),
+    categoriesCollection.utils.refetch(),
+    tasksCollection.utils.refetch(),
+  ]);
 };
 
 export const addCollaborator = async (categoryId: string, username: string) => {

@@ -190,6 +190,25 @@ const deleteCategoryWithTasks = async ({
   ]);
 };
 
+export type CategoryRestoreMetadata = { categoryId: string };
+
+// One request: the server kept the list, its sharing and its tasks, collaborators' tasks too
+const restoreCategoryWithTasks = async ({
+  transaction,
+}: {
+  transaction: { metadata: Record<string, unknown> };
+}) => {
+  assertSignedIn();
+  const { categoryId } = transaction.metadata as CategoryRestoreMetadata;
+  console.log(`[sync:categories] restore → id=${categoryId}`);
+  await assertOk(await client.api.categories[":id"].restore.$post({ param: { id: categoryId } }));
+  await Promise.all([
+    categoriesCollection.utils.refetch(),
+    tasksCollection.utils.refetch(),
+    notesCollection.utils.refetch(),
+  ]);
+};
+
 export const offline = startOfflineExecutor({
   collections: { tasks: tasksCollection, categories: categoriesCollection, notes: notesCollection },
   mutationFns: {
@@ -199,6 +218,7 @@ export const offline = startOfflineExecutor({
     deleteTask: deleteTaskWithSubtasks,
     restoreTasks: restoreTasksAndNotes,
     deleteCategory: deleteCategoryWithTasks,
+    restoreCategory: restoreCategoryWithTasks,
   },
   // The default policy drops any error whose message contains "401" or "403", so decide by type.
   shouldRetry: (error) => (error instanceof SessionExpiredError ? true : undefined),

@@ -241,6 +241,22 @@ test.describe("deleting a category", () => {
     await expect(page.getByText("List deleted")).toBeVisible();
   });
 
+  test("Undo brings a deleted list back", async ({ page }, testInfo) => {
+    await openList(page);
+    await openOptions(page, "Home", testInfo.project.name === "desktop");
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    const toast = page.locator("[data-toast-undo]", { hasText: "List deleted" });
+    await expect(toast).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Home/ })).toHaveCount(0);
+
+    const restore = page.waitForRequest(
+      (r) => r.method() === "POST" && r.url().endsWith("/api/categories/c-home/restore"),
+    );
+    await toast.getByRole("button", { name: "Undo" }).click();
+    await restore;
+    await expect(page.getByRole("button", { name: /^Home/ }).first()).toBeVisible();
+  });
+
   test("a refused delete says so and brings the category back", async ({ page }, testInfo) => {
     await openList(page);
     await page.route("**/api/categories", (route) =>
@@ -537,5 +553,53 @@ test.describe("accessibility", () => {
     await page.goto("/auth", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: /sign in/i })).toBeVisible({ timeout: 15000 });
     await expectNoAxeViolations(page);
+  });
+});
+
+test.describe("removing a contact", () => {
+  const openPeople = async (page: Page) => {
+    await mockApi(page);
+    await page.goto("/people", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("@sarah")).toBeVisible();
+  };
+
+  const remove = async (page: Page, name: string) => {
+    const contactRow = page
+      .locator("div")
+      .filter({ hasText: name })
+      .filter({ has: page.getByRole("button", { name: "Remove" }) });
+    await contactRow.last().hover();
+    await contactRow.last().getByRole("button", { name: "Remove" }).click();
+  };
+
+  test("Undo brings them back", async ({ page }) => {
+    await openPeople(page);
+    await remove(page, "Sarah Murray");
+
+    const toast = page.locator("[data-toast-undo]", { hasText: "Removed Sarah Murray" });
+    await expect(toast).toBeVisible();
+    await expect(page.getByText("@sarah")).toHaveCount(0);
+
+    const restore = page.waitForRequest(
+      (r) => r.method() === "POST" && r.url().endsWith("/api/contacts/ct-u-sarah/restore"),
+    );
+    await toast.getByRole("button", { name: "Undo" }).click();
+    await restore;
+    await expect(page.getByText("@sarah")).toBeVisible();
+  });
+
+  test("a failed remove says so and keeps them", async ({ page }) => {
+    await openPeople(page);
+    await page.route("**/api/contacts/*", (route) =>
+      route.request().method() === "DELETE"
+        ? route.fulfill({ status: 500, contentType: "application/json", body: '{"error":"no"}' })
+        : route.fallback(),
+    );
+    await remove(page, "Sarah Murray");
+
+    await expect(
+      page.getByText("Couldn't remove Sarah Murray. Check your connection and try again."),
+    ).toBeVisible();
+    await expect(page.getByText("@sarah")).toBeVisible();
   });
 });

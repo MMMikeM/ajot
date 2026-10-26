@@ -4,7 +4,9 @@ import { Toast } from "@base-ui/react/toast";
 import { createLazyFileRoute, useRouter } from "@tanstack/react-router";
 import { ChevronLeft, UserPlus } from "lucide-react";
 import { useContacts } from "~/lib/db/hooks";
-import { createInvite, removeContact } from "~/lib/actions";
+import { createInvite, removeContact, restoreContact } from "~/lib/actions";
+import { pushUndoToast } from "~/lib/undo-toast";
+import type { Contact } from "~/lib/types";
 import { getBuildTarget } from "~/lib/build-target";
 import { getServerUrl } from "~/lib/server-url";
 import { useIsDesk } from "~/lib/hooks/use-is-desk";
@@ -55,6 +57,23 @@ export function PeoplePage() {
     } finally {
       setInviting(false);
     }
+  };
+
+  const remove = async (contact: Contact) => {
+    const name = contact.contactUser?.name ?? "this contact";
+    try {
+      await removeContact(contact.id);
+    } catch (err) {
+      console.error("[contacts] remove failed:", err);
+      toastManager.add({ title: `Couldn't remove ${name}. Check your connection and try again.` });
+      return;
+    }
+    pushUndoToast(`Removed ${name}`, () => {
+      restoreContact(contact.id).catch((err) => {
+        console.error("[contacts] restore failed:", err);
+        toastManager.add({ title: `Couldn't bring back ${name}` });
+      });
+    });
   };
 
   return (
@@ -111,7 +130,7 @@ export function PeoplePage() {
               }
             />
             <RevealGroup>
-              <RevealButton onClick={() => removeContact(contact.id)}>Remove</RevealButton>
+              <RevealButton onClick={() => remove(contact)}>Remove</RevealButton>
             </RevealGroup>
           </ListRow>
         ))}

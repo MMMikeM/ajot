@@ -147,7 +147,10 @@ export const taskRoutes = authed()
 
       if (restoring) {
         const result = await taskRepo.restore(id, updatedAt);
-        broadcast(c, "tasks", "insert", await taskRepo.findListItem(id), taskUserIds(task));
+        // Read again: a task whose list was deleted came back to the Inbox, away from the
+        // list's collaborators
+        const restored = await taskRepo.findByIdWithAccess(id, userId);
+        broadcast(c, "tasks", "insert", await taskRepo.findListItem(id), taskUserIds(restored));
         return c.json(result, 200);
       }
 
