@@ -32,6 +32,106 @@ const serverNotes = (token: string) => apiRequest<Note[]>("GET", "/api/notes", u
 const row = (page: Parameters<typeof createTask>[0], title: string) =>
   page.locator("[data-task-id]", { hasText: title }).first();
 
+test("ticking stamps completedAt and unticking clears it, without counting as an edit", async ({
+  user1Page: page,
+  user1Auth,
+}) => {
+  await createTask(page, "Water the plants");
+  await expect.poll(() => serverTask(user1Auth.token, "Water the plants")).toBeTruthy();
+
+  await row(page, "Water the plants").getByRole("checkbox").first().click();
+  await expect
+    .poll(async () => (await serverTask(user1Auth.token, "Water the plants"))?.completedAt)
+    .toBeTruthy();
+  expect((await serverTask(user1Auth.token, "Water the plants"))?.editedAt).toBeNull();
+
+  await page.getByRole("button", { name: /done/i }).first().click();
+  await row(page, "Water the plants").getByRole("checkbox").first().click();
+  await expect
+    .poll(async () => (await serverTask(user1Auth.token, "Water the plants"))?.completedAt)
+    .toBeNull();
+});
+
+test("a client that sends no stamps still gets them from the server", async ({ user1Auth }) => {
+  const at = new Date().toISOString();
+  const created = await apiRequest<Task>(
+    "POST",
+    "/api/tasks",
+    {
+      id: `stamps-${Date.now()}`,
+      userId: user1Auth.userId,
+      title: "Old client",
+      createdAt: at,
+      updatedAt: at,
+    },
+    user1Auth.token,
+  );
+  expect(created.editedAt).toBeNull();
+  expect(created.completedAt).toBeNull();
+
+  const later = new Date(Date.now() + 1000).toISOString();
+  const renamed = await apiRequest<Task>(
+    "PUT",
+    "/api/tasks",
+    { id: created.id, title: "Old client, renamed", status: "done", updatedAt: later },
+    user1Auth.token,
+  );
+  expect(renamed.editedAt).toBe(later);
+  expect(renamed.completedAt).toBe(later);
+});
+
+test("adding a note or a subtask marks the task edited", async ({ user1Auth }) => {
+  const at = new Date().toISOString();
+  const task = await apiRequest<Task>(
+    "POST",
+    "/api/tasks",
+    {
+      id: `edited-${Date.now()}`,
+      userId: user1Auth.userId,
+      title: "Plan the trip",
+      createdAt: at,
+      updatedAt: at,
+    },
+    user1Auth.token,
+  );
+
+  const noteAt = new Date(Date.now() + 1000).toISOString();
+  await apiRequest(
+    "POST",
+    "/api/notes",
+    {
+      id: `note-${Date.now()}`,
+      userId: user1Auth.userId,
+      taskId: task.id,
+      title: "Window seat",
+      content: "Window seat",
+      createdAt: noteAt,
+      updatedAt: noteAt,
+    },
+    user1Auth.token,
+  );
+  expect((await serverTask(user1Auth.token, "Plan the trip"))?.editedAt).toBe(noteAt);
+
+  const subtaskAt = new Date(Date.now() + 2000).toISOString();
+  await apiRequest(
+    "POST",
+    "/api/tasks",
+    {
+      id: `sub-${Date.now()}`,
+      userId: user1Auth.userId,
+      parentId: task.id,
+      title: "Book the hotel",
+      createdAt: subtaskAt,
+      updatedAt: subtaskAt,
+    },
+    user1Auth.token,
+  );
+  const parent = await serverTask(user1Auth.token, "Plan the trip");
+  expect(parent?.editedAt).toBe(subtaskAt);
+  // The sync clock is left alone, so an older pending edit to the task still lands
+  expect(parent?.updatedAt).toBe(at);
+});
+
 test("Undo brings back a note deleted on its own", async ({ user1Page: page, user1Auth }) => {
   await createTask(page, "Book the vet");
   await expect.poll(() => serverTask(user1Auth.token, "Book the vet")).toBeTruthy();

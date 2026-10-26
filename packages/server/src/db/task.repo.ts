@@ -1,4 +1,4 @@
-import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
@@ -121,6 +121,17 @@ const update = async (id: string, updatedAt: string, fields: Partial<TaskInsert>
   return row;
 };
 
+// Leaves updatedAt, the sync clock, alone: a note or subtask changing must not beat a pending
+// edit to the task itself. Undefined when the task was already edited later than `at`.
+const markEdited = async (id: string, at: string) => {
+  const [row] = await db
+    .update(tasks)
+    .set({ editedAt: at })
+    .where(and(eq(tasks.id, id), or(isNull(tasks.editedAt), lt(tasks.editedAt, at))))
+    .returning();
+  return row;
+};
+
 // After the user's other top-level tasks, where the app puts a task they add themselves
 const nextSortOrder = async (userId: string) => {
   const last = await db.query.tasks.findFirst({
@@ -217,6 +228,7 @@ export default {
   findByIdWithAccess,
   insert,
   update,
+  markEdited,
   remove,
   nextSortOrder,
   insertShare,

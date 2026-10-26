@@ -20,6 +20,8 @@ import { sendNotification, getUserName } from "../notify";
 import notificationQueueRepo from "../db/notification-queue.repo";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
+import { markTaskEdited, taskUserIds } from "./task-users";
+import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 
 const shareSchema = z.object({
   taskId: z.string(),
@@ -35,27 +37,6 @@ const shareCategorySchema = z.object({
   taskId: z.string(),
   categoryId: z.string().nullable(),
 });
-
-const taskUserIds = (task: {
-  userId: string;
-  shares?: { sharedWithUserId: string }[];
-  category?: { collaborators: { userId: string }[] } | null;
-  parent?: {
-    userId: string;
-    shares?: { sharedWithUserId: string }[];
-    category?: { collaborators: { userId: string }[] } | null;
-  } | null;
-}) => [
-  ...new Set([
-    task.userId,
-    ...(task.shares?.map((s) => s.sharedWithUserId) ?? []),
-    ...(task.category?.collaborators.map((c) => c.userId) ?? []),
-    // Subtasks have no shares or category of their own; everyone with the parent sees them
-    ...(task.parent ? [task.parent.userId] : []),
-    ...(task.parent?.shares?.map((s) => s.sharedWithUserId) ?? []),
-    ...(task.parent?.category?.collaborators.map((c) => c.userId) ?? []),
-  ]),
-];
 
 export const taskRoutes = authed()
   .openapi(
@@ -96,7 +77,12 @@ export const taskRoutes = authed()
         throw new HTTPException(403, { message: "Not your list" });
       }
 
-      const result = await taskRepo.insert({ ...data, userId });
+      // A client from before completedAt existed doesn't send it
+      const result = await taskRepo.insert({
+        ...taskChangeStamps({ status: data.status }, data.updatedAt),
+        ...data,
+        userId,
+      });
       // A retry gets its own row back; an id someone else's task already has must not
       if (result.userId !== userId) throw new HTTPException(409, { message: "Task id taken" });
       const taskWithRelations = { ...result, subtasks: [], shares: [] };
@@ -105,6 +91,7 @@ export const taskRoutes = authed()
         ? await categoryCollaboratorRepo.listUserIds(effectiveCategoryId)
         : [];
       broadcast(c, "tasks", "insert", taskWithRelations, [...new Set([userId, ...collabIds])]);
+      if (data.parentId) await markTaskEdited(c, data.parentId, userId, data.createdAt);
       return c.json(result, 200);
     },
   )
@@ -141,8 +128,12 @@ export const taskRoutes = authed()
       if (!isContact) throw new HTTPException(400, { message: "Can only assign to a contact" });
       if (!canUseList) throw new HTTPException(403, { message: "Not your list" });
 
-      const result = await taskRepo.update(id, updatedAt, fields);
+      // What the client stamped wins; one from before these columns existed sends neither
+      const stamps = taskChangeStamps(fields, updatedAt);
+      const result = await taskRepo.update(id, updatedAt, { ...stamps, ...fields });
       broadcast(c, "tasks", "update", result, taskUserIds(task));
+      if (result.parentId && stamps.editedAt)
+        await markTaskEdited(c, result.parentId, userId, updatedAt);
 
       const notifiableFields = ["title", "description", "status", "dueDate"] as const;
       const changedNotifiable = notifiableFields.filter((f) => f in fields);
