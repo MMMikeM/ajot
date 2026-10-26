@@ -15,11 +15,13 @@ import contactRepo from "../db/contact.repo";
 import categoryRepo from "../db/category.repo";
 import categoryCollaboratorRepo from "../db/category-collaborator.repo";
 import { authed } from "../middleware";
-import { broadcast, broadcastAll, broadcastPerUser } from "../broadcast";
+import { broadcast, broadcastAll } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import notificationQueueRepo from "../db/notification-queue.repo";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
+import { markTaskEdited, taskUserIds } from "./task-users";
+import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 
 const shareSchema = z.object({
   taskId: z.string(),
@@ -35,27 +37,6 @@ const shareCategorySchema = z.object({
   taskId: z.string(),
   categoryId: z.string().nullable(),
 });
-
-const taskUserIds = (task: {
-  userId: string;
-  shares?: { sharedWithUserId: string }[];
-  category?: { collaborators: { userId: string }[] } | null;
-  parent?: {
-    userId: string;
-    shares?: { sharedWithUserId: string }[];
-    category?: { collaborators: { userId: string }[] } | null;
-  } | null;
-}) => [
-  ...new Set([
-    task.userId,
-    ...(task.shares?.map((s) => s.sharedWithUserId) ?? []),
-    ...(task.category?.collaborators.map((c) => c.userId) ?? []),
-    // Subtasks have no shares or category of their own; everyone with the parent sees them
-    ...(task.parent ? [task.parent.userId] : []),
-    ...(task.parent?.shares?.map((s) => s.sharedWithUserId) ?? []),
-    ...(task.parent?.category?.collaborators.map((c) => c.userId) ?? []),
-  ]),
-];
 
 export const taskRoutes = authed()
   .openapi(
@@ -96,7 +77,12 @@ export const taskRoutes = authed()
         throw new HTTPException(403, { message: "Not your list" });
       }
 
-      const result = await taskRepo.insert({ ...data, userId });
+      // A client from before completedAt existed doesn't send it
+      const result = await taskRepo.insert({
+        ...taskChangeStamps({ status: data.status }, data.updatedAt),
+        ...data,
+        userId,
+      });
       // A retry gets its own row back; an id someone else's task already has must not
       if (result.userId !== userId) throw new HTTPException(409, { message: "Task id taken" });
       const taskWithRelations = { ...result, subtasks: [], shares: [] };
@@ -105,6 +91,7 @@ export const taskRoutes = authed()
         ? await categoryCollaboratorRepo.listUserIds(effectiveCategoryId)
         : [];
       broadcast(c, "tasks", "insert", taskWithRelations, [...new Set([userId, ...collabIds])]);
+      if (data.parentId) await markTaskEdited(c, data.parentId, userId, data.createdAt);
       return c.json(result, 200);
     },
   )
@@ -119,8 +106,9 @@ export const taskRoutes = authed()
       const { id, updatedAt, ...fields } = c.req.valid("json");
       const userId = c.get("userId");
 
+      const restoring = fields.deletedAt === null;
       const [task, isContact, canUseList] = await Promise.all([
-        taskRepo.findByIdWithAccess(id, userId),
+        taskRepo.findByIdWithAccess(id, userId, { deleted: restoring }),
         fields.assigneeId ? contactRepo.exists(userId, fields.assigneeId) : Promise.resolve(true),
         fields.categoryId ? categoryRepo.canUse(fields.categoryId, userId) : Promise.resolve(true),
       ]);
@@ -140,9 +128,21 @@ export const taskRoutes = authed()
         throw new HTTPException(403, { message: "Not authorized" });
       if (!isContact) throw new HTTPException(400, { message: "Can only assign to a contact" });
       if (!canUseList) throw new HTTPException(403, { message: "Not your list" });
+      // As with deleting, only the owner can bring a task back
+      if (restoring && !isOwner) throw new HTTPException(403, { message: "Not authorized" });
 
-      const result = await taskRepo.update(id, updatedAt, fields);
+      if (restoring) {
+        const result = await taskRepo.restore(id, updatedAt);
+        broadcast(c, "tasks", "insert", await taskRepo.findListItem(id), taskUserIds(task));
+        return c.json(result, 200);
+      }
+
+      // What the client stamped wins; one from before these columns existed sends neither
+      const stamps = taskChangeStamps(fields, updatedAt);
+      const result = await taskRepo.update(id, updatedAt, { ...stamps, ...fields });
       broadcast(c, "tasks", "update", result, taskUserIds(task));
+      if (result.parentId && stamps.editedAt)
+        await markTaskEdited(c, result.parentId, userId, updatedAt);
 
       const notifiableFields = ["title", "description", "status", "dueDate"] as const;
       const changedNotifiable = notifiableFields.filter((f) => f in fields);
@@ -221,7 +221,7 @@ export const taskRoutes = authed()
       const isOwner = task.userId === userId || task.parent?.userId === userId;
       if (!isOwner) throw new HTTPException(403, { message: "Not authorized" });
 
-      const { task: removed, subtaskIds, unlinkedNotes } = await taskRepo.remove(id);
+      const { task: removed, subtaskIds } = await taskRepo.remove(id);
       broadcastAll(
         c,
         [removed.id, ...subtaskIds].map((removedId) => ({
@@ -230,13 +230,6 @@ export const taskRoutes = authed()
           data: { id: removedId },
         })),
         taskUserIds(task),
-      );
-      broadcastPerUser(
-        c,
-        unlinkedNotes.map((note) => ({
-          userId: note.userId,
-          event: { model: "notes" as const, action: "update" as const, data: note },
-        })),
       );
       return c.json(removed, 200);
     },
