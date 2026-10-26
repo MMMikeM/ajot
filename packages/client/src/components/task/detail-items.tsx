@@ -84,7 +84,12 @@ export const Subtasks = ({
                 done && checkboxDoneClass,
               )}
             />
-            <span className={cn("flex-1 text-sm", done && "text-muted-foreground line-through")}>
+            <span
+              className={cn(
+                "flex-1 text-sm touch:text-base",
+                done && "text-muted-foreground line-through",
+              )}
+            >
               {sub.title}
             </span>
             {canDeleteTask(userId, sub, task) && (
@@ -136,8 +141,8 @@ const NoteItem = ({ note }: { note: Note }) => {
 
   return (
     <ListRow size="sm" className="-mx-2 min-h-9 items-start touch:min-h-11">
-      {/* touch:py-2 centres the first line on the h-9 touch buttons */}
-      <span className="flex-1 py-1 text-sm whitespace-pre-wrap touch:py-2">
+      {/* touch:py-1.5 centres the first line on the h-9 touch buttons */}
+      <span className="flex-1 py-1 text-sm whitespace-pre-wrap touch:py-1.5 touch:text-base">
         {note.content || note.title}
       </span>
       <RevealGroup className="items-start pt-0.5 touch:pt-0">

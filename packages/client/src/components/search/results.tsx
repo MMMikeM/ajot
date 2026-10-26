@@ -118,7 +118,7 @@ export function SearchResults({
         const list = listOf(listId);
         return (
           <section key={listId ?? "inbox"} aria-label={list.name}>
-            <h2 className="flex items-center gap-2 text-xs font-medium tracking-wide text-hint uppercase">
+            <h2 className="flex items-center gap-2 text-xs font-medium tracking-wider text-hint uppercase">
               <ColorDot size="sm" color={list.color} />
               {list.name}
             </h2>
@@ -141,7 +141,7 @@ export function SearchResults({
           aria-label="Done"
           className={cn(results.groups.length > 0 && "border-t border-border pt-3")}
         >
-          <h2 className="text-xs font-medium tracking-wide text-hint uppercase">Done</h2>
+          <h2 className="text-xs font-medium tracking-wider text-hint uppercase">Done</h2>
           <ul className="flex flex-col">
             {results.done.map((hit) => (
               <ResultRow
