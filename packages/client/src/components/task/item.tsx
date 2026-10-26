@@ -446,7 +446,7 @@ function TaskRow({
             type="text"
             value={subtaskTitle}
             onChange={(e) => setSubtaskTitle(e.target.value)}
-            placeholder="Subtask title..."
+            placeholder="New subtask"
             // Phones keep the primitive's 16px so iOS doesn't zoom on focus
             className="md:h-7 md:text-xs"
             // eslint-disable-next-line jsx-a11y/no-autofocus

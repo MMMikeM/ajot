@@ -52,11 +52,15 @@ export const inviteRoutes = authed()
         } else {
           console.log(`[invite:accept] token expired at=${raw.expiresAt}`);
         }
-        throw new HTTPException(410, { message: "Invite link has expired or already been used" });
+        throw new HTTPException(410, {
+          message: "This invite link has expired or been used. Ask for a new one.",
+        });
       }
       if (invite.createdByUserId === userId) {
         console.log(`[invite:accept] self-accept rejected`);
-        throw new HTTPException(400, { message: "Cannot accept your own invite" });
+        throw new HTTPException(400, {
+          message: "That's your own invite. Send it to someone else.",
+        });
       }
 
       await inviteTokenRepo.consume(invite, userId);

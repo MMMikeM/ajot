@@ -61,7 +61,7 @@ export function CategoryCollabSheet({
       if (contact)
         pushUndoToast(`Shared with ${contact.name}`, () => void handleRemove(contact.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add");
+      setError(err instanceof Error ? err.message : "Couldn't add them. Try again.");
     } finally {
       setAdding(false);
     }
@@ -72,7 +72,7 @@ export function CategoryCollabSheet({
     try {
       await removeCollaborator(categoryId, userId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove");
+      setError(err instanceof Error ? err.message : "Couldn't remove them. Try again.");
     }
   };
 
@@ -144,7 +144,7 @@ export function CategoryCollabSheet({
               <Link to="/people" className="underline hover:text-foreground">
                 Invite someone
               </Link>{" "}
-              to share this list.
+              to share this list with them.
             </p>
           )}
         </div>

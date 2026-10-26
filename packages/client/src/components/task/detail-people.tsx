@@ -44,7 +44,7 @@ export const useListFiling = (task: Task) => {
   const fileShare = (id: string | null) =>
     updateShareCategory(task.id, id).catch((err) => {
       console.error("[share] filing failed:", err);
-      toastManager.add({ title: "Couldn't move it to that list" });
+      toastManager.add({ title: "Couldn't move it to that list. Try again." });
     });
   return {
     mode,

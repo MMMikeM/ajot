@@ -203,13 +203,16 @@ export const categoryRoutes = authed()
         userRepo.findByUsername(username.toLowerCase()),
       ]);
 
-      if (cat.userId !== userId) throw new HTTPException(403, { message: "Not authorized" });
+      if (cat.userId !== userId)
+        throw new HTTPException(403, { message: "Only the list's owner can share it." });
       if (targetUser.id === userId)
-        throw new HTTPException(400, { message: "Cannot add yourself as a collaborator" });
+        throw new HTTPException(400, { message: "That's you. Choose someone else." });
 
       const isContact = await contactRepo.exists(userId, targetUser.id);
       if (!isContact)
-        throw new HTTPException(400, { message: "Can only add contacts as collaborators" });
+        throw new HTTPException(400, {
+          message: "You can only share lists with your contacts. Invite them first.",
+        });
 
       await categoryCollaboratorRepo.add(id, targetUser.id);
 

@@ -33,6 +33,19 @@ const sendSchema = taskInsertSchema
   .pick({ id: true, title: true, description: true, createdAt: true, updatedAt: true })
   .extend({ recipientId: z.string() });
 
+// A due date is a calendar day, so read in UTC it stays that day wherever the reader is
+const dueDateFormat = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+
+const formatDueDate = (dueDate: string) => {
+  const day = new Date(`${dueDate.slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(day.getTime()) ? dueDate : dueDateFormat.format(day);
+};
+
 const shareCategorySchema = z.object({
   taskId: z.string(),
   categoryId: z.string().nullable(),
@@ -66,7 +79,7 @@ export const taskRoutes = authed()
       if (data.parentId) {
         const parent = await taskRepo.findByIdWithAccess(data.parentId, userId);
         if (parent.parentId)
-          throw new HTTPException(400, { message: "Cannot nest subtasks more than one level" });
+          throw new HTTPException(400, { message: "Subtasks can't have subtasks." });
         const canAddTo =
           parent.userId === userId ||
           parent.shares.some((s) => s.sharedWithUserId === userId) ||
@@ -74,7 +87,7 @@ export const taskRoutes = authed()
         if (!canAddTo) throw new HTTPException(403, { message: "Not authorized" });
         effectiveCategoryId = parent.categoryId;
       } else if (data.categoryId && !(await categoryRepo.canUse(data.categoryId, userId))) {
-        throw new HTTPException(403, { message: "Not your list" });
+        throw new HTTPException(403, { message: "That list isn't yours." });
       }
 
       // A client from before completedAt existed doesn't send it
@@ -126,8 +139,9 @@ export const taskRoutes = authed()
       const isShareRecipient = shareUserIds.includes(userId);
       if (!isOwner && !isCollab && !isShareRecipient)
         throw new HTTPException(403, { message: "Not authorized" });
-      if (!isContact) throw new HTTPException(400, { message: "Can only assign to a contact" });
-      if (!canUseList) throw new HTTPException(403, { message: "Not your list" });
+      if (!isContact)
+        throw new HTTPException(400, { message: "You can only assign tasks to your contacts." });
+      if (!canUseList) throw new HTTPException(403, { message: "That list isn't yours." });
       // As with deleting, only the owner can bring a task back
       if (restoring && !isOwner) throw new HTTPException(403, { message: "Not authorized" });
 
@@ -174,10 +188,10 @@ export const taskRoutes = authed()
           }).catch(() => {});
         } else if (changedNotifiable.length > 0 && allRecipients.length > 0) {
           const changeDescriptions = changedNotifiable.map((f) => {
-            if (f === "status") return `status → ${result.status}`;
-            if (f === "dueDate")
-              return result.dueDate ? `due ${result.dueDate}` : "due date removed";
-            return f;
+            if (f === "title") return "renamed";
+            if (f === "description") return "new description";
+            if (f === "status") return result.status === "done" ? "marked done" : "reopened";
+            return result.dueDate ? `due ${formatDueDate(result.dueDate)}` : "due date removed";
           });
           for (const recipientId of allRecipients) {
             sendNotification(recipientId, {
@@ -248,7 +262,7 @@ export const taskRoutes = authed()
       const { recipientId, ...data } = c.req.valid("json");
       const userId = c.get("userId");
       if (!(await contactRepo.exists(userId, recipientId)))
-        throw new HTTPException(403, { message: "Can only send to a contact" });
+        throw new HTTPException(403, { message: "You can only send tasks to your contacts." });
 
       // The recipient owns it, as if they'd added it, so it lands in their Inbox and not the sender's
       const result = await taskRepo.insert({
@@ -288,9 +302,10 @@ export const taskRoutes = authed()
         taskRepo.findById(data.taskId),
         userRepo.findByUsername(data.username.toLowerCase()),
       ]);
-      if (task.userId !== userId) throw new HTTPException(403, { message: "Not authorized" });
+      if (task.userId !== userId)
+        throw new HTTPException(403, { message: "Only the task's owner can share it." });
       if (targetUser.id === userId)
-        throw new HTTPException(400, { message: "Cannot share with yourself" });
+        throw new HTTPException(400, { message: "That's you. Choose someone else." });
 
       const result = await taskRepo.insertShare({
         id: createId(),
