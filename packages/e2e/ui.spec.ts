@@ -425,6 +425,42 @@ test.describe("accessibility", () => {
     await expectNoAxeViolations(page);
   });
 
+  test("⌘Z / Ctrl+Z reaches a toast's Undo from inside the sheet", async ({ page }) => {
+    await openList(page);
+    await row(page, "Book flights")
+      .getByRole("button", { name: /^Book flights/ })
+      .click();
+    const sheet = page.locator('[data-slot="drawer-content"]');
+    const subtask = sheet.getByRole("checkbox", { name: "Compare Tuesday and Wednesday fares" });
+    await subtask.click();
+    await expect(subtask).toBeChecked();
+    await expect(page.getByRole("button", { name: "Undo" })).toHaveAttribute(
+      "aria-keyshortcuts",
+      /Control\+Z/,
+    );
+
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(subtask).not.toBeChecked();
+    await expect(page.locator("[data-toast-undo]")).toHaveCount(0);
+    await expect(sheet).toBeVisible();
+  });
+
+  test("the sheet's Close shows on keyboard focus and closes it", async ({ page }) => {
+    await openList(page);
+    await row(page, "Book flights")
+      .getByRole("button", { name: /^Book flights/ })
+      .click();
+    const sheet = page.locator('[data-slot="drawer-content"]');
+    const close = sheet.getByRole("button", { name: "Close" });
+    expect((await close.boundingBox())?.width).toBeLessThanOrEqual(1);
+    await sheet.getByRole("button", { name: "Delete task" }).focus();
+    await page.keyboard.press("Tab");
+    await expect(close).toBeFocused();
+    expect((await close.boundingBox())?.width).toBeGreaterThan(20);
+    await page.keyboard.press("Enter");
+    await expect(sheet).toHaveCount(0);
+  });
+
   test("people", async ({ page }) => {
     await mockApi(page);
     await page.goto("/people", { waitUntil: "domcontentloaded" });

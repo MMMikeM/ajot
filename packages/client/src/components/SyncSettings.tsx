@@ -1,4 +1,5 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { Toast } from "@base-ui/react/toast";
 import { useAuthToken } from "~/lib/auth/token";
@@ -37,6 +38,24 @@ const SYNC_LABELS = {
   connected: "Sync",
 } as const;
 
+/**
+ * What a screen reader hears when sync goes offline or comes back. Silent for the state the page
+ * opens in, and while a reconnect is still being tried.
+ */
+const useSyncAnnouncement = (syncState: keyof typeof SYNC_LABELS, deviceOnline: boolean) => {
+  const [announcement, setAnnouncement] = useState("");
+  const wasOffline = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (syncState === "connecting") return;
+    const offline = syncState === "disconnected";
+    if (wasOffline.current !== null && wasOffline.current !== offline) {
+      setAnnouncement(offline ? (deviceOnline ? "Not syncing" : "Offline") : "Back online");
+    }
+    wasOffline.current = offline;
+  }, [syncState, deviceOnline]);
+  return announcement;
+};
+
 export const SyncSettings = () => {
   const token = useAuthToken();
   const currentUser = useCurrentUser();
@@ -47,6 +66,7 @@ export const SyncSettings = () => {
   const [open, setOpen] = useState(false);
   const { canInstall, install } = useInstallPrompt();
   const toastManager = Toast.useToastManager();
+  const syncAnnouncement = useSyncAnnouncement(syncState, deviceOnline);
 
   useEffect(
     () =>
@@ -168,6 +188,13 @@ export const SyncSettings = () => {
           <div className="my-1 h-px bg-border" />
           <span className="px-2.5 pb-0.5 text-xs text-hint tabular-nums">{__BUILD_VERSION__}</span>
         </PopoverContent>
+      )}
+      {/* On body, so it stays audible while a sheet hides the page */}
+      {createPortal(
+        <output aria-live="polite" data-testid="sync-status" className="sr-only">
+          {syncAnnouncement}
+        </output>,
+        document.body,
       )}
     </Popover>
   );

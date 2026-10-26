@@ -1,6 +1,7 @@
 import { ComponentProps, createContext, use, useEffect, useRef, useState } from "react";
 import { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 
+import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
 /** Whether the sheet is open (not on its way out), and whether it has finished sliding in */
@@ -96,6 +97,8 @@ const DrawerContent = ({
             "data-[starting-style]:[transform:translateY(calc(100%+2px))]",
             "data-[ending-style]:[transform:translateY(calc(100%+2px))]",
             "data-[ending-style]:duration-[calc(var(--drawer-swipe-strength,1)*280ms)]",
+            "motion-reduce:transition-opacity motion-reduce:data-[ending-style]:transform-none! motion-reduce:data-[starting-style]:transform-none!",
+            "motion-reduce:data-[ending-style]:opacity-0 motion-reduce:data-[starting-style]:opacity-0",
             className,
           )}
           {...props}
@@ -105,6 +108,19 @@ const DrawerContent = ({
           <DrawerPrimitive.Content className="overflow-y-auto overscroll-contain">
             {children}
           </DrawerPrimitive.Content>
+          {/* Screen readers on a phone can't swipe the sheet away or press Escape, and an
+              installed PWA has no back button. Last, so Tab starts in the sheet's own content. */}
+          <DrawerPrimitive.Close
+            render={
+              <Button
+                variant="subtle"
+                size="sm"
+                className="absolute top-2 right-3 not-focus-visible:sr-only"
+              />
+            }
+          >
+            Close
+          </DrawerPrimitive.Close>
         </DrawerPrimitive.Popup>
       </DrawerPrimitive.Viewport>
     </DrawerPrimitive.Portal>

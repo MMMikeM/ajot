@@ -260,7 +260,7 @@ Flat at rest. Depth comes from tonal layering (background, then surface, surface
 
 ### Toasts
 
-- Surface card, bottom centre, with a countdown bar (`primary` at 40%, so it reads against the card) animated with `scaleX`. The bar follows the toast's own timeout, pauses while the stack is hovered or focused, and is absent for toasts without a timeout and under reduced motion. Dismiss is an icon button. On desktop they sit inside the sheet, centred on the list column; on touch they sit above the input bar (`--input-bar-h`). While a sheet is open they move above it, to the top of the screen (or of the desktop sheet's inset), on a layer above the sheet so Undo can be pressed without dismissing it.
+- Surface card, bottom centre, with a countdown bar (`primary` at 40%, so it reads against the card) animated with `scaleX`. The bar follows the toast's own timeout, pauses while the stack is hovered or focused, and is absent for toasts without a timeout and under reduced motion. Dismiss is an icon button. On desktop they sit inside the sheet, centred on the list column; on touch they sit above the input bar (`--input-bar-h`). While a sheet is open they move above it, to the top of the screen (or of the desktop sheet's inset), on a layer above the sheet so Undo can be pressed without dismissing it. ⌘Z / Ctrl+Z presses the newest Undo, outside a field holding text, since an open sheet keeps Tab inside it.
 
 ### Sync Status
 
