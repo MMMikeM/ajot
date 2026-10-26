@@ -8,12 +8,11 @@ import { Toast } from "~/components/ui/toast";
 import { NavContextProvider } from "~/lib/state/nav-context";
 import { isListPath } from "~/lib/list-path";
 import { registerServiceWorker } from "~/lib/sync/register-sw";
+import { toastManager } from "~/lib/undo-toast";
 
 export const Route = createRootRoute({
   component: RootComponent,
 });
-
-const toastManager = Toast.createToastManager();
 
 export default function RootComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });

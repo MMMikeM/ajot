@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useRef,
   useState,
@@ -80,7 +81,7 @@ function ShareChip({ ownerName, sharedWith }: { ownerName?: string; sharedWith: 
   );
 }
 
-export function TaskItem({
+function TaskRow({
   task,
   onOpen,
   onToggle,
@@ -445,6 +446,25 @@ export function TaskItem({
     </div>
   );
 }
+
+const sameRows = (a: Task[] | undefined, b: Task[] | undefined) =>
+  a === b || (!!a && !!b && a.length === b.length && a.every((t, i) => t === b[i]));
+
+/**
+ * Props unchanged, with a list's subtasks compared by their rows: the list builds those arrays
+ * again on every edit, and a row that compared them by identity would render with every other row.
+ */
+export const sameRowProps = <P extends { subtasks?: Task[] }>(prev: P, next: P) => {
+  const keys = Object.keys(next) as (keyof P)[];
+  return (
+    keys.length === Object.keys(prev).length &&
+    keys.every((key) =>
+      key === "subtasks" ? sameRows(prev.subtasks, next.subtasks) : Object.is(prev[key], next[key]),
+    )
+  );
+};
+
+export const TaskItem = memo(TaskRow, sameRowProps);
 
 // Sorts within its parent only: a subtask can't join the task list or another parent
 function SortableSubtask({

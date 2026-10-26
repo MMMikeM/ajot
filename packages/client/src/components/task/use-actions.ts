@@ -1,27 +1,24 @@
-import { useRef } from "react";
 import { flushSync } from "react-dom";
-import { useTasks, useNotes, updateTask, deleteTask, deleteTasks } from "~/lib/db/hooks";
+import { useNotes, updateTask, deleteTask, deleteTasks } from "~/lib/db/hooks";
+import { tasksCollection } from "~/lib/db/collections";
 import { addTask } from "~/lib/db/add-task";
-import { useUndoToast } from "~/lib/hooks/use-undo-toast";
+import { pushUndoToast as pushUndo } from "~/lib/undo-toast";
 import type { Task } from "~/lib/types";
 
+// Read when an action runs, not subscribed to: handlers that close over the list change on every
+// edit, and every row they're passed to renders again
+const currentTasks = () => [...(tasksCollection.state?.values() ?? [])];
+
 export const useTaskActions = () => {
-  const { data: allTasks } = useTasks();
   // Keeps notes loaded: deleting a task unlinks its notes, and Undo links them back
   useNotes();
-  const pushUndoToast = useUndoToast();
-  const undoIdRef = useRef<string | undefined>(undefined);
-
-  const pushUndo = (message: string, onUndo: () => void) => {
-    undoIdRef.current = pushUndoToast(message, onUndo);
-  };
 
   const handleToggle = (task: Task) => {
     const newStatus = task.status === "done" ? "todo" : "done";
     updateTask(task.id, { status: newStatus });
 
     if (newStatus === "done") {
-      const incomplete = (allTasks ?? []).filter(
+      const incomplete = currentTasks().filter(
         (t) => t.parentId === task.id && t.status !== "done",
       );
       for (const sub of incomplete) updateTask(sub.id, { status: "done" });
@@ -62,7 +59,7 @@ export const useTaskActions = () => {
   const handleAddSubtask = (task: Task, title: string) => addTask(title, null, task.id);
 
   const getSubtasks = (taskId: string): Task[] =>
-    (allTasks ?? [])
+    currentTasks()
       .filter((t) => t.parentId === taskId)
       .sort((a, b) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? ""));
 

@@ -12,7 +12,7 @@ import { cn } from "~/lib/utils";
 import { canDeleteTask } from "~/lib/task-permissions";
 import { DetailRow } from "~/components/task/detail-row";
 import { hitArea } from "~/components/hit-area";
-import { useUndoToast } from "~/lib/hooks/use-undo-toast";
+import { pushUndoToast } from "~/lib/undo-toast";
 
 const AddLine = ({
   inputRef,
@@ -62,7 +62,6 @@ export const Subtasks = ({
   onToggle: (task: Task) => void;
 }) => {
   const userId = useOptimisticUserId();
-  const pushUndo = useUndoToast();
 
   if (rawSubtasks.length === 0 && !adding) return null;
 
@@ -92,7 +91,7 @@ export const Subtasks = ({
               <RevealGroup>
                 <RevealButton
                   className={hitArea}
-                  onClick={() => pushUndo("Subtask deleted", deleteTask(sub.id))}
+                  onClick={() => pushUndoToast("Subtask deleted", deleteTask(sub.id))}
                 >
                   Delete
                 </RevealButton>
@@ -115,7 +114,6 @@ export const Subtasks = ({
 const NoteItem = ({ note }: { note: Note }) => {
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(note.content ?? "");
-  const pushUndo = useUndoToast();
 
   if (editing) {
     return (
@@ -148,7 +146,7 @@ const NoteItem = ({ note }: { note: Note }) => {
         </RevealButton>
         <RevealButton
           className={hitArea}
-          onClick={() => pushUndo("Note deleted", deleteNote(note.id))}
+          onClick={() => pushUndoToast("Note deleted", deleteNote(note.id))}
         >
           Delete
         </RevealButton>

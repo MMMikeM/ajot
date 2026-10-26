@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type RefCallback } from "react";
+import { memo, useEffect, useRef, useState, type ComponentProps } from "react";
 import { ChevronRight } from "lucide-react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
@@ -10,7 +10,7 @@ import { getEffectiveCategoryId } from "~/lib/effective-category";
 import { CategoryNav } from "~/components/category-nav";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
-import { TaskItem } from "./item";
+import { TaskItem, sameRowProps } from "./item";
 import { TaskRowsSkeleton } from "./rows-skeleton";
 import { finishStartup } from "~/lib/startup-timing";
 import { useTaskActions } from "./use-actions";
@@ -171,24 +171,39 @@ const ClearedState = ({ doneTasks }: { doneTasks: Task[] }) => {
   );
 };
 
-function SortableTask({
-  id,
+const SortableTask = memo(function SortableTask({
   index,
-  children,
-}: {
-  id: string;
-  index: number;
-  children: (ref: RefCallback<HTMLElement>, handleRef: RefCallback<HTMLElement>) => ReactNode;
-}) {
+  ...props
+}: { index: number } & ComponentProps<typeof TaskItem>) {
   const { ref, handleRef } = useSortable({
-    id,
+    id: props.task.id,
     index,
     type: "task",
     accept: "task",
     sensors: rowDragSensors,
   });
-  return <>{children(ref, handleRef)}</>;
-}
+  return (
+    <li ref={ref}>
+      <TaskItem {...props} dragHandleRef={handleRef} />
+    </li>
+  );
+}, sameRowProps);
+
+const NO_SUBTASKS: Task[] = [];
+
+const bySortOrder = (a: Task, b: Task) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? "");
+
+const groupSubtasks = (tasks: Task[]) => {
+  const groups = new Map<string, Task[]>();
+  for (const task of tasks) {
+    if (!task.parentId) continue;
+    const group = groups.get(task.parentId);
+    if (group) group.push(task);
+    else groups.set(task.parentId, [task]);
+  }
+  for (const group of groups.values()) group.sort(bySortOrder);
+  return groups;
+};
 
 export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => void }) {
   const { data: allTasks, isLoading: tasksLoading } = useTasks();
@@ -199,9 +214,15 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   const userId = useOptimisticUserId();
   const actions = useTaskActions();
   const activeListRef = useRef<HTMLUListElement>(null);
-  const withFocusHandoff = (action: (task: Task) => void) => (task: Task) => {
+  // Not built by a shared wrapper: the compiler won't cache a call's result that reads a ref, and a
+  // new handler each render would render every row again
+  const toggleActive = (task: Task) => {
     handOffRowFocus(activeListRef.current, task.id);
-    action(task);
+    actions.handleToggle(task);
+  };
+  const deleteActive = (task: Task) => {
+    handOffRowFocus(activeListRef.current, task.id);
+    actions.handleDelete(task);
   };
 
   const categories = rawCategories
@@ -217,9 +238,8 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
       getEffectiveCategoryId(t, userId, collaboratedCategoryIds) === activeCategoryId,
   );
 
-  const activeTasks = categoryTasks
-    .filter((t) => t.status !== "done")
-    .sort((a, b) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? ""));
+  const activeTasks = categoryTasks.filter((t) => t.status !== "done").sort(bySortOrder);
+  const subtasksByParent = groupSubtasks(allTasks ?? []);
 
   const { handleDragEnd } = useDndActions({
     categories,
@@ -247,7 +267,8 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   // Deleting a task deletes its subtasks, so one still holding open work stays
   const clearableDoneTasks = doneTasks.filter(
     (t) =>
-      canDeleteTask(userId, t) && actions.getSubtasks(t.id).every((sub) => sub.status === "done"),
+      canDeleteTask(userId, t) &&
+      (subtasksByParent.get(t.id) ?? NO_SUBTASKS).every((sub) => sub.status === "done"),
   );
 
   return (
@@ -255,24 +276,19 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
       <div className="flex flex-1 flex-col gap-4">
         <ul ref={activeListRef} className="flex flex-col gap-1">
           {activeTasks.map((task, index) => (
-            <SortableTask key={task.id} id={task.id} index={index}>
-              {(ref, handleRef) => (
-                <li ref={ref}>
-                  <TaskItem
-                    task={task}
-                    dragHandleRef={handleRef}
-                    subtasks={actions.getSubtasks(task.id)}
-                    onOpen={onSelectTask}
-                    onToggle={withFocusHandoff(actions.handleToggle)}
-                    onDelete={withFocusHandoff(actions.handleDelete)}
-                    onSetDueDate={actions.handleSetDueDate}
-                    onAddSubtask={actions.handleAddSubtask}
-                    isInSharedCategory={!!task.categoryId && sharedCategoryIds.has(task.categoryId)}
-                    swipeHint={index === 0}
-                  />
-                </li>
-              )}
-            </SortableTask>
+            <SortableTask
+              key={task.id}
+              index={index}
+              task={task}
+              subtasks={subtasksByParent.get(task.id) ?? NO_SUBTASKS}
+              onOpen={onSelectTask}
+              onToggle={toggleActive}
+              onDelete={deleteActive}
+              onSetDueDate={actions.handleSetDueDate}
+              onAddSubtask={actions.handleAddSubtask}
+              isInSharedCategory={!!task.categoryId && sharedCategoryIds.has(task.categoryId)}
+              swipeHint={index === 0}
+            />
           ))}
         </ul>
 
@@ -292,7 +308,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
               <li key={task.id}>
                 <TaskItem
                   task={task}
-                  subtasks={actions.getSubtasks(task.id)}
+                  subtasks={subtasksByParent.get(task.id) ?? NO_SUBTASKS}
                   onOpen={onSelectTask}
                   onToggle={actions.handleToggle}
                   onDelete={actions.handleDelete}
