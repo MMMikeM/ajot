@@ -135,6 +135,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --primary-subtle: oklch(0.22 0.035 140);
   --primary-selected: oklch(0.24 0.045 138);
   --background: oklch(0.165 0.02 262);
@@ -199,7 +200,7 @@
   }
 
   html {
-    @apply bg-background font-sans antialiased;
+    @apply bg-background font-sans text-foreground antialiased;
   }
 }
 
