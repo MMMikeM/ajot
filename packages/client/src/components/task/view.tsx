@@ -79,7 +79,7 @@ const DoneSection = ({
           size="xs"
           onClick={toggle}
           aria-expanded={open}
-          className="-ml-2.5 font-medium tracking-wide text-muted-foreground uppercase hover:text-foreground aria-expanded:bg-transparent touch:h-11"
+          className="-ml-2.5 font-medium tracking-wider text-muted-foreground uppercase hover:text-foreground aria-expanded:bg-transparent touch:h-11"
         >
           <ChevronRight
             size={14}

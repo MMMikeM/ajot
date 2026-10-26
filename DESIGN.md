@@ -58,11 +58,15 @@ typography:
     fontFamily: "Figtree Variable, Inter Variable, sans-serif"
     fontSize: "0.875rem"
     lineHeight: 1.43
+  meta:
+    fontFamily: "Figtree Variable, Inter Variable, sans-serif"
+    fontSize: "0.75rem"
+    lineHeight: 1.33
   label:
     fontFamily: "Figtree Variable, Inter Variable, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 500
-    letterSpacing: "0.025em"
+    letterSpacing: "0.05em"
 rounded:
   sm: "0.27rem"
   md: "0.36rem"
@@ -177,11 +181,13 @@ A near-monochrome ink palette: blue-black surfaces, slate secondary text and war
 
 - **Wordmark** (DM Serif Display, 1.125rem, uppercase, tracking 0.28em): "AJOT" in the header. Kept small so the list title leads.
 - **Headline** (DM Serif Display, 1.75rem, 1.25): the active category as the list title, with its colour dot and open count, on both targets. Page titles (People, sign-in) use the same style.
+- **Display** (DM Serif Display, 1.5rem): the empty-list phrases and the sharing sheet's title. A step under the headline and in `muted-foreground` on the list, so an empty list's phrase never competes with the list title above it.
 - **Capture** (Figtree, 1.125rem): the "What needs doing?" input.
 - **Title** (Figtree 600, 1.125rem, 1.375): the task title in the detail sheet.
 - **Body** (Figtree 500, 1rem, 1.5): task titles in the list, wrapping to at most two lines.
-- **Body Small** (Figtree, 0.875rem): subtasks, notes and sheet rows.
-- **Label** (Figtree 500, 0.75rem, tracking 0.025em, uppercase): section toggles such as "Done (2)" and sheet headings.
+- **Body Small** (Figtree, 0.875rem): subtasks in the list, and the detail sheet's rows, subtasks and notes on desktop. On touch the sheet's rows, subtasks and notes all step up to 1rem, the size of the fields that edit them, so a note or subtask doesn't change size between reading and editing it.
+- **Meta** (Figtree 400, 0.75rem, 1.33): due dates, row descriptions, the "2 done" subtask fold and the sidebar's counts. Counts that stack in a column (header, sidebar, lists sheet) use tabular figures; left-aligned counts and date labels keep Figtree's proportional ones, whose narrow "1" reads better in running text.
+- **Label** (Figtree 500, 0.75rem, tracking 0.05em, uppercase): group headings in lists, such as "Done (2)", the lists sheet's "Lists", "Shared with me" and search's groups. Page sections on People, Settings and the sharing sheet use a sentence-case `SectionLabel` (Figtree 500, 0.875rem, `hint`) instead.
 - **Avatar initials** (Figtree 600, 11px, tight tracking) in a 22px circle; the 28px `md` size uses 12px. Nothing smaller.
 
 ## Layout
