@@ -6,15 +6,15 @@ Shadcn/Base UI component primitives. Two-tier architecture:
 
 These are unmodified shadcn output. Do not add app opinions here.
 
-| File               | Component                              | Notes                                                                                                                                            |
-| ------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `input.tsx`        | `Input`                                | Box-style, Base UI InputPrimitive                                                                                                                |
-| `textarea.tsx`     | `Textarea`                             | Box-style, raw `<textarea>`                                                                                                                      |
-| `button.tsx`       | `Button`                               | —                                                                                                                                                |
-| `checkbox.tsx`     | `Checkbox`                             | `group-has-disabled/field` swapped for `field-disabled` after each regenerate: see the rule on `group-has-*` below                               |
-| `select.tsx`       | `Select`, `SelectTrigger`, …           | —                                                                                                                                                |
-| `drawer.tsx`       | `Drawer`, `DrawerContent`, …           | Opens a frame after mounting, so a sheet that mounts open still slides in; the backdrop blurs only once it has. Keep both after a regenerate     |
-| `alert-dialog.tsx` | `AlertDialog`, `AlertDialogContent`, … | Added by hand: `shadcn add` would overwrite `button.tsx`. Only the parts in use are exported (knip); backdrop uses `bg-backdrop` like the drawer |
+| File               | Component                              | Notes                                                                                                                                                                              |
+| ------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `input.tsx`        | `Input`                                | Box-style, Base UI InputPrimitive                                                                                                                                                  |
+| `textarea.tsx`     | `Textarea`                             | Box-style, raw `<textarea>`                                                                                                                                                        |
+| `button.tsx`       | `Button`                               | —                                                                                                                                                                                  |
+| `checkbox.tsx`     | `Checkbox`                             | `group-has-disabled/field` swapped for `field-disabled` after each regenerate: see the rule on `group-has-*` below                                                                 |
+| `select.tsx`       | `Select`, `SelectTrigger`, …           | —                                                                                                                                                                                  |
+| `drawer.tsx`       | `Drawer`, `DrawerContent`, …           | Opens a frame after mounting, so a sheet that mounts open still slides in; blurs only once it rests, and on touch only the page above the sheet. Keep all of it after a regenerate |
+| `alert-dialog.tsx` | `AlertDialog`, `AlertDialogContent`, … | Added by hand: `shadcn add` would overwrite `button.tsx`. Only the parts in use are exported (knip); backdrop uses `bg-backdrop` like the drawer                                   |
 
 Regenerate any of these with: `npx shadcn@latest add <name> --overwrite`
 

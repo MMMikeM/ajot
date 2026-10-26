@@ -44,29 +44,36 @@ const DrawerContent = ({
   const resting = use(RestingContext);
   return (
     <DrawerPrimitive.Portal>
-      {/* Re-blurring the page every frame dropped frames on phones, so the backdrop only blurs
-          while the sheet rests, and stops the moment it moves (closing, or dragged). Three
-          values per list: the build writes backdrop-filter out as two properties. */}
+      {/* Re-blurring the page every frame dropped frames on phones, so the page only blurs while
+          the sheet rests, and stops the moment it moves (closing, or dragged). Three values per
+          list: the build writes backdrop-filter out as two properties. On touch the sheet is
+          full width, so the blur sits above it instead (below), never under it. */}
       <DrawerPrimitive.Backdrop
         data-slot="drawer-backdrop"
         data-resting={resting || undefined}
-        className="fixed inset-0 z-50 bg-backdrop transition-[opacity,backdrop-filter] duration-[450ms,180ms,180ms] ease-[cubic-bezier(0.32,0.72,0,1),ease-out,ease-out] data-[ending-style]:opacity-0 data-[ending-style]:duration-[calc(var(--drawer-swipe-strength,1)*400ms),0ms,0ms] data-[starting-style]:opacity-0 data-[swiping]:backdrop-blur-none data-[swiping]:duration-0 supports-backdrop-filter:data-[resting]:backdrop-blur-xs"
+        className="fixed inset-0 z-50 bg-backdrop transition-[opacity,backdrop-filter] duration-[380ms,180ms,180ms] ease-[cubic-bezier(0.16,1,0.3,1),ease-out,ease-out] data-[ending-style]:opacity-0 data-[ending-style]:duration-[calc(var(--drawer-swipe-strength,1)*280ms),0ms,0ms] data-[starting-style]:opacity-0 data-[swiping]:backdrop-blur-none data-[swiping]:duration-0 supports-backdrop-filter:desk:data-[resting]:backdrop-blur-xs"
       />
       <DrawerPrimitive.Viewport className="fixed inset-0 z-50 flex touch-none items-end justify-center">
         <DrawerPrimitive.Popup
           data-slot="drawer-content"
           className={cn(
-            "flex h-auto max-h-[80vh] w-full flex-col rounded-t-xl border-t border-border bg-popover text-sm text-popover-foreground",
+            "relative flex h-auto max-h-[80vh] w-full flex-col rounded-t-xl border-t border-border bg-popover text-sm text-popover-foreground",
             "[transform:translateY(var(--drawer-swipe-movement-y,0px))]",
-            "transition-transform duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
+            "transition-transform duration-[380ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
             "data-[swiping]:duration-0 data-[swiping]:select-none",
             "data-[starting-style]:[transform:translateY(calc(100%+2px))]",
             "data-[ending-style]:[transform:translateY(calc(100%+2px))]",
-            "data-[ending-style]:duration-[calc(var(--drawer-swipe-strength,1)*400ms)]",
+            "data-[ending-style]:duration-[calc(var(--drawer-swipe-strength,1)*280ms)]",
             className,
           )}
           {...props}
         >
+          {/* Exactly the page left showing above the sheet: the opaque sheet hides the rest */}
+          <div
+            aria-hidden="true"
+            data-resting={resting || undefined}
+            className="pointer-events-none absolute inset-x-0 bottom-full h-[calc(100dvh-100%)] transition-[backdrop-filter] duration-180 ease-out supports-backdrop-filter:data-[resting]:backdrop-blur-xs desk:hidden [[data-swiping]>&]:backdrop-blur-none"
+          />
           <div className="mx-auto mt-4 h-1.5 w-[100px] shrink-0 rounded-full bg-muted" />
           <DrawerPrimitive.Content className="overflow-y-auto overscroll-contain">
             {children}
