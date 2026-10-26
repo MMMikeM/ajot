@@ -27,7 +27,7 @@ app.post("/process", async (c) => {
 
   for (const row of pending) {
     if (row.type === "reminder-due" && row.task) {
-      if (row.task.status !== "done") {
+      if (row.task.status !== "done" && !row.task.deletedAt) {
         await sendNotification(row.userId, {
           type: "reminder-due",
           taskId: row.task.id,

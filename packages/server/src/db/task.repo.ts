@@ -2,11 +2,11 @@ import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { generateKeyBetween } from "fractional-indexing";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
-import { db, inTransaction } from "./client";
-import noteRepo from "./note.repo";
+import { db } from "./client";
 import { tasks, taskShares, users } from "./schema";
 import { InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
+import { now } from "@newtab-todo/shared/iso";
 
 export type TaskShareInsert = typeof taskShares.$inferInsert;
 
@@ -37,15 +37,20 @@ export const taskListItemSchema = taskResponseSchema.extend({
 export const taskInsertSchema = createInsertSchema(tasks, {
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
-}).required({ id: true, createdAt: true, updatedAt: true });
+})
+  .required({ id: true, createdAt: true, updatedAt: true })
+  .omit({ deletedAt: true });
+// Deleting goes through DELETE; an update can only bring a deleted task back
 export const taskUpdateSchema = createUpdateSchema(tasks, { updatedAt: isoDatetime })
   .required({ id: true, updatedAt: true })
   .omit({ createdAt: true })
+  .extend({ deletedAt: z.null().optional() })
   .strict();
 
 const list = async (userId: string) =>
   db.query.tasks.findMany({
     where: {
+      deletedAt: { isNull: true },
       OR: [
         { userId },
         { shares: { sharedWithUserId: userId } },
@@ -58,7 +63,7 @@ const list = async (userId: string) =>
     },
     with: {
       user: { columns: { id: true, name: true } },
-      subtasks: true,
+      subtasks: { where: { deletedAt: { isNull: true } } },
       shares: {
         with: {
           sharedWithUser: { columns: { id: true, name: true, username: true } },
@@ -70,14 +75,15 @@ const list = async (userId: string) =>
   });
 
 const findById = async (id: string) => {
-  const row = await db.query.tasks.findFirst({ where: { id } });
+  const row = await db.query.tasks.findFirst({ where: { id, deletedAt: { isNull: true } } });
   if (!row) throw new NotFoundError("task", id);
   return row;
 };
 
-const findByIdWithAccess = async (id: string, _userId: string) => {
+/** A deleted task reads as missing, unless asked for by the restore that brings it back. */
+const findByIdWithAccess = async (id: string, _userId: string, { deleted = false } = {}) => {
   const row = await db.query.tasks.findFirst({
-    where: { id },
+    where: deleted ? { id } : { id, deletedAt: { isNull: true } },
     with: {
       shares: { columns: { sharedWithUserId: true } },
       category: {
@@ -100,12 +106,16 @@ const findByIdWithAccess = async (id: string, _userId: string) => {
   return row;
 };
 
-// A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it
+// A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
+// Re-inserting a deleted task, as Undo did before restores went through update, restores it.
 const insert = async (data: TaskInsert) => {
   const [row] = await db
     .insert(tasks)
     .values(data)
-    .onConflictDoUpdate({ target: tasks.id, set: { updatedAt: sql`${tasks.updatedAt}` } })
+    .onConflictDoUpdate({
+      target: tasks.id,
+      set: { updatedAt: sql`${tasks.updatedAt}`, deletedAt: sql`null` },
+    })
     .returning();
   if (!row) throw new InsertFailedError("task");
   return row;
@@ -142,23 +152,54 @@ const nextSortOrder = async (userId: string) => {
   return generateKeyBetween(last?.sortOrder ?? null, null);
 };
 
-// parent_id would cascade, but naming the subtasks here returns their ids for the broadcast
-const remove = async (id: string) =>
-  inTransaction(async (tx) => {
-    const subtasks = await tx.query.tasks.findMany({
-      where: { parentId: id },
-      columns: { id: true },
-    });
-    const subtaskIds = subtasks.map((s) => s.id);
-    const unlinkedNotes = await noteRepo.unlinkFromTasks(tx, [id, ...subtaskIds]);
-    const rows = await tx
-      .delete(tasks)
-      .where(or(eq(tasks.id, id), eq(tasks.parentId, id)))
-      .returning();
-    const task = rows.find((row) => row.id === id);
-    if (!task) throw new NotFoundError("task", id);
-    return { task, subtaskIds, unlinkedNotes };
+/**
+ * Hides the task and its subtasks, keeping their shares, notes and reminders for a restore.
+ * Bumping updatedAt makes the delete win over older offline edits.
+ */
+const remove = async (id: string) => {
+  const at = now();
+  const rows = await db
+    .update(tasks)
+    .set({ deletedAt: at, updatedAt: at })
+    .where(and(or(eq(tasks.id, id), eq(tasks.parentId, id)), isNull(tasks.deletedAt)))
+    .returning();
+  const task = rows.find((row) => row.id === id);
+  if (!task) throw new NotFoundError("task", id);
+  return { task, subtaskIds: rows.filter((row) => row.id !== id).map((row) => row.id) };
+};
+
+/**
+ * Undoes a delete. It skips the stale check update makes: the delete was stamped by the server's
+ * clock and the restore by the device's, and a restore always comes after the delete it undoes.
+ */
+const restore = async (id: string, updatedAt: string) => {
+  const [row] = await db
+    .update(tasks)
+    .set({ deletedAt: null, updatedAt: sql`max(${tasks.updatedAt}, ${updatedAt})` })
+    .where(eq(tasks.id, id))
+    .returning();
+  if (!row) throw new NotFoundError("task", id);
+  return row;
+};
+
+/** A task in the shape the list sends, for broadcasting one that's back. */
+const findListItem = async (id: string) => {
+  const row = await db.query.tasks.findFirst({
+    where: { id, deletedAt: { isNull: true } },
+    with: {
+      user: { columns: { id: true, name: true } },
+      subtasks: { where: { deletedAt: { isNull: true } } },
+      shares: {
+        with: {
+          sharedWithUser: { columns: { id: true, name: true, username: true } },
+        },
+      },
+      assignee: { columns: { id: true, name: true, username: true } },
+    },
   });
+  if (!row) throw new NotFoundError("task", id);
+  return row;
+};
 
 export type TaskWithRelations = Awaited<ReturnType<typeof list>>[number];
 
@@ -218,6 +259,7 @@ const findOverdue = async (beforeDate: string) =>
     where: {
       dueDate: { lt: beforeDate },
       status: { in: ["todo", "in_progress"] },
+      deletedAt: { isNull: true },
     },
     columns: { id: true, title: true, dueDate: true, userId: true },
   });
@@ -230,6 +272,8 @@ export default {
   update,
   markEdited,
   remove,
+  restore,
+  findListItem,
   nextSortOrder,
   insertShare,
   removeShare,

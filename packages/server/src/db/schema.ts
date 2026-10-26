@@ -47,6 +47,8 @@ export const tasks = sqliteTable("tasks", {
   updatedAt: updatedAt(),
   editedAt: nullableString("edited_at"),
   completedAt: nullableString("completed_at"),
+  // Deleting hides a task rather than removing it, so Undo restores it for everyone
+  deletedAt: nullableString("deleted_at"),
 });
 
 export const users = sqliteTable("users", {
