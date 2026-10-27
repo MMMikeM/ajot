@@ -52,6 +52,7 @@ export const taskUpdateSchema = createUpdateSchema(tasks, { updatedAt: isoDateti
 const reachedBy = (userId: string) => [
   { userId },
   { shares: { sharedWithUserId: userId } },
+  { category: { userId } },
   { category: { collaborators: { userId } } },
 ];
 
@@ -84,7 +85,10 @@ const findById = async (id: string) => {
 // What task-access.ts reads, for a task and for its parent
 const holderWith = {
   shares: { columns: { sharedWithUserId: true, permission: true } },
-  category: { columns: { id: true }, with: { collaborators: { columns: { userId: true } } } },
+  category: {
+    columns: { id: true, userId: true },
+    with: { collaborators: { columns: { userId: true } } },
+  },
 } as const;
 
 /** A deleted task reads as missing, unless asked for by the restore that brings it back. */

@@ -69,6 +69,40 @@ test.describe("which lists and tasks you can add to or edit", () => {
     ).toBe(404);
   });
 
+  test("its owner sees and edits a task a collaborator added to their list", async ({
+    user1Auth,
+    user2Auth,
+  }) => {
+    const list = await newList(user1Auth.token, "Ours");
+    await apiRequest(
+      "POST",
+      `/api/categories/${list.id}/collaborators`,
+      { username: user2Auth.username },
+      user1Auth.token,
+    );
+    const theirs = await apiRequest<{ id: string }>(
+      "POST",
+      "/api/tasks",
+      newTask({ categoryId: list.id }),
+      user2Auth.token,
+    );
+    const mine = await apiRequest<{ id: string }[]>(
+      "GET",
+      "/api/tasks",
+      undefined,
+      user1Auth.token,
+    );
+    expect(mine.some((t) => t.id === theirs.id)).toBe(true);
+    expect(
+      await status(
+        "PUT",
+        "/api/tasks",
+        { id: theirs.id, status: "done", updatedAt: now() },
+        user1Auth.token,
+      ),
+    ).toBe(200);
+  });
+
   test("a subtask under a task shared with you", async ({ user1Auth, user2Auth }) => {
     const parent = await addTaskAs(user1Auth.token);
     await apiRequest(
