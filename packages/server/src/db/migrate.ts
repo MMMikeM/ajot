@@ -1,13 +1,14 @@
 // Applies the migrations in packages/server/drizzle. A database drizzle-kit
 // push built before there were migrations already has the baseline's tables, so the baseline is
 // recorded as applied rather than run, as drizzle's own `init` does for a single migration.
+import { fileURLToPath } from "node:url";
 import { connect } from "@tursodatabase/serverless";
 import { sql } from "drizzle-orm";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { drizzle } from "drizzle-orm/tursodatabase-serverless";
 import { migrate } from "drizzle-orm/tursodatabase-serverless/migrator";
 
-const migrationsFolder = new URL("../../drizzle", import.meta.url).pathname;
+const migrationsFolder = fileURLToPath(new URL("../../drizzle", import.meta.url));
 const db = drizzle({
   client: connect({
     url: process.env.TURSO_DATABASE_URL!,
@@ -22,10 +23,14 @@ const hasTable = async (name: string) => {
   return rows.length > 0;
 };
 
-if (!(await hasTable("__drizzle_migrations")) && (await hasTable("users"))) {
+const hasRecordedMigrations = async () =>
+  (await hasTable("__drizzle_migrations")) &&
+  (await db.all(sql`SELECT 1 FROM "__drizzle_migrations" LIMIT 1`)).length > 0;
+
+if (!(await hasRecordedMigrations()) && (await hasTable("users"))) {
   const [baseline] = readMigrationFiles({ migrationsFolder });
   // The table drizzle's migrator creates
-  await db.run(sql`CREATE TABLE "__drizzle_migrations" (
+  await db.run(sql`CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
     id INTEGER PRIMARY KEY,
     hash text NOT NULL,
     created_at numeric,

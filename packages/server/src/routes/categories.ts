@@ -113,7 +113,10 @@ export const categoryRoutes = authed()
           data: task,
         })),
       ];
-      broadcastPerUser(c, toReach(reach, taskEvents));
+      const reached = new Set(reach.map((a) => a.taskId));
+      const addedSinceRead = taskEvents.map((e) => e.data.id).filter((id) => !reached.has(id));
+      const reachSinceRead = await taskRepo.accessTo(addedSinceRead);
+      broadcastPerUser(c, toReach([...reach, ...reachSinceRead], taskEvents));
       broadcast(c, "categories", "delete", { id: category.id }, memberIds);
 
       // Whoever filed a shared task here would otherwise keep seeing it under the deleted
