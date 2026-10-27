@@ -86,7 +86,11 @@ const tasks = rows("SELECT id FROM tasks").map((t) => String(t.id));
 describe("task_access and shared/task-access.ts", () => {
   test.each(tasks)("agree on %s", (id) => {
     const task = holder(id);
-    const fromView = rows(`SELECT * FROM task_access WHERE task_id = '${id}'`).map((r) => ({
+    // A row per way in, folded to each person's widest as the server does
+    const fromView = rows(
+      `SELECT user_id, max(can_edit) AS can_edit, max(can_delete) AS can_delete
+       FROM task_access WHERE task_id = '${id}' GROUP BY user_id`,
+    ).map((r) => ({
       userId: String(r.user_id),
       canEdit: r.can_edit === 1,
       canDelete: r.can_delete === 1,
@@ -99,10 +103,10 @@ describe("task_access and shared/task-access.ts", () => {
 describe("who reaches what", () => {
   const access = (id: string) =>
     Object.fromEntries(
-      rows(`SELECT * FROM task_access WHERE task_id = '${id}'`).map((r) => [
-        r.user_id,
-        r.can_delete ? "delete" : r.can_edit ? "edit" : "view",
-      ]),
+      rows(
+        `SELECT user_id, max(can_edit) AS can_edit, max(can_delete) AS can_delete
+         FROM task_access WHERE task_id = '${id}' GROUP BY user_id`,
+      ).map((r) => [r.user_id, r.can_delete ? "delete" : r.can_edit ? "edit" : "view"]),
     );
 
   test("an owner deletes; an edit share edits; a view share views", () => {
@@ -135,4 +139,15 @@ test("canDeleteTask: the owner, or the parent's for a subtask", () => {
   const sub = holder("sub-of-shared");
   expect(canDeleteTask({ ...sub, parent: holder("shared") }, "alice")).toBe(true);
   expect(canDeleteTask({ ...sub, parent: holder("shared") }, "bob")).toBe(false);
+});
+
+// Built over every task, share and list, the view has to let a lookup reach each branch's index
+test.each([
+  ["a task", "task_id = 'own'"],
+  ["a user", "user_id = 'alice'"],
+])("looking up %s searches indexes and scans no table", (_, where) => {
+  const plan = rows(`EXPLAIN QUERY PLAN SELECT * FROM task_access WHERE ${where}`).map((r) =>
+    String(r.detail),
+  );
+  expect(plan.filter((step) => step.startsWith("SCAN"))).toEqual([]);
 });

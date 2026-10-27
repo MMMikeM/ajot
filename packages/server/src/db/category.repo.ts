@@ -111,7 +111,7 @@ const memberIds = async (id: string) => {
     .select({ userId: listMembers.userId })
     .from(listMembers)
     .where(eq(listMembers.listId, id));
-  return rows.map((r) => r.userId);
+  return [...new Set(rows.map((r) => r.userId))];
 };
 
 /** Whether the user owns the list or collaborates on it. */

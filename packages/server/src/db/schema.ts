@@ -1,6 +1,7 @@
 import { defineRelations, sql, type SQL } from "drizzle-orm";
 import {
   check,
+  index,
   integer,
   primaryKey,
   sqliteTable,
@@ -26,19 +27,23 @@ import {
 import type { PushTrigger } from "@newtab-todo/shared/push-payload";
 import type { AccessPath } from "@newtab-todo/shared/task-access";
 
-export const categories = sqliteTable("categories", {
-  id: pk(),
-  userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
-  name: string("name"),
-  color: nullableString("color"),
-  sortOrder: nullableString("sort_order"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-  // Deleting hides a list rather than removing it, so Undo brings back its collaborators and
-  // its tasks for everyone
-  deletedAt: nullableString("deleted_at"),
-  deletion: nullableJson<CategoryDeletion>("deletion"),
-});
+export const categories = sqliteTable(
+  "categories",
+  {
+    id: pk(),
+    userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
+    name: string("name"),
+    color: nullableString("color"),
+    sortOrder: nullableString("sort_order"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    // Deleting hides a list rather than removing it, so Undo brings back its collaborators and
+    // its tasks for everyone
+    deletedAt: nullableString("deleted_at"),
+    deletion: nullableJson<CategoryDeletion>("deletion"),
+  },
+  (t) => [index("categories_user_idx").on(t.userId)],
+);
 
 /** What deleting a list changed beyond the list itself, so Undo can put exactly that back. */
 export type CategoryDeletion = {
@@ -70,7 +75,13 @@ export const tasks = sqliteTable(
     deletedAt: nullableString("deleted_at"),
   },
   // A subtask goes wherever its parent is; a list of its own would add that list's people to it
-  (t) => [check("subtask_has_no_list", sql`${t.parentId} IS NULL OR ${t.categoryId} IS NULL`)],
+  (t) => [
+    check("subtask_has_no_list", sql`${t.parentId} IS NULL OR ${t.categoryId} IS NULL`),
+    // For task_access, looked up by task and by user
+    index("tasks_user_idx").on(t.userId),
+    index("tasks_category_idx").on(t.categoryId),
+    index("tasks_parent_idx").on(t.parentId),
+  ],
 );
 
 export const users = sqliteTable("users", {
@@ -102,15 +113,22 @@ export const notes = sqliteTable("notes", {
 
 export const sharePermissions = ["view", "edit"] as const;
 
-export const taskShares = sqliteTable("task_shares", {
-  id: pk(),
-  taskId: fk("task_id", () => tasks.id, { onDelete: "cascade" }),
-  sharedWithUserId: fk("shared_with_user_id", () => users.id, { onDelete: "cascade" }),
-  categoryId: nullableFk("category_id", () => categories.id, { onDelete: "set null" }),
-  permission: oneOf("permission", sharePermissions).default("edit"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const taskShares = sqliteTable(
+  "task_shares",
+  {
+    id: pk(),
+    taskId: fk("task_id", () => tasks.id, { onDelete: "cascade" }),
+    sharedWithUserId: fk("shared_with_user_id", () => users.id, { onDelete: "cascade" }),
+    categoryId: nullableFk("category_id", () => categories.id, { onDelete: "set null" }),
+    permission: oneOf("permission", sharePermissions).default("edit"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("task_shares_task_idx").on(t.taskId),
+    index("task_shares_user_idx").on(t.sharedWithUserId),
+  ],
+);
 
 // Only an extension subscription (userVisibleOnly: false) may receive pushes that show nothing.
 export const pushSubscriptionKinds = ["web", "extension"] as const;
@@ -183,7 +201,10 @@ export const categoryCollaborators = sqliteTable(
     userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
     addedAt: createdAt("added_at"),
   },
-  (t) => [uniqueIndex("category_collaborators_cat_user_idx").on(t.categoryId, t.userId)],
+  (t) => [
+    uniqueIndex("category_collaborators_cat_user_idx").on(t.categoryId, t.userId),
+    index("category_collaborators_user_idx").on(t.userId),
+  ],
 );
 
 export const notificationQueueTypes = ["reminder-due", "overdue-digest"] as const;
@@ -209,38 +230,57 @@ export const metricCounts = sqliteTable(
   (t) => [primaryKey({ columns: [t.name, t.day] })],
 );
 
-/** Who's in a list: its owner and its collaborators, while it isn't deleted. */
+/**
+ * Who's in a list: its owner and its collaborators, while it isn't deleted. `UNION ALL`, not
+ * `UNION`: de-duplicating would stop a filter on the list or the user reaching inside, so the
+ * whole view would be built for every lookup.
+ */
 export const listMembers = sqliteView("list_members", {
   listId: text("list_id").notNull(),
   userId: text("user_id").notNull(),
 }).as(sql`
   SELECT id AS list_id, user_id FROM categories WHERE deleted_at IS NULL
-  UNION
-  SELECT cc.category_id, cc.user_id FROM category_collaborators cc
+  UNION ALL
+  SELECT cc.category_id AS list_id, cc.user_id FROM category_collaborators cc
   JOIN categories c ON c.id = cc.category_id AND c.deleted_at IS NULL`);
 
-// Each path in shared/task-access.ts, for the task that holds it. The JS there is keyed the same,
-// so a path added to either fails to compile until both have it.
+// Each path in shared/task-access.ts, as rows of (the task holding it, who, how far). The JS there
+// is keyed the same, so a path added to either fails to compile until both have it.
 const holderAccess = {
   owner: sql`SELECT id AS holder_id, user_id, 1 AS can_edit, 1 AS can_delete FROM tasks`,
-  share: sql`SELECT task_id, shared_with_user_id, permission = 'edit', 0 FROM task_shares`,
-  list: sql`SELECT t.id, m.user_id, 1, 0 FROM tasks t JOIN list_members m ON m.list_id = t.category_id`,
+  share: sql`SELECT task_id AS holder_id, shared_with_user_id AS user_id,
+    permission = 'edit' AS can_edit, 0 AS can_delete FROM task_shares`,
+  list: sql`SELECT t.id AS holder_id, m.user_id, 1 AS can_edit, 0 AS can_delete
+    FROM tasks t JOIN list_members m ON m.list_id = t.category_id`,
 } satisfies Record<AccessPath, SQL>;
 
+// A task reached through a path it holds, and a subtask through one its parent holds
+const reachedDirectly = (path: SQL) =>
+  sql`SELECT h.holder_id AS task_id, h.user_id, h.can_edit, h.can_delete FROM (${path}) h`;
+const reachedThroughParent = (path: SQL) =>
+  sql`SELECT c.id AS task_id, h.user_id, h.can_edit, h.can_delete
+    FROM tasks c JOIN (${path}) h ON h.holder_id = c.parent_id`;
+
 /**
- * Who can reach each task, and how far: the one place the server asks. A subtask holds nothing
- * itself, so it goes with its parent's. Deleted tasks are included, for the restore.
+ * Who can reach each task, and how far: the one place the server asks. One row per way in, so a
+ * person can have several for one task; callers take the widest. It isn't grouped here, since a
+ * GROUP BY would stop a filter on the task or the user reaching each branch and its index.
+ * Deleted tasks are included, for the restore.
  */
 export const taskAccess = sqliteView("task_access", {
   taskId: text("task_id").notNull(),
   userId: text("user_id").notNull(),
   canEdit: integer("can_edit", { mode: "boolean" }).notNull(),
   canDelete: integer("can_delete", { mode: "boolean" }).notNull(),
-}).as(sql`
-  WITH holder_access AS (${sql.join(Object.values(holderAccess), sql` UNION ALL `)})
-  SELECT t.id AS task_id, a.user_id, max(a.can_edit) AS can_edit, max(a.can_delete) AS can_delete
-  FROM tasks t JOIN holder_access a ON a.holder_id IN (t.id, t.parent_id)
-  GROUP BY t.id, a.user_id`);
+}).as(
+  sql.join(
+    [
+      ...Object.values(holderAccess).map(reachedDirectly),
+      ...Object.values(holderAccess).map(reachedThroughParent),
+    ],
+    sql` UNION ALL `,
+  ),
+);
 
 export const relations = defineRelations(
   {
