@@ -9,7 +9,7 @@ import {
   canEditTask,
   canSeeTask,
   type TaskWithHolders,
-} from "../task-access";
+} from "@newtab-todo/shared/task-access";
 
 const allowed = { see: canSeeTask, edit: canEditTask, delete: canDeleteTask };
 
