@@ -30,7 +30,7 @@ const createInvite = async (inviter: AuthResult) => {
   return ((await res.json()) as { token: string }).token;
 };
 
-const login = (user: TestUser) =>
+export const login = (user: TestUser) =>
   fetch(`${BASE_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

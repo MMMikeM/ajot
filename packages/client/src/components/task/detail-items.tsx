@@ -9,7 +9,7 @@ import { Input, Textarea } from "~/components/ui/field";
 import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { cn } from "~/lib/utils";
-import { canDeleteTask } from "~/lib/task-permissions";
+import { canDeleteTask } from "@newtab-todo/shared/task-access";
 import { DetailRow } from "~/components/task/detail-row";
 import { hitArea } from "~/components/hit-area";
 import { pushUndoToast } from "~/lib/undo-toast";
@@ -93,7 +93,7 @@ export const Subtasks = ({
             >
               {sub.title}
             </span>
-            {canDeleteTask(userId, sub, task) && (
+            {canDeleteTask({ ...sub, parent: task }, userId) && (
               <RevealGroup className="items-start pt-1.5 touch:pt-0">
                 <RevealButton
                   className={hitArea}

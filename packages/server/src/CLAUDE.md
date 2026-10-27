@@ -12,11 +12,16 @@ Routes are in `src/routes/`. Each file exports Hono route handlers.
 
 ## Database
 
-Single Turso instance with embedded replica. `syncInterval: 60` keeps local SQLite in sync. All writes go through Turso (remote-first), reads are local.
+One Turso database, reached over HTTP by `@tursodatabase/serverless` (`db/client.ts`): every query is a round trip, and reads are retried once on a transport failure (`db/retry.ts`).
+
+## Who can reach what
+
+- **Ask the views, never write the check again.** Who can see, edit or delete a task is the `task_access` view, and who's in a list is `list_members` (both in `db/schema.ts`, created by a migration). Routes go through `requireTask` and `audienceOf` (`routes/task-users.ts`) and `categoryRepo.canUse`; a route that compares owners, shares or collaborators itself is the drift these replace.
+- **The client's copy is `shared/task-access.ts`**, for what a page decides offline. Its paths and the view's SQL fragments are both keyed by `AccessPath`, so adding a way in fails to compile until both have it, and `task-access.test.ts` runs the migrations into an in-memory SQLite and checks the two agree row for row. Add a case there with any new path.
 
 ## Query patterns
 
-- **Always use `db.query` (relational API)** for reads — never `db.select().from()`.
+- **Always use `db.query` (relational API)** for reads — never `db.select().from()`, except for the views, which the relational API can't read.
 - **Drizzle v1 `where` uses object syntax**, not `eq()` operators: `where: { id: someId }`.
 - **`db.insert()` / `db.update()` / `db.delete()`** (classic API) are fine for writes.
 - Check existing repos in `src/db/` for the canonical patterns before writing new queries.

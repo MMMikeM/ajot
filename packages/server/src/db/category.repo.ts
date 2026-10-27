@@ -2,11 +2,18 @@ import { and, eq, getColumns, inArray, isNull, lt, notInArray, or, sql } from "d
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db, inTransaction } from "./client";
-import { categories, tasks, taskShares, type CategoryDeletion } from "./schema";
+import {
+  categories,
+  listMembers,
+  taskAccess,
+  tasks,
+  taskShares,
+  type CategoryDeletion,
+} from "./schema";
 import {
   BadRequestError,
+  ConflictError,
   ForbiddenError,
-  InsertFailedError,
   NotFoundError,
   StaleUpdateError,
 } from "./errors";
@@ -44,9 +51,10 @@ export const categoryInsertSchema = createInsertSchema(categories, {
   .required({ id: true, createdAt: true, updatedAt: true })
   .omit({ deletedAt: true, deletion: true })
   .strict();
+// The fields a client may change, so a column added later isn't editable until it's listed
 export const categoryUpdateSchema = createUpdateSchema(categories, { updatedAt: isoDatetime })
+  .pick({ id: true, updatedAt: true, name: true, color: true, sortOrder: true })
   .required({ id: true, updatedAt: true })
-  .omit({ createdAt: true, deletedAt: true, deletion: true })
   .strict();
 
 // What a deleted list keeps is only for the server's Undo, so no read or write sends it
@@ -56,7 +64,17 @@ const live = { deletedAt: { isNull: true } } as const;
 
 const list = async (userId: string) =>
   db.query.categories.findMany({
-    where: { ...live, OR: [{ userId }, { collaborators: { userId } }] },
+    where: {
+      ...live,
+      RAW: (list) =>
+        inArray(
+          list.id,
+          db
+            .select({ id: listMembers.listId })
+            .from(listMembers)
+            .where(eq(listMembers.userId, userId)),
+        ),
+    },
     columns: hidden,
     with: {
       user: { columns: { name: true } },
@@ -104,24 +122,38 @@ const findByIdWithCollaborators = async (id: string) => {
   return row;
 };
 
-/** Whether the user may file tasks in this list: they own it or collaborate on it. */
-const canUse = async (id: string, userId: string) => {
-  const row = await db.query.categories.findFirst({
-    where: { ...live, id },
-    columns: { userId: true },
-    with: { collaborators: { columns: { userId: true } } },
-  });
-  return !!row && (row.userId === userId || row.collaborators.some((c) => c.userId === userId));
+/** Everyone in a list: its owner and its collaborators. */
+const memberIds = async (id: string) => {
+  const rows = await db
+    .select({ userId: listMembers.userId })
+    .from(listMembers)
+    .where(eq(listMembers.listId, id));
+  return [...new Set(rows.map((r) => r.userId))];
 };
 
-// A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it
+/** Whether the user owns the list or collaborates on it. */
+const canUse = async (id: string, userId: string) => {
+  const rows = await db
+    .select()
+    .from(listMembers)
+    .where(and(eq(listMembers.listId, id), eq(listMembers.userId, userId)))
+    .limit(1);
+  return rows.length > 0;
+};
+
+// A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
+// An id someone else's list already has updates nothing, so their list isn't sent back.
 const insert = async (data: CategoryInsert) => {
   const [row] = await db
     .insert(categories)
     .values(data)
-    .onConflictDoUpdate({ target: categories.id, set: { updatedAt: sql`${categories.updatedAt}` } })
+    .onConflictDoUpdate({
+      target: categories.id,
+      set: { updatedAt: sql`${categories.updatedAt}` },
+      setWhere: eq(categories.userId, data.userId),
+    })
     .returning(sentColumns);
-  if (!row) throw new InsertFailedError("category");
+  if (!row) throw new ConflictError("List id taken");
   return row;
 };
 
@@ -145,14 +177,19 @@ const removeWithTasks = async (
   inTransaction(async (tx) => {
     const inCategory = await tx.query.tasks.findMany({
       where: { categoryId: id, deletedAt: { isNull: true } },
-      columns: { id: true, userId: true },
+      columns: { id: true },
       with: {
-        shares: { columns: { sharedWithUserId: true } },
-        subtasks: { where: { deletedAt: { isNull: true } }, columns: { id: true, userId: true } },
+        subtasks: { where: { deletedAt: { isNull: true } }, columns: { id: true } },
       },
     });
     if (inCategory.length > 0 && !action)
       throw new BadRequestError("Move or delete this list's tasks first.");
+    // Read here, in the delete's transaction: afterwards the list reaches no one
+    const ids = inCategory.flatMap((t) => [t.id, ...t.subtasks.map((s) => s.id)]);
+    const reach =
+      ids.length === 0
+        ? []
+        : await tx.select().from(taskAccess).where(inArray(taskAccess.taskId, ids));
 
     // A client from before confirmed ids were sent meant everything in the category
     const confirmed = new Set(confirmedIds ?? inCategory.map((t) => t.id));
@@ -193,7 +230,7 @@ const removeWithTasks = async (
       .where(and(eq(categories.id, id), isNull(categories.deletedAt)))
       .returning(sentColumns);
     if (!category) throw new NotFoundError("category", id);
-    return { category, inCategory, deletedIds, movedTasks, unfiledShares };
+    return { category, deletedIds, movedTasks, unfiledShares, reach };
   });
 
 /**
@@ -297,6 +334,7 @@ export default {
   findById,
   findByIdWithCollaborators,
   canUse,
+  memberIds,
   insert,
   update,
   removeWithTasks,

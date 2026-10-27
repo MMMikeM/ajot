@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { startsWith } from "./helpers/app";
 import { mockApi } from "./helpers/mock-api";
 
 // The task detail sheet shows only what a task has, against the dev server with /api mocked
@@ -7,8 +8,6 @@ test.use({ serviceWorkers: "block" });
 
 const row = (page: Page, title: string) =>
   page.locator("[data-task-id]", { hasText: title }).first();
-
-const startsWith = (text: string) => new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
 
 const openDetail = async (page: Page, title: string) => {
   await mockApi(page);

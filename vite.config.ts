@@ -90,6 +90,8 @@ export default defineConfig({
   fmt: {
     ignorePatterns: [
       "src/routeTree.gen.ts",
+      // drizzle-kit writes these, and reads the latest back on the next generate
+      "packages/server/drizzle/**/snapshot.json",
     ],
     sortTailwindcss: {
       stylesheet: "./packages/client/src/app.css",

@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures";
-import { createTask } from "./helpers/app";
+import { addField, createTask } from "./helpers/app";
 import { apiRequest, ensureMutualContacts } from "./helpers/api";
 
 const openFirstTaskDetail = async (page: Parameters<typeof createTask>[0]) => {
@@ -11,13 +11,6 @@ const openFirstTaskDetail = async (page: Parameters<typeof createTask>[0]) => {
 
 const drawer = (page: Parameters<typeof createTask>[0]) =>
   page.locator('[data-slot="drawer-content"]');
-
-// The sheet shows only what a task has; anything else is offered under Add
-const addField = async (page: Parameters<typeof createTask>[0], field: string) => {
-  const d = drawer(page);
-  await d.getByRole("button", { name: "Add", exact: true }).click();
-  await d.getByRole("group", { name: "Add to task" }).getByRole("button", { name: field }).click();
-};
 
 test.beforeEach(async ({ user1Auth }) => {
   type Task = { id: string; parentId: string | null };
@@ -37,7 +30,7 @@ test.describe("task detail — visual language", () => {
     await page.waitForSelector("[data-task-id]");
     await openFirstTaskDetail(page);
 
-    await addField(page, "Description");
+    await addField(drawer(page), "Description");
     const textarea = drawer(page).getByRole("textbox", { name: "Description" });
     await expect(textarea).toBeVisible();
 
@@ -110,7 +103,7 @@ test.describe("task detail — visual language", () => {
     await page.waitForSelector("[data-task-id]");
     await page.waitForTimeout(1000); // contacts collection hydrate
     await openFirstTaskDetail(page);
-    await addField(page, "Share");
+    await addField(drawer(page), "Share");
 
     await expect(drawer(page).locator("select")).toHaveCount(0);
     const shareWith = drawer(page).getByRole("combobox", { name: "Share with" });
@@ -131,7 +124,7 @@ test.describe("task detail — functionality", () => {
     await titleInput.fill("Updated title");
 
     // Blur by moving to the description
-    await addField(page, "Description");
+    await addField(drawer(page), "Description");
     await page.waitForTimeout(400);
 
     await expect(titleInput).toHaveValue("Updated title");
@@ -186,7 +179,7 @@ test.describe("task detail — functionality", () => {
     await openFirstTaskDetail(page);
 
     const d = drawer(page);
-    await addField(page, "Description");
+    await addField(drawer(page), "Description");
     const desc = d.getByRole("textbox", { name: "Description" });
     await desc.click();
     await desc.fill("My description");
