@@ -48,19 +48,19 @@ export const taskUpdateSchema = createUpdateSchema(tasks, { updatedAt: isoDateti
   .extend({ deletedAt: z.null().optional() })
   .strict();
 
+// task-access.ts's audience, as a query: the owner, a share's recipient, the list's people
+const reachedBy = (userId: string) => [
+  { userId },
+  { shares: { sharedWithUserId: userId } },
+  { category: { collaborators: { userId } } },
+];
+
 const list = async (userId: string) =>
   db.query.tasks.findMany({
     where: {
       deletedAt: { isNull: true },
-      OR: [
-        { userId },
-        { shares: { sharedWithUserId: userId } },
-        { category: { collaborators: { userId } } },
-        // Subtasks carry no shares or categoryId, so they're reached through their parent
-        { parent: { userId } },
-        { parent: { shares: { sharedWithUserId: userId } } },
-        { parent: { category: { collaborators: { userId } } } },
-      ],
+      // Subtasks carry no shares or categoryId, so they're reached through their parent
+      OR: [...reachedBy(userId), ...reachedBy(userId).map((reach) => ({ parent: reach }))],
     },
     with: {
       user: { columns: { id: true, name: true } },
@@ -81,26 +81,19 @@ const findById = async (id: string) => {
   return row;
 };
 
+// What task-access.ts reads, for a task and for its parent
+const holderWith = {
+  shares: { columns: { sharedWithUserId: true, permission: true } },
+  category: { columns: { id: true }, with: { collaborators: { columns: { userId: true } } } },
+} as const;
+
 /** A deleted task reads as missing, unless asked for by the restore that brings it back. */
-const findByIdWithAccess = async (id: string, _userId: string, { deleted = false } = {}) => {
+const findByIdWithAccess = async (id: string, { deleted = false } = {}) => {
   const row = await db.query.tasks.findFirst({
     where: deleted ? { id } : { id, deletedAt: { isNull: true } },
     with: {
-      shares: { columns: { sharedWithUserId: true, permission: true } },
-      category: {
-        with: { collaborators: { columns: { userId: true } } },
-        columns: { id: true },
-      },
-      parent: {
-        columns: { id: true, userId: true },
-        with: {
-          shares: { columns: { sharedWithUserId: true, permission: true } },
-          category: {
-            with: { collaborators: { columns: { userId: true } } },
-            columns: { id: true },
-          },
-        },
-      },
+      ...holderWith,
+      parent: { columns: { id: true, userId: true, deletedAt: true }, with: holderWith },
     },
   });
   if (!row) throw new NotFoundError("task", id);
@@ -285,14 +278,6 @@ const listSharesForTasks = async (taskIds: string[]) => {
   });
 };
 
-const listShareUserIds = async (taskId: string) => {
-  const rows = await db.query.taskShares.findMany({
-    where: { taskId },
-    columns: { sharedWithUserId: true },
-  });
-  return rows.map((r) => r.sharedWithUserId);
-};
-
 const findOverdue = async (beforeDate: string) =>
   db.query.tasks.findMany({
     where: {
@@ -320,6 +305,5 @@ export default {
   removeShare,
   updateShareCategory,
   listSharesForTasks,
-  listShareUserIds,
   findOverdue,
 };

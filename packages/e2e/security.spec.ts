@@ -210,7 +210,8 @@ test.describe("notes are their author's", () => {
       },
       token: user2Auth.token,
     });
-    expect(res.status).toBe(403);
+    // As if the task weren't there, so its id can't be probed
+    expect(res.status).toBe(404);
   });
 
   test("a note on a task shared with you to view", async ({ user1Auth, user2Auth }) => {
@@ -270,7 +271,7 @@ test.describe("notes are their author's", () => {
       body: { id: note.id, taskId: theirs.id, updatedAt: now() },
       token: user2Auth.token,
     });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 
   test("can't hand your note to someone else", async ({ user1Auth, user2Auth }) => {

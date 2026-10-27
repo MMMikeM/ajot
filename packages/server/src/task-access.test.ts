@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { canEditTask, canSeeTask } from "./task-access";
+import { audience, canDeleteTask, canEditTask, canSeeTask } from "./task-access";
 
 const owner = "alice";
 const other = "bob";
@@ -63,5 +63,35 @@ describe("canSeeTask", () => {
   test("not a stranger", () => {
     expect(canSeeTask(task(), other)).toBe(false);
     expect(canSeeTask(task({ parent: task() }), other)).toBe(false);
+  });
+});
+
+describe("canDeleteTask", () => {
+  test("the owner, or the parent's for a subtask", () => {
+    expect(canDeleteTask(task(), owner)).toBe(true);
+    expect(canDeleteTask(task({ userId: other, parent: task() }), owner)).toBe(true);
+  });
+
+  test("not an edit share's recipient or a collaborator", () => {
+    expect(canDeleteTask(task({ shares: [editShare] }), other)).toBe(false);
+    expect(canDeleteTask(task({ category: sharedList }), other)).toBe(false);
+  });
+});
+
+describe("audience", () => {
+  test("the owner, whoever it's shared with and the list's people, once each", () => {
+    const carol = { sharedWithUserId: "carol", permission: "view" as const };
+    expect(audience(task({ shares: [editShare, carol], category: sharedList }))).toEqual([
+      owner,
+      other,
+      "carol",
+    ]);
+  });
+
+  test("a subtask reaches everyone its parent does", () => {
+    expect(audience(task({ userId: other, parent: task({ shares: [viewShare] }) }))).toEqual([
+      other,
+      owner,
+    ]);
   });
 });
