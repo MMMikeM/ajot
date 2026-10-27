@@ -14,11 +14,15 @@ import {
   tasksOf,
   type ApiNote,
 } from "./helpers/api";
+import { login } from "./helpers/auth";
 import { API_URL } from "./helpers/stack";
 import { USER_1 } from "./helpers/users";
 
 const EVIL = "https://evil.example";
 const EXTENSION = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
+
+const putTask = (id: string, fields: Record<string, unknown>, token: string) =>
+  send("/api/tasks", { method: "PUT", body: { id, updatedAt: now(), ...fields }, token });
 
 test.describe("which sites can call the API", () => {
   test("another site gets no CORS headers; an extension does", async ({ user1Auth }) => {
@@ -49,10 +53,7 @@ test.describe("which sites can call the API", () => {
   });
 
   test("signing in sets no session cookie", async ({ user1Auth }) => {
-    const res = await send("/api/auth/login", {
-      method: "POST",
-      body: { username: user1Auth.username, password: USER_1.password },
-    });
+    const res = await login({ ...USER_1, username: user1Auth.username });
     expect(res.status).toBe(200);
     expect(res.headers.getSetCookie()).toEqual([]);
   });
@@ -184,24 +185,13 @@ test.describe("notes are their author's", () => {
 });
 
 test.describe("what a share lets you change", () => {
-  const rename = (taskId: string, token: string) =>
-    send("/api/tasks", {
-      method: "PUT",
-      body: { id: taskId, title: "Renamed", updatedAt: now() },
-      token,
-    });
-
   test("a view share can't edit", async ({ user1Auth, user2Auth }) => {
     const task = await addTask(user1Auth.token, { title: "Look, don't touch" });
     await shareTask(user1Auth.token, task.id, user2Auth.username, "view");
     expect((await tasksOf(user2Auth.token)).some((t) => t.id === task.id)).toBe(true);
 
-    expect((await rename(task.id, user2Auth.token)).status).toBe(403);
-    const done = await send("/api/tasks", {
-      method: "PUT",
-      body: { id: task.id, status: "done", updatedAt: now() },
-      token: user2Auth.token,
-    });
+    expect((await putTask(task.id, { title: "Renamed" }, user2Auth.token)).status).toBe(403);
+    const done = await putTask(task.id, { status: "done" }, user2Auth.token);
     expect(done.status).toBe(403);
     const subtask = await send("/api/tasks", {
       method: "POST",
@@ -245,11 +235,7 @@ test.describe("what a share lets you change", () => {
     const task = await addTask(user1Auth.token);
     await shareTask(user1Auth.token, task.id, user2Auth.username, "edit");
     const privateList = await addList(user2Auth.token, "Bob's own");
-    const res = await send("/api/tasks", {
-      method: "PUT",
-      body: { id: task.id, categoryId: privateList.id, updatedAt: now() },
-      token: user2Auth.token,
-    });
+    const res = await putTask(task.id, { categoryId: privateList.id }, user2Auth.token);
     expect(res.status).toBe(403);
   });
 
@@ -257,22 +243,14 @@ test.describe("what a share lets you change", () => {
     const parent = await addTask(user1Auth.token);
     const subtask = await addTask(user1Auth.token, { parentId: parent.id });
     const list = await addList(user1Auth.token, "Elsewhere");
-    const res = await send("/api/tasks", {
-      method: "PUT",
-      body: { id: subtask.id, categoryId: list.id, updatedAt: now() },
-      token: user1Auth.token,
-    });
+    const res = await putTask(subtask.id, { categoryId: list.id }, user1Auth.token);
     expect(res.status).toBe(400);
   });
 
   test("an edit share can't take the task", async ({ user1Auth, user2Auth }) => {
     const task = await addTask(user1Auth.token);
     await shareTask(user1Auth.token, task.id, user2Auth.username, "edit");
-    const res = await send("/api/tasks", {
-      method: "PUT",
-      body: { id: task.id, userId: user2Auth.userId, updatedAt: now() },
-      token: user2Auth.token,
-    });
+    const res = await putTask(task.id, { userId: user2Auth.userId }, user2Auth.token);
     expect(res.status).toBe(400);
     expect((await tasksOf(user1Auth.token)).find((t) => t.id === task.id)?.userId).toBe(
       user1Auth.userId,

@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 export const waitForAppReady = async (page: Page): Promise<void> => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -46,4 +46,17 @@ export const clearIDB = async (page: Page): Promise<void> => {
       ),
     );
   });
+};
+
+/** A pattern for a name that begins with `text`, as a task row's button is named after its title */
+export const startsWith = (text: string) =>
+  new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
+
+/** The sheet shows only what a task has; anything else is offered under Add */
+export const addField = async (sheet: Locator, field: string) => {
+  await sheet.getByRole("button", { name: "Add", exact: true }).click();
+  await sheet
+    .getByRole("group", { name: "Add to task" })
+    .getByRole("button", { name: field })
+    .click();
 };
