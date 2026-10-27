@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "14384c7c-4ba5-4fb7-8c00-2b682744456c",
+  "id": "e828414c-9f6a-40cf-90ff-097f204c0ed2",
   "prevIds": [
     "65f97acc-1d37-4a7f-bca5-e8c9c2d974bc"
   ],
@@ -1423,6 +1423,20 @@
     {
       "columns": [
         {
+          "value": "user_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "categories_user_idx",
+      "entityType": "indexes",
+      "table": "categories"
+    },
+    {
+      "columns": [
+        {
           "value": "category_id",
           "isExpression": false
         },
@@ -1443,6 +1457,20 @@
         {
           "value": "user_id",
           "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "category_collaborators_user_idx",
+      "entityType": "indexes",
+      "table": "category_collaborators"
+    },
+    {
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false
         },
         {
           "value": "contact_user_id",
@@ -1455,6 +1483,76 @@
       "name": "contacts_user_contact_idx",
       "entityType": "indexes",
       "table": "contacts"
+    },
+    {
+      "columns": [
+        {
+          "value": "task_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "task_shares_task_idx",
+      "entityType": "indexes",
+      "table": "task_shares"
+    },
+    {
+      "columns": [
+        {
+          "value": "shared_with_user_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "task_shares_user_idx",
+      "entityType": "indexes",
+      "table": "task_shares"
+    },
+    {
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "tasks_user_idx",
+      "entityType": "indexes",
+      "table": "tasks"
+    },
+    {
+      "columns": [
+        {
+          "value": "category_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "tasks_category_idx",
+      "entityType": "indexes",
+      "table": "tasks"
+    },
+    {
+      "columns": [
+        {
+          "value": "parent_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "tasks_parent_idx",
+      "entityType": "indexes",
+      "table": "tasks"
     },
     {
       "columns": [
@@ -1481,14 +1579,14 @@
       "table": "tasks"
     },
     {
-      "definition": "\n  SELECT id AS list_id, user_id FROM categories WHERE deleted_at IS NULL\n  UNION\n  SELECT cc.category_id, cc.user_id FROM category_collaborators cc\n  JOIN categories c ON c.id = cc.category_id AND c.deleted_at IS NULL",
+      "definition": "\n  SELECT id AS list_id, user_id FROM categories WHERE deleted_at IS NULL\n  UNION ALL\n  SELECT cc.category_id AS list_id, cc.user_id FROM category_collaborators cc\n  JOIN categories c ON c.id = cc.category_id AND c.deleted_at IS NULL",
       "isExisting": false,
       "error": null,
       "name": "list_members",
       "entityType": "views"
     },
     {
-      "definition": "\n  WITH holder_access AS (SELECT id AS holder_id, user_id, 1 AS can_edit, 1 AS can_delete FROM tasks UNION ALL SELECT task_id, shared_with_user_id, permission = 'edit', 0 FROM task_shares UNION ALL SELECT t.id, m.user_id, 1, 0 FROM tasks t JOIN list_members m ON m.list_id = t.category_id)\n  SELECT t.id AS task_id, a.user_id, max(a.can_edit) AS can_edit, max(a.can_delete) AS can_delete\n  FROM tasks t JOIN holder_access a ON a.holder_id IN (t.id, t.parent_id)\n  GROUP BY t.id, a.user_id",
+      "definition": "SELECT h.holder_id AS task_id, h.user_id, h.can_edit, h.can_delete FROM (SELECT id AS holder_id, user_id, 1 AS can_edit, 1 AS can_delete FROM tasks) h UNION ALL SELECT h.holder_id AS task_id, h.user_id, h.can_edit, h.can_delete FROM (SELECT task_id AS holder_id, shared_with_user_id AS user_id,\n    permission = 'edit' AS can_edit, 0 AS can_delete FROM task_shares) h UNION ALL SELECT h.holder_id AS task_id, h.user_id, h.can_edit, h.can_delete FROM (SELECT t.id AS holder_id, m.user_id, 1 AS can_edit, 0 AS can_delete\n    FROM tasks t JOIN list_members m ON m.list_id = t.category_id) h UNION ALL SELECT c.id AS task_id, h.user_id, h.can_edit, h.can_delete\n    FROM tasks c JOIN (SELECT id AS holder_id, user_id, 1 AS can_edit, 1 AS can_delete FROM tasks) h ON h.holder_id = c.parent_id UNION ALL SELECT c.id AS task_id, h.user_id, h.can_edit, h.can_delete\n    FROM tasks c JOIN (SELECT task_id AS holder_id, shared_with_user_id AS user_id,\n    permission = 'edit' AS can_edit, 0 AS can_delete FROM task_shares) h ON h.holder_id = c.parent_id UNION ALL SELECT c.id AS task_id, h.user_id, h.can_edit, h.can_delete\n    FROM tasks c JOIN (SELECT t.id AS holder_id, m.user_id, 1 AS can_edit, 0 AS can_delete\n    FROM tasks t JOIN list_members m ON m.list_id = t.category_id) h ON h.holder_id = c.parent_id",
       "isExisting": false,
       "error": null,
       "name": "task_access",

@@ -18,10 +18,12 @@ import { jsonBody, jsonContent, withAuth } from "./crud";
 
 type TaskEvent = BroadcastEvent & { model: "tasks"; data: { id: string } };
 
-// Each task's event goes only to the people task_access says can reach it
+// Each task's event goes only to the people task_access says can reach it, once each
 const toReach = (access: { taskId: string; userId: string }[], events: TaskEvent[]) =>
   events.flatMap((event) =>
-    access.filter((a) => a.taskId === event.data.id).map((a) => ({ userId: a.userId, event })),
+    [...new Set(access.filter((a) => a.taskId === event.data.id).map((a) => a.userId))].map(
+      (userId) => ({ userId, event }),
+    ),
   );
 
 const collaboratorSchema = z.object({ username: z.string().min(1) });
