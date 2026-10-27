@@ -16,12 +16,10 @@ export const parseAllowedOrigins = (value: string | undefined) =>
 
 /**
  * Who gets CORS headers: each extension, and a web app served from another address than the API.
- * Nothing authenticates by cookie, so a page on any other site can't act as a user either way.
+ * The web app on the API's own address needs none, since its requests are same-origin.
  */
-export const isAllowedOrigin = (origin: string, host: string | undefined, allowed: string[]) => {
+export const isAllowedOrigin = (origin: string, allowed: string[]) => {
   const url = URL.parse(origin);
   if (!url) return false;
-  if (extensionProtocols.has(url.protocol)) return true;
-  if (host && url.host === host.toLowerCase()) return true;
-  return allowed.includes(url.origin);
+  return extensionProtocols.has(url.protocol) || allowed.includes(url.origin);
 };

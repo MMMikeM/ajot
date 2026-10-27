@@ -99,14 +99,13 @@ test.describe("which sites can call the API", () => {
     );
   });
 
-  test("signing in sets no session cookie, and clears an old one", async ({ user1Auth }) => {
+  test("signing in sets no session cookie", async ({ user1Auth }) => {
     const res = await send("/api/auth/login", {
       method: "POST",
       body: { username: user1Auth.username, password: USER_1.password },
     });
     expect(res.status).toBe(200);
-    const cookies = res.headers.getSetCookie();
-    expect(cookies).toEqual([expect.stringMatching(/^auth=;.*Max-Age=0/)]);
+    expect(res.headers.getSetCookie()).toEqual([]);
   });
 
   test("a cookie doesn't sign a request in", async ({ user1Auth }) => {

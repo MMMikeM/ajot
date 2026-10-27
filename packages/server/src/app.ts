@@ -60,12 +60,11 @@ const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 // Headers are set BEFORE next() so they're present on error responses too:
 // if a route throws HTTPException, onError() calls c.json() which picks up
 // whatever is already in c._headers — but post-next() code is never reached.
-// No Allow-Credentials: every client authenticates with a Bearer token, never a cookie.
+// No Allow-Credentials: see extractToken.
 app.use("*", (c, next) => {
   c.header("Vary", "Origin", { append: true });
   const origin = c.req.header("origin");
-  const host = c.req.header("host");
-  if (origin && isAllowedOrigin(origin, host, allowedOrigins)) {
+  if (origin && isAllowedOrigin(origin, allowedOrigins)) {
     c.header("Access-Control-Allow-Origin", origin);
     c.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
     c.header("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Client-Id,X-Device-Id");
