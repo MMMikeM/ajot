@@ -2,7 +2,7 @@ import { and, eq, getColumns, inArray, isNull, lt, notInArray, or, sql } from "d
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db, inTransaction } from "./client";
-import { categories, tasks, taskShares, type CategoryDeletion } from "./schema";
+import { categories, listMembers, tasks, taskShares, type CategoryDeletion } from "./schema";
 import {
   BadRequestError,
   ConflictError,
@@ -106,18 +106,15 @@ const findByIdWithCollaborators = async (id: string) => {
 };
 
 /** Whether the user may file tasks in this list: they own it or collaborate on it. */
-/** A list's owner and collaborators, or undefined for one that's gone. */
-const findMembers = async (id: string) =>
-  db.query.categories.findFirst({
-    where: { ...live, id },
-    columns: { userId: true },
-    with: { collaborators: { columns: { userId: true } } },
-  });
-
-export const isMember = (list: Awaited<ReturnType<typeof findMembers>>, userId: string) =>
-  !!list && (list.userId === userId || list.collaborators.some((c) => c.userId === userId));
-
-const canUse = async (id: string, userId: string) => isMember(await findMembers(id), userId);
+/** Whether the user owns the list or collaborates on it. */
+const canUse = async (id: string, userId: string) => {
+  const rows = await db
+    .select()
+    .from(listMembers)
+    .where(and(eq(listMembers.listId, id), eq(listMembers.userId, userId)))
+    .limit(1);
+  return rows.length > 0;
+};
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
 // An id someone else's list already has updates nothing, so their list isn't sent back.
@@ -307,7 +304,6 @@ export default {
   findById,
   findByIdWithCollaborators,
   canUse,
-  findMembers,
   insert,
   update,
   removeWithTasks,

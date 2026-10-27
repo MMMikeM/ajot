@@ -11,10 +11,11 @@ import { jsonBody, jsonContent, withAuth } from "./crud";
 import { markTaskEdited } from "./task-users";
 import taskRepo from "../db/task.repo";
 import { NotFoundError } from "../db/errors";
-import { canSeeTask } from "@newtab-todo/shared/task-access";
 
-// A deleted task still takes notes: they're hidden with it and come back when it's restored
-const findTask = (taskId: string) => taskRepo.findByIdWithAccess(taskId, { deleted: true });
+// A deleted task still takes notes: they're hidden with it and come back when it's restored, so
+// task_access, which keeps deleted tasks, decides
+const canSee = (access: Awaited<ReturnType<typeof taskRepo.accessTo>>, userId: string) =>
+  access.some((a) => a.userId === userId);
 
 export const noteRoutes = authed()
   .openapi(
@@ -35,13 +36,13 @@ export const noteRoutes = authed()
     async (c) => {
       const data = c.req.valid("json");
       const userId = c.get("userId");
-      const task = await findTask(data.taskId);
+      const access = await taskRepo.accessTo([data.taskId]);
       // A retry after a lost response gets its note back, even if the task was unshared meanwhile
-      if (!canSeeTask(task, userId) && !(await noteRepo.findOwn(data.id, userId)))
+      if (!canSee(access, userId) && !(await noteRepo.findOwn(data.id, userId)))
         throw new NotFoundError("task", data.taskId);
       const result = await noteRepo.insert({ ...data, userId });
       broadcast(c, "notes", "insert", result, [userId]);
-      await markTaskEdited(c, task, userId, result.updatedAt);
+      await markTaskEdited(c, data.taskId, userId, result.updatedAt, access);
       return c.json(result, 200);
     },
   )
@@ -61,13 +62,13 @@ export const noteRoutes = authed()
         if (
           note &&
           note.taskId !== fields.taskId &&
-          !canSeeTask(await findTask(fields.taskId), userId)
+          !canSee(await taskRepo.accessTo([fields.taskId]), userId)
         )
           throw new NotFoundError("task", fields.taskId);
       }
       const result = await noteRepo.update(id, userId, updatedAt, fields);
       broadcast(c, "notes", "update", result, [userId]);
-      if (result.taskId) await markTaskEdited(c, await findTask(result.taskId), userId, updatedAt);
+      if (result.taskId) await markTaskEdited(c, result.taskId, userId, updatedAt);
       return c.json(result, 200);
     },
   )

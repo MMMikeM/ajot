@@ -1,8 +1,11 @@
-import { defineRelations, sql } from "drizzle-orm";
+import { defineRelations, sql, type SQL } from "drizzle-orm";
 import {
   check,
+  integer,
   primaryKey,
   sqliteTable,
+  sqliteView,
+  text,
   uniqueIndex,
   type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
@@ -21,6 +24,7 @@ import {
   bool,
 } from "./columns";
 import type { PushTrigger } from "@newtab-todo/shared/push-payload";
+import type { AccessPath } from "@newtab-todo/shared/task-access";
 
 export const categories = sqliteTable("categories", {
   id: pk(),
@@ -204,6 +208,39 @@ export const metricCounts = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.name, t.day] })],
 );
+
+/** Who's in a list: its owner and its collaborators, while it isn't deleted. */
+export const listMembers = sqliteView("list_members", {
+  listId: text("list_id").notNull(),
+  userId: text("user_id").notNull(),
+}).as(sql`
+  SELECT id AS list_id, user_id FROM categories WHERE deleted_at IS NULL
+  UNION
+  SELECT cc.category_id, cc.user_id FROM category_collaborators cc
+  JOIN categories c ON c.id = cc.category_id AND c.deleted_at IS NULL`);
+
+// Each path in shared/task-access.ts, for the task that holds it. The JS there is keyed the same,
+// so a path added to either fails to compile until both have it.
+const holderAccess = {
+  owner: sql`SELECT id AS holder_id, user_id, 1 AS can_edit, 1 AS can_delete FROM tasks`,
+  share: sql`SELECT task_id, shared_with_user_id, permission = 'edit', 0 FROM task_shares`,
+  list: sql`SELECT t.id, m.user_id, 1, 0 FROM tasks t JOIN list_members m ON m.list_id = t.category_id`,
+} satisfies Record<AccessPath, SQL>;
+
+/**
+ * Who can reach each task, and how far: the one place the server asks. A subtask holds nothing
+ * itself, so it goes with its parent's. Deleted tasks are included, for the restore.
+ */
+export const taskAccess = sqliteView("task_access", {
+  taskId: text("task_id").notNull(),
+  userId: text("user_id").notNull(),
+  canEdit: integer("can_edit", { mode: "boolean" }).notNull(),
+  canDelete: integer("can_delete", { mode: "boolean" }).notNull(),
+}).as(sql`
+  WITH holder_access AS (${sql.join(Object.values(holderAccess), sql` UNION ALL `)})
+  SELECT t.id AS task_id, a.user_id, max(a.can_edit) AS can_edit, max(a.can_delete) AS can_delete
+  FROM tasks t JOIN holder_access a ON a.holder_id IN (t.id, t.parent_id)
+  GROUP BY t.id, a.user_id`);
 
 export const relations = defineRelations(
   {

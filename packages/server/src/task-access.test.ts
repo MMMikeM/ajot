@@ -1,112 +1,138 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, test } from "vite-plus/test";
-import { audience, canDeleteTask, canEditTask, canSeeTask } from "@newtab-todo/shared/task-access";
+import { canDeleteTask, grants, type Grant } from "@newtab-todo/shared/task-access";
 
-const owner = "alice";
-const other = "bob";
+// The migrations, as production runs them, into a database of the cases below
+const migrations = new URL("../drizzle/", import.meta.url);
+const db = new DatabaseSync(":memory:");
+for (const folder of readdirSync(migrations).sort()) {
+  const migration = readFileSync(new URL(`${folder}/migration.sql`, migrations), "utf8");
+  for (const statement of migration.split("--> statement-breakpoint")) db.exec(statement);
+}
 
-const task = (extra: Partial<Parameters<typeof canEditTask>[0]> = {}) => ({
-  userId: owner,
-  shares: [],
-  category: null,
-  ...extra,
+const rows = (query: string) => db.prepare(query).all() as Record<string, string | number | null>[];
+const insert = (table: string, ...values: Record<string, string>[]) => {
+  for (const row of values) {
+    const columns = Object.keys(row);
+    db.prepare(
+      `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
+    ).run(...Object.values(row));
+  }
+};
+
+insert(
+  "users",
+  ...["alice", "bob", "carol", "dave"].map((id) => ({
+    id,
+    name: id,
+    username: id,
+    password_hash: "x",
+  })),
+);
+insert(
+  "categories",
+  { id: "home", user_id: "alice", name: "Home" },
+  { id: "gone", user_id: "alice", name: "Gone", deleted_at: "2026-10-01T00:00:00.000Z" },
+);
+insert(
+  "category_collaborators",
+  { id: "cc1", category_id: "home", user_id: "bob" },
+  { id: "cc2", category_id: "gone", user_id: "carol" },
+);
+insert(
+  "tasks",
+  { id: "own", user_id: "alice", title: "Alice's own" },
+  { id: "shared", user_id: "alice", title: "Shared with Bob to edit, Carol to view" },
+  { id: "in-home", user_id: "bob", category_id: "home", title: "Bob's, in Alice's list" },
+  { id: "in-gone", user_id: "alice", category_id: "gone", title: "In a deleted list" },
+  { id: "deleted", user_id: "alice", title: "Deleted", deleted_at: "2026-10-01T00:00:00.000Z" },
+  { id: "sub-of-shared", user_id: "carol", parent_id: "shared", title: "Carol's subtask" },
+  { id: "sub-in-home", user_id: "alice", parent_id: "in-home", title: "Alice's subtask" },
+);
+insert(
+  "task_shares",
+  { id: "sh1", task_id: "shared", shared_with_user_id: "bob", permission: "edit" },
+  { id: "sh2", task_id: "shared", shared_with_user_id: "carol", permission: "view" },
+);
+
+// What the JS is handed: the task's shares, and its list while that isn't deleted
+const holder = (id: string) => {
+  const [task] = rows(`SELECT * FROM tasks WHERE id = '${id}'`);
+  const [list] = rows(
+    `SELECT * FROM categories WHERE id = '${task.category_id}' AND deleted_at IS NULL`,
+  );
+  return {
+    userId: String(task.user_id),
+    parentId: task.parent_id as string | null,
+    shares: rows(`SELECT * FROM task_shares WHERE task_id = '${id}'`).map((s) => ({
+      sharedWithUserId: String(s.shared_with_user_id),
+      permission: s.permission as "view" | "edit",
+    })),
+    category: list
+      ? {
+          userId: String(list.user_id),
+          collaborators: rows(
+            `SELECT user_id FROM category_collaborators WHERE category_id = '${list.id}'`,
+          ).map((c) => ({ userId: String(c.user_id) })),
+        }
+      : null,
+  };
+};
+
+const byUser = (a: Grant, b: Grant) => a.userId.localeCompare(b.userId);
+const tasks = rows("SELECT id FROM tasks").map((t) => String(t.id));
+
+describe("task_access and shared/task-access.ts", () => {
+  test.each(tasks)("agree on %s", (id) => {
+    const task = holder(id);
+    const fromView = rows(`SELECT * FROM task_access WHERE task_id = '${id}'`).map((r) => ({
+      userId: String(r.user_id),
+      canEdit: r.can_edit === 1,
+      canDelete: r.can_delete === 1,
+    }));
+    const fromJs = grants({ ...task, parent: task.parentId ? holder(task.parentId) : null });
+    expect(fromView.sort(byUser)).toEqual(fromJs.sort(byUser));
+  });
 });
 
-const viewShare = { sharedWithUserId: other, permission: "view" as const };
-const editShare = { sharedWithUserId: other, permission: "edit" as const };
-const sharedList = { userId: owner, collaborators: [{ userId: other }] };
-
-describe("canEditTask", () => {
-  test("the owner", () => {
-    expect(canEditTask(task(), owner)).toBe(true);
-  });
-
-  test("not a stranger", () => {
-    expect(canEditTask(task(), other)).toBe(false);
-  });
-
-  test("an edit share's recipient", () => {
-    expect(canEditTask(task({ shares: [editShare] }), other)).toBe(true);
-  });
-
-  test("not a view share's recipient", () => {
-    expect(canEditTask(task({ shares: [viewShare] }), other)).toBe(false);
-  });
-
-  test("a collaborator on the task's list", () => {
-    expect(canEditTask(task({ category: sharedList }), other)).toBe(true);
-  });
-
-  test("a subtask, through its parent", () => {
-    const sub = (parent: ReturnType<typeof task>) => task({ parent });
-    expect(canEditTask(sub(task({ shares: [editShare] })), other)).toBe(true);
-    expect(canEditTask(sub(task({ category: sharedList })), other)).toBe(true);
-    expect(canEditTask(sub(task({ shares: [viewShare] })), other)).toBe(false);
-    expect(canEditTask(sub(task()), other)).toBe(false);
-  });
-
-  test("a subtask you added under a task shared with you", () => {
-    expect(canEditTask(task({ userId: other, parent: task({ shares: [viewShare] }) }), other)).toBe(
-      true,
+describe("who reaches what", () => {
+  const access = (id: string) =>
+    Object.fromEntries(
+      rows(`SELECT * FROM task_access WHERE task_id = '${id}'`).map((r) => [
+        r.user_id,
+        r.can_delete ? "delete" : r.can_edit ? "edit" : "view",
+      ]),
     );
-  });
-});
 
-describe("canSeeTask", () => {
-  test("a view share's recipient", () => {
-    expect(canSeeTask(task({ shares: [viewShare] }), other)).toBe(true);
+  test("an owner deletes; an edit share edits; a view share views", () => {
+    expect(access("shared")).toEqual({ alice: "delete", bob: "edit", carol: "view" });
   });
 
-  test("a subtask of a task shared with you to view", () => {
-    expect(canSeeTask(task({ parent: task({ shares: [viewShare] }) }), other)).toBe(true);
+  test("a list's owner and collaborators edit a task in it, and only its owner deletes it", () => {
+    expect(access("in-home")).toEqual({ alice: "edit", bob: "delete" });
+  });
+
+  test("a deleted list reaches no one", () => {
+    expect(access("in-gone")).toEqual({ alice: "delete" });
+  });
+
+  test("a deleted task keeps its access, for the restore", () => {
+    expect(access("deleted")).toEqual({ alice: "delete" });
+  });
+
+  test("a subtask goes with its parent, and its own owner deletes it", () => {
+    expect(access("sub-of-shared")).toEqual({ alice: "delete", bob: "edit", carol: "delete" });
+    expect(access("sub-in-home")).toEqual({ alice: "delete", bob: "delete" });
   });
 
   test("not a stranger", () => {
-    expect(canSeeTask(task(), other)).toBe(false);
-    expect(canSeeTask(task({ parent: task() }), other)).toBe(false);
+    for (const id of tasks) expect(access(id)).not.toHaveProperty("dave");
   });
 });
 
-describe("canDeleteTask", () => {
-  test("the owner, or the parent's for a subtask", () => {
-    expect(canDeleteTask(task(), owner)).toBe(true);
-    expect(canDeleteTask(task({ userId: other, parent: task() }), owner)).toBe(true);
-  });
-
-  test("not an edit share's recipient or a collaborator", () => {
-    expect(canDeleteTask(task({ shares: [editShare] }), other)).toBe(false);
-    expect(canDeleteTask(task({ category: sharedList }), other)).toBe(false);
-  });
-});
-
-describe("audience", () => {
-  test("the owner, whoever it's shared with and the list's people, once each", () => {
-    const carol = { sharedWithUserId: "carol", permission: "view" as const };
-    expect(audience(task({ shares: [editShare, carol], category: sharedList }))).toEqual([
-      owner,
-      other,
-      "carol",
-    ]);
-  });
-
-  test("a subtask reaches everyone its parent does", () => {
-    expect(audience(task({ userId: other, parent: task({ shares: [viewShare] }) }))).toEqual([
-      other,
-      owner,
-    ]);
-  });
-});
-
-describe("a list's owner", () => {
-  // Bob added this to Alice's list, which he collaborates on
-  const added = task({ userId: other, category: sharedList });
-
-  test("sees and edits a task someone else added to their list", () => {
-    expect(canSeeTask(added, owner)).toBe(true);
-    expect(canEditTask(added, owner)).toBe(true);
-    expect(audience(added)).toContain(owner);
-  });
-
-  test("but doesn't delete it", () => {
-    expect(canDeleteTask(added, owner)).toBe(false);
-  });
+test("canDeleteTask: the owner, or the parent's for a subtask", () => {
+  const sub = holder("sub-of-shared");
+  expect(canDeleteTask({ ...sub, parent: holder("shared") }, "alice")).toBe(true);
+  expect(canDeleteTask({ ...sub, parent: holder("shared") }, "bob")).toBe(false);
 });
