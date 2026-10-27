@@ -94,6 +94,8 @@ export default defineConfig({
       "src/routeTree.gen.ts",
       ".claude/skills/impeccable/**",
       ".claude/agents/impeccable-*.md",
+      // drizzle-kit writes these, and reads the latest back on the next generate
+      "packages/server/drizzle/**/snapshot.json",
     ],
     sortTailwindcss: {
       stylesheet: "./packages/client/src/app.css",

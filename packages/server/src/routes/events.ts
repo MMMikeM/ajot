@@ -4,7 +4,9 @@ import { extractToken, validateSession } from "../auth";
 import { registerClient, unregisterClient } from "../broadcast";
 
 export const eventsRoute = new Hono().get("/", async (c) => {
-  const token = extractToken(c.req.raw, new URL(c.req.url));
+  // EventSource can't set headers, so the stream alone takes the token in its URL; anywhere else
+  // it would end up in logs and history
+  const token = extractToken(c.req.raw) ?? c.req.query("token");
   if (!token) return c.json({ error: "Unauthorized" }, 401);
 
   let userId: string;

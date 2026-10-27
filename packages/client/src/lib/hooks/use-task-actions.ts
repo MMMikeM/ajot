@@ -2,7 +2,11 @@ import { ComponentProps } from "react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortableOperation } from "@dnd-kit/react/sortable";
 import { generateKeyBetween } from "fractional-indexing";
-import { updateTask, updateCategory } from "~/lib/db/hooks";
+import { updateTask, updateCategory, moveToList } from "~/lib/db/hooks";
+import { useOptimisticUserId } from "~/lib/auth/current-user";
+import { placement } from "~/lib/effective-category";
+import { useCollaboratedCategoryIds } from "~/lib/hooks/use-collaborated-categories";
+import { toastManager } from "~/lib/undo-toast";
 import { CATEGORY_DROP_PREFIX } from "~/lib/constants";
 import type { Task, Category } from "~/lib/types";
 
@@ -23,6 +27,9 @@ export const useTaskActions = ({
   activeTasks,
   getSubtasks,
 }: Params) => {
+  const userId = useOptimisticUserId();
+  const collaboratedCategoryIds = useCollaboratedCategoryIds(userId);
+
   const handleReorder = (taskId: string, newIndex: number, groupTasks: Task[]) => {
     const filtered = groupTasks.filter((t) => t.id !== taskId);
     const prevOrder = newIndex > 0 ? (filtered[newIndex - 1]?.sortOrder ?? null) : null;
@@ -45,9 +52,12 @@ export const useTaskActions = ({
     if (target && typeof target.id === "string" && target.id.startsWith(CATEGORY_DROP_PREFIX)) {
       const targetCategoryId = target.id.slice(CATEGORY_DROP_PREFIX.length);
       const taskId = String(event.operation.source?.id);
-      if (targetCategoryId !== activeCategoryId) {
-        updateTask(taskId, { categoryId: targetCategoryId });
-      }
+      if (targetCategoryId === activeCategoryId) return;
+      const task = activeTasks.find((t) => t.id === taskId);
+      if (!task) return;
+      const { mode } = placement(task, userId, collaboratedCategoryIds);
+      if (mode === "list") toastManager.add({ title: "Only its owner can move this task." });
+      else moveToList(task, mode, targetCategoryId);
       return;
     }
 

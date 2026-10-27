@@ -32,13 +32,6 @@ const authResponseSchema = z.object({
 
 const inviterSchema = z.object({ inviterName: z.string() });
 
-const setAuthCookie = (c: { header: (name: string, value: string) => void }, token: string) => {
-  c.header(
-    "Set-Cookie",
-    `auth=${token}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=${60 * 60 * 24 * 365}`,
-  );
-};
-
 export const authRoutes = new OpenAPIHono()
   .openapi(
     createRoute({
@@ -56,7 +49,6 @@ export const authRoutes = new OpenAPIHono()
       try {
         const result = await login(data.username, data.password);
         console.log(`[login] success username=${data.username} userId=${result.userId}`);
-        setAuthCookie(c, result.token);
         return c.json(result, 200);
       } catch (e) {
         console.log(
@@ -90,7 +82,6 @@ export const authRoutes = new OpenAPIHono()
           () => {},
         );
       }
-      setAuthCookie(c, session.token);
       return c.json(session, 200);
     },
   )

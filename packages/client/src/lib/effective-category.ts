@@ -1,28 +1,37 @@
 import type { Task } from "~/lib/types";
 
+export type Placement = {
+  /**
+   * How `userId` moves it to another list: `owner` moves the task, `share` files their share of
+   * it, and `list` can't move it, since it sits in a list that's someone else's to arrange.
+   */
+  mode: "owner" | "share" | "list";
+  /** The list it appears in: a category, `null` for the Inbox, `undefined` for nowhere. */
+  categoryId: string | null | undefined;
+};
+
 /**
- * Which list a top-level task appears in for `userId`.
- *
- * - `string` — that category
- * - `null` — the inbox
- * - `undefined` — not listed anywhere for this user
- *
- * Owners file tasks by the task's own categoryId. Tasks in a category the user
- * collaborates on stay in that category (a share never overrides category
- * membership). Recipients of a direct share file it by their share's categoryId.
+ * Where a top-level task appears for `userId`. A task in a list they collaborate on stays in that
+ * list: a share never overrides list membership.
  */
+export const placement = (
+  task: Task,
+  userId: string,
+  collaboratedCategoryIds: Set<string>,
+): Placement => {
+  if (task.userId === userId) return { mode: "owner", categoryId: task.categoryId ?? null };
+  if (task.categoryId && collaboratedCategoryIds.has(task.categoryId))
+    return { mode: "list", categoryId: task.categoryId };
+  const myShare = task.shares.find((s) => s.sharedWithUserId === userId);
+  if (myShare) return { mode: "share", categoryId: myShare.categoryId ?? null };
+  return { mode: "list", categoryId: task.categoryId ?? undefined };
+};
+
 export const getEffectiveCategoryId = (
   task: Task,
   userId: string,
   collaboratedCategoryIds: Set<string>,
-): string | null | undefined => {
-  if (task.userId === userId) return task.categoryId ?? null;
-  if (task.categoryId && collaboratedCategoryIds.has(task.categoryId)) return task.categoryId;
-
-  const myShare = task.shares.find((s) => s.sharedWithUserId === userId);
-  if (!myShare) return task.categoryId ?? undefined;
-  return myShare.categoryId ?? null;
-};
+) => placement(task, userId, collaboratedCategoryIds).categoryId;
 
 export const countOpenTasksByCategory = (
   tasks: Task[],

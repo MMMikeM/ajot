@@ -4,7 +4,7 @@ Playwright test suite. Two projects: `desktop` (Chrome) runs every spec, and `mo
 
 ## The stack
 
-`pnpm test:e2e` brings its own, so it needs Docker and nothing else running: Playwright's `webServer` starts `api-stack.ts` (a throwaway libSQL container, `drizzle-kit push`, then the API server on port 3180) and the client's production build on 5180 (`vp preview`), proxying to it. The `test` task in this package's `vite.config.ts` builds the client first: on the dev server, compiling each module as a page asked for it made every load slow on CI. The build's service worker is blocked, so it can't answer requests a test mocks. Each run starts from an empty database, and stopping the run removes the container. Set `BASE_URL` to run against a stack that's already up instead; nothing is started then.
+`pnpm test:e2e` brings its own, so it needs Docker and nothing else running: Playwright's `webServer` starts `api-stack.ts` (a throwaway libSQL container, the migrations, then the API server on port 3180) and the client's production build on 5180 (`vp preview`), proxying to it. The `test` task in this package's `vite.config.ts` builds the client first: on the dev server, compiling each module as a page asked for it made every load slow on CI. The build's service worker is blocked, so it can't answer requests a test mocks. Each run starts from an empty database, and stopping the run removes the container. Set `BASE_URL` to run against a stack that's already up instead; nothing is started then.
 
 ## Entry points
 
@@ -25,9 +25,9 @@ Playwright test suite. Two projects: `desktop` (Chrome) runs every spec, and `mo
 | File            | What it exports                                                                                               |
 | --------------- | ------------------------------------------------------------------------------------------------------------- |
 | `users.ts`      | `USER_1`, `USER_2` — dedicated e2e accounts (Alice / Bob)                                                     |
-| `stack.ts`      | `API_PORT`, `CLIENT_PORT`, `BASE_URL` — where the suite finds the app                                         |
+| `stack.ts`      | `API_PORT`, `CLIENT_PORT`, `BASE_URL`, `API_URL` — where the suite finds the app                              |
 | `auth.ts`       | `getOrCreateUser(user, inviter?)` — login, or signup (invited) on first run; `signIn(page, auth)`             |
-| `api.ts`        | `apiRequest()` — raw fetch with Bearer token; `deleteAllTasksInCategory(token, categoryId)`                   |
+| `api.ts`        | `apiRequest` throws on a refusal, `send` returns it; `newTask`, `addTask` and kin; `tasksOf`, `notesOf`       |
 | `app.ts`        | `waitForAppReady`, `createTask`, `createCategory`, `clearLocalStorage`, `clearIDB`                            |
 | `sync.ts`       | `createSyncTracker(page)` — tracks non-GET `/api/*` mutations, exposes `waitForSync()` + `assertNoFailures()` |
 | `screenshot.ts` | `takeScreenshot`, `forBothViewports`, `reportViolations` — used by the screenshot script                      |

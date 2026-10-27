@@ -8,7 +8,9 @@ import noteRepo, {
 import { authed } from "../middleware";
 import { broadcast } from "../broadcast";
 import { jsonBody, jsonContent, withAuth } from "./crud";
-import { markTaskEdited } from "./task-users";
+import { markTaskEdited, requireTask } from "./task-users";
+import taskRepo from "../db/task.repo";
+import { NotFoundError } from "../db/errors";
 
 export const noteRoutes = authed()
   .openapi(
@@ -27,10 +29,16 @@ export const noteRoutes = authed()
       responses: withAuth({ 200: jsonContent(noteResponseSchema) }),
     }),
     async (c) => {
+      const data = c.req.valid("json");
       const userId = c.get("userId");
-      const result = await noteRepo.insert({ ...c.req.valid("json"), userId });
+      // A deleted task still takes notes: they're hidden with it and come back when it's restored
+      const access = await taskRepo.accessTo([data.taskId]);
+      // A retry after a lost response gets its note back, even if the task was unshared meanwhile
+      if (!access.some((a) => a.userId === userId) && !(await noteRepo.findOwn(data.id, userId)))
+        throw new NotFoundError("task", data.taskId);
+      const result = await noteRepo.insert({ ...data, userId });
       broadcast(c, "notes", "insert", result, [userId]);
-      if (result.taskId) await markTaskEdited(c, result.taskId, userId, result.updatedAt);
+      await markTaskEdited(c, data.taskId, userId, result.updatedAt, access);
       return c.json(result, 200);
     },
   )
@@ -44,7 +52,13 @@ export const noteRoutes = authed()
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
       const userId = c.get("userId");
-      const result = await noteRepo.update(id, updatedAt, fields);
+      // Only a move is checked: a note stays its author's after they lose the task
+      if (fields.taskId) {
+        const note = await noteRepo.findOwn(id, userId);
+        if (note && note.taskId !== fields.taskId)
+          await requireTask(fields.taskId, userId, "see", { deleted: true });
+      }
+      const result = await noteRepo.update(id, userId, updatedAt, fields);
       broadcast(c, "notes", "update", result, [userId]);
       if (result.taskId) await markTaskEdited(c, result.taskId, userId, updatedAt);
       return c.json(result, 200);
@@ -58,8 +72,9 @@ export const noteRoutes = authed()
       responses: withAuth({ 200: jsonContent(noteResponseSchema) }),
     }),
     async (c) => {
-      const result = await noteRepo.remove(c.req.valid("json").id);
-      broadcast(c, "notes", "delete", { id: result.id }, [c.get("userId")]);
+      const userId = c.get("userId");
+      const result = await noteRepo.remove(c.req.valid("json").id, userId);
+      broadcast(c, "notes", "delete", { id: result.id }, [userId]);
       return c.json(result, 200);
     },
   );

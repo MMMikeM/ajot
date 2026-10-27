@@ -1,4 +1,4 @@
-// Playwright's webServer runs this: a throwaway libSQL database in Docker, the schema pushed to
+// Playwright's webServer runs this: a throwaway libSQL database in Docker, the migrations run on
 // it, and the API server on top. Stopping it removes the container, so every run starts empty.
 
 import { execFileSync, spawn } from "node:child_process";
@@ -51,7 +51,7 @@ const pnpm = (...args: string[]) =>
     env,
     stdio: "inherit",
   });
-pnpm("exec", "drizzle-kit", "push", "--force");
+pnpm("db:migrate");
 pnpm("build");
 
 const server = spawn("node", ["--enable-source-maps", "dist/index.js"], {

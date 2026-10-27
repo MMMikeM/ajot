@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Toast } from "@base-ui/react/toast";
 import { Link } from "@tanstack/react-router";
 import { UserRound, Users } from "lucide-react";
 import type { Task, Category } from "~/lib/types";
-import { useCategories, useContacts, updateTask } from "~/lib/db/hooks";
-import { shareTask, removeTaskShare, updateShareCategory } from "~/lib/actions";
+import { useCategories, useContacts, moveToList, updateTask } from "~/lib/db/hooks";
+import { placement } from "~/lib/effective-category";
+import { useCollaboratedCategoryIds } from "~/lib/hooks/use-collaborated-categories";
+import { shareTask, removeTaskShare } from "~/lib/actions";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import {
   Select,
@@ -28,30 +29,23 @@ const rowTrigger =
 
 type Person = { id: string; name: string };
 
-/**
- * Where this task is filed for the viewer: the owner files the task itself, someone it
- * was shared with files their share, and a collaborator in a shared list only sees it.
- */
+/** The list this task is in for the viewer, and the lists they can move it to. */
 export const useListFiling = (task: Task) => {
   const userId = useOptimisticUserId();
   const { data: categories = [] } = useCategories();
-  const myShare = task.shares.find((s) => s.sharedWithUserId === userId);
-  const mode = task.userId === userId ? "owner" : myShare ? "share" : "view";
-  const categoryId = mode === "share" ? (myShare?.categoryId ?? null) : task.categoryId;
+  const { mode, categoryId } = placement(task, userId, useCollaboratedCategoryIds(userId));
   const category = categories.find((c) => c.id === categoryId);
-  const choices = categories.filter((c) => c.userId === userId || c.id === task.categoryId);
-  const toastManager = Toast.useToastManager();
-  const fileShare = (id: string | null) =>
-    updateShareCategory(task.id, id).catch((err) => {
-      console.error("[share] filing failed:", err);
-      toastManager.add({ title: "Couldn't move it to that list. Try again." });
-    });
+  const mine = categories.filter((c) => c.userId === userId);
+  const choices = {
+    owner: categories.filter((c) => c.userId === userId || c === category),
+    share: mine,
+    list: [],
+  };
   return {
     mode,
     category,
-    choices: mode === "view" ? [] : choices.filter((c) => mode === "owner" || c.userId === userId),
-    move: (id: string | null) =>
-      mode === "share" ? void fileShare(id) : updateTask(task.id, { categoryId: id }),
+    choices: choices[mode],
+    move: (id: string | null) => moveToList(task, mode, id),
   };
 };
 
