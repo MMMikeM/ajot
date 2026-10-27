@@ -17,8 +17,7 @@
     "dev": "vp pack --watch --on-success \"node --env-file=../../.env.dev --enable-source-maps dist/index.js\"",
     "start": "node dist/index.js",
     "test": "vp test run",
-    "db:prepare": "node src/db/prepare-push.ts",
-    "db:push": "pnpm db:prepare && drizzle-kit push",
+    "db:migrate": "node --env-file-if-exists=../../.env.dev src/db/migrate.ts",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio"
   },

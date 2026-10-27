@@ -36,7 +36,7 @@ export default {
       project: ["src/**/*.{ts,tsx}"],
     },
   },
-  // drizzle.config.ts loads .env.dev, which only exists where db:push runs
+  // drizzle.config.ts loads .env.dev, which only exists where migrations are made
   drizzle: false,
   ignoreExportsUsedInFile: true,
   ignoreDependencies: [

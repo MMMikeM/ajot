@@ -20,16 +20,16 @@ turso db show --url todo        # TURSO_DATABASE_URL
 turso db tokens create todo     # TURSO_AUTH_TOKEN
 ```
 
-## 2. Push the schema
+## 2. Create the tables
 
 From a clone of this repo:
 
 ```sh
 pnpm install
-TURSO_DATABASE_URL=… TURSO_AUTH_TOKEN=… pnpm --filter @newtab-todo/server db:push
+TURSO_DATABASE_URL=… TURSO_AUTH_TOKEN=… pnpm db:migrate
 ```
 
-Run it again after pulling changes that touch `packages/server/src/db/schema.ts`.
+Run it again after pulling changes that add a migration under `packages/server/drizzle`. A database set up with the old `db:push` is picked up as it is: its tables count as the first migration.
 
 ## 3. Generate Web Push keys
 

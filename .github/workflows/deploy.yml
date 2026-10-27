@@ -50,11 +50,11 @@ jobs:
       # The extension's background and the PWA's worker, saving the lists for flight mode
       - run: pnpm test:e2e:background
 
-      # Once the suites pass, and only for a deploy, with the dependencies installed above. Without a
-      # TTY, a rename or data-loss change exits non-zero and stops the deploy; push those by hand.
-      - name: Push database schema
+      # Once the suites pass, and only for a deploy, with the dependencies installed above. A
+      # migration that fails rolls back and stops the deploy.
+      - name: Migrate the database
         if: github.event_name == 'push'
-        run: pnpm --filter @newtab-todo/server db:push --verbose
+        run: pnpm --filter @newtab-todo/server db:migrate
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
