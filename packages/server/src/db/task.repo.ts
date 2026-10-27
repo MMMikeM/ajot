@@ -90,6 +90,18 @@ const findById = async (id: string, { deleted = false } = {}) => {
   return row;
 };
 
+/** Who can reach the tasks in a list, and their subtasks. */
+const accessToList = async (categoryId: string) =>
+  db
+    .select()
+    .from(taskAccess)
+    .where(
+      sql`${taskAccess.taskId} IN (
+        SELECT id FROM tasks WHERE category_id = ${categoryId}
+        UNION SELECT s.id FROM tasks s JOIN tasks p ON p.id = s.parent_id
+        WHERE p.category_id = ${categoryId})`,
+    );
+
 /** Who can reach these tasks, and how far. */
 const accessTo = async (taskIds: string[]) =>
   taskIds.length === 0
@@ -284,6 +296,7 @@ export default {
   list,
   findById,
   accessTo,
+  accessToList,
   insert,
   insertSent,
   update,

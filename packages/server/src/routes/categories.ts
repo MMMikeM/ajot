@@ -11,10 +11,18 @@ import taskRepo from "../db/task.repo";
 import userRepo, { userPublicSchema } from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
 import { authed } from "../middleware";
-import { broadcast, broadcastAll, broadcastPerUser } from "../broadcast";
+import { broadcast, broadcastPerUser, type BroadcastEvent } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
+
+type TaskEvent = BroadcastEvent & { model: "tasks"; data: { id: string } };
+
+// Each task's event goes only to the people task_access says can reach it
+const toReach = (access: { taskId: string; userId: string }[], events: TaskEvent[]) =>
+  events.flatMap((event) =>
+    access.filter((a) => a.taskId === event.data.id).map((a) => ({ userId: a.userId, event })),
+  );
 
 const collaboratorSchema = z.object({ username: z.string().min(1) });
 const collaboratorIdSchema = z.object({ userId: z.string() });
@@ -56,15 +64,14 @@ export const categoryRoutes = authed()
       const { id, updatedAt, ...fields } = c.req.valid("json");
       const userId = c.get("userId");
 
-      const cat = await categoryRepo.findByIdWithCollaborators(id);
+      const [cat, memberIds] = await Promise.all([
+        categoryRepo.findById(id),
+        categoryRepo.memberIds(id),
+      ]);
       if (cat.userId !== userId) throw new HTTPException(403, { message: "Not authorized" });
-      const catUserIds = [
-        cat.userId,
-        ...cat.collaborators.flatMap((c) => (c.user ? [c.user.id] : [])),
-      ];
 
       const result = await categoryRepo.update(id, updatedAt, fields);
-      broadcast(c, "categories", "update", result, catUserIds);
+      broadcast(c, "categories", "update", result, memberIds);
       return c.json(result, 200);
     },
   )
@@ -83,19 +90,18 @@ export const categoryRoutes = authed()
       const { id, tasks: taskAction, taskIds } = c.req.valid("json");
       const userId = c.get("userId");
 
-      // findByIdWithCollaborators used (not findById) so we have userIds for broadcast
-      // before the row is deleted — after deletion we can't look up collaborators.
-      const cat = await categoryRepo.findByIdWithCollaborators(id);
+      // Read before the delete: afterwards the list reaches no one
+      const [cat, memberIds, reach] = await Promise.all([
+        categoryRepo.findById(id),
+        categoryRepo.memberIds(id),
+        taskRepo.accessToList(id),
+      ]);
       if (cat.userId !== userId) throw new HTTPException(403, { message: "Not authorized" });
-      const catUserIds = [
-        cat.userId,
-        ...cat.collaborators.flatMap((c) => (c.user ? [c.user.id] : [])),
-      ];
 
-      const { category, inCategory, deletedIds, movedTasks, unfiledShares } =
+      const { category, deletedIds, movedTasks, unfiledShares } =
         await categoryRepo.removeWithTasks(id, taskAction, taskIds);
 
-      const taskEvents = [
+      const taskEvents: TaskEvent[] = [
         ...deletedIds.map((taskId) => ({
           model: "tasks" as const,
           action: "delete" as const,
@@ -107,24 +113,8 @@ export const categoryRoutes = authed()
           data: task,
         })),
       ];
-      broadcastAll(
-        c,
-        [...taskEvents, { model: "categories", action: "delete", data: { id: category.id } }],
-        catUserIds,
-      );
-      // Task owners who have left the category, and people a task is shared with, hold the
-      // tasks but not the category
-      const outsideUserIds = [
-        ...new Set(
-          inCategory.flatMap((t) => [
-            t.userId,
-            ...t.subtasks.map((s) => s.userId),
-            ...t.shares.map((s) => s.sharedWithUserId),
-          ]),
-        ),
-      ].filter((uid) => !catUserIds.includes(uid));
-      if (taskEvents.length > 0 && outsideUserIds.length > 0)
-        broadcastAll(c, taskEvents, outsideUserIds);
+      broadcastPerUser(c, toReach(reach, taskEvents));
+      broadcast(c, "categories", "delete", { id: category.id }, memberIds);
 
       // Whoever filed a shared task here would otherwise keep seeing it under the deleted
       // category on their other devices
@@ -167,35 +157,20 @@ export const categoryRoutes = authed()
       );
       broadcast(c, "categories", "insert", category, memberIds);
 
-      // Each task goes only to the people who can see it, as the task list would send it
-      const backTasks = await taskRepo.findListItems([
-        ...restoredIds,
-        ...movedBack.map((t) => t.id),
+      const backIds = [...restoredIds, ...movedBack.map((t) => t.id)];
+      const [backTasks, reach] = await Promise.all([
+        taskRepo.findListItems(backIds),
+        taskRepo.accessTo(backIds),
       ]);
-      const viewers = new Map(
-        backTasks.map((t) => [
-          t.id,
-          [
-            t.userId,
-            ...t.shares.map((s) => s.sharedWithUserId),
-            ...(t.categoryId === id ? memberIds : []),
-          ],
-        ]),
-      );
-      // A subtask is seen by whoever sees its parent
-      const viewersOf = (t: (typeof backTasks)[number]) =>
-        new Set((t.parentId && viewers.get(t.parentId)) || viewers.get(t.id) || []);
       const back = new Set(backTasks.map((t) => t.id));
       const refiledTasks = await taskRepo.listSharesForTasks([
         ...new Set(refiled.filter((s) => !back.has(s.taskId)).map((s) => s.taskId)),
       ]);
       const sharesOf = new Map(refiledTasks.map((t) => [t.id, t.shares]));
       broadcastPerUser(c, [
-        ...backTasks.flatMap((task) =>
-          [...viewersOf(task)].map((userId) => ({
-            userId,
-            event: { model: "tasks" as const, action: "insert" as const, data: task },
-          })),
+        ...toReach(
+          reach,
+          backTasks.map((task) => ({ model: "tasks", action: "insert", data: task })),
         ),
         ...refiled
           .filter((s) => sharesOf.has(s.taskId))
