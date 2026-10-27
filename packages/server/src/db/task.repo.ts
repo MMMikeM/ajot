@@ -40,11 +40,24 @@ export const taskInsertSchema = createInsertSchema(tasks, {
 })
   .required({ id: true, createdAt: true, updatedAt: true })
   .omit({ deletedAt: true });
-// Deleting goes through DELETE; an update can only bring a deleted task back. Its owner and
-// parent are fixed: a task taken, planted in someone's Inbox or hung under theirs would be theirs.
+// The fields a client may change, so a column added later isn't editable until it's listed. Its
+// owner and parent are fixed: a task taken, planted in someone's Inbox or hung under theirs
+// would be theirs. Deleting goes through DELETE; an update can only bring a deleted task back.
 export const taskUpdateSchema = createUpdateSchema(tasks, { updatedAt: isoDatetime })
+  .pick({
+    id: true,
+    updatedAt: true,
+    title: true,
+    description: true,
+    status: true,
+    dueDate: true,
+    sortOrder: true,
+    categoryId: true,
+    assigneeId: true,
+    editedAt: true,
+    completedAt: true,
+  })
   .required({ id: true, updatedAt: true })
-  .omit({ createdAt: true, userId: true, parentId: true })
   .extend({ deletedAt: z.null().optional() })
   .strict();
 
