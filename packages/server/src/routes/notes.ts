@@ -60,7 +60,7 @@ export const noteRoutes = authed()
       }
       const result = await noteRepo.update(id, userId, updatedAt, fields);
       broadcast(c, "notes", "update", result, [userId]);
-      if (result.taskId) await markTaskEdited(c, result.taskId, userId, updatedAt);
+      await markTaskEdited(c, result.taskId, userId, updatedAt);
       return c.json(result, 200);
     },
   )

@@ -1,6 +1,5 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
-import { z } from "@hono/zod-openapi";
 import { db } from "./client";
 import { notes } from "./schema";
 import { ConflictError, NotFoundError, StaleUpdateError } from "./errors";
@@ -11,21 +10,15 @@ export type NoteSelect = typeof notes.$inferSelect;
 
 export const noteSelectSchema = createSelectSchema(notes).pick({ id: true });
 export const noteResponseSchema = createSelectSchema(notes);
-// A note always belongs to a task. The column stays nullable for notes from before, which
-// lost their task when it was deleted; the list leaves those out.
 export const noteInsertSchema = createInsertSchema(notes, {
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
-  taskId: z.string(),
 })
-  .required({ id: true, createdAt: true, updatedAt: true, taskId: true })
+  .required({ id: true, createdAt: true, updatedAt: true })
   .strict();
 // The fields a client may change. An edit sends only what changed, so it can leave out taskId,
 // but it can't clear it.
-export const noteUpdateSchema = createUpdateSchema(notes, {
-  updatedAt: isoDatetime,
-  taskId: z.string().optional(),
-})
+export const noteUpdateSchema = createUpdateSchema(notes, { updatedAt: isoDatetime })
   .pick({ id: true, updatedAt: true, title: true, content: true, taskId: true })
   .required({ id: true, updatedAt: true })
   .strict();
