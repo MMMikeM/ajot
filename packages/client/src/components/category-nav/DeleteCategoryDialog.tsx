@@ -53,13 +53,7 @@ export function DeleteCategoryDialog({
           <Button variant="ghost" intent="destructive" onClick={() => onConfirm("delete")}>
             Delete tasks
           </Button>
-          <Button
-            variant="ghost"
-            onClick={() => onConfirm("uncategorise")}
-            className="bg-primary-subtle text-primary hover:bg-primary-selected hover:text-primary"
-          >
-            Move to Inbox
-          </Button>
+          <Button onClick={() => onConfirm("uncategorise")}>Move to Inbox</Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

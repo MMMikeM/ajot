@@ -7,7 +7,7 @@ export function Highlight({ text, ranges }: Highlighted) {
   for (const [start, end] of ranges) {
     if (start > cursor) parts.push(text.slice(cursor, start));
     parts.push(
-      <mark key={start} className="rounded-[3px] bg-secondary px-px text-inherit">
+      <mark key={start} className="rounded-sm bg-secondary px-px text-inherit">
         {text.slice(start, end + 1)}
       </mark>,
     );

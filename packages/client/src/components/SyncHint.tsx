@@ -32,7 +32,8 @@ export function SyncHint() {
           localStorage.setItem(DISMISSED_KEY, String(Date.now() + DISMISS_DURATION_MS));
           setDismissed(true);
         }}
-        className="-mr-1.5 shrink-0 touch:size-8"
+        bleed="end"
+        className="shrink-0"
         aria-label="Dismiss"
       >
         <X />

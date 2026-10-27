@@ -81,8 +81,8 @@ spacing:
   row-x: "0.5rem"
 components:
   button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.primary-foreground}"
+    backgroundColor: "{colors.primary-subtle}"
+    textColor: "{colors.primary}"
     rounded: "{rounded.pill}"
     height: "2.25rem"
   button-subtle:
@@ -213,9 +213,9 @@ Flat at rest. Depth comes from tonal layering (background, then surface, surface
 ### Buttons
 
 - **Shape:** pill (`1.17rem`).
-- **Variants:** primary (green fill), outline, ghost (muted well on hover), subtle (hint text that brightens on hover) and link. A destructive intent recolours ghost and subtle buttons.
-- **Primary action with a text label** (Sign in, accept invite, add collaborator): the `primary-subtle` pill with `primary` text, as the touch add button uses. Light text on the solid `primary` fill measures about 3.2:1, under the Contrast Floor.
-- **Touch:** targets grow to 36–44px through `touch:` sizing rather than separate components.
+- **Variants:** primary (the default: a `primary-subtle` pill with `primary` text, as the touch add button uses; light text on the solid `primary` fill measures about 3.2:1, under the Contrast Floor), outline, ghost (muted well on hover), subtle (hint text that brightens on hover) and link. A destructive intent recolours ghost and subtle buttons.
+- **Touch:** the sizes carry their own touch sizing: `xs` is 36px with a 44px target around it, `sm` and `default` are 44px. Call sites don't add `touch:h-*`.
+- **Bleed:** `bleed="start"` or `"end"` pulls a text button out by its padding, so its label lines up with the column edge at both pointer sizes.
 
 ### Toggle Pills
 
