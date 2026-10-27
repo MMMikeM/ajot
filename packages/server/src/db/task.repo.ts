@@ -269,13 +269,14 @@ const insertShare = async (data: TaskShareInsert) => {
   return row;
 };
 
-// Someone else's share reads as missing, so its id can't be probed
-const removeShare = async (id: string, ownerId: string) => {
-  const ownedTaskIds = db.select({ id: tasks.id }).from(tasks).where(eq(tasks.userId, ownerId));
-  const [row] = await db
-    .delete(taskShares)
-    .where(and(eq(taskShares.id, id), inArray(taskShares.taskId, ownedTaskIds)))
-    .returning();
+const findShare = async (id: string) => {
+  const row = await db.query.taskShares.findFirst({ where: { id } });
+  if (!row) throw new NotFoundError("task share", id);
+  return row;
+};
+
+const removeShare = async (id: string) => {
+  const [row] = await db.delete(taskShares).where(eq(taskShares.id, id)).returning();
   if (!row) throw new NotFoundError("task share", id);
   return row;
 };
@@ -332,6 +333,7 @@ export default {
   findListItems,
   nextSortOrder,
   insertShare,
+  findShare,
   removeShare,
   updateShareCategory,
   listSharesForTasks,

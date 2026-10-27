@@ -7,24 +7,17 @@ import categoryRepo, {
   categoryResponseSchema,
 } from "../db/category.repo";
 import categoryCollaboratorRepo from "../db/category-collaborator.repo";
-import taskRepo, { type TaskAccessRow } from "../db/task.repo";
-import { audienceFrom } from "./task-users";
+import reachRepo from "../db/reach.repo";
+import { requireList } from "./task-users";
+import { sendReachChanges } from "./reach";
 import userRepo, { userPublicSchema } from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
+import { NotFoundError } from "../db/errors";
 import { authed } from "../middleware";
-import { broadcast, broadcastPerUser, type TaskEvent } from "../broadcast";
+import { broadcast } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
-
-// Each task's event goes only to the people task_access says can reach it, once each
-const toReach = (access: TaskAccessRow[], events: TaskEvent[]) => {
-  const byTask = new Map<string, TaskAccessRow[]>();
-  for (const row of access) byTask.set(row.taskId, [...(byTask.get(row.taskId) ?? []), row]);
-  return events.flatMap((event) =>
-    audienceFrom(byTask.get(event.data.id) ?? []).map((userId) => ({ userId, event })),
-  );
-};
 
 const collaboratorSchema = z.object({ username: z.string().min(1) });
 const collaboratorIdSchema = z.object({ userId: z.string() });
@@ -60,17 +53,17 @@ export const categoryRoutes = authed()
       responses: withAuth({
         200: jsonContent(categoryResponseSchema),
         403: jsonContent(errorSchema, "Forbidden"),
+        404: jsonContent(errorSchema, "Not found"),
       }),
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
       const userId = c.get("userId");
 
-      const [cat, memberIds] = await Promise.all([
-        categoryRepo.findById(id),
+      const [, memberIds] = await Promise.all([
+        requireList(id, userId, "manage"),
         categoryRepo.memberIds(id),
       ]);
-      if (cat.userId !== userId) throw new HTTPException(403, { message: "Not authorized" });
 
       const result = await categoryRepo.update(id, updatedAt, fields);
       broadcast(c, "categories", "update", result, memberIds);
@@ -86,49 +79,18 @@ export const categoryRoutes = authed()
         200: jsonContent(categoryResponseSchema),
         400: jsonContent(errorSchema, "Bad request"),
         403: jsonContent(errorSchema, "Forbidden"),
+        404: jsonContent(errorSchema, "Not found"),
       }),
     }),
     async (c) => {
       const { id, tasks: taskAction, taskIds } = c.req.valid("json");
-      const userId = c.get("userId");
-
-      // Read before the delete: afterwards the list reaches no one
-      const [cat, memberIds] = await Promise.all([
-        categoryRepo.findById(id),
-        categoryRepo.memberIds(id),
-      ]);
-      if (cat.userId !== userId) throw new HTTPException(403, { message: "Not authorized" });
-
-      const { category, deletedIds, movedTasks, unfiledShares, reach } =
-        await categoryRepo.removeWithTasks(id, taskAction, taskIds);
-
-      const taskEvents: TaskEvent[] = [
-        ...deletedIds.map((id): TaskEvent => ({ model: "tasks", action: "delete", data: { id } })),
-        ...movedTasks.map((task): TaskEvent => ({ model: "tasks", action: "update", data: task })),
-      ];
-      broadcastPerUser(c, toReach(reach, taskEvents));
-      broadcast(c, "categories", "delete", { id: category.id }, memberIds);
-
-      // Whoever filed a shared task here would otherwise keep seeing it under the deleted
-      // category on their other devices
-      const deleted = new Set(deletedIds);
-      const unfiled = unfiledShares.filter((s) => !deleted.has(s.taskId));
-      const unfiledTasks = await taskRepo.listSharesForTasks([
-        ...new Set(unfiled.map((s) => s.taskId)),
-      ]);
-      const sharesByTask = new Map(unfiledTasks.map((t) => [t.id, t.shares]));
-      broadcastPerUser(
-        c,
-        unfiled.map((s) => ({
-          userId: s.sharedWithUserId,
-          event: {
-            model: "tasks" as const,
-            action: "update" as const,
-            data: { id: s.taskId, shares: sharesByTask.get(s.taskId) ?? [] },
-          },
-        })),
+      await requireList(id, c.get("userId"), "manage");
+      const { category, before, changed } = await categoryRepo.removeWithTasks(
+        id,
+        taskAction,
+        taskIds,
       );
-
+      await sendReachChanges(c, before, changed);
       return c.json(category, 200);
     },
   )
@@ -144,39 +106,11 @@ export const categoryRoutes = authed()
     }),
     async (c) => {
       const { id } = c.req.param();
-      const { category, restoredIds, movedBack, refiled, memberIds } = await categoryRepo.restore(
-        id,
-        c.get("userId"),
-      );
-      broadcast(c, "categories", "insert", category, memberIds);
-
-      const backIds = [...restoredIds, ...movedBack.map((t) => t.id)];
-      const [backTasks, reach] = await Promise.all([
-        taskRepo.findListItems(backIds),
-        taskRepo.accessTo(backIds),
-      ]);
-      const back = new Set(backTasks.map((t) => t.id));
-      const refiledTasks = await taskRepo.listSharesForTasks([
-        ...new Set(refiled.filter((s) => !back.has(s.taskId)).map((s) => s.taskId)),
-      ]);
-      const sharesOf = new Map(refiledTasks.map((t) => [t.id, t.shares]));
-      broadcastPerUser(c, [
-        ...toReach(
-          reach,
-          backTasks.map((task) => ({ model: "tasks", action: "insert", data: task })),
-        ),
-        ...refiled
-          .filter((s) => sharesOf.has(s.taskId))
-          .map((s) => ({
-            userId: s.sharedWithUserId,
-            event: {
-              model: "tasks" as const,
-              action: "update" as const,
-              data: { id: s.taskId, shares: sharesOf.get(s.taskId) },
-            },
-          })),
-      ]);
-
+      await requireList(id, c.get("userId"), "manage", { deleted: true });
+      const { before, changed } = await categoryRepo.restore(id);
+      await sendReachChanges(c, before, changed);
+      const [category] = await categoryRepo.listByIds([id]);
+      if (!category) throw new NotFoundError("category", id);
       return c.json(category, 200);
     },
   )
@@ -187,14 +121,15 @@ export const categoryRoutes = authed()
       responses: withAuth({
         200: jsonContent(z.array(userPublicSchema)),
         403: jsonContent(errorSchema, "Forbidden"),
+        404: jsonContent(errorSchema, "Not found"),
       }),
     }),
     async (c) => {
       const { id } = c.req.param();
-      const userId = c.get("userId");
-
-      const cat = await categoryRepo.findByIdWithCollaborators(id);
-      if (cat.userId !== userId) throw new HTTPException(403, { message: "Not authorized" });
+      const [, cat] = await Promise.all([
+        requireList(id, c.get("userId"), "manage"),
+        categoryRepo.findByIdWithCollaborators(id),
+      ]);
 
       return c.json(
         cat.collaborators.flatMap((c) =>
@@ -222,6 +157,7 @@ export const categoryRoutes = authed()
         200: jsonContent(userPublicSchema),
         400: jsonContent(errorSchema, "Bad request"),
         403: jsonContent(errorSchema, "Forbidden"),
+        404: jsonContent(errorSchema, "Not found"),
       }),
     }),
     async (c) => {
@@ -230,12 +166,9 @@ export const categoryRoutes = authed()
       const { username } = c.req.valid("json");
 
       const [cat, targetUser] = await Promise.all([
-        categoryRepo.findById(id),
+        requireList(id, userId, "manage"),
         userRepo.findByUsername(username.toLowerCase()),
       ]);
-
-      if (cat.userId !== userId)
-        throw new HTTPException(403, { message: "Only the list's owner can share it." });
       if (targetUser.id === userId)
         throw new HTTPException(400, { message: "That's you. Choose someone else." });
 
@@ -245,7 +178,9 @@ export const categoryRoutes = authed()
           message: "You can only share lists with your contacts. Invite them first.",
         });
 
+      const before = await reachRepo.read({ listIds: [id] });
       await categoryCollaboratorRepo.add(id, targetUser.id);
+      await sendReachChanges(c, before);
 
       const actorName = await getUserName(userId);
       sendNotification(targetUser.id, {
@@ -273,20 +208,17 @@ export const categoryRoutes = authed()
       responses: withAuth({
         200: jsonContent(collaboratorIdSchema),
         403: jsonContent(errorSchema, "Forbidden"),
+        404: jsonContent(errorSchema, "Not found"),
       }),
     }),
     async (c) => {
       const { id, userId: targetUserId } = c.req.param();
       const userId = c.get("userId");
-      const isSelf = targetUserId === userId;
+      // A collaborator may leave; only the owner removes someone else
+      await requireList(id, userId, targetUserId === userId ? "use" : "manage");
 
-      const cat = await categoryRepo.findById(id);
-      if (cat.userId !== userId && !isSelf)
-        throw new HTTPException(403, { message: "Not authorized" });
-
-      await categoryCollaboratorRepo.remove(id, targetUserId);
-      // Notify the removed user so the category disappears from their collection
-      broadcast(c, "categories", "delete", { id }, [targetUserId]);
+      const { before, left } = await categoryCollaboratorRepo.remove(id, targetUserId);
+      await sendReachChanges(c, before, [...left.movedTaskIds, ...left.unfiledTaskIds]);
       return c.json({ userId: targetUserId }, 200);
     },
   );

@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { widest } from "@newtab-todo/shared/task-access";
 import taskRepo, { type TaskAccessRow } from "../db/task.repo";
+import categoryRepo from "../db/category.repo";
 import { ForbiddenError, NotFoundError } from "../db/errors";
 import { broadcast } from "../broadcast";
 
@@ -9,21 +10,43 @@ export const audienceFrom = (access: TaskAccessRow[]) =>
   widest(access).map((grant) => grant.userId);
 
 /**
- * The task, with the user's reach and everyone it reaches, if the user may do this to it. Someone
- * who can't see it gets the same 404 as for a task that doesn't exist, so its id can't be probed.
+ * The task, with the user's reach and everyone it reaches, if the user may do this to it: `manage`
+ * is its owner's alone, to delete, restore, move or share it. Someone who can't see it gets the
+ * same 404 as for a task that doesn't exist, so its id can't be probed.
  */
 export const requireTask = async (
   id: string,
   userId: string,
-  action: "see" | "edit" | "delete",
+  action: "see" | "edit" | "manage",
   { deleted = false } = {},
 ) => {
   const { task, access } = await taskRepo.findWithAccess(id, { deleted });
   const mine = widest(access).find((grant) => grant.userId === userId);
   if (!task || !mine) throw new NotFoundError("task", id);
-  if ((action === "edit" && !mine.canEdit) || (action === "delete" && !mine.canDelete))
+  if ((action === "edit" && !mine.canEdit) || (action === "manage" && !mine.canDelete))
     throw new ForbiddenError("Not authorized");
   return { task, mine, access, audience: audienceFrom(access) };
+};
+
+/**
+ * The list, if the user may do this to it: `use` is for its members, to add to it or leave it, and
+ * `manage` its owner's alone, to rename, delete, restore or share it. Someone not in it gets the
+ * same 404 as for a list that doesn't exist. A deleted list has no members, only its owner.
+ */
+export const requireList = async (
+  id: string,
+  userId: string,
+  action: "use" | "manage",
+  { deleted = false } = {},
+) => {
+  const [list, member] = await Promise.all([
+    categoryRepo.findById(id, { deleted }),
+    categoryRepo.canUse(id, userId),
+  ]);
+  const owns = list.userId === userId;
+  if (!owns && !member) throw new NotFoundError("category", id);
+  if (action === "manage" && !owns) throw new ForbiddenError("Only the list's owner can do that.");
+  return list;
 };
 
 /** Everyone a task reaches now, for a change that may have moved it. */
