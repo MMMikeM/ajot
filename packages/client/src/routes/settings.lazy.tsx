@@ -89,11 +89,11 @@ export function SettingsPage() {
           icon
           onClick={() => router.navigate({ to: "/" })}
           aria-label="Back to tasks"
-          className="-ml-2 touch:size-10"
+          bleed="start"
         >
           <ChevronLeft className="size-5" />
         </Button>
-        <h2 className="font-display text-[1.75rem] leading-tight text-foreground">Settings</h2>
+        <h2 className="font-display text-3xl text-foreground">Settings</h2>
       </div>
 
       {!isPwa ? (

@@ -198,7 +198,7 @@ function TaskRow({
       // Lifted while dragged, so it doesn't read as text floating over the rows below. Only the
       // dragged row's own: a parent's subtasks ride along inside its lift.
       className={cn(
-        "transition-[opacity,translate,scale] duration-150 ease-out [[data-dnd-dragging]>&]:-mx-2 [[data-dnd-dragging]>&]:scale-[1.02] [[data-dnd-dragging]>&]:rounded-lg [[data-dnd-dragging]>&]:bg-popover [[data-dnd-dragging]>&]:px-2 [[data-dnd-dragging]>&]:shadow-md motion-reduce:[[data-dnd-dragging]>&]:scale-100",
+        "transition-[opacity,translate,scale] duration-150 ease-out [[data-dnd-dragging]>&]:-mx-2 [[data-dnd-dragging]>&]:scale-102 [[data-dnd-dragging]>&]:rounded-lg [[data-dnd-dragging]>&]:bg-popover [[data-dnd-dragging]>&]:px-2 [[data-dnd-dragging]>&]:shadow-md motion-reduce:[[data-dnd-dragging]>&]:scale-100",
         leaving && !isDone && "translate-y-1 opacity-0 ease-in motion-reduce:translate-y-0",
       )}
     >
@@ -213,10 +213,10 @@ function TaskRow({
         data-entering={entering || undefined}
         className={cn(
           "-mx-2",
-          entering && "animate-[task-enter_200ms_ease-out] motion-reduce:animate-none",
+          entering && "animate-task-enter motion-reduce:animate-none",
           swipeEnabled && "group/swipe relative overflow-hidden rounded-lg",
           // A long press drags the row, so iOS mustn't select its text or show the callout first
-          dragHandleRef && "touch:select-none touch:[-webkit-touch-callout:none]",
+          dragHandleRef && "touch:select-none touch:touch-callout-none",
         )}
       >
         {swipeEnabled && (
@@ -285,7 +285,7 @@ function TaskRow({
             aria-label={task.title}
             // Pinned to the first line of the title, which can wrap
             className={cn(
-              "mt-1 touch:mt-[3px] touch:size-[18px] touch:after:-inset-3",
+              "mt-1 touch:mt-0.75 touch:size-4.5 touch:after:-inset-3",
               isSubtask && "mt-0.5 touch:mt-px",
               isDone && checkboxDoneClass,
               readyToTick && "border-primary",
@@ -404,7 +404,7 @@ function TaskRow({
         <FlipList list={subtaskListRef} arrivals>
           <div
             ref={subtaskListRef}
-            className="mt-1 ml-2 border-l border-ghost pl-[15px] touch:pl-[19px]"
+            className="mt-1 ml-2 border-l border-ghost pl-3.75 touch:pl-4.75"
           >
             {openSubtasks.map((sub, index) => (
               <SortableSubtask

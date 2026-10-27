@@ -141,7 +141,7 @@ const AuthView = () => {
     <div className="flex flex-col items-center justify-start pt-[20vh] pb-16 touch:flex-1 touch:overflow-y-auto touch:pt-[12vh] touch:pb-10">
       <div className="w-full max-w-xs touch:max-w-none">
         <div className="mb-8 flex flex-col gap-2">
-          <h2 className="font-display text-[1.75rem] leading-tight text-balance text-foreground">
+          <h2 className="font-display text-3xl text-balance text-foreground">
             {mode === "login"
               ? "Sign in to sync across devices"
               : inviterName
@@ -242,12 +242,7 @@ const AuthView = () => {
           )}
           <div className="mt-1 flex flex-col gap-2">
             {/* Not the solid primary fill: its text falls under 4.5:1 */}
-            <Button
-              type="submit"
-              variant="ghost"
-              className="w-full bg-primary-subtle text-primary hover:bg-primary-selected hover:text-primary touch:h-11"
-              disabled={form.state.isSubmitting}
-            >
+            <Button type="submit" className="w-full" disabled={form.state.isSubmitting}>
               {form.state.isSubmitting
                 ? mode === "login"
                   ? "Signing in…"
@@ -262,7 +257,7 @@ const AuthView = () => {
                   type="button"
                   variant="subtle"
                   size="xs"
-                  className="touch:h-10 touch:text-sm"
+                  className="touch:text-sm"
                   onClick={() => {
                     setMode(mode === "login" ? "signup" : "login");
                     form.reset();
@@ -276,7 +271,7 @@ const AuthView = () => {
                 type="button"
                 variant="subtle"
                 size="xs"
-                className="touch:h-10 touch:text-sm"
+                className="touch:text-sm"
                 onClick={() => router.navigate({ to: "/" })}
               >
                 Skip

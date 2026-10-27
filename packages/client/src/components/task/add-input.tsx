@@ -58,7 +58,7 @@ export function AddTaskInput({ onAdd }: { onAdd: (title: string) => void }) {
         className={cn(
           // inset-y-0 + my-auto rather than a translate: Button nudges translate-y on :active
           // after: 44px touch target
-          "absolute inset-y-0 right-0 my-auto hidden rounded-full bg-primary-subtle text-primary transition-[opacity,scale] duration-150 after:absolute after:-inset-1.5 active:bg-primary-selected touch:inline-flex",
+          "absolute inset-y-0 right-0 my-auto hidden rounded-full transition-[opacity,scale] duration-150 after:absolute after:-inset-1.5 touch:inline-flex touch:size-8",
           !hasText && "pointer-events-none scale-75 opacity-0",
         )}
       >

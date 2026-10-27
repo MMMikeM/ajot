@@ -10,10 +10,6 @@ export const Route = createLazyFileRoute("/invite/$token")({
   component: InviteAcceptPage,
 });
 
-// Not the solid primary fill: its text falls under 4.5:1
-const primaryPill =
-  "w-full bg-primary-subtle text-primary hover:bg-primary-selected hover:text-primary touch:h-11";
-
 export function InviteAcceptPage() {
   const { token } = Route.useParams();
   const router = useRouter();
@@ -48,7 +44,7 @@ export function InviteAcceptPage() {
   return (
     <div className="flex flex-col items-center justify-start pt-[20vh] pb-16 touch:flex-1 touch:overflow-y-auto touch:pt-[12vh] touch:pb-10">
       <div className="flex w-full max-w-xs flex-col gap-8 touch:max-w-none">
-        <h2 className="font-display text-[1.75rem] leading-tight text-balance text-foreground">
+        <h2 className="font-display text-3xl text-balance text-foreground">
           {isSuccess
             ? inviterName
               ? `You're connected with ${inviterName}.`
@@ -58,11 +54,7 @@ export function InviteAcceptPage() {
               : "You're invited to share tasks and lists."}
         </h2>
         {isSuccess ? (
-          <Button
-            variant="ghost"
-            className={primaryPill}
-            onClick={() => router.navigate({ to: "/people" })}
-          >
+          <Button className="w-full" onClick={() => router.navigate({ to: "/people" })}>
             Go to People
             <ArrowRight data-icon="inline-end" />
           </Button>
@@ -76,13 +68,13 @@ export function InviteAcceptPage() {
                 {errorMsg}
               </div>
             )}
-            <Button variant="ghost" className={primaryPill} onClick={accept} disabled={isPending}>
+            <Button className="w-full" onClick={accept} disabled={isPending}>
               {isPending ? "Accepting…" : "Accept invite"}
             </Button>
             <Button
               variant="subtle"
               size="xs"
-              className="self-center touch:h-10 touch:text-sm"
+              className="self-center touch:text-sm"
               onClick={() => router.navigate({ to: "/" })}
             >
               Not now
