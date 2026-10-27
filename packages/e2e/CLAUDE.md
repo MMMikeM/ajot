@@ -25,9 +25,9 @@ Playwright test suite. Two projects: `desktop` (Chrome) runs every spec, and `mo
 | File            | What it exports                                                                                               |
 | --------------- | ------------------------------------------------------------------------------------------------------------- |
 | `users.ts`      | `USER_1`, `USER_2` — dedicated e2e accounts (Alice / Bob)                                                     |
-| `stack.ts`      | `API_PORT`, `CLIENT_PORT`, `BASE_URL` — where the suite finds the app                                         |
+| `stack.ts`      | `API_PORT`, `CLIENT_PORT`, `BASE_URL`, `API_URL` — where the suite finds the app                              |
 | `auth.ts`       | `getOrCreateUser(user, inviter?)` — login, or signup (invited) on first run; `signIn(page, auth)`             |
-| `api.ts`        | `apiRequest()` (throws on a refusal), `send()` (returns it); `newTask`/`newNote`/`newList` rows; `addTask`, `addNote`, `addList`, `shareTask`, `addCollaborator`, `tasksOf`, `notesOf`; `deleteAllTasksInCategory` |
+| `api.ts`        | `apiRequest` throws on a refusal, `send` returns it; `newTask`, `addTask` and kin; `tasksOf`, `notesOf`       |
 | `app.ts`        | `waitForAppReady`, `createTask`, `createCategory`, `clearLocalStorage`, `clearIDB`                            |
 | `sync.ts`       | `createSyncTracker(page)` — tracks non-GET `/api/*` mutations, exposes `waitForSync()` + `assertNoFailures()` |
 | `screenshot.ts` | `takeScreenshot`, `forBothViewports`, `reportViolations` — used by the screenshot script                      |
