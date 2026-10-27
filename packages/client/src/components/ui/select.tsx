@@ -87,7 +87,7 @@ const SelectContent = ({
     <SelectPrimitive.Popup
       data-slot="select-popup"
       className={cn(
-        "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-border bg-popover",
+        "z-50 max-h-(--available-height) min-w-[8rem] overflow-y-auto rounded-lg border border-border bg-popover",
         "p-1 text-popover-foreground shadow-lg outline-none",
         "transition-[opacity,translate] duration-150",
         "data-[starting-style]:-translate-y-1 data-[starting-style]:opacity-0",
