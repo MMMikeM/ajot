@@ -18,7 +18,7 @@ Before starting, read the reference docs in this skill directory:
 
 - **Driver**: `@tursodatabase/serverless` (HTTP client for Turso). `@libsql/client` is not a dependency; don't reintroduce it.
 - **ORM import**: `drizzle-orm/tursodatabase-serverless`
-- **Client**: `packages/server/src/db/client.ts` exports `db` (one shared connection, reads retried once on transport failures by `db/retry.ts`) and `inTransaction()`. Use `inTransaction(async (tx) => …)`, never `db.transaction`: a connection is one Turso session, so a transaction on the shared one would take in statements from concurrent requests.
+- **Client**: `packages/server/src/db/client.ts` exports `db` (SELECTs on three reader connections, everything else on one, retried as `db/connection.ts` says) and `inTransaction()`. Use `inTransaction(async (tx) => …)`, never `db.transaction`, which throws: a connection is one Turso session, so a transaction on a shared one would take in statements from concurrent requests, and its reads would run on the readers, outside it.
 - **Schema column imports**: `drizzle-orm/sqlite-core`
 - **Config dialect**: `turso`
 - **Env vars**: `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`
