@@ -16,6 +16,7 @@ import { TaskRowsSkeleton } from "./rows-skeleton";
 import { finishStartup } from "~/lib/startup-timing";
 import { useTaskActions } from "./use-actions";
 import { handOffRowFocus } from "./focus-handoff";
+import { revealPendingRow } from "./reveal-added";
 import { rowDragSensors } from "./row-drag";
 import { useTaskActions as useDndActions } from "~/lib/hooks/use-task-actions";
 import { canDeleteTask } from "@newtab-todo/shared/task-access";
@@ -319,6 +320,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   const isLoading =
     tasksLoading || categoriesLoading || allTasks === undefined || rawCategories === undefined;
   const hasRows = !!allTasks?.length;
+  useEffect(() => revealPendingRow(activeListRef.current));
   useEffect(() => {
     if (hasRows) finishStartup("tasks-shown");
     else if (!isLoading) finishStartup("list-ready");

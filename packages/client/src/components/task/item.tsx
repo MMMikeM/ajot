@@ -6,6 +6,7 @@ import {
   type ComponentProps,
   type CSSProperties,
   type RefCallback,
+  type RefObject,
 } from "react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import type { Task } from "~/lib/types";
@@ -48,6 +49,27 @@ const hoverActionsWidth = (count: number) =>
 // existed appear at once, so loading, switching lists or opening Done shows them without a fade.
 const ENTER_WINDOW_MS = 3000;
 const isJustCreated = (task: Task) => Date.now() - Date.parse(task.createdAt) < ENTER_WINDOW_MS;
+
+// Held at its first frame until the row is mostly on screen: a task added at the end of a long list
+// is scrolled to, and one arriving off-screen would otherwise finish its entrance unseen
+const useSeen = (ref: RefObject<HTMLElement | null>, watching: boolean) => {
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!watching || !el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setSeen(true);
+        observer.disconnect();
+      },
+      { threshold: 0.75 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, watching]);
+  return seen;
+};
 
 const listNames = new Intl.ListFormat(undefined, { type: "conjunction" });
 
@@ -145,6 +167,7 @@ function TaskRow({
     isOpen: isSwipeOpen,
     close: closeSwipe,
   } = useSwipeReveal(!IS_TOUCH || !!isSubtask, swipeHint);
+  const enterSeen = useSeen(containerRef, entering);
   const swipeEnabled = IS_TOUCH && !isSubtask;
 
   const openPicker = () => dateRef.current?.showPicker();
@@ -196,9 +219,10 @@ function TaskRow({
     <div
       data-task-id={task.id}
       // Lifted while dragged, so it doesn't read as text floating over the rows below. Only the
-      // dragged row's own: a parent's subtasks ride along inside its lift.
+      // dragged row's own: a parent's subtasks ride along inside its lift. The scroll margin keeps a
+      // row scrolled into view clear of the touch list's bottom edge fade.
       className={cn(
-        "transition-[opacity,translate,scale] duration-150 ease-out [[data-dnd-dragging]>&]:-mx-2 [[data-dnd-dragging]>&]:scale-[1.02] [[data-dnd-dragging]>&]:rounded-lg [[data-dnd-dragging]>&]:bg-popover [[data-dnd-dragging]>&]:px-2 [[data-dnd-dragging]>&]:shadow-md motion-reduce:[[data-dnd-dragging]>&]:scale-100",
+        "scroll-mb-8 transition-[opacity,translate,scale] duration-150 ease-out [[data-dnd-dragging]>&]:-mx-2 [[data-dnd-dragging]>&]:scale-[1.02] [[data-dnd-dragging]>&]:rounded-lg [[data-dnd-dragging]>&]:bg-popover [[data-dnd-dragging]>&]:px-2 [[data-dnd-dragging]>&]:shadow-md motion-reduce:[[data-dnd-dragging]>&]:scale-100",
         leaving && !isDone && "translate-y-1 opacity-0 ease-in motion-reduce:translate-y-0",
       )}
     >
@@ -214,6 +238,7 @@ function TaskRow({
         className={cn(
           "-mx-2",
           entering && "animate-[task-enter_200ms_ease-out] motion-reduce:animate-none",
+          entering && !enterSeen && "[animation-play-state:paused]",
           swipeEnabled && "group/swipe relative overflow-hidden rounded-lg",
           // A long press drags the row, so iOS mustn't select its text or show the callout first
           dragHandleRef && "touch:select-none touch:[-webkit-touch-callout:none]",
