@@ -17,7 +17,7 @@ import { Calendar, Plus, Users, X } from "lucide-react";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { useSwipeReveal } from "~/lib/hooks/use-swipe-reveal";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
-import { canDeleteTask } from "~/lib/task-permissions";
+import { canDeleteTask } from "@newtab-todo/shared/task-access";
 import { isReadyToTick } from "~/lib/ready-to-tick";
 import { rowDragSensors } from "./row-drag";
 import { formatDueDate } from "~/lib/due-date";
@@ -117,7 +117,7 @@ function TaskRow({
   const hasMeta = showDate || hasShareChip || !!task.assignee;
   const canSetDate = !isDone && !showDate;
   const canAddSubtask = !isSubtask && !isDone;
-  const canDelete = canDeleteTask(currentUserId, task, parent);
+  const canDelete = canDeleteTask({ ...task, parent }, currentUserId);
   const hoverActionCount = Number(canSetDate) + Number(canAddSubtask) + Number(canDelete);
   const dateRef = useRef<HTMLInputElement>(null);
   const [entering] = useState(() => isJustCreated(task));

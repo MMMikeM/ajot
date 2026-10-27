@@ -18,7 +18,7 @@ import { useTaskActions } from "./use-actions";
 import { handOffRowFocus } from "./focus-handoff";
 import { rowDragSensors } from "./row-drag";
 import { useTaskActions as useDndActions } from "~/lib/hooks/use-task-actions";
-import { canDeleteTask } from "~/lib/task-permissions";
+import { canDeleteTask } from "@newtab-todo/shared/task-access";
 import type { Task } from "~/lib/types";
 
 const DONE_OPEN_KEY = "newtab-todo-done-open";
@@ -331,7 +331,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   // Deleting a task deletes its subtasks, so one still holding open work stays
   const clearableDoneTasks = doneTasks.filter(
     (t) =>
-      canDeleteTask(userId, t) &&
+      canDeleteTask(t, userId) &&
       (subtasksByParent.get(t.id) ?? NO_SUBTASKS).every((sub) => sub.status === "done"),
   );
 

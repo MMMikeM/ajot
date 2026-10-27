@@ -27,7 +27,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Textarea } from "~/components/ui/field";
 import { cn } from "~/lib/utils";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
-import { canDeleteTask } from "~/lib/task-permissions";
+import { canDeleteTask } from "@newtab-todo/shared/task-access";
 import { isReadyToTick } from "~/lib/ready-to-tick";
 import { useTasks } from "~/lib/db/hooks";
 import { useTaskActions } from "~/components/task/use-actions";
@@ -347,7 +347,7 @@ const TaskDetailContent = ({
             <Plus className={cn("transition-transform", offering && "rotate-45")} />
             Add
           </Button>
-          {canDeleteTask(userId, task, parent) && (
+          {canDeleteTask({ ...task, parent }, userId) && (
             <Button
               variant="subtle"
               intent="destructive"

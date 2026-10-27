@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { audience, canDeleteTask, canEditTask, canSeeTask } from "./task-access";
+import { audience, canDeleteTask, canEditTask, canSeeTask } from "@newtab-todo/shared/task-access";
 
 const owner = "alice";
 const other = "bob";

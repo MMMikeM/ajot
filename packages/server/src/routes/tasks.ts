@@ -20,7 +20,7 @@ import notificationQueueRepo from "../db/notification-queue.repo";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
 import { markTaskEdited, requireTask } from "./task-users";
-import { audience, canDeleteTask } from "../task-access";
+import { audience, canDeleteTask } from "@newtab-todo/shared/task-access";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 
 const shareSchema = z.object({

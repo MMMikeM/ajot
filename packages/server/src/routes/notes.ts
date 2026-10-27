@@ -11,7 +11,7 @@ import { jsonBody, jsonContent, withAuth } from "./crud";
 import { markTaskEdited } from "./task-users";
 import taskRepo from "../db/task.repo";
 import { NotFoundError } from "../db/errors";
-import { canSeeTask } from "../task-access";
+import { canSeeTask } from "@newtab-todo/shared/task-access";
 
 // A deleted task still takes notes: they're hidden with it and come back when it's restored
 const findTask = (taskId: string) => taskRepo.findByIdWithAccess(taskId, { deleted: true });
