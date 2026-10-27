@@ -66,7 +66,7 @@ test.describe("which lists and tasks you can add to or edit", () => {
     const parent = await addTaskAs(user1Auth.token);
     expect(
       await status("POST", "/api/tasks", newTask({ parentId: parent.id }), user2Auth.token),
-    ).toBe(403);
+    ).toBe(404);
   });
 
   test("a subtask under a task shared with you", async ({ user1Auth, user2Auth }) => {
@@ -109,7 +109,7 @@ test.describe("which lists and tasks you can add to or edit", () => {
         { id: theirs.id, status: "done", updatedAt: now() },
         user2Auth.token,
       ),
-    ).toBe(403);
+    ).toBe(404);
   });
 
   test("not moving your task into someone else's list", async ({ user1Auth, user2Auth }) => {

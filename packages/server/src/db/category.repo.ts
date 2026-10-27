@@ -105,14 +105,18 @@ const findByIdWithCollaborators = async (id: string) => {
 };
 
 /** Whether the user may file tasks in this list: they own it or collaborate on it. */
-const canUse = async (id: string, userId: string) => {
-  const row = await db.query.categories.findFirst({
+/** A list's owner and collaborators, or undefined for one that's gone. */
+const findMembers = async (id: string) =>
+  db.query.categories.findFirst({
     where: { ...live, id },
     columns: { userId: true },
     with: { collaborators: { columns: { userId: true } } },
   });
-  return !!row && (row.userId === userId || row.collaborators.some((c) => c.userId === userId));
-};
+
+export const isMember = (list: Awaited<ReturnType<typeof findMembers>>, userId: string) =>
+  !!list && (list.userId === userId || list.collaborators.some((c) => c.userId === userId));
+
+const canUse = async (id: string, userId: string) => isMember(await findMembers(id), userId);
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
 // An id someone else's list already has updates nothing, so their list isn't sent back.
@@ -302,6 +306,7 @@ export default {
   findById,
   findByIdWithCollaborators,
   canUse,
+  findMembers,
   insert,
   update,
   removeWithTasks,
