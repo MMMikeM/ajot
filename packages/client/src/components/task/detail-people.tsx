@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Toast } from "@base-ui/react/toast";
 import { Link } from "@tanstack/react-router";
 import { UserRound, Users } from "lucide-react";
 import type { Task, Category } from "~/lib/types";
-import { useCategories, useContacts, updateTask } from "~/lib/db/hooks";
-import { shareTask, removeTaskShare, updateShareCategory } from "~/lib/actions";
+import { useCategories, useContacts, updateTask, fileShare } from "~/lib/db/hooks";
+import { filingMode } from "~/lib/task-permissions";
+import { shareTask, removeTaskShare } from "~/lib/actions";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import {
   Select,
@@ -35,23 +35,17 @@ type Person = { id: string; name: string };
 export const useListFiling = (task: Task) => {
   const userId = useOptimisticUserId();
   const { data: categories = [] } = useCategories();
+  const mode = filingMode(userId, task);
   const myShare = task.shares.find((s) => s.sharedWithUserId === userId);
-  const mode = task.userId === userId ? "owner" : myShare ? "share" : "view";
   const categoryId = mode === "share" ? (myShare?.categoryId ?? null) : task.categoryId;
   const category = categories.find((c) => c.id === categoryId);
   const choices = categories.filter((c) => c.userId === userId || c.id === task.categoryId);
-  const toastManager = Toast.useToastManager();
-  const fileShare = (id: string | null) =>
-    updateShareCategory(task.id, id).catch((err) => {
-      console.error("[share] filing failed:", err);
-      toastManager.add({ title: "Couldn't move it to that list. Try again." });
-    });
   return {
     mode,
     category,
     choices: mode === "view" ? [] : choices.filter((c) => mode === "owner" || c.userId === userId),
     move: (id: string | null) =>
-      mode === "share" ? void fileShare(id) : updateTask(task.id, { categoryId: id }),
+      mode === "share" ? fileShare(task.id, id) : updateTask(task.id, { categoryId: id }),
   };
 };
 

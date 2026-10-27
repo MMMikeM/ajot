@@ -21,7 +21,7 @@ import notificationQueueRepo from "../db/notification-queue.repo";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
 import { markTaskEdited, taskUserIds } from "./task-users";
-import { canEditTask } from "../task-access";
+import { canDeleteTask, canEditTask } from "../task-access";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 
 const shareSchema = z.object({
@@ -131,11 +131,13 @@ export const taskRoutes = authed()
         fields.categoryId ? categoryRepo.canUse(fields.categoryId, userId) : Promise.resolve(true),
       ]);
 
-      const isOwner = task.userId === userId || task.parent?.userId === userId;
       if (!canEditTask(task, userId)) throw new HTTPException(403, { message: "Not authorized" });
       if (!isContact)
         throw new HTTPException(400, { message: "You can only assign tasks to your contacts." });
       if (!canUseList) throw new HTTPException(403, { message: "That list isn't yours." });
+      // A subtask goes wherever its parent is; a list of its own would add that list's people
+      if (fields.categoryId && task.parentId)
+        throw new HTTPException(400, { message: "A subtask moves with its parent." });
       // Moved into a list its owner can't open, the task would vanish for them
       if (
         fields.categoryId &&
@@ -144,7 +146,8 @@ export const taskRoutes = authed()
       )
         throw new HTTPException(403, { message: "That list isn't the task owner's." });
       // As with deleting, only the owner can bring a task back
-      if (restoring && !isOwner) throw new HTTPException(403, { message: "Not authorized" });
+      if (restoring && !canDeleteTask(task, userId))
+        throw new HTTPException(403, { message: "Not authorized" });
 
       if (restoring) {
         const result = await taskRepo.restore(id, updatedAt);
@@ -236,8 +239,7 @@ export const taskRoutes = authed()
       const userId = c.get("userId");
 
       const task = await taskRepo.findByIdWithAccess(id, userId);
-      const isOwner = task.userId === userId || task.parent?.userId === userId;
-      if (!isOwner) throw new HTTPException(403, { message: "Not authorized" });
+      if (!canDeleteTask(task, userId)) throw new HTTPException(403, { message: "Not authorized" });
 
       const { task: removed, subtaskIds } = await taskRepo.remove(id);
       broadcastAll(

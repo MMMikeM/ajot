@@ -162,6 +162,21 @@ const restoreTasksAndNotes = async ({
     await (m.collection === notesCollection ? syncNote(m) : restoreTask(m));
 };
 
+export type ShareFilingMetadata = { taskId: string; categoryId: string | null };
+
+// Filing changes the recipient's share, not the task, so it has an endpoint of its own
+const fileShare = async ({
+  transaction,
+}: {
+  transaction: { metadata: Record<string, unknown> };
+}) => {
+  assertSignedIn();
+  const { taskId, categoryId } = transaction.metadata as ShareFilingMetadata;
+  console.log(`[sync:tasks] file share → task=${taskId} list=${categoryId}`);
+  await assertOk(await client.api.tasks.share.$put({ json: { taskId, categoryId } }));
+  await tasksCollection.utils.refetch();
+};
+
 export type CategoryDeleteMetadata = {
   categoryId: string;
   tasks: CategoryTaskAction;
@@ -217,6 +232,7 @@ export const offline = startOfflineExecutor({
     syncNotes: syncEach(syncNote),
     deleteTask: deleteTaskWithSubtasks,
     restoreTasks: restoreTasksAndNotes,
+    fileShare,
     deleteCategory: deleteCategoryWithTasks,
     restoreCategory: restoreCategoryWithTasks,
   },
