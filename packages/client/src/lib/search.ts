@@ -1,5 +1,6 @@
 import { createFuzzySearch, SCORES, type HighlightRanges, type MatchResult } from "ekrina";
 import { getEffectiveCategoryId } from "~/lib/effective-category";
+import { categoriesById } from "~/lib/task-holders";
 import type { Category, Note, Task } from "~/lib/types";
 
 export type Highlighted = { text: string; ranges: HighlightRanges };
@@ -60,26 +61,25 @@ export const searchTasks = ({
   notes,
   categories,
   userId,
-  collaboratedCategoryIds,
 }: {
   query: string;
   tasks: Task[];
   notes: Note[];
   categories: Category[];
   userId: string;
-  collaboratedCategoryIds: Set<string>;
 }): SearchResults => {
   const q = query.trim();
   if (q.length < 2) return NO_RESULTS;
 
   const byId = new Map(tasks.map((t) => [t.id, t]));
+  const lists = categoriesById(categories);
   // Only what the lists show: a subtask files under its parent, and a task in none of this
   // user's lists is left out, as the lists leave it out
   const listOf = new Map<string, string | null>();
   for (const task of tasks) {
     const top = task.parentId ? byId.get(task.parentId) : task;
     if (!top) continue;
-    const listId = getEffectiveCategoryId(top, userId, collaboratedCategoryIds);
+    const listId = getEffectiveCategoryId(top, userId, lists);
     if (listId !== undefined) listOf.set(task.id, listId);
   }
   const visible = tasks.filter((t) => listOf.has(t.id));

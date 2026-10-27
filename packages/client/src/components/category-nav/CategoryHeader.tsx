@@ -3,7 +3,7 @@ import { useCategories, useTasks } from "~/lib/db/hooks";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { useActiveCategoryId } from "~/lib/state/active-category";
 import { useNavContext } from "~/lib/state/nav-context";
-import { useCollaboratedCategoryIds } from "~/lib/hooks/use-collaborated-categories";
+import { categoriesById } from "~/lib/task-holders";
 import { countOpenTasksByCategory } from "~/lib/effective-category";
 import { INBOX_COLOR } from "~/lib/constants";
 import { useIsDesk } from "~/lib/hooks/use-is-desk";
@@ -16,16 +16,14 @@ export function CategoryHeader() {
   const userId = useOptimisticUserId();
   const { data: categories } = useCategories();
   const { data: tasks } = useTasks();
-  const collaboratedCategoryIds = useCollaboratedCategoryIds(userId);
   const { setNavOpen } = useNavContext();
   const isDesk = useIsDesk();
 
   const active = activeCategoryId
     ? (categories ?? []).find((c) => c.id === activeCategoryId)
     : undefined;
-  const openCount =
-    countOpenTasksByCategory(tasks ?? [], userId, collaboratedCategoryIds).get(activeCategoryId) ??
-    0;
+  const lists = categoriesById(categories ?? []);
+  const openCount = countOpenTasksByCategory(tasks ?? [], userId, lists).get(activeCategoryId) ?? 0;
 
   // On touch nothing else shows the full name, so it wraps; the dot, chevron and count
   // sit on its first line, a 2.1875rem line box

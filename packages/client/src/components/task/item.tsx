@@ -18,6 +18,7 @@ import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { useSwipeReveal } from "~/lib/hooks/use-swipe-reveal";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { canDeleteTask } from "@newtab-todo/shared/task-access";
+import { holders, type CategoriesById } from "~/lib/task-holders";
 import { isReadyToTick } from "~/lib/ready-to-tick";
 import { rowDragSensors } from "./row-drag";
 import { formatDueDate } from "~/lib/due-date";
@@ -79,6 +80,7 @@ function TaskRow({
   onSetDueDate,
   onAddSubtask,
   subtasks = [],
+  lists,
   parent,
   hideDate,
   isSubtask,
@@ -93,6 +95,7 @@ function TaskRow({
   onSetDueDate: (task: Task, date: string | null) => void;
   onAddSubtask: (task: Task, title: string) => void;
   subtasks?: Task[];
+  lists: CategoriesById;
   parent?: Task;
   hideDate?: boolean;
   isSubtask?: boolean;
@@ -117,7 +120,7 @@ function TaskRow({
   const hasMeta = showDate || hasShareChip || !!task.assignee;
   const canSetDate = !isDone && !showDate;
   const canAddSubtask = !isSubtask && !isDone;
-  const canDelete = canDeleteTask({ ...task, parent }, currentUserId);
+  const canDelete = canDeleteTask(holders(task, lists, parent), currentUserId);
   const hoverActionCount = Number(canSetDate) + Number(canAddSubtask) + Number(canDelete);
   const dateRef = useRef<HTMLInputElement>(null);
   const [entering] = useState(() => isJustCreated(task));
@@ -410,6 +413,7 @@ function TaskRow({
                 // Done rows aren't sortable, and neither is what's under them
                 disabled={isDone}
                 task={sub}
+                lists={lists}
                 parent={task}
                 isSubtask
                 onOpen={onOpen}
@@ -464,16 +468,27 @@ function TaskRow({
 const sameRows = (a: Task[] | undefined, b: Task[] | undefined) =>
   a === b || (!!a && !!b && a.length === b.length && a.every((t, i) => t === b[i]));
 
+const sameLists = (a: CategoriesById | undefined, b: CategoriesById | undefined) =>
+  a === b || (!!a && !!b && a.size === b.size && [...a].every(([id, list]) => b.get(id) === list));
+
 /**
- * Props unchanged, with a list's subtasks compared by their rows: the list builds those arrays
- * again on every edit, and a row that compared them by identity would render with every other row.
+ * Props unchanged, with a list's subtasks and the lists compared by their rows: the list builds
+ * those again on every render, and a row that compared them by identity would render with every
+ * other row.
  */
-export const sameRowProps = <P extends { subtasks?: Task[] }>(prev: P, next: P) => {
+export const sameRowProps = <P extends { subtasks?: Task[]; lists?: CategoriesById }>(
+  prev: P,
+  next: P,
+) => {
   const keys = Object.keys(next) as (keyof P)[];
   return (
     keys.length === Object.keys(prev).length &&
     keys.every((key) =>
-      key === "subtasks" ? sameRows(prev.subtasks, next.subtasks) : Object.is(prev[key], next[key]),
+      key === "subtasks"
+        ? sameRows(prev.subtasks, next.subtasks)
+        : key === "lists"
+          ? sameLists(prev.lists, next.lists)
+          : Object.is(prev[key], next[key]),
     )
   );
 };

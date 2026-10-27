@@ -1,4 +1,11 @@
-import type { Task } from "~/lib/types";
+import {
+  canDeleteTask,
+  canFileShareIn,
+  canMoveTo,
+  listMemberIds,
+} from "@newtab-todo/shared/task-access";
+import { asList, holders, type CategoriesById } from "~/lib/task-holders";
+import type { Category, Task } from "~/lib/types";
 
 export type Placement = {
   /**
@@ -11,37 +18,42 @@ export type Placement = {
 };
 
 /**
- * Where a top-level task appears for `userId`. A task in a list they collaborate on stays in that
- * list: a share never overrides list membership.
+ * Where a top-level task appears for `userId`. A task in a list they're in stays in that list: a
+ * share never overrides list membership, so filing one there would change nothing they can see.
  */
-export const placement = (
-  task: Task,
-  userId: string,
-  collaboratedCategoryIds: Set<string>,
-): Placement => {
-  if (task.userId === userId) return { mode: "owner", categoryId: task.categoryId ?? null };
-  if (task.categoryId && collaboratedCategoryIds.has(task.categoryId))
+export const placement = (task: Task, userId: string, lists: CategoriesById): Placement => {
+  const held = holders(task, lists);
+  if (canDeleteTask(held, userId)) return { mode: "owner", categoryId: task.categoryId ?? null };
+  if (held.category && listMemberIds(held.category).includes(userId))
     return { mode: "list", categoryId: task.categoryId };
   const myShare = task.shares.find((s) => s.sharedWithUserId === userId);
   if (myShare) return { mode: "share", categoryId: myShare.categoryId ?? null };
   return { mode: "list", categoryId: task.categoryId ?? undefined };
 };
 
-export const getEffectiveCategoryId = (
-  task: Task,
-  userId: string,
-  collaboratedCategoryIds: Set<string>,
-) => placement(task, userId, collaboratedCategoryIds).categoryId;
+/**
+ * Where it appears for `userId`, and the lists besides the Inbox they can move it to: what the
+ * sheet's List picker offers, and the only lists a drag onto the sidebar accepts.
+ */
+export const listChoices = (task: Task, userId: string, lists: CategoriesById) => {
+  const where = placement(task, userId, lists);
+  const held = holders(task, lists);
+  const allowed = {
+    owner: (list: Category) => canMoveTo(held, asList(list), userId),
+    share: (list: Category) => canFileShareIn(held, asList(list), userId),
+    list: () => false,
+  }[where.mode];
+  return { ...where, choices: [...lists.values()].filter(allowed) };
+};
 
-export const countOpenTasksByCategory = (
-  tasks: Task[],
-  userId: string,
-  collaboratedCategoryIds: Set<string>,
-) => {
+export const getEffectiveCategoryId = (task: Task, userId: string, lists: CategoriesById) =>
+  placement(task, userId, lists).categoryId;
+
+export const countOpenTasksByCategory = (tasks: Task[], userId: string, lists: CategoriesById) => {
   const counts = new Map<string | null, number>();
   for (const t of tasks) {
     if (t.parentId || t.status === "done") continue;
-    const key = getEffectiveCategoryId(t, userId, collaboratedCategoryIds);
+    const key = getEffectiveCategoryId(t, userId, lists);
     if (key === undefined) continue;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
