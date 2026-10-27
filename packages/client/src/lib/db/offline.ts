@@ -168,13 +168,16 @@ export type ShareFilingMetadata = { taskId: string; categoryId: string | null };
 const fileShare = async ({
   transaction,
 }: {
-  transaction: { metadata: Record<string, unknown> };
+  transaction: { metadata: Record<string, unknown>; mutations: PendingWrite[] };
 }) => {
   assertSignedIn();
   const { taskId, categoryId } = transaction.metadata as ShareFilingMetadata;
   console.log(`[sync:tasks] file share → task=${taskId} list=${categoryId}`);
   await assertOk(await client.api.tasks.share.$put({ json: { taskId, categoryId } }));
-  await tasksCollection.utils.refetch();
+  const [filed] = transaction.mutations;
+  // Gone meanwhile, deleted by its owner: there's no row left to file
+  if (filed && tasksCollection.has(taskId))
+    await tasksCollection.utils.writeUpdate({ id: taskId, shares: filed.modified.shares } as never);
 };
 
 export type CategoryDeleteMetadata = {
