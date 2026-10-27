@@ -33,6 +33,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   // The GitHub runner has 4 cores; each worker has its own accounts, so they don't collide
   workers: process.env.CI ? 4 : undefined,
+  fullyParallel: true,
 
   reporter: [["list"], ["html", { outputFolder: ".report", open: "never" }]],
 
