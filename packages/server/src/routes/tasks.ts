@@ -2,6 +2,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { createId } from "@paralleldrive/cuid2";
+import { BadRequestError, ForbiddenError } from "../db/errors";
 import taskRepo, {
   taskInsertSchema,
   taskUpdateSchema,
@@ -15,7 +16,7 @@ import userRepo from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
 import categoryRepo from "../db/category.repo";
 import { authed } from "../middleware";
-import { broadcast, broadcastAll, broadcastPerUser } from "../broadcast";
+import { broadcast, broadcastAll, type TaskEvent } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import notificationQueueRepo from "../db/notification-queue.repo";
 import { errorSchema } from "./openapi-schemas";
@@ -46,16 +47,12 @@ const formatDueDate = (dueDate: string) => {
   return Number.isNaN(day.getTime()) ? dueDate : dueDateFormat.format(day);
 };
 
-// Yourself, or a contact
 const canAssign = async (userId: string, assigneeId: string | null | undefined) =>
   !assigneeId || assigneeId === userId || contactRepo.exists(userId, assigneeId);
 
-const notYourList = () => new HTTPException(403, { message: "That list isn't yours." });
-const notAContact = () =>
-  new HTTPException(400, { message: "You can only assign tasks to your contacts." });
-// A subtask goes wherever its parent is; a list of its own would add that list's people to it
-const subtaskList = () =>
-  new HTTPException(400, { message: "A subtask goes wherever its parent is." });
+const notYourList = () => new ForbiddenError("That list isn't yours.");
+const notAContact = () => new BadRequestError("You can only assign tasks to your contacts.");
+const subtaskGoesWithParent = () => new BadRequestError("A subtask goes wherever its parent is.");
 
 /**
  * A move to another list changes who reaches the task and its subtasks: whoever gains it gets
@@ -73,22 +70,15 @@ const broadcastMove = async (
   const kept = before.filter((u) => after.includes(u));
   broadcast(c, "tasks", "update", result, kept);
   if (gained.length === 0 && lost.length === 0) return;
-  const moved = await taskRepo.findListItem(id);
-  const rows = [moved, ...(await taskRepo.findListItems(moved.subtasks.map((s) => s.id)))];
-  broadcastPerUser(c, [
-    ...gained.flatMap((userId) =>
-      rows.map((data) => ({
-        userId,
-        event: { model: "tasks" as const, action: "insert" as const, data },
-      })),
-    ),
-    ...lost.flatMap((userId) =>
-      rows.map(({ id }) => ({
-        userId,
-        event: { model: "tasks" as const, action: "delete" as const, data: { id } },
-      })),
-    ),
-  ]);
+  const rows = await taskRepo.findListItemWithSubtasks(id);
+  const inserts = rows.map((data): TaskEvent => ({ model: "tasks", action: "insert", data }));
+  const deletes = rows.map(({ id }): TaskEvent => ({
+    model: "tasks",
+    action: "delete",
+    data: { id },
+  }));
+  broadcastAll(c, inserts, gained);
+  broadcastAll(c, deletes, lost);
 };
 
 const shareCategorySchema = z.object({
@@ -118,7 +108,7 @@ export const taskRoutes = authed()
     async (c) => {
       const data = c.req.valid("json");
       const userId = c.get("userId");
-      if (data.parentId && data.categoryId) throw subtaskList();
+      if (data.parentId && data.categoryId) throw subtaskGoesWithParent();
 
       const [parent, canUseList, mayAssign] = await Promise.all([
         data.parentId ? requireTask(data.parentId, userId, "edit") : null,
@@ -138,7 +128,7 @@ export const taskRoutes = authed()
       });
       const added = { ...result, subtasks: [], shares: [] };
       broadcast(c, "tasks", "insert", added, await audienceOf(result.id));
-      if (data.parentId) await markTaskEdited(c, data.parentId, userId, data.createdAt);
+      if (parent) await markTaskEdited(c, parent.task.id, userId, data.createdAt, parent.access);
       return c.json(result, 200);
     },
   )
@@ -164,9 +154,9 @@ export const taskRoutes = authed()
       // Someone it's shared with files their share instead (PUT /share); anyone else moving it
       // could take it away from its owner or its list's people
       if ("categoryId" in fields && !mine.canDelete)
-        throw new HTTPException(403, { message: "Only its owner can move it to another list." });
+        throw new ForbiddenError("Only its owner can move it to another list.");
       if (fields.categoryId) {
-        if (task.parentId) throw subtaskList();
+        if (task.parentId) throw subtaskGoesWithParent();
         if (!canUseList) throw notYourList();
       }
 
@@ -326,6 +316,7 @@ export const taskRoutes = authed()
       ]);
       if (task.userId !== userId)
         throw new HTTPException(403, { message: "Only the task's owner can share it." });
+      if (task.parentId) throw subtaskGoesWithParent();
       if (targetUser.id === userId)
         throw new HTTPException(400, { message: "That's you. Choose someone else." });
 

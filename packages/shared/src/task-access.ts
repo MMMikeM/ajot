@@ -39,21 +39,27 @@ const grantsByPath = {
       : [],
 } satisfies Record<AccessPath, (holder: Holder) => Grant[]>;
 
-/** Each person's widest reach. A subtask has no shares or list of its own: it goes with its parent's. */
-export const grants = (task: TaskWithHolders): Grant[] => {
-  const byUser = new Map<string, Grant>();
-  for (const holder of task.parent ? [task, task.parent] : [task])
-    for (const grantsFor of Object.values(grantsByPath))
-      for (const grant of grantsFor(holder)) {
-        const held = byUser.get(grant.userId);
-        byUser.set(grant.userId, {
-          userId: grant.userId,
-          canEdit: grant.canEdit || !!held?.canEdit,
-          canDelete: grant.canDelete || !!held?.canDelete,
-        });
-      }
+/** Each person's widest reach, from grants that may hold several for one person. */
+export const widest = <G extends Grant>(grants: G[]): G[] => {
+  const byUser = new Map<string, G>();
+  for (const grant of grants) {
+    const held = byUser.get(grant.userId);
+    byUser.set(grant.userId, {
+      ...grant,
+      canEdit: grant.canEdit || !!held?.canEdit,
+      canDelete: grant.canDelete || !!held?.canDelete,
+    });
+  }
   return [...byUser.values()];
 };
+
+/** Each person's widest reach. A subtask has no shares or list of its own: it goes with its parent's. */
+export const grants = (task: TaskWithHolders): Grant[] =>
+  widest(
+    (task.parent ? [task, task.parent] : [task]).flatMap((holder) =>
+      Object.values(grantsByPath).flatMap((grantsFor): Grant[] => grantsFor(holder)),
+    ),
+  );
 
 /** A share or a shared list lets you edit a task, but only its owner deletes or restores it. */
 export const canDeleteTask = (task: TaskWithHolders, userId: string) =>

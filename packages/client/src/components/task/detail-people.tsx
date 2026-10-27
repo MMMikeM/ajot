@@ -37,7 +37,7 @@ export const useListFiling = (task: Task) => {
   const category = categories.find((c) => c.id === categoryId);
   const mine = categories.filter((c) => c.userId === userId);
   const choices = {
-    owner: categories.filter((c) => mine.includes(c) || c === category),
+    owner: categories.filter((c) => c.userId === userId || c === category),
     share: mine,
     list: [],
   };

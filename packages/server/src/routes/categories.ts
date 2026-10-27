@@ -7,24 +7,24 @@ import categoryRepo, {
   categoryResponseSchema,
 } from "../db/category.repo";
 import categoryCollaboratorRepo from "../db/category-collaborator.repo";
-import taskRepo from "../db/task.repo";
+import taskRepo, { type TaskAccessRow } from "../db/task.repo";
+import { audienceFrom } from "./task-users";
 import userRepo, { userPublicSchema } from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
 import { authed } from "../middleware";
-import { broadcast, broadcastPerUser, type BroadcastEvent } from "../broadcast";
+import { broadcast, broadcastPerUser, type TaskEvent } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
 
-type TaskEvent = BroadcastEvent & { model: "tasks"; data: { id: string } };
-
 // Each task's event goes only to the people task_access says can reach it, once each
-const toReach = (access: { taskId: string; userId: string }[], events: TaskEvent[]) =>
-  events.flatMap((event) =>
-    [...new Set(access.filter((a) => a.taskId === event.data.id).map((a) => a.userId))].map(
-      (userId) => ({ userId, event }),
-    ),
+const toReach = (access: TaskAccessRow[], events: TaskEvent[]) => {
+  const byTask = new Map<string, TaskAccessRow[]>();
+  for (const row of access) byTask.set(row.taskId, [...(byTask.get(row.taskId) ?? []), row]);
+  return events.flatMap((event) =>
+    audienceFrom(byTask.get(event.data.id) ?? []).map((userId) => ({ userId, event })),
   );
+};
 
 const collaboratorSchema = z.object({ username: z.string().min(1) });
 const collaboratorIdSchema = z.object({ userId: z.string() });
@@ -93,32 +93,20 @@ export const categoryRoutes = authed()
       const userId = c.get("userId");
 
       // Read before the delete: afterwards the list reaches no one
-      const [cat, memberIds, reach] = await Promise.all([
+      const [cat, memberIds] = await Promise.all([
         categoryRepo.findById(id),
         categoryRepo.memberIds(id),
-        taskRepo.accessToList(id),
       ]);
       if (cat.userId !== userId) throw new HTTPException(403, { message: "Not authorized" });
 
-      const { category, deletedIds, movedTasks, unfiledShares } =
+      const { category, deletedIds, movedTasks, unfiledShares, reach } =
         await categoryRepo.removeWithTasks(id, taskAction, taskIds);
 
       const taskEvents: TaskEvent[] = [
-        ...deletedIds.map((taskId) => ({
-          model: "tasks" as const,
-          action: "delete" as const,
-          data: { id: taskId },
-        })),
-        ...movedTasks.map((task) => ({
-          model: "tasks" as const,
-          action: "update" as const,
-          data: task,
-        })),
+        ...deletedIds.map((id): TaskEvent => ({ model: "tasks", action: "delete", data: { id } })),
+        ...movedTasks.map((task): TaskEvent => ({ model: "tasks", action: "update", data: task })),
       ];
-      const reached = new Set(reach.map((a) => a.taskId));
-      const addedSinceRead = taskEvents.map((e) => e.data.id).filter((id) => !reached.has(id));
-      const reachSinceRead = await taskRepo.accessTo(addedSinceRead);
-      broadcastPerUser(c, toReach([...reach, ...reachSinceRead], taskEvents));
+      broadcastPerUser(c, toReach(reach, taskEvents));
       broadcast(c, "categories", "delete", { id: category.id }, memberIds);
 
       // Whoever filed a shared task here would otherwise keep seeing it under the deleted

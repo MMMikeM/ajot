@@ -66,6 +66,7 @@ export const broadcast = (
 };
 
 export type BroadcastEvent = Omit<MutationEvent, "sourceClientId">;
+export type TaskEvent = BroadcastEvent & { model: "tasks"; data: { id: string } };
 
 /** Broadcast several mutation events with one push per device, rather than one per event. */
 export const broadcastAll = (c: Context, events: BroadcastEvent[], userIds: string[]) => {

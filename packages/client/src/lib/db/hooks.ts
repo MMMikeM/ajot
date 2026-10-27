@@ -55,11 +55,10 @@ const fileShare = (taskId: string, categoryId: string | null) => {
   );
 };
 
-/** Moves a task to another list the way `mode` allows. False when this user can't move it. */
+/** Moves a task to another list the way `mode` allows; in "list" mode it isn't this user's to move. */
 export const moveToList = (task: Task, mode: Placement["mode"], categoryId: string | null) => {
   if (mode === "owner") updateTask(task.id, { categoryId });
   else if (mode === "share") fileShare(task.id, categoryId);
-  return mode !== "list";
 };
 
 /** Deletes the tasks and their subtasks in one transaction, so one Undo restores them all. */

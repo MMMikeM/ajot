@@ -66,7 +66,13 @@ const list = async (userId: string) =>
     where: {
       deletedAt: { isNull: true },
       RAW: (task) =>
-        sql`${task.id} IN (SELECT ${taskAccess.taskId} FROM ${taskAccess} WHERE ${taskAccess.userId} = ${userId})`,
+        inArray(
+          task.id,
+          db
+            .select({ id: taskAccess.taskId })
+            .from(taskAccess)
+            .where(eq(taskAccess.userId, userId)),
+        ),
     },
     with: {
       user: { columns: { id: true, name: true } },
@@ -90,23 +96,34 @@ const findById = async (id: string, { deleted = false } = {}) => {
   return row;
 };
 
-/** Who can reach the tasks in a list, and their subtasks. */
-const accessToList = async (categoryId: string) =>
-  db
-    .select()
-    .from(taskAccess)
-    .where(
-      sql`${taskAccess.taskId} IN (
-        SELECT id FROM tasks WHERE category_id = ${categoryId}
-        UNION SELECT s.id FROM tasks s JOIN tasks p ON p.id = s.parent_id
-        WHERE p.category_id = ${categoryId})`,
-    );
-
-/** Who can reach these tasks, and how far. */
+/** Who can reach these tasks, and how far: a row per way in. */
 const accessTo = async (taskIds: string[]) =>
   taskIds.length === 0
     ? []
     : db.select().from(taskAccess).where(inArray(taskAccess.taskId, taskIds));
+
+export type TaskAccessRow = Awaited<ReturnType<typeof accessTo>>[number];
+
+/**
+ * The task and who can reach it, in one query; no task when it's missing, or deleted unless asked
+ * for. Filtered on the view's task_id, so each branch of task_access is an index lookup.
+ */
+const findWithAccess = async (id: string, { deleted = false } = {}) => {
+  const rows = await db
+    .select({
+      task: tasks,
+      taskId: taskAccess.taskId,
+      userId: taskAccess.userId,
+      canEdit: taskAccess.canEdit,
+      canDelete: taskAccess.canDelete,
+    })
+    .from(taskAccess)
+    .innerJoin(tasks, eq(tasks.id, taskAccess.taskId))
+    .where(
+      deleted ? eq(taskAccess.taskId, id) : and(eq(taskAccess.taskId, id), isNull(tasks.deletedAt)),
+    );
+  return { task: rows[0]?.task, access: rows.map(({ task: _task, ...access }) => access) };
+};
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
 // Re-inserting a deleted task, as Undo did before restores went through update, restores it.
@@ -229,6 +246,13 @@ const findListItem = async (id: string) => {
   return row;
 };
 
+/** A task as the list sends it, with its subtasks as rows of their own. */
+const findListItemWithSubtasks = async (id: string) =>
+  db.query.tasks.findMany({
+    where: { OR: [{ id }, { parentId: id }], deletedAt: { isNull: true } },
+    with: listItemWith,
+  });
+
 const findListItems = async (ids: string[]) => {
   if (ids.length === 0) return [];
   return db.query.tasks.findMany({
@@ -296,7 +320,8 @@ export default {
   list,
   findById,
   accessTo,
-  accessToList,
+  findWithAccess,
+  findListItemWithSubtasks,
   insert,
   insertSent,
   update,
