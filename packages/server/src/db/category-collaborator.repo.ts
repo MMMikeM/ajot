@@ -27,12 +27,4 @@ const remove = async (categoryId: string, userId: string) => {
   return row;
 };
 
-const listUserIds = async (categoryId: string): Promise<string[]> => {
-  const rows = await db.query.categoryCollaborators.findMany({
-    where: { categoryId },
-    columns: { userId: true },
-  });
-  return rows.map((r) => r.userId);
-};
-
-export default { add, remove, listUserIds };
+export default { add, remove };

@@ -105,7 +105,6 @@ const findByIdWithCollaborators = async (id: string) => {
   return row;
 };
 
-/** Whether the user may file tasks in this list: they own it or collaborate on it. */
 /** Everyone in a list: its owner and its collaborators. */
 const memberIds = async (id: string) => {
   const rows = await db
@@ -161,10 +160,9 @@ const removeWithTasks = async (
   inTransaction(async (tx) => {
     const inCategory = await tx.query.tasks.findMany({
       where: { categoryId: id, deletedAt: { isNull: true } },
-      columns: { id: true, userId: true },
+      columns: { id: true },
       with: {
-        shares: { columns: { sharedWithUserId: true } },
-        subtasks: { where: { deletedAt: { isNull: true } }, columns: { id: true, userId: true } },
+        subtasks: { where: { deletedAt: { isNull: true } }, columns: { id: true } },
       },
     });
     if (inCategory.length > 0 && !action)
@@ -209,7 +207,7 @@ const removeWithTasks = async (
       .where(and(eq(categories.id, id), isNull(categories.deletedAt)))
       .returning(sentColumns);
     if (!category) throw new NotFoundError("category", id);
-    return { category, inCategory, deletedIds, movedTasks, unfiledShares };
+    return { category, deletedIds, movedTasks, unfiledShares };
   });
 
 /**

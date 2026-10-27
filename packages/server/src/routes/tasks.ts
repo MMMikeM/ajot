@@ -1,4 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { createId } from "@paralleldrive/cuid2";
 import taskRepo, {
@@ -14,7 +15,7 @@ import userRepo from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
 import categoryRepo from "../db/category.repo";
 import { authed } from "../middleware";
-import { broadcast, broadcastAll } from "../broadcast";
+import { broadcast, broadcastAll, broadcastPerUser } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import notificationQueueRepo from "../db/notification-queue.repo";
 import { errorSchema } from "./openapi-schemas";
@@ -55,6 +56,40 @@ const notAContact = () =>
 // A subtask goes wherever its parent is; a list of its own would add that list's people to it
 const subtaskList = () =>
   new HTTPException(400, { message: "A subtask goes wherever its parent is." });
+
+/**
+ * A move to another list changes who reaches the task and its subtasks: whoever gains it gets
+ * them, whoever loses it has them taken off, and the rest get the change.
+ */
+const broadcastMove = async (
+  c: Context,
+  id: string,
+  result: Parameters<typeof broadcast>[3],
+  before: string[],
+) => {
+  const after = await audienceOf(id);
+  const gained = after.filter((u) => !before.includes(u));
+  const lost = before.filter((u) => !after.includes(u));
+  const kept = before.filter((u) => after.includes(u));
+  broadcast(c, "tasks", "update", result, kept);
+  if (gained.length === 0 && lost.length === 0) return;
+  const moved = await taskRepo.findListItem(id);
+  const rows = [moved, ...(await taskRepo.findListItems(moved.subtasks.map((s) => s.id)))];
+  broadcastPerUser(c, [
+    ...gained.flatMap((userId) =>
+      rows.map((data) => ({
+        userId,
+        event: { model: "tasks" as const, action: "insert" as const, data },
+      })),
+    ),
+    ...lost.flatMap((userId) =>
+      rows.map(({ id }) => ({
+        userId,
+        event: { model: "tasks" as const, action: "delete" as const, data: { id } },
+      })),
+    ),
+  ]);
+};
 
 const shareCategorySchema = z.object({
   taskId: z.string(),
@@ -146,7 +181,8 @@ export const taskRoutes = authed()
       // What the client stamped wins; one from before these columns existed sends neither
       const stamps = taskChangeStamps(fields, updatedAt);
       const result = await taskRepo.update(id, updatedAt, { ...stamps, ...fields });
-      broadcast(c, "tasks", "update", result, audience);
+      if ("categoryId" in fields) await broadcastMove(c, id, result, audience);
+      else broadcast(c, "tasks", "update", result, audience);
       if (task.parentId && stamps.editedAt)
         await markTaskEdited(c, task.parentId, userId, updatedAt);
 
