@@ -22,15 +22,17 @@ test("a task shared with you, filed offline, reaches the server once back online
   const title = `File me ${newId().slice(0, 8)}`;
   const task = await addTask(user1Auth.token, { title });
   await shareTask(user1Auth.token, task.id, user2Auth.username);
-  const list = await addList(user2Auth.token, "Bob's own");
+  // A retry on CI runs as the same Bob, so the name has to be its own each run
+  const listName = `Bob's own ${newId().slice(0, 8)}`;
+  const list = await addList(user2Auth.token, listName);
   await page.reload({ waitUntil: "domcontentloaded" });
 
   await page.getByRole("button", { name: startsWith(title) }).click();
   const sheet = page.getByRole("dialog", { name: title });
   await page.context().setOffline(true);
   await addField(sheet, "List");
-  await page.getByRole("option", { name: "Bob's own" }).click();
-  await expect(sheet.getByRole("combobox", { name: "List" })).toHaveText("Bob's own");
+  await page.getByRole("option", { name: listName }).click();
+  await expect(sheet.getByRole("combobox", { name: "List" })).toHaveText(listName);
 
   await page.context().setOffline(false);
   const filedUnder = async () =>
