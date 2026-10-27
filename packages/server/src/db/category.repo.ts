@@ -2,21 +2,9 @@ import { and, eq, getColumns, inArray, isNull, lt, notInArray, or, sql } from "d
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db, inTransaction } from "./client";
-import {
-  categories,
-  listMembers,
-  taskAccess,
-  tasks,
-  taskShares,
-  type CategoryDeletion,
-} from "./schema";
-import {
-  BadRequestError,
-  ConflictError,
-  ForbiddenError,
-  NotFoundError,
-  StaleUpdateError,
-} from "./errors";
+import reachRepo from "./reach.repo";
+import { categories, listMembers, tasks, taskShares, type CategoryDeletion } from "./schema";
+import { BadRequestError, ConflictError, NotFoundError, StaleUpdateError } from "./errors";
 import { now } from "@newtab-todo/shared/iso";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { CATEGORY_TASK_ACTIONS, type CategoryTaskAction } from "@newtab-todo/shared/constants";
@@ -102,8 +90,12 @@ const listByIds = async (ids: string[]) => {
   });
 };
 
-const findById = async (id: string) => {
-  const row = await db.query.categories.findFirst({ where: { ...live, id }, columns: hidden });
+/** A deleted list reads as missing, unless asked for by the restore that brings it back. */
+const findById = async (id: string, { deleted = false } = {}) => {
+  const row = await db.query.categories.findFirst({
+    where: deleted ? { id } : { ...live, id },
+    columns: hidden,
+  });
   if (!row) throw new NotFoundError("category", id);
   return row;
 };
@@ -185,11 +177,7 @@ const removeWithTasks = async (
     if (inCategory.length > 0 && !action)
       throw new BadRequestError("Move or delete this list's tasks first.");
     // Read here, in the delete's transaction: afterwards the list reaches no one
-    const ids = inCategory.flatMap((t) => [t.id, ...t.subtasks.map((s) => s.id)]);
-    const reach =
-      ids.length === 0
-        ? []
-        : await tx.select().from(taskAccess).where(inArray(taskAccess.taskId, ids));
+    const before = await reachRepo.read({ listIds: [id] }, tx);
 
     // A client from before confirmed ids were sent meant everything in the category
     const confirmed = new Set(confirmedIds ?? inCategory.map((t) => t.id));
@@ -205,14 +193,11 @@ const removeWithTasks = async (
         .update(tasks)
         .set({ deletedAt: at, updatedAt: at })
         .where(inArray(tasks.id, deletedIds));
-    const movedTasks =
-      movedIds.length > 0
-        ? await tx
-            .update(tasks)
-            .set({ categoryId: null, updatedAt: at })
-            .where(inArray(tasks.id, movedIds))
-            .returning()
-        : [];
+    if (movedIds.length > 0)
+      await tx
+        .update(tasks)
+        .set({ categoryId: null, updatedAt: at })
+        .where(inArray(tasks.id, movedIds));
     const unfiledShares = await tx
       .update(taskShares)
       .set({ categoryId: null })
@@ -230,32 +215,36 @@ const removeWithTasks = async (
       .where(and(eq(categories.id, id), isNull(categories.deletedAt)))
       .returning(sentColumns);
     if (!category) throw new NotFoundError("category", id);
-    return { category, deletedIds, movedTasks, unfiledShares, reach };
+    const changed = [...movedIds, ...unfiledShares.map((s) => s.taskId)];
+    return { category, before, changed };
   });
 
 /**
- * Undoes removeWithTasks for the list's owner. A task changed since stays where it went: moved
- * back only from the Inbox, refiled only if still unfiled. A task or share of someone no longer
- * on the list goes to their Inbox, where they can still see it. A list that isn't deleted, as
- * when a restore is replayed after a lost response, comes back unchanged.
+ * Undoes removeWithTasks. A task changed since stays where it went: moved back only from the
+ * Inbox, refiled only if still unfiled. A task or share of someone no longer on the list goes to
+ * their Inbox, where they can still see it. A list that isn't deleted, as when a restore is
+ * replayed after a lost response, comes back unchanged. Returns who reached it all before.
  */
-const restore = async (id: string, userId: string) => {
-  const result = await inTransaction(async (tx) => {
+const restore = async (id: string) =>
+  inTransaction(async (tx) => {
     const found = await tx.query.categories.findFirst({
       where: { id },
       with: { collaborators: { columns: { userId: true } } },
     });
     if (!found) throw new NotFoundError("category", id);
-    if (found.userId !== userId) throw new ForbiddenError("Not authorized");
-    const memberIds = [found.userId, ...found.collaborators.map((c) => c.userId)];
-    const nothing = { restoredIds: [], movedBack: [], refiled: [], memberIds };
-    if (!found.deletedAt) return nothing;
-
     const { deletedTaskIds, movedTaskIds, unfiledShares } = found.deletion ?? {
       deletedTaskIds: [],
       movedTaskIds: [],
       unfiledShares: [],
     };
+    const taskIds = [...deletedTaskIds, ...movedTaskIds, ...unfiledShares.map((s) => s.taskId)];
+    const before = await reachRepo.read({ taskIds, listIds: [id] }, tx);
+    if (!found.deletedAt) return { before, changed: [] };
+
+    // list_members leaves out a deleted list, so its members are read from its rows. Leaving a
+    // list takes the leaver's tasks out of it, but not what this delete had already moved or
+    // unfiled, and tasks of people who left before it did that still name the list
+    const memberIds = [found.userId, ...found.collaborators.map((c) => c.userId)];
     const at = now();
     await tx
       .update(categories)
@@ -296,7 +285,7 @@ const restore = async (id: string, userId: string) => {
                 inArray(tasks.userId, memberIds),
               ),
             )
-            .returning()
+            .returning({ id: tasks.id })
         : [];
 
     const refilable = unfiledShares.filter((s) => memberIds.includes(s.sharedWithUserId));
@@ -321,12 +310,9 @@ const restore = async (id: string, userId: string) => {
             .returning({ taskId: taskShares.taskId, sharedWithUserId: taskShares.sharedWithUserId })
         : [];
 
-    return { restoredIds, movedBack, refiled, memberIds };
+    const changed = [...movedBack.map((t) => t.id), ...refiled.map((s) => s.taskId)];
+    return { before, changed };
   });
-  const [category] = await listByIds([id]);
-  if (!category) throw new NotFoundError("category", id);
-  return { category, ...result };
-};
 
 export default {
   list,
