@@ -21,6 +21,7 @@ import notificationQueueRepo from "../db/notification-queue.repo";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
 import { markTaskEdited, taskUserIds } from "./task-users";
+import { canEditTask } from "../task-access";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 
 const shareSchema = z.object({
@@ -75,20 +76,24 @@ export const taskRoutes = authed()
       const userId = c.get("userId");
 
       // Subtasks carry no categoryId; their collaborators come from the parent's category
+      if (data.parentId) data.categoryId = null;
       let effectiveCategoryId = data.categoryId;
       if (data.parentId) {
         const parent = await taskRepo.findByIdWithAccess(data.parentId, userId);
         if (parent.parentId)
           throw new HTTPException(400, { message: "Subtasks can't have subtasks." });
-        const canAddTo =
-          parent.userId === userId ||
-          parent.shares.some((s) => s.sharedWithUserId === userId) ||
-          !!parent.category?.collaborators.some((c) => c.userId === userId);
-        if (!canAddTo) throw new HTTPException(403, { message: "Not authorized" });
+        if (!canEditTask(parent, userId))
+          throw new HTTPException(403, { message: "Not authorized" });
         effectiveCategoryId = parent.categoryId;
-      } else if (data.categoryId && !(await categoryRepo.canUse(data.categoryId, userId))) {
-        throw new HTTPException(403, { message: "That list isn't yours." });
       }
+      if (data.categoryId && !(await categoryRepo.canUse(data.categoryId, userId)))
+        throw new HTTPException(403, { message: "That list isn't yours." });
+      if (
+        data.assigneeId &&
+        data.assigneeId !== userId &&
+        !(await contactRepo.exists(userId, data.assigneeId))
+      )
+        throw new HTTPException(400, { message: "You can only assign tasks to your contacts." });
 
       // A client from before completedAt existed doesn't send it
       const result = await taskRepo.insert({
@@ -96,8 +101,6 @@ export const taskRoutes = authed()
         ...data,
         userId,
       });
-      // A retry gets its own row back; an id someone else's task already has must not
-      if (result.userId !== userId) throw new HTTPException(409, { message: "Task id taken" });
       const taskWithRelations = { ...result, subtasks: [], shares: [] };
 
       const collabIds = effectiveCategoryId
@@ -122,26 +125,24 @@ export const taskRoutes = authed()
       const restoring = fields.deletedAt === null;
       const [task, isContact, canUseList] = await Promise.all([
         taskRepo.findByIdWithAccess(id, userId, { deleted: restoring }),
-        fields.assigneeId ? contactRepo.exists(userId, fields.assigneeId) : Promise.resolve(true),
+        fields.assigneeId && fields.assigneeId !== userId
+          ? contactRepo.exists(userId, fields.assigneeId)
+          : Promise.resolve(true),
         fields.categoryId ? categoryRepo.canUse(fields.categoryId, userId) : Promise.resolve(true),
       ]);
 
-      const collabUserIds = [
-        ...(task.category?.collaborators.map((c) => c.userId) ?? []),
-        ...(task.parent?.category?.collaborators.map((c) => c.userId) ?? []),
-      ];
-      const shareUserIds = [
-        ...task.shares.map((s) => s.sharedWithUserId),
-        ...(task.parent?.shares?.map((s) => s.sharedWithUserId) ?? []),
-      ];
       const isOwner = task.userId === userId || task.parent?.userId === userId;
-      const isCollab = collabUserIds.includes(userId);
-      const isShareRecipient = shareUserIds.includes(userId);
-      if (!isOwner && !isCollab && !isShareRecipient)
-        throw new HTTPException(403, { message: "Not authorized" });
+      if (!canEditTask(task, userId)) throw new HTTPException(403, { message: "Not authorized" });
       if (!isContact)
         throw new HTTPException(400, { message: "You can only assign tasks to your contacts." });
       if (!canUseList) throw new HTTPException(403, { message: "That list isn't yours." });
+      // Moved into a list its owner can't open, the task would vanish for them
+      if (
+        fields.categoryId &&
+        task.userId !== userId &&
+        !(await categoryRepo.canUse(fields.categoryId, task.userId))
+      )
+        throw new HTTPException(403, { message: "That list isn't the task owner's." });
       // As with deleting, only the owner can bring a task back
       if (restoring && !isOwner) throw new HTTPException(403, { message: "Not authorized" });
 
@@ -268,12 +269,11 @@ export const taskRoutes = authed()
         throw new HTTPException(403, { message: "You can only send tasks to your contacts." });
 
       // The recipient owns it, as if they'd added it, so it lands in their Inbox and not the sender's
-      const result = await taskRepo.insert({
+      const result = await taskRepo.insertSent({
         ...data,
         userId: recipientId,
         sortOrder: await taskRepo.nextSortOrder(recipientId),
       });
-      if (result.userId !== recipientId) throw new HTTPException(409, { message: "Task id taken" });
       broadcast(c, "tasks", "insert", { ...result, subtasks: [], shares: [] }, [recipientId]);
 
       const actorName = await getUserName(userId);
@@ -356,6 +356,8 @@ export const taskRoutes = authed()
     async (c) => {
       const { taskId, categoryId } = c.req.valid("json");
       const userId = c.get("userId");
+      if (categoryId && !(await categoryRepo.canUse(categoryId, userId)))
+        throw new HTTPException(403, { message: "That list isn't yours." });
       const result = await taskRepo.updateShareCategory(taskId, userId, categoryId);
       broadcast(c, "tasks", "update", { id: taskId }, [userId]);
       return c.json(result, 200);

@@ -14,6 +14,7 @@ import { notificationRoutes } from "./routes/notifications";
 import { deployRoutes } from "./routes/deploy";
 import { configRoutes } from "./routes/config";
 import { metricRoutes } from "./routes/metrics";
+import { isAllowedOrigin, isCrossOriginWrite, parseAllowedOrigins } from "./origins";
 
 const app = new OpenAPIHono();
 
@@ -53,17 +54,32 @@ app.use(
   }),
 );
 
+const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
+
 // CORS — needed for extension context (moz-extension:// origin).
 // Headers are set BEFORE next() so they're present on error responses too:
 // if a route throws HTTPException, onError() calls c.json() which picks up
 // whatever is already in c._headers — but post-next() code is never reached.
+// No Allow-Credentials: every client authenticates with a Bearer token, never a cookie.
 app.use("*", (c, next) => {
-  c.header("Access-Control-Allow-Origin", c.req.header("origin") ?? "*");
-  c.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  c.header("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Client-Id,X-Device-Id");
-  c.header("Access-Control-Allow-Credentials", "true");
-  c.header("Access-Control-Expose-Headers", "*");
-  c.header("Access-Control-Max-Age", "86400");
+  c.header("Vary", "Origin", { append: true });
+  const origin = c.req.header("origin");
+  const host = c.req.header("host");
+  if (origin && isAllowedOrigin(origin, host, allowedOrigins)) {
+    c.header("Access-Control-Allow-Origin", origin);
+    c.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    c.header("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Client-Id,X-Device-Id");
+    c.header("Access-Control-Expose-Headers", "*");
+    c.header("Access-Control-Max-Age", "86400");
+  }
+  const request = {
+    origin,
+    host,
+    method: c.req.method,
+    secFetchSite: c.req.header("sec-fetch-site"),
+  };
+  if (isCrossOriginWrite(request, allowedOrigins))
+    throw new HTTPException(403, { message: "Requests from other sites aren't allowed." });
   return next();
 });
 

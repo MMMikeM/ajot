@@ -5,8 +5,8 @@ import { db, inTransaction } from "./client";
 import { categories, tasks, taskShares, type CategoryDeletion } from "./schema";
 import {
   BadRequestError,
+  ConflictError,
   ForbiddenError,
-  InsertFailedError,
   NotFoundError,
   StaleUpdateError,
 } from "./errors";
@@ -46,7 +46,7 @@ export const categoryInsertSchema = createInsertSchema(categories, {
   .strict();
 export const categoryUpdateSchema = createUpdateSchema(categories, { updatedAt: isoDatetime })
   .required({ id: true, updatedAt: true })
-  .omit({ createdAt: true, deletedAt: true, deletion: true })
+  .omit({ createdAt: true, userId: true, deletedAt: true, deletion: true })
   .strict();
 
 // What a deleted list keeps is only for the server's Undo, so no read or write sends it
@@ -114,14 +114,19 @@ const canUse = async (id: string, userId: string) => {
   return !!row && (row.userId === userId || row.collaborators.some((c) => c.userId === userId));
 };
 
-// A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it
+// A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
+// An id someone else's list already has updates nothing, so their list isn't sent back.
 const insert = async (data: CategoryInsert) => {
   const [row] = await db
     .insert(categories)
     .values(data)
-    .onConflictDoUpdate({ target: categories.id, set: { updatedAt: sql`${categories.updatedAt}` } })
+    .onConflictDoUpdate({
+      target: categories.id,
+      set: { updatedAt: sql`${categories.updatedAt}` },
+      setWhere: eq(categories.userId, data.userId),
+    })
     .returning(sentColumns);
-  if (!row) throw new InsertFailedError("category");
+  if (!row) throw new ConflictError("List id taken");
   return row;
 };
 

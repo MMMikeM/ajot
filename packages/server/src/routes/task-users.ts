@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import taskRepo from "../db/task.repo";
 import { broadcast } from "../broadcast";
+import { canEditTask } from "../task-access";
 
 export const taskUserIds = (task: {
   userId: string;
@@ -30,10 +31,9 @@ export const taskUserIds = (task: {
 export const markTaskEdited = async (c: Context, taskId: string, userId: string, at: string) => {
   try {
     const task = await taskRepo.findByIdWithAccess(taskId, userId);
-    const userIds = taskUserIds(task);
-    if (!userIds.includes(userId)) return;
+    if (!canEditTask(task, userId)) return;
     const row = await taskRepo.markEdited(taskId, at);
-    if (row) broadcast(c, "tasks", "update", row, userIds);
+    if (row) broadcast(c, "tasks", "update", row, taskUserIds(task));
   } catch (err) {
     console.error(`[tasks] couldn't mark ${taskId} edited`, err);
   }

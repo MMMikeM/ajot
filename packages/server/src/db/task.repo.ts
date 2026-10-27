@@ -4,7 +4,7 @@ import { createInsertSchema, createSelectSchema, createUpdateSchema } from "driz
 import { z } from "@hono/zod-openapi";
 import { db } from "./client";
 import { categories, tasks, taskShares, users } from "./schema";
-import { InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
+import { ConflictError, InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { now } from "@newtab-todo/shared/iso";
 
@@ -40,10 +40,11 @@ export const taskInsertSchema = createInsertSchema(tasks, {
 })
   .required({ id: true, createdAt: true, updatedAt: true })
   .omit({ deletedAt: true });
-// Deleting goes through DELETE; an update can only bring a deleted task back
+// Deleting goes through DELETE; an update can only bring a deleted task back. Its owner and
+// parent are fixed: a task taken, planted in someone's Inbox or hung under theirs would be theirs.
 export const taskUpdateSchema = createUpdateSchema(tasks, { updatedAt: isoDatetime })
   .required({ id: true, updatedAt: true })
-  .omit({ createdAt: true })
+  .omit({ createdAt: true, userId: true, parentId: true })
   .extend({ deletedAt: z.null().optional() })
   .strict();
 
@@ -85,7 +86,7 @@ const findByIdWithAccess = async (id: string, _userId: string, { deleted = false
   const row = await db.query.tasks.findFirst({
     where: deleted ? { id } : { id, deletedAt: { isNull: true } },
     with: {
-      shares: { columns: { sharedWithUserId: true } },
+      shares: { columns: { sharedWithUserId: true, permission: true } },
       category: {
         with: { collaborators: { columns: { userId: true } } },
         columns: { id: true },
@@ -93,7 +94,7 @@ const findByIdWithAccess = async (id: string, _userId: string, { deleted = false
       parent: {
         columns: { id: true, userId: true },
         with: {
-          shares: { columns: { sharedWithUserId: true } },
+          shares: { columns: { sharedWithUserId: true, permission: true } },
           category: {
             with: { collaborators: { columns: { userId: true } } },
             columns: { id: true },
@@ -108,6 +109,7 @@ const findByIdWithAccess = async (id: string, _userId: string, { deleted = false
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
 // Re-inserting a deleted task, as Undo did before restores went through update, restores it.
+// An id someone else's task already has updates nothing, so it returns nothing and restores nothing.
 const insert = async (data: TaskInsert) => {
   const [row] = await db
     .insert(tasks)
@@ -115,9 +117,28 @@ const insert = async (data: TaskInsert) => {
     .onConflictDoUpdate({
       target: tasks.id,
       set: { updatedAt: sql`${tasks.updatedAt}`, deletedAt: sql`null` },
+      setWhere: eq(tasks.userId, data.userId),
     })
     .returning();
-  if (!row) throw new InsertFailedError("task");
+  if (!row) throw new ConflictError("Task id taken");
+  return row;
+};
+
+/**
+ * A task sent to someone, which they own. A retried send gets the row back; an id one of their
+ * tasks already has, made at another moment, doesn't, so it can't be read or brought back.
+ */
+const insertSent = async (data: TaskInsert & Required<Pick<TaskInsert, "createdAt">>) => {
+  const [row] = await db
+    .insert(tasks)
+    .values(data)
+    .onConflictDoUpdate({
+      target: tasks.id,
+      set: { updatedAt: sql`${tasks.updatedAt}` },
+      setWhere: and(eq(tasks.userId, data.userId), eq(tasks.createdAt, data.createdAt)),
+    })
+    .returning();
+  if (!row) throw new ConflictError("Task id taken");
   return row;
 };
 
@@ -287,6 +308,7 @@ export default {
   findById,
   findByIdWithAccess,
   insert,
+  insertSent,
   update,
   markEdited,
   remove,

@@ -1,8 +1,12 @@
 import { ComponentProps } from "react";
+import { Toast } from "@base-ui/react/toast";
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortableOperation } from "@dnd-kit/react/sortable";
 import { generateKeyBetween } from "fractional-indexing";
 import { updateTask, updateCategory } from "~/lib/db/hooks";
+import { updateShareCategory } from "~/lib/actions";
+import { useOptimisticUserId } from "~/lib/auth/current-user";
+import { isSharedWith } from "~/lib/task-permissions";
 import { CATEGORY_DROP_PREFIX } from "~/lib/constants";
 import type { Task, Category } from "~/lib/types";
 
@@ -23,6 +27,9 @@ export const useTaskActions = ({
   activeTasks,
   getSubtasks,
 }: Params) => {
+  const userId = useOptimisticUserId();
+  const toastManager = Toast.useToastManager();
+
   const handleReorder = (taskId: string, newIndex: number, groupTasks: Task[]) => {
     const filtered = groupTasks.filter((t) => t.id !== taskId);
     const prevOrder = newIndex > 0 ? (filtered[newIndex - 1]?.sortOrder ?? null) : null;
@@ -45,9 +52,14 @@ export const useTaskActions = ({
     if (target && typeof target.id === "string" && target.id.startsWith(CATEGORY_DROP_PREFIX)) {
       const targetCategoryId = target.id.slice(CATEGORY_DROP_PREFIX.length);
       const taskId = String(event.operation.source?.id);
-      if (targetCategoryId !== activeCategoryId) {
-        updateTask(taskId, { categoryId: targetCategoryId });
-      }
+      if (targetCategoryId === activeCategoryId) return;
+      const task = activeTasks.find((t) => t.id === taskId);
+      if (task && isSharedWith(userId, task))
+        updateShareCategory(taskId, targetCategoryId).catch((err) => {
+          console.error("[share] filing failed:", err);
+          toastManager.add({ title: "Couldn't move it to that list. Try again." });
+        });
+      else updateTask(taskId, { categoryId: targetCategoryId });
       return;
     }
 
