@@ -20,7 +20,7 @@ import notificationQueueRepo from "../db/notification-queue.repo";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
 import { markTaskEdited, requireTask } from "./task-users";
-import { audience } from "../task-access";
+import { audience, canDeleteTask } from "../task-access";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 
 const shareSchema = z.object({
@@ -127,12 +127,13 @@ export const taskRoutes = authed()
         canAssign(userId, fields.assigneeId),
       ]);
       if (!mayAssign) throw notAContact();
+      // Someone it's shared with files their share instead (PUT /share); anyone else moving it
+      // could take it away from its owner or its list's people
+      if ("categoryId" in fields && !canDeleteTask(task, userId))
+        throw new HTTPException(403, { message: "Only its owner can move it to another list." });
       if (fields.categoryId) {
         if (task.parentId) throw subtaskList();
         if (!isMember(list, userId)) throw notYourList();
-        // Moved into a list its owner can't open, the task would vanish for them
-        if (!isMember(list, task.userId))
-          throw new HTTPException(403, { message: "That list isn't the task owner's." });
       }
 
       if (restoring) {
