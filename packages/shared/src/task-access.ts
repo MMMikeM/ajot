@@ -15,13 +15,21 @@ export type AccessPath =
 
 export type Grant = { userId: string; canEdit: boolean; canDelete: boolean };
 
+type List = { userId: string; collaborators: { userId: string }[] };
+
 type Holder = {
   userId: string;
   shares?: { sharedWithUserId: string; permission: "view" | "edit" }[];
-  category?: { userId: string; collaborators: { userId: string }[] } | null;
+  category?: List | null;
 };
 
 export type TaskWithHolders = Holder & { parent?: Holder | null };
+
+/** Who's in a list: its owner and its collaborators. The server's `list_members` view. */
+export const listMemberIds = (list: List) => [
+  list.userId,
+  ...list.collaborators.map((c) => c.userId),
+];
 
 const grantsByPath = {
   owner: (holder) => [{ userId: holder.userId, canEdit: true, canDelete: true }],
@@ -33,9 +41,11 @@ const grantsByPath = {
     })),
   list: (holder) =>
     holder.category
-      ? [holder.category.userId, ...holder.category.collaborators.map((c) => c.userId)].map(
-          (userId) => ({ userId, canEdit: true, canDelete: false }),
-        )
+      ? listMemberIds(holder.category).map((userId) => ({
+          userId,
+          canEdit: true,
+          canDelete: false,
+        }))
       : [],
 } satisfies Record<AccessPath, (holder: Holder) => Grant[]>;
 
@@ -64,3 +74,21 @@ export const grants = (task: TaskWithHolders): Grant[] =>
 /** A share or a shared list lets you edit a task, but only its owner deletes or restores it. */
 export const canDeleteTask = (task: TaskWithHolders, userId: string) =>
   grants(task).some((grant) => grant.userId === userId && grant.canDelete);
+
+/**
+ * Where `userId` may put a task, as its owner or as someone it's shared with: the Inbox (`null`),
+ * or any list they're in. The server's `categoryRepo.canUse`.
+ */
+const canFileIn = (list: List | null, userId: string) =>
+  list === null || listMemberIds(list).includes(userId);
+
+/** Only its owner moves a top-level task, which moves it for everyone (PUT /api/tasks). */
+export const canMoveTo = (task: Holder, list: List | null, userId: string) =>
+  canDeleteTask(task, userId) && canFileIn(list, userId);
+
+/**
+ * Someone it's shared with files their own share instead, which moves it for them alone
+ * (PUT /api/tasks/share).
+ */
+export const canFileShareIn = (task: Holder, list: List | null, userId: string) =>
+  !!task.shares?.some((s) => s.sharedWithUserId === userId) && canFileIn(list, userId);

@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { UserRound, Users } from "lucide-react";
-import type { Task, Category } from "~/lib/types";
-import { useCategories, useContacts, moveToList, updateTask } from "~/lib/db/hooks";
-import { placement } from "~/lib/effective-category";
-import { useCollaboratedCategoryIds } from "~/lib/hooks/use-collaborated-categories";
+import { grants } from "@newtab-todo/shared/task-access";
+import type { Task } from "~/lib/types";
+import { useContacts, moveToList, updateTask } from "~/lib/db/hooks";
+import { listChoices } from "~/lib/effective-category";
+import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
+import { holders, type CategoriesById } from "~/lib/task-holders";
 import { shareTask, removeTaskShare } from "~/lib/actions";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import {
@@ -32,19 +34,12 @@ type Person = { id: string; name: string };
 /** The list this task is in for the viewer, and the lists they can move it to. */
 export const useListFiling = (task: Task) => {
   const userId = useOptimisticUserId();
-  const { data: categories = [] } = useCategories();
-  const { mode, categoryId } = placement(task, userId, useCollaboratedCategoryIds(userId));
-  const category = categories.find((c) => c.id === categoryId);
-  const mine = categories.filter((c) => c.userId === userId);
-  const choices = {
-    owner: categories.filter((c) => c.userId === userId || c === category),
-    share: mine,
-    list: [],
-  };
+  const lists = useCategoriesById();
+  const { mode, categoryId, choices } = listChoices(task, userId, lists);
   return {
     mode,
-    category,
-    choices: choices[mode],
+    category: categoryId ? lists.get(categoryId) : undefined,
+    choices,
     move: (id: string | null) => moveToList(task, mode, id),
   };
 };
@@ -98,31 +93,30 @@ export const ListField = ({ filing, choosing }: { filing: Filing; choosing: bool
 };
 
 /** Everyone who can see the task besides its owner: its shares, then its list's people. */
-const peopleOnTask = (task: Task, category: Category | undefined): Person[] => {
-  const seen = new Set<string>([task.userId]);
-  const people: Person[] = [];
-  const add = (id: string, name: string | undefined) => {
-    if (!name || seen.has(id)) return;
-    seen.add(id);
-    people.push({ id, name });
-  };
-  for (const s of task.shares) add(s.sharedWithUserId, s.sharedWithUser?.name);
-  if (category && category.collaborators.length > 0) {
-    add(category.userId, category.user?.name);
-    for (const c of category.collaborators) if (c.user) add(c.user.id, c.user.name);
+const peopleOnTask = (task: Task, lists: CategoriesById): Person[] => {
+  const category = task.categoryId ? lists.get(task.categoryId) : undefined;
+  const names = new Map<string, string | undefined>(
+    task.shares.map((s) => [s.sharedWithUserId, s.sharedWithUser?.name]),
+  );
+  if (category) {
+    names.set(category.userId, category.user?.name);
+    for (const c of category.collaborators ?? []) names.set(c.userId, c.user?.name);
   }
-  return people;
+  return grants(holders(task, lists)).flatMap(({ userId: id }) => {
+    const name = names.get(id);
+    return id !== task.userId && name ? [{ id, name }] : [];
+  });
 };
 
 export const useSharing = (task: Task) => {
   const userId = useOptimisticUserId();
-  const { data: categories = [] } = useCategories();
+  const lists = useCategoriesById();
   const { data: contacts = [] } = useContacts();
-  const category = categories.find((c) => c.id === task.categoryId);
+  const category = task.categoryId ? lists.get(task.categoryId) : undefined;
   const isOwner = task.userId === userId;
-  const sharedList = category && category.collaborators.length > 0 ? category : undefined;
+  const sharedList = category?.collaborators?.length ? category : undefined;
   const sharedWithIds = new Set(task.shares.map((s) => s.sharedWithUserId));
-  const others = peopleOnTask(task, category);
+  const others = peopleOnTask(task, lists);
   return {
     userId,
     isOwner,

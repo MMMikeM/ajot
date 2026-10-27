@@ -10,6 +10,8 @@ import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { cn } from "~/lib/utils";
 import { canDeleteTask } from "@newtab-todo/shared/task-access";
+import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
+import { holders } from "~/lib/task-holders";
 import { DetailRow } from "~/components/task/detail-row";
 import { hitArea } from "~/components/hit-area";
 import { pushUndoToast } from "~/lib/undo-toast";
@@ -62,6 +64,7 @@ export const Subtasks = ({
   onToggle: (task: Task) => void;
 }) => {
   const userId = useOptimisticUserId();
+  const lists = useCategoriesById();
 
   if (rawSubtasks.length === 0 && !adding) return null;
 
@@ -93,7 +96,7 @@ export const Subtasks = ({
             >
               {sub.title}
             </span>
-            {canDeleteTask({ ...sub, parent: task }, userId) && (
+            {canDeleteTask(holders(sub, lists, task), userId) && (
               <RevealGroup className="items-start pt-1.5 touch:pt-0">
                 <RevealButton
                   className={hitArea}
