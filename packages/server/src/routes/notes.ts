@@ -38,7 +38,8 @@ export const noteRoutes = authed()
     async (c) => {
       const data = c.req.valid("json");
       const userId = c.get("userId");
-      await assertCanSeeTask(data.taskId, userId);
+      // A retry after a lost response gets its note back, even if the task was unshared meanwhile
+      if (!(await noteRepo.findOwn(data.id, userId))) await assertCanSeeTask(data.taskId, userId);
       const result = await noteRepo.insert({ ...data, userId });
       broadcast(c, "notes", "insert", result, [userId]);
       if (result.taskId) await markTaskEdited(c, result.taskId, userId, result.updatedAt);

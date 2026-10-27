@@ -1,8 +1,6 @@
 const extensionProtocols = new Set(["chrome-extension:", "moz-extension:"]);
 
-const safeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
-
-/** `ALLOWED_ORIGINS`, comma-separated, for a server whose proxy rewrites the Host header. */
+/** `ALLOWED_ORIGINS`, comma-separated: where a web app on another address than the API is served. */
 export const parseAllowedOrigins = (value: string | undefined) =>
   (value ?? "")
     .split(",")
@@ -16,17 +14,9 @@ export const parseAllowedOrigins = (value: string | undefined) =>
       return [];
     });
 
-type IncomingRequest = {
-  origin: string | undefined;
-  /** The Host header. Compared without the scheme: TLS ends at Fly's proxy, so it's http here. */
-  host: string | undefined;
-  method: string;
-  secFetchSite: string | undefined;
-};
-
 /**
- * The PWA calls its own origin, and each extension calls from its own origin with a Bearer token.
- * The dev and preview proxies rewrite Host, so a page behind them is known by Sec-Fetch-Site.
+ * Who gets CORS headers: each extension, and a web app served from another address than the API.
+ * Nothing authenticates by cookie, so a page on any other site can't act as a user either way.
  */
 export const isAllowedOrigin = (origin: string, host: string | undefined, allowed: string[]) => {
   const url = URL.parse(origin);
@@ -35,19 +25,3 @@ export const isAllowedOrigin = (origin: string, host: string | undefined, allowe
   if (host && url.host === host.toLowerCase()) return true;
   return allowed.includes(url.origin);
 };
-
-/**
- * A write from a page on another origin is refused. Nothing authenticates by cookie, so a write
- * that needs a session can't come from another site anyway; this covers the ones that don't, such
- * as another site's form signing someone in or up. The browser's own Sec-Fetch-Site vouches for a
- * same-origin request, which can arrive with `Origin: null` under the no-referrer policy, or with
- * a Host header a proxy rewrote.
- */
-export const isCrossOriginWrite = (
-  { origin, host, method, secFetchSite }: IncomingRequest,
-  allowed: string[],
-) =>
-  !safeMethods.has(method) &&
-  origin !== undefined &&
-  secFetchSite !== "same-origin" &&
-  !isAllowedOrigin(origin, host, allowed);

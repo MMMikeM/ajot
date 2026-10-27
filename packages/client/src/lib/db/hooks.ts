@@ -9,6 +9,7 @@ import {
   offline,
   type CategoryDeleteMetadata,
   type CategoryRestoreMetadata,
+  type ShareFilingMetadata,
   type TaskDeleteMetadata,
 } from "~/lib/db/offline";
 import { getCurrentUserId } from "~/lib/auth/current-user";
@@ -33,6 +34,23 @@ export const updateTask = (id: string, fields: Partial<Task>) => {
     ),
   );
   console.log("[mutation] optimistic applied, tx queued");
+};
+
+/** Files a task shared with this user under one of their own lists, or back in the Inbox. */
+export const fileShare = (taskId: string, categoryId: string | null) => {
+  console.log(`[mutation] fileShare task=${taskId} list=${categoryId}`);
+  const userId = getCurrentUserId();
+  const tx = offline.createOfflineTransaction({
+    mutationFnName: "fileShare",
+    metadata: { taskId, categoryId } satisfies ShareFilingMetadata,
+  });
+  tx.mutate(() =>
+    tasksCollection.update(taskId, (draft) => {
+      draft.shares = draft.shares.map((share) =>
+        share.sharedWithUserId === userId ? { ...share, categoryId } : share,
+      );
+    }),
+  );
 };
 
 /** Deletes the tasks and their subtasks in one transaction, so one Undo restores them all. */

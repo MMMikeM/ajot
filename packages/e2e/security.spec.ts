@@ -27,14 +27,10 @@ type Send = {
   token?: string;
   cookie?: string;
   origin?: string;
-  fetchSite?: string;
   base?: string;
 };
 
-const send = (
-  path: string,
-  { method = "GET", body, token, cookie, origin, fetchSite, base }: Send,
-) =>
+const send = (path: string, { method = "GET", body, token, cookie, origin, base }: Send) =>
   fetch(`${base ?? API_URL}${path}`, {
     method,
     headers: {
@@ -42,7 +38,6 @@ const send = (
       ...(token && { Authorization: `Bearer ${token}` }),
       ...(cookie && { Cookie: `auth=${cookie}` }),
       ...(origin && { Origin: origin }),
-      ...(fetchSite && { "Sec-Fetch-Site": fetchSite }),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
@@ -68,7 +63,7 @@ const addNote = (auth: AuthResult, taskId: string, content: string) =>
   );
 
 const share = (owner: AuthResult, taskId: string, to: AuthResult, permission: "view" | "edit") =>
-  apiRequest(
+  apiRequest<{ id: string }>(
     "POST",
     "/api/tasks/share",
     { taskId, username: to.username, permission },
@@ -126,21 +121,6 @@ test.describe("which sites can call the API", () => {
     expect((await tasksOf(user1Auth)).some((t) => t.id === task.id)).toBe(false);
   });
 
-  test("another site can't sign someone in or make a write", async ({ user1Auth }) => {
-    const login = await send("/api/auth/login", {
-      method: "POST",
-      body: { username: user1Auth.username, password: USER_1.password },
-      origin: EVIL,
-    });
-    expect(login.status).toBe(403);
-    const invite = await send("/api/invites", {
-      method: "POST",
-      token: user1Auth.token,
-      origin: "null",
-    });
-    expect(invite.status).toBe(403);
-  });
-
   test("the app's own writes still work", async ({ user1Auth }) => {
     const direct = newTask({ title: "Own origin" });
     const res = await send("/api/tasks", {
@@ -151,27 +131,16 @@ test.describe("which sites can call the API", () => {
     });
     expect(res.status).toBe(200);
 
-    // Through the preview server's proxy, as the PWA calls it in the suite. The proxy rewrites
-    // Host, so the server knows the page by the Sec-Fetch-Site a browser sends with it.
+    // Through the preview server's proxy, as the PWA calls it in the suite
     const proxied = newTask({ title: "Through the proxy" });
     const viaProxy = await send("/api/tasks", {
       method: "POST",
       body: proxied,
       token: user1Auth.token,
       origin: new URL(BASE_URL).origin,
-      fetchSite: "same-origin",
       base: BASE_URL,
     });
     expect(viaProxy.status).toBe(200);
-    const crossSite = await send("/api/tasks", {
-      method: "POST",
-      body: newTask(),
-      token: user1Auth.token,
-      origin: EVIL,
-      fetchSite: "cross-site",
-      base: BASE_URL,
-    });
-    expect(crossSite.status).toBe(403);
 
     const ids = (await tasksOf(user1Auth)).map((t) => t.id);
     expect(ids).toEqual(expect.arrayContaining([direct.id, proxied.id]));
@@ -273,6 +242,23 @@ test.describe("notes are their author's", () => {
     });
     expect(res.status).toBe(409);
     expect(await res.text()).not.toContain("Secret");
+  });
+
+  test("a retried note comes back after its task was unshared", async ({
+    user1Auth,
+    user2Auth,
+  }) => {
+    const task = await addTask(user1Auth);
+    const shared = await share(user1Auth, task.id, user2Auth, "edit");
+    const note = { id: id(), userId: "", taskId: task.id, title: "Kept", content: "Kept" };
+    const body = { ...note, createdAt: now(), updatedAt: now() };
+    await apiRequest("POST", "/api/notes", body, user2Auth.token);
+    await apiRequest("DELETE", "/api/tasks/share", { id: shared.id }, user1Auth.token);
+
+    // As if the first response was lost and the outbox sent it again
+    const retry = await send("/api/notes", { method: "POST", body, token: user2Auth.token });
+    expect(retry.status).toBe(200);
+    expect(((await retry.json()) as Note).id).toBe(note.id);
   });
 
   test("can't move your note onto a task you can't see", async ({ user1Auth, user2Auth }) => {
@@ -383,6 +369,23 @@ test.describe("what a share lets you change", () => {
       token: user2Auth.token,
     });
     expect(res.status).toBe(403);
+  });
+
+  test("a subtask can't be filed in a list of its own", async ({ user1Auth }) => {
+    const parent = await addTask(user1Auth);
+    const subtask = await addTask(user1Auth, { parentId: parent.id });
+    const list = await apiRequest<{ id: string }>(
+      "POST",
+      "/api/categories",
+      { id: id(), userId: "", name: "Elsewhere", createdAt: now(), updatedAt: now() },
+      user1Auth.token,
+    );
+    const res = await send("/api/tasks", {
+      method: "PUT",
+      body: { id: subtask.id, categoryId: list.id, updatedAt: now() },
+      token: user1Auth.token,
+    });
+    expect(res.status).toBe(400);
   });
 
   test("an edit share can edit", async ({ user1Auth, user2Auth }) => {

@@ -19,6 +19,10 @@ export const canSeeTask = (task: TaskWithHolders, userId: string) =>
       !!holder.shares?.some((s) => s.sharedWithUserId === userId),
   );
 
+/** A share or a shared list lets you edit a task, but only its owner deletes or restores it. */
+export const canDeleteTask = (task: TaskWithHolders, userId: string) =>
+  holders(task).some((holder) => holder.userId === userId);
+
 /** A view share lets its recipient see the task and file it in their own list, nothing more. */
 export const canEditTask = (task: TaskWithHolders, userId: string) =>
   holders(task).some(

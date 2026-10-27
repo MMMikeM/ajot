@@ -4,8 +4,16 @@ type Owned = { userId: string };
 export const canDeleteTask = (userId: string, task: Owned, parent?: Owned) =>
   task.userId === userId || parent?.userId === userId;
 
-// Moving a task shared with you files your share; moving the task itself would move it for its owner
-export const isSharedWith = (
+/**
+ * Who moves a task to another list: its owner moves the task, someone it was shared with files
+ * their share, and a collaborator in a shared list can't move it.
+ */
+export const filingMode = (
   userId: string,
   task: Owned & { shares: { sharedWithUserId: string }[] },
-) => task.userId !== userId && task.shares.some((s) => s.sharedWithUserId === userId);
+) =>
+  task.userId === userId
+    ? "owner"
+    : task.shares.some((s) => s.sharedWithUserId === userId)
+      ? "share"
+      : "view";

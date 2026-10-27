@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db } from "./client";
@@ -38,17 +38,14 @@ const list = async (userId: string) =>
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
 // An id another note already has updates nothing, so someone else's note isn't sent back.
-const insert = async (data: NoteInsert) => {
+const insert = async (data: NoteInsert & { taskId: string }) => {
   const [row] = await db
     .insert(notes)
     .values(data)
     .onConflictDoUpdate({
       target: notes.id,
       set: { updatedAt: sql`${notes.updatedAt}` },
-      setWhere: and(
-        eq(notes.userId, data.userId),
-        data.taskId ? eq(notes.taskId, data.taskId) : isNull(notes.taskId),
-      ),
+      setWhere: and(eq(notes.userId, data.userId), eq(notes.taskId, data.taskId)),
     })
     .returning();
   if (!row) throw new ConflictError("Note id taken");

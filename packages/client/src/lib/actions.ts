@@ -105,12 +105,6 @@ export const removeTaskShare = async (shareId: string) => {
   await client.api.tasks.share.$delete({ json: { id: shareId } });
 };
 
-/** Files a task shared with this user under one of their own categories. */
-export const updateShareCategory = async (taskId: string, categoryId: string | null) => {
-  const res = await client.api.tasks.share.$put({ json: { taskId, categoryId } });
-  if (!res.ok) throw new Error("Couldn't move it to that list. Try again.");
-};
-
 const AUTH_FAILED = {
   login: "Couldn't sign in. Try again.",
   signup: "Couldn't create your account. Try again.",

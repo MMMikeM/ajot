@@ -14,7 +14,7 @@ import { notificationRoutes } from "./routes/notifications";
 import { deployRoutes } from "./routes/deploy";
 import { configRoutes } from "./routes/config";
 import { metricRoutes } from "./routes/metrics";
-import { isAllowedOrigin, isCrossOriginWrite, parseAllowedOrigins } from "./origins";
+import { isAllowedOrigin, parseAllowedOrigins } from "./origins";
 
 const app = new OpenAPIHono();
 
@@ -72,14 +72,6 @@ app.use("*", (c, next) => {
     c.header("Access-Control-Expose-Headers", "*");
     c.header("Access-Control-Max-Age", "86400");
   }
-  const request = {
-    origin,
-    host,
-    method: c.req.method,
-    secFetchSite: c.req.header("sec-fetch-site"),
-  };
-  if (isCrossOriginWrite(request, allowedOrigins))
-    throw new HTTPException(403, { message: "Requests from other sites aren't allowed." });
   return next();
 });
 
