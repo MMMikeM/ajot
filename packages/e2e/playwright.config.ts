@@ -5,6 +5,7 @@ import { API_PORT, BASE_URL, CLIENT_PORT } from "./helpers/stack";
 // that's the same at any size, so they run on desktop only.
 const TOUCH_SPECS = [
   "adapt-touch.spec.ts",
+  "add-visible.spec.ts",
   "back-button.spec.ts",
   "category-nav.spec.ts",
   "contrast.spec.ts",

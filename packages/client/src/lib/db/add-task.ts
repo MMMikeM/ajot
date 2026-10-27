@@ -12,6 +12,7 @@ export const addTask = async (
   title: string,
   categoryId?: string | null,
   parentId?: string | null,
+  id = nanoid(),
 ) => {
   // An insert before the first load settles can leave the collection stuck loading (signed
   // out, its sync never completes), and the sort order below needs the loaded siblings
@@ -30,7 +31,7 @@ export const addTask = async (
   const tx = offline.createOfflineTransaction({ mutationFnName: "syncTasks" });
   tx.mutate(() =>
     tasksCollection.insert({
-      id: nanoid(),
+      id,
       userId,
       categoryId: parentId ? null : (categoryId ?? null),
       assigneeId: null,

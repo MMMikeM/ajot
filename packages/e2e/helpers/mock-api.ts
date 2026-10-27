@@ -152,6 +152,23 @@ export const mockData = () => {
 
 type MockData = ReturnType<typeof mockData>;
 
+/** Appends `count` plain Inbox tasks, so the list scrolls on every viewport */
+export const withLongInbox = (data: MockData, count = 18) => {
+  const base = data.tasks.find((t) => !t.categoryId && !t.parentId && t.status === "todo")!;
+  for (let i = 0; i < count; i++)
+    data.tasks.push({
+      ...base,
+      id: `t-long-${i}`,
+      title: `Errand ${i + 1}`,
+      description: null,
+      dueDate: null,
+      shares: [],
+      // Valid fractional-index keys after the fixtures' own: addTask can't order after a malformed one
+      sortOrder: `a${(40 + i).toString(36)}`,
+    });
+  return data;
+};
+
 type MockApiOptions = {
   signedIn?: boolean;
   data?: MockData;
