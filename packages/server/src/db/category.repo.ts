@@ -44,9 +44,10 @@ export const categoryInsertSchema = createInsertSchema(categories, {
   .required({ id: true, createdAt: true, updatedAt: true })
   .omit({ deletedAt: true, deletion: true })
   .strict();
+// The fields a client may change, so a column added later isn't editable until it's listed
 export const categoryUpdateSchema = createUpdateSchema(categories, { updatedAt: isoDatetime })
+  .pick({ id: true, updatedAt: true, name: true, color: true, sortOrder: true })
   .required({ id: true, updatedAt: true })
-  .omit({ createdAt: true, userId: true, deletedAt: true, deletion: true })
   .strict();
 
 // What a deleted list keeps is only for the server's Undo, so no read or write sends it

@@ -20,13 +20,14 @@ export const noteInsertSchema = createInsertSchema(notes, {
 })
   .required({ id: true, createdAt: true, updatedAt: true, taskId: true })
   .strict();
-// An edit sends only what changed, so it can leave out taskId, but it can't clear it
+// The fields a client may change. An edit sends only what changed, so it can leave out taskId,
+// but it can't clear it.
 export const noteUpdateSchema = createUpdateSchema(notes, {
   updatedAt: isoDatetime,
   taskId: z.string().optional(),
 })
+  .pick({ id: true, updatedAt: true, title: true, content: true, taskId: true })
   .required({ id: true, updatedAt: true })
-  .omit({ createdAt: true, userId: true })
   .strict();
 
 // A deleted task's notes wait, hidden, for it to come back
