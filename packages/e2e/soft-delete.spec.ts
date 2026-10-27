@@ -317,10 +317,10 @@ for (const tasks of ["delete", "uncategorise"] as const) {
     );
     expect((await listsOf(user2Auth.token)).some((l) => l.id === list.id)).toBe(false);
 
-    // Only the owner can undo it
+    // Only the owner can undo it: to anyone else a deleted list doesn't exist
     await expect(
       apiRequest("POST", `/api/categories/${list.id}/restore`, undefined, user2Auth.token),
-    ).rejects.toThrow(/403/);
+    ).rejects.toThrow(/404/);
     await apiRequest("POST", `/api/categories/${list.id}/restore`, undefined, user1Auth.token);
 
     const theirView = (await listsOf(user2Auth.token)).find((l) => l.id === list.id);

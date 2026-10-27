@@ -30,6 +30,7 @@ Playwright test suite. Two projects: `desktop` (Chrome) runs every spec, and `mo
 | `api.ts`        | `apiRequest` throws on a refusal, `send` returns it; `newTask`, `addTask` and kin; `tasksOf`, `notesOf`       |
 | `app.ts`        | `waitForAppReady`, `createTask`, `createCategory`, `clearLocalStorage`, `clearIDB`                            |
 | `sync.ts`       | `createSyncTracker(page)` — tracks non-GET `/api/*` mutations, exposes `waitForSync()` + `assertNoFailures()` |
+| `live.ts`       | `listenLive(page)` — `open()` waits for the event stream, `expectHeard()` an event, `assertAllApplied()`      |
 | `screenshot.ts` | `takeScreenshot`, `forBothViewports`, `reportViolations` — used by the screenshot script                      |
 | `mock-api.ts`   | `mockApi(page, opts)` — serves `/api/*` from in-memory fixtures and signs the page in (no server needed)      |
 

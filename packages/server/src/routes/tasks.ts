@@ -1,5 +1,4 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { createId } from "@paralleldrive/cuid2";
 import { BadRequestError, ForbiddenError } from "../db/errors";
@@ -16,12 +15,14 @@ import userRepo from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
 import categoryRepo from "../db/category.repo";
 import { authed } from "../middleware";
-import { broadcast, broadcastAll, type TaskEvent } from "../broadcast";
+import { broadcast, broadcastAll } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import notificationQueueRepo from "../db/notification-queue.repo";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
+import reachRepo from "../db/reach.repo";
 import { audienceOf, markTaskEdited, requireTask } from "./task-users";
+import { sendReachChanges } from "./reach";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 
 const shareSchema = z.object({
@@ -53,33 +54,6 @@ const canAssign = async (userId: string, assigneeId: string | null | undefined) 
 const notYourList = () => new ForbiddenError("That list isn't yours.");
 const notAContact = () => new BadRequestError("You can only assign tasks to your contacts.");
 const subtaskGoesWithParent = () => new BadRequestError("A subtask goes wherever its parent is.");
-
-/**
- * A move to another list changes who reaches the task and its subtasks: whoever gains it gets
- * them, whoever loses it has them taken off, and the rest get the change.
- */
-const broadcastMove = async (
-  c: Context,
-  id: string,
-  result: Parameters<typeof broadcast>[3],
-  before: string[],
-) => {
-  const after = await audienceOf(id);
-  const gained = after.filter((u) => !before.includes(u));
-  const lost = before.filter((u) => !after.includes(u));
-  const kept = before.filter((u) => after.includes(u));
-  broadcast(c, "tasks", "update", result, kept);
-  if (gained.length === 0 && lost.length === 0) return;
-  const rows = await taskRepo.findListItemWithSubtasks(id);
-  const inserts = rows.map((data): TaskEvent => ({ model: "tasks", action: "insert", data }));
-  const deletes = rows.map(({ id }): TaskEvent => ({
-    model: "tasks",
-    action: "delete",
-    data: { id },
-  }));
-  broadcastAll(c, inserts, gained);
-  broadcastAll(c, deletes, lost);
-};
 
 const shareCategorySchema = z.object({
   taskId: z.string(),
@@ -146,7 +120,7 @@ export const taskRoutes = authed()
       const restoring = fields.deletedAt === null;
       const [{ task, mine, audience }, canUseList, mayAssign] = await Promise.all([
         // As with deleting, only the owner can bring a task back
-        requireTask(id, userId, restoring ? "delete" : "edit", { deleted: restoring }),
+        requireTask(id, userId, restoring ? "manage" : "edit", { deleted: restoring }),
         fields.categoryId ? categoryRepo.canUse(fields.categoryId, userId) : true,
         canAssign(userId, fields.assigneeId),
       ]);
@@ -170,8 +144,9 @@ export const taskRoutes = authed()
 
       // What the client stamped wins; one from before these columns existed sends neither
       const stamps = taskChangeStamps(fields, updatedAt);
+      const moving = "categoryId" in fields ? await reachRepo.read({ taskIds: [id] }) : undefined;
       const result = await taskRepo.update(id, updatedAt, { ...stamps, ...fields });
-      if ("categoryId" in fields) await broadcastMove(c, id, result, audience);
+      if (moving) await sendReachChanges(c, moving, [id]);
       else broadcast(c, "tasks", "update", result, audience);
       if (task.parentId && stamps.editedAt)
         await markTaskEdited(c, task.parentId, userId, updatedAt);
@@ -246,7 +221,7 @@ export const taskRoutes = authed()
       const { id } = c.req.valid("json");
       const userId = c.get("userId");
 
-      const { audience } = await requireTask(id, userId, "delete");
+      const { audience } = await requireTask(id, userId, "manage");
 
       const { task: removed, subtaskIds } = await taskRepo.remove(id);
       broadcastAll(
@@ -305,28 +280,28 @@ export const taskRoutes = authed()
         200: jsonContent(taskShareResponseSchema),
         400: jsonContent(errorSchema, "Bad request"),
         403: jsonContent(errorSchema, "Forbidden"),
+        404: jsonContent(errorSchema, "Not found"),
       }),
     }),
     async (c) => {
       const data = c.req.valid("json");
       const userId = c.get("userId");
-      const [task, targetUser] = await Promise.all([
-        taskRepo.findById(data.taskId),
+      const [{ task }, targetUser] = await Promise.all([
+        requireTask(data.taskId, userId, "manage"),
         userRepo.findByUsername(data.username.toLowerCase()),
       ]);
-      if (task.userId !== userId)
-        throw new HTTPException(403, { message: "Only the task's owner can share it." });
       if (task.parentId) throw subtaskGoesWithParent();
       if (targetUser.id === userId)
         throw new HTTPException(400, { message: "That's you. Choose someone else." });
 
+      const before = await reachRepo.read({ taskIds: [task.id] });
       const result = await taskRepo.insertShare({
         id: createId(),
-        taskId: data.taskId,
+        taskId: task.id,
         sharedWithUserId: targetUser.id,
         permission: data.permission,
       });
-      broadcast(c, "tasks", "update", { id: data.taskId }, [task.userId, targetUser.id]);
+      await sendReachChanges(c, before, [task.id]);
 
       const actorName = await getUserName(userId);
       sendNotification(targetUser.id, {
@@ -344,15 +319,19 @@ export const taskRoutes = authed()
       method: "delete",
       path: "/share",
       request: jsonBody(taskShareSelectSchema),
-      responses: withAuth({ 200: jsonContent(taskShareResponseSchema) }),
+      responses: withAuth({
+        200: jsonContent(taskShareResponseSchema),
+        403: jsonContent(errorSchema, "Forbidden"),
+        404: jsonContent(errorSchema, "Not found"),
+      }),
     }),
     async (c) => {
-      const result = await taskRepo.removeShare(c.req.valid("json").id, c.get("userId"));
-      const task = await taskRepo.findById(result.taskId);
-      broadcast(c, "tasks", "update", { id: result.taskId }, [
-        task.userId,
-        result.sharedWithUserId,
-      ]);
+      const share = await taskRepo.findShare(c.req.valid("json").id);
+      // Someone who can't see the task gets the same 404 as for a share that doesn't exist
+      await requireTask(share.taskId, c.get("userId"), "manage");
+      const before = await reachRepo.read({ taskIds: [share.taskId] });
+      const result = await taskRepo.removeShare(share.id);
+      await sendReachChanges(c, before, [share.taskId]);
       return c.json(result, 200);
     },
   )

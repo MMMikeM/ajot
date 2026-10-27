@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import categoryRepo from "./category.repo";
 import contactRepo from "./contact.repo";
-import { categories, categoryCollaborators, contacts, removedContacts } from "./schema";
+import {
+  categories,
+  categoryCollaborators,
+  contacts,
+  removedContacts,
+  tasks,
+  taskShares,
+} from "./schema";
 
 type Row = Record<string, unknown>;
 type Where = Record<string, unknown>;
@@ -62,6 +69,13 @@ vi.mock("./client", () => ({
   inTransaction: (run: (tx: typeof fakeDb) => unknown) => run(fakeDb),
 }));
 
+// Reads the views, which the fake can't; what it reads only addresses the broadcast
+vi.mock("./reach.repo", () => ({
+  default: {
+    read: async () => ({ taskIds: [], listIds: [], tasks: new Map(), lists: new Map() }),
+  },
+}));
+
 const owner = "owner";
 const collaborator = "collaborator";
 const stranger = "stranger";
@@ -81,35 +95,26 @@ beforeEach(() => {
   writes.length = 0;
 });
 
+// Only its owner may restore a list: requireList checks that in the route, before this runs
 describe("restoring a deleted list", () => {
-  test("is refused to anyone but its owner, before anything is written", async () => {
-    tables.categories = [list()];
-    for (const userId of [collaborator, stranger]) {
-      await expect(categoryRepo.restore("list", userId)).rejects.toMatchObject({ status: 403 });
-    }
-    expect(writes).toEqual([]);
-  });
-
   test("of a list that doesn't exist is not found", async () => {
-    await expect(categoryRepo.restore("list", owner)).rejects.toMatchObject({ status: 404 });
+    await expect(categoryRepo.restore("list")).rejects.toMatchObject({ status: 404 });
     expect(writes).toEqual([]);
   });
 
-  test("brings the list back for its owner", async () => {
+  test("brings the list back", async () => {
     tables.categories = [list()];
-    // The read after the transaction stands in for the restored list
-    const restored = await categoryRepo.restore("list", owner);
+    await categoryRepo.restore("list");
     expect(writes[0]).toMatchObject({
       op: "update",
       table: categories,
       data: { deletedAt: null, deletion: null },
     });
-    expect(restored.memberIds).toEqual([owner, collaborator]);
   });
 
   test("of a list that isn't deleted changes nothing, so a replay is harmless", async () => {
     tables.categories = [list({ deletedAt: null, deletion: null })];
-    await categoryRepo.restore("list", owner);
+    await categoryRepo.restore("list");
     expect(writes).toEqual([]);
   });
 });
@@ -145,6 +150,21 @@ describe("restoring a removed contact", () => {
       { op: "insert", table: categoryCollaborators, data: [record.collaborators[0]] },
       { op: "delete", table: removedContacts },
     ]);
+  });
+
+  test("puts back what leaving the list took out of it", async () => {
+    const left = { movedTaskIds: ["bobs-task"], unfiledTaskIds: ["shared-with-bob"] };
+    tables.removedContacts = [{ ...record, collaborators: [{ ...record.collaborators[0], left }] }];
+    tables.categories = [{ id: "live", deletedAt: null }];
+    await contactRepo.restore("mine", owner);
+    expect(writes.map(({ op, table }) => ({ op, table }))).toEqual([
+      { op: "insert", table: contacts },
+      { op: "insert", table: categoryCollaborators },
+      { op: "update", table: tasks },
+      { op: "update", table: taskShares },
+      { op: "delete", table: removedContacts },
+    ]);
+    expect(writes[1]!.data).toEqual([record.collaborators[0]]);
   });
 
   test("with nothing left to restore is not found", async () => {
