@@ -106,6 +106,15 @@ const findByIdWithCollaborators = async (id: string) => {
 };
 
 /** Whether the user may file tasks in this list: they own it or collaborate on it. */
+/** Everyone in a list: its owner and its collaborators. */
+const memberIds = async (id: string) => {
+  const rows = await db
+    .select({ userId: listMembers.userId })
+    .from(listMembers)
+    .where(eq(listMembers.listId, id));
+  return rows.map((r) => r.userId);
+};
+
 /** Whether the user owns the list or collaborates on it. */
 const canUse = async (id: string, userId: string) => {
   const rows = await db
@@ -304,6 +313,7 @@ export default {
   findById,
   findByIdWithCollaborators,
   canUse,
+  memberIds,
   insert,
   update,
   removeWithTasks,
