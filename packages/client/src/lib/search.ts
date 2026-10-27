@@ -83,8 +83,8 @@ export const searchTasks = ({
     if (listId !== undefined) listOf.set(task.id, listId);
   }
   const visible = tasks.filter((t) => listOf.has(t.id));
-  // A note whose task was just deleted, or lost it long ago, has nowhere to open
-  const visibleNotes = notes.filter((n) => n.taskId && listOf.has(n.taskId));
+  // A note whose task was just deleted has nowhere to open
+  const visibleNotes = notes.filter((n) => listOf.has(n.taskId));
 
   const taskResults = createFuzzySearch(visible, [
     { text: (t) => t.title },
