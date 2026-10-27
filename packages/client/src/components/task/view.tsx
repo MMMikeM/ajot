@@ -5,8 +5,8 @@ import { useSortable } from "@dnd-kit/react/sortable";
 import { useTasks, useCategories } from "~/lib/db/hooks";
 import { useActiveCategoryId } from "~/lib/state/active-category";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
-import { useCollaboratedCategoryIds } from "~/lib/hooks/use-collaborated-categories";
 import { getEffectiveCategoryId } from "~/lib/effective-category";
+import { categoriesById, holders } from "~/lib/task-holders";
 import { CategoryNav } from "~/components/category-nav";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
@@ -288,13 +288,11 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
     ? [...rawCategories].sort((a, b) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? ""))
     : [];
 
-  const collaboratedCategoryIds = useCollaboratedCategoryIds(userId);
+  const lists = categoriesById(rawCategories ?? []);
 
   // Computed before loading guard so useDndActions always receives stable values
   const categoryTasks = (allTasks ?? []).filter(
-    (t) =>
-      !t.parentId &&
-      getEffectiveCategoryId(t, userId, collaboratedCategoryIds) === activeCategoryId,
+    (t) => !t.parentId && getEffectiveCategoryId(t, userId, lists) === activeCategoryId,
   );
 
   const activeTasks = categoryTasks.filter((t) => t.status !== "done").sort(bySortOrder);
@@ -331,7 +329,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   // Deleting a task deletes its subtasks, so one still holding open work stays
   const clearableDoneTasks = doneTasks.filter(
     (t) =>
-      canDeleteTask(t, userId) &&
+      canDeleteTask(holders(t, lists), userId) &&
       (subtasksByParent.get(t.id) ?? NO_SUBTASKS).every((sub) => sub.status === "done"),
   );
 
@@ -347,6 +345,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
                   index={index}
                   task={task}
                   subtasks={subtasksByParent.get(task.id) ?? NO_SUBTASKS}
+                  lists={lists}
                   onOpen={onSelectTask}
                   onToggle={toggleActive}
                   onDelete={deleteActive}
@@ -386,6 +385,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
                     <TaskItem
                       task={task}
                       subtasks={subtasksByParent.get(task.id) ?? NO_SUBTASKS}
+                      lists={lists}
                       onOpen={onSelectTask}
                       onToggle={actions.handleToggle}
                       onDelete={actions.handleDelete}

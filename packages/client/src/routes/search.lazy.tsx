@@ -10,7 +10,6 @@ import { useCategories, useNotes, useTasks } from "~/lib/db/hooks";
 import { addTask } from "~/lib/db/add-task";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { useActiveCategoryId } from "~/lib/state/active-category";
-import { useCollaboratedCategoryIds } from "~/lib/hooks/use-collaborated-categories";
 import { useIsDesk } from "~/lib/hooks/use-is-desk";
 import { releaseKeyboard } from "~/lib/keyboard-bridge";
 import { searchTasks } from "~/lib/search";
@@ -34,18 +33,10 @@ function SearchPage() {
   const { data: tasks = [] } = useTasks();
   const { data: notes = [] } = useNotes();
   const { data: rawCategories = [] } = useCategories();
-  const collaboratedCategoryIds = useCollaboratedCategoryIds(userId);
   const { handleToggle } = useTaskActions();
 
   const categories = [...rawCategories].sort(bySortOrder);
-  const results = searchTasks({
-    query,
-    tasks,
-    notes,
-    categories,
-    userId,
-    collaboratedCategoryIds,
-  });
+  const results = searchTasks({ query, tasks, notes, categories, userId });
 
   // Search was opened from a list, which an added task goes into; one deleted since is the Inbox
   const fromList = categories.find((c) => c.id === activeCategoryId) ?? null;

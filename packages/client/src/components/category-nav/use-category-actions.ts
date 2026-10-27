@@ -9,7 +9,7 @@ import {
 } from "~/lib/db/hooks";
 import { useActiveCategoryId, setActiveCategoryId } from "~/lib/state/active-category";
 import { useCurrentUserId, useOptimisticUserId } from "~/lib/auth/current-user";
-import { useCollaboratedCategoryIds } from "~/lib/hooks/use-collaborated-categories";
+import { categoriesById } from "~/lib/task-holders";
 import { leaveCategory } from "~/lib/actions";
 import { pushUndoToast } from "~/lib/undo-toast";
 import { countOpenTasksByCategory } from "~/lib/effective-category";
@@ -31,12 +31,10 @@ export const useCategoryActions = () => {
     ? [...rawCategories].sort((a, b) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? ""))
     : [];
 
-  const collaboratedCategoryIds = useCollaboratedCategoryIds(currentUserId);
-
   const openCounts = countOpenTasksByCategory(
     allTasks ?? [],
     currentUserId,
-    collaboratedCategoryIds,
+    categoriesById(categories),
   );
   const inboxCount = openCounts.get(null) ?? 0;
 
