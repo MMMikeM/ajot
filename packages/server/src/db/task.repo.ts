@@ -134,20 +134,10 @@ const insert = async (data: TaskInsert) => {
   return row;
 };
 
-/**
- * A task sent to someone, which they own. A retried send gets the row back; an id one of their
- * tasks already has, made at another moment, doesn't, so it can't be read or brought back.
- */
-const insertSent = async (data: TaskInsert & Required<Pick<TaskInsert, "createdAt">>) => {
-  const [row] = await db
-    .insert(tasks)
-    .values(data)
-    .onConflictDoUpdate({
-      target: tasks.id,
-      set: { updatedAt: sql`${tasks.updatedAt}` },
-      setWhere: and(eq(tasks.userId, data.userId), eq(tasks.createdAt, data.createdAt)),
-    })
-    .returning();
+// A task sent to someone, which they own. Nothing retries a send with the same id, so any id
+// already taken is a conflict, and the sender never gets back a task of the recipient's.
+const insertSent = async (data: TaskInsert) => {
+  const [row] = await db.insert(tasks).values(data).onConflictDoNothing().returning();
   if (!row) throw new ConflictError("Task id taken");
   return row;
 };
