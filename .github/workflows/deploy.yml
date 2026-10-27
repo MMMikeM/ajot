@@ -54,7 +54,7 @@ jobs:
       # TTY, a rename or data-loss change exits non-zero and stops the deploy; push those by hand.
       - name: Push database schema
         if: github.event_name == 'push'
-        run: pnpm --filter @newtab-todo/server exec drizzle-kit push --verbose
+        run: pnpm --filter @newtab-todo/server db:push --verbose
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
