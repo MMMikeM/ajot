@@ -28,12 +28,24 @@ const rawInputs = [
   },
 ];
 
+// A class ending in a bracket is an arbitrary value or property; variants end in a colon. Values
+// with a function or a list in them (calc, env, max, transition lists) and viewport units have no
+// scale equivalent, so they stay allowed
+const arbitraryValues = {
+  pattern: "\\[(?![^\\[\\]]*[(,])(?![\\d.]+d?v[hw]\\])[^\\[\\]]*\\]!?$",
+  message: "Arbitrary value: use a theme token or a scale value instead.",
+};
+
 // An override's options for a rule replace the ones before it rather than adding to them, so each
 // override below lists every ban that applies to its files
 export default defineConfig({
   lint: {
     options: { typeAware: true, typeCheck: true },
     plugins: ["eslint", "typescript", "unicorn", "oxc", "react", "import", "jsx-a11y"],
+    jsPlugins: ["eslint-plugin-better-tailwindcss"],
+    settings: {
+      "better-tailwindcss": { cwd: "packages/client", entryPoint: "src/app.css" },
+    },
     categories: { correctness: "error" },
     // .claude/skills/impeccable is vendored (managed by `npx impeccable update`)
     ignorePatterns: ["src/routeTree.gen.ts", ".worktrees/**", ".claude/skills/impeccable/**"],
@@ -47,8 +59,18 @@ export default defineConfig({
       // useLiveQuery returns `data: undefined`. The `data = []` defaults are load-bearing.
       "typescript/no-useless-default-assignment": ["off"],
       "typescript/no-restricted-imports": ["error", { paths: [manualMemoHooks] }],
+      "better-tailwindcss/no-unknown-classes": ["error"],
+      "better-tailwindcss/no-conflicting-classes": ["error"],
+      "better-tailwindcss/no-duplicate-classes": ["error"],
+      "better-tailwindcss/no-deprecated-classes": ["error"],
+      "better-tailwindcss/no-restricted-classes": ["error", { restrict: [arbitraryValues] }],
     },
     overrides: [
+      // shadcn writes arbitrary values into the primitives, and a regenerate brings them back
+      {
+        files: ["packages/client/src/components/ui/**"],
+        rules: { "better-tailwindcss/no-restricted-classes": ["off"] },
+      },
       {
         files: ["packages/client/src/routes/**", "packages/client/src/components/**"],
         rules: {

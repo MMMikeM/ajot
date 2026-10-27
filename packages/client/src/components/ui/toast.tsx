@@ -59,17 +59,7 @@ export const Toasts = () => {
                 Undo
               </Toast.Action>
             )}
-            <Toast.Close
-              render={
-                <Button
-                  variant="subtle"
-                  size="xs"
-                  icon
-                  aria-label="Dismiss"
-                  className="touch:size-9"
-                />
-              }
-            >
+            <Toast.Close render={<Button variant="subtle" size="xs" icon aria-label="Dismiss" />}>
               <X className="size-3.5" />
             </Toast.Close>
           </div>

@@ -91,11 +91,11 @@ export function PeoplePage() {
           icon
           onClick={() => router.navigate({ to: "/" })}
           aria-label="Back to tasks"
-          className="-ml-2 touch:size-10"
+          bleed="start"
         >
           <ChevronLeft className="size-5" />
         </Button>
-        <h2 className="font-display text-[1.75rem] leading-tight text-foreground">People</h2>
+        <h2 className="font-display text-3xl text-foreground">People</h2>
       </div>
 
       <Button
@@ -103,7 +103,7 @@ export function PeoplePage() {
         size="sm"
         onClick={invite}
         disabled={inviting}
-        className="self-start touch:h-10 touch:px-4"
+        className="self-start"
       >
         <UserPlus />
         {inviting ? "Generating link…" : "Invite someone"}

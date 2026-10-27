@@ -22,7 +22,6 @@ import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { TogglePill } from "~/components/ui/toggle-pill";
 import { DetailRow } from "~/components/task/detail-row";
-import { hitArea } from "~/components/hit-area";
 
 const INBOX_VALUE = "__inbox__";
 
@@ -163,9 +162,7 @@ export const SharingField = ({
           </span>
           {isOwner && (
             <RevealGroup>
-              <RevealButton className={hitArea} onClick={() => removeTaskShare(share.id)}>
-                Remove
-              </RevealButton>
+              <RevealButton onClick={() => removeTaskShare(share.id)}>Remove</RevealButton>
             </RevealGroup>
           )}
         </ListRow>
@@ -269,7 +266,6 @@ export const AssigneeField = ({
             aria-checked={task.assigneeId === c.id}
             selected={task.assigneeId === c.id}
             onClick={() => updateTask(task.id, { assigneeId: c.id })}
-            className={hitArea}
           >
             {c.name}
           </TogglePill>

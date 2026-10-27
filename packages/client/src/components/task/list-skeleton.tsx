@@ -6,7 +6,7 @@ export function TaskListSkeleton() {
   return (
     <>
       {/* The title's line box: text-[1.75rem] leading-tight */}
-      <div className="mb-3 box-content flex h-[2.1875rem] shrink-0 items-center gap-2.5 py-1">
+      <div className="mb-3 box-content flex h-8.75 shrink-0 items-center gap-2.5 py-1">
         <Skeleton data-testid="skeleton-dot" className="mt-1 size-2 rounded-full" />
         <Skeleton data-testid="skeleton-title" className="h-7 w-28" />
         <output className="sr-only">Loading tasks</output>

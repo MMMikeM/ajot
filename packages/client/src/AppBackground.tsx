@@ -23,7 +23,7 @@ export function AppShell({
       )}
     >
       <header className="mb-5 flex shrink-0 items-center justify-between touch:mb-4">
-        <h1 className="font-display text-lg tracking-[0.28em] text-foreground uppercase">Ajot</h1>
+        <h1 className="font-display text-lg tracking-wordmark text-foreground uppercase">Ajot</h1>
         {right}
       </header>
       {/* contents: route children stay direct flex items of the shell on touch */}

@@ -5,10 +5,13 @@ import type { StyledProps } from "~/lib/utils";
 
 const togglePillVariants = tv({
   extend: buttonVariants,
-  base: "rounded-full touch:h-8 touch:px-3.5 touch:text-sm",
+  base: "rounded-full touch:text-sm",
   variants: {
+    size: {
+      xs: "touch:px-3.5",
+    },
     selected: {
-      true: "bg-primary-selected text-primary",
+      true: "bg-primary-selected text-primary touch:active:bg-primary-selected touch:active:text-primary",
       false: "text-hint hover:text-foreground",
     },
   },

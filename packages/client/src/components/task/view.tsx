@@ -106,7 +106,8 @@ const DoneSection = ({
           aria-expanded={open}
           // The count's inline-block would read as "Done ( 3 )"
           aria-label={`Done (${count})`}
-          className="-ml-2.5 font-medium tracking-wider text-muted-foreground uppercase hover:text-foreground aria-expanded:bg-transparent touch:h-11"
+          bleed="start"
+          className="font-medium tracking-wider text-muted-foreground uppercase hover:text-foreground aria-expanded:bg-transparent"
         >
           <ChevronRight
             size={14}
@@ -120,8 +121,7 @@ const DoneSection = ({
               onAnimationEnd={countLanding.onLanded}
               className={cn(
                 "inline-block tabular-nums",
-                countLanding.landing &&
-                  "animate-[done-count-land_320ms_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none",
+                countLanding.landing && "animate-done-count-land motion-reduce:animate-none",
               )}
             >
               {count}
@@ -135,7 +135,7 @@ const DoneSection = ({
             size="xs"
             onClick={clear}
             aria-label="Clear done tasks"
-            className="-mr-2.5 touch:h-11 touch:px-3"
+            bleed="end"
           >
             Clear
           </Button>

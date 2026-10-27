@@ -91,7 +91,7 @@ export function SetupHint() {
         onDismiss={() => dismiss("install")}
         action={
           canInstall && (
-            <Button variant="subtle" size="xs" className="touch:h-8" onClick={install}>
+            <Button variant="subtle" size="xs" onClick={install}>
               Install
             </Button>
           )
@@ -116,13 +116,7 @@ export function SetupHint() {
         icon={<BellRing />}
         onDismiss={() => dismiss("background")}
         action={
-          <Button
-            variant="subtle"
-            size="xs"
-            className="touch:h-8"
-            onClick={turnOn}
-            disabled={turningOn}
-          >
+          <Button variant="subtle" size="xs" onClick={turnOn} disabled={turningOn}>
             Turn on
           </Button>
         }
@@ -155,7 +149,8 @@ const HintRow = ({
       size="xs"
       icon
       onClick={onDismiss}
-      className="-mr-1.5 shrink-0 touch:size-8"
+      bleed="end"
+      className="shrink-0"
       aria-label="Dismiss"
     >
       <X />

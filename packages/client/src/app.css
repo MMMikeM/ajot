@@ -23,6 +23,11 @@
 
 @theme inline {
   --font-display: "DM Serif Display", serif;
+  --text-3xl: 1.75rem;
+  --text-3xl--line-height: 1.25;
+  --tracking-wordmark: 0.28em;
+  --animate-task-enter: task-enter 200ms ease-out;
+  --animate-done-count-land: done-count-land 320ms cubic-bezier(0.16, 1, 0.3, 1);
   --font-heading: "Figtree Variable", sans-serif;
   --font-sans: "Figtree Variable", "Inter Variable", sans-serif;
   --color-date: var(--date);
@@ -85,6 +90,10 @@
     transparent var(--actions-w),
     black calc(var(--actions-w) + 1.5rem)
   );
+}
+
+@utility touch-callout-none {
+  -webkit-touch-callout: none;
 }
 
 @utility scrollbar-none {
@@ -293,9 +302,9 @@
     --scroll-fade-bottom: 0px;
   }
 }
-@media (pointer: coarse) {
-  @supports (animation-timeline: scroll()) {
-    .scroll-edge-fade {
+@utility scroll-edge-fade {
+  @media (pointer: coarse) {
+    @supports (animation-timeline: scroll()) {
       mask-image: linear-gradient(
         to bottom,
         transparent,

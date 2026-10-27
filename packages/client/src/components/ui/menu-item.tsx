@@ -5,7 +5,7 @@ import type { StyledProps } from "~/lib/utils";
 
 const menuItemVariants = tv({
   extend: buttonVariants,
-  base: "w-full justify-start gap-2.5 rounded-md touch:h-11 [&_svg:not([class*='text-'])]:text-hint",
+  base: "w-full justify-start gap-2.5 rounded-md [&_svg:not([class*='text-'])]:text-hint",
   compoundVariants: [
     { intent: "destructive", class: "[&_svg:not([class*='text-'])]:text-current" },
   ],

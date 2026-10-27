@@ -13,6 +13,7 @@ import { setActiveCategoryId } from "~/lib/state/active-category";
 import { useCurrentUserId } from "~/lib/auth/current-user";
 import { useNavContext } from "~/lib/state/nav-context";
 import { cn } from "~/lib/utils";
+import { navRow } from "./nav-row";
 import type { Category } from "~/lib/types";
 import { useCategoryNavState } from "./use-category-nav-state";
 import { useCategoryActions } from "./use-category-actions";
@@ -123,7 +124,7 @@ function CategoryMobileSheet() {
         >
           {/* Long names wrap: touch has no hover to reveal a truncated one */}
           <ColorDot color={cat.color ?? undefined} className="mt-1.5 self-start" />
-          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+          <span className="min-w-0 flex-1 wrap-anywhere">
             {cat.name}
             {!isOwned && cat.user?.name && (
               <span className="ml-1 text-xs font-normal text-hint">· {cat.user.name}</span>
@@ -137,8 +138,11 @@ function CategoryMobileSheet() {
         <Popover>
           <PopoverTrigger
             render={
-              <button
-                className="flex size-11 shrink-0 items-center justify-center rounded-lg text-hint transition-colors active:bg-secondary active:text-foreground"
+              <Button
+                variant="subtle"
+                size="sm"
+                icon
+                className="size-11 rounded-lg"
                 aria-label="List options"
               />
             }
@@ -229,15 +233,13 @@ function CategoryMobileSheet() {
               />
             </form>
           ) : (
-            <Button
-              variant="subtle"
-              size="sm"
+            <button
               onClick={() => setAdding(true)}
-              className="mx-2 h-12 w-[calc(100%-1rem)] justify-start gap-3 rounded-lg px-3 active:bg-secondary active:text-foreground"
+              className={navRow({ place: "sheet", class: "w-[calc(100%-1rem)]" })}
             >
               <Plus size={16} />
               Add list
-            </Button>
+            </button>
           )}
 
           {signedIn && (
@@ -245,7 +247,7 @@ function CategoryMobileSheet() {
               to="/people"
               replace
               onClick={() => setNavOpen(false)}
-              className="mx-2 flex h-12 items-center gap-3 rounded-lg px-3 text-sm text-hint transition-colors active:bg-secondary active:text-foreground"
+              className={navRow({ place: "sheet" })}
             >
               <Users size={16} />
               People
