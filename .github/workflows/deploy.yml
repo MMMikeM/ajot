@@ -3,7 +3,7 @@ name: Deploy
 on:
   push:
     branches: [main]
-  # A pull request runs the e2e job only; deploying stays with pushes to main
+  # A pull request runs the tests and builds the server image; deploying stays with pushes to main
   pull_request:
 
 jobs:
@@ -78,8 +78,27 @@ jobs:
           # Dot folders are skipped by default, which left the upload empty
           include-hidden-files: true
 
+  # The server image, built while the tests run; the deploy adds the tested client to it. Pull
+  # requests build it too, so a broken Dockerfile shows before the merge.
+  server-image:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - run: flyctl auth docker
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # Builds on the runner's own Docker, uncached: restoring layers from the GitHub Actions cache
+      # was slower, as the node_modules layers run to 200+ MB each
+      - run: |
+          docker build --target server -t registry.fly.io/ajot:server-${{ github.sha }} .
+          docker push registry.fly.io/ajot:server-${{ github.sha }}
+
   deploy:
-    needs: e2e
+    needs: [e2e, server-image]
     if: github.event_name == 'push'
     runs-on: ubuntu-26.04
     steps:
@@ -93,9 +112,12 @@ jobs:
           name: client-build
           path: packages/client
 
-      # Builds on the runner's own Docker, uncached: restoring layers from the GitHub Actions cache
-      # was slower, as the node_modules layers run to 200+ MB each
-      - run: flyctl deploy --local-only
+      # So the build can pull the server image
+      - run: flyctl auth docker
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - run: flyctl deploy --local-only --build-arg SERVER_IMAGE=registry.fly.io/ajot:server-${{ github.sha }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
