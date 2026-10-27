@@ -2,8 +2,9 @@ import { HTTPException } from "hono/http-exception";
 import sessionRepo from "./db/session.repo";
 
 /**
- * A Bearer header, or, from EventSource, which can't set headers, a query param. Never a cookie:
- * the browser would attach one to a request another site starts.
+ * A Bearer header. Never a cookie: the browser would attach one to a request another site starts.
+ * Only the event stream passes its URL, since EventSource can't set headers; anywhere else a
+ * token in the URL would end up in logs and history.
  */
 export const extractToken = (request: Request, url?: URL): string | null => {
   const header = request.headers.get("authorization");

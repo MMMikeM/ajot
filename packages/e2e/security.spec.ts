@@ -438,3 +438,8 @@ test.describe("ids someone else already has", () => {
     expect(await res.text()).not.toContain("Hidden name");
   });
 });
+
+test("a token in the URL signs in only the event stream", async ({ user1Auth }) => {
+  const res = await send(`/api/tasks?token=${user1Auth.token}`, {});
+  expect(res.status).toBe(401);
+});
