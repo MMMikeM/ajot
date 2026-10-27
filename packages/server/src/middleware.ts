@@ -6,7 +6,7 @@ import { extractToken, validateSession } from "./auth";
 export type AuthEnv = { Variables: { userId: string } };
 
 const authMiddleware: MiddlewareHandler<AuthEnv> = async (c, next) => {
-  const token = extractToken(c.req.raw, new URL(c.req.url));
+  const token = extractToken(c.req.raw);
   if (!token) throw new HTTPException(401, { message: "Unauthorized" });
   c.set("userId", await validateSession(token));
   await next();
