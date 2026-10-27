@@ -1,5 +1,6 @@
-import { defineRelations } from "drizzle-orm";
+import { defineRelations, sql } from "drizzle-orm";
 import {
+  check,
   primaryKey,
   sqliteTable,
   uniqueIndex,
@@ -44,24 +45,29 @@ export type CategoryDeletion = {
 
 export const taskStatuses = ["todo", "in_progress", "done"] as const;
 
-export const tasks = sqliteTable("tasks", {
-  id: pk(),
-  userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
-  categoryId: nullableFk("category_id", () => categories.id, { onDelete: "set null" }),
-  assigneeId: nullableFk("assignee_id", () => users.id, { onDelete: "set null" }),
-  parentId: nullableFk("parent_id", (): AnySQLiteColumn => tasks.id, { onDelete: "cascade" }),
-  title: string("title"),
-  description: nullableString("description"),
-  status: oneOf("status", taskStatuses).default("todo"),
-  dueDate: nullableString("due_date"),
-  sortOrder: nullableString("sort_order"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-  editedAt: nullableString("edited_at"),
-  completedAt: nullableString("completed_at"),
-  // Deleting hides a task rather than removing it, so Undo restores it for everyone
-  deletedAt: nullableString("deleted_at"),
-});
+export const tasks = sqliteTable(
+  "tasks",
+  {
+    id: pk(),
+    userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
+    categoryId: nullableFk("category_id", () => categories.id, { onDelete: "set null" }),
+    assigneeId: nullableFk("assignee_id", () => users.id, { onDelete: "set null" }),
+    parentId: nullableFk("parent_id", (): AnySQLiteColumn => tasks.id, { onDelete: "cascade" }),
+    title: string("title"),
+    description: nullableString("description"),
+    status: oneOf("status", taskStatuses).default("todo"),
+    dueDate: nullableString("due_date"),
+    sortOrder: nullableString("sort_order"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    editedAt: nullableString("edited_at"),
+    completedAt: nullableString("completed_at"),
+    // Deleting hides a task rather than removing it, so Undo restores it for everyone
+    deletedAt: nullableString("deleted_at"),
+  },
+  // A subtask goes wherever its parent is; a list of its own would add that list's people to it
+  (t) => [check("subtask_has_no_list", sql`${t.parentId} IS NULL OR ${t.categoryId} IS NULL`)],
+);
 
 export const users = sqliteTable("users", {
   id: pk(),
