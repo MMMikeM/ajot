@@ -2,6 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["node"],
+    // migrate.ts runs under plain node, which won't add the .ts to an import itself
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "paths": {
       "~/*": ["./src/*"]
     }

@@ -16,8 +16,8 @@ One Turso database, reached over HTTP by `@tursodatabase/serverless` (`db/client
 
 ## Who can reach what
 
-- **Ask the views, never write the check again.** Who can see, edit or delete a task is the `task_access` view, and who's in a list is `list_members` (both in `db/schema.ts`, created by a migration). Routes go through `requireTask` and `audienceOf` (`routes/task-users.ts`) and `categoryRepo.canUse`; a route that compares owners, shares or collaborators itself is the drift these replace.
-- **The client's copy is `shared/task-access.ts`**, for what a page decides offline. Its paths and the view's SQL fragments are both keyed by `AccessPath`, so adding a way in fails to compile until both have it, and `task-access.test.ts` runs the migrations into an in-memory SQLite and checks the two agree row for row. Add a case there with any new path.
+- **Ask the views, never write the check again.** Who can see, edit or delete a task is the `task_access` view, and who's in a list is `list_members` (both in `db/views.ts`, created by `migrate.ts` on every run). Routes go through `requireTask` and `audienceOf` (`routes/task-users.ts`) and `categoryRepo.canUse`; a route that compares owners, shares or collaborators itself is the drift these replace.
+- **The client's copy is `shared/task-access.ts`**, for what a page decides offline. Its paths and the view's SQL fragments are both keyed by `AccessPath`, so adding a way in fails to compile until both have it, and `task-access.test.ts` runs the migrations, as `migrate.ts` does, into an in-memory SQLite and checks the two agree row for row. Add a case there with any new path.
 
 ## Query patterns
 

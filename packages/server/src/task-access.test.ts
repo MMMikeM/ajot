@@ -1,15 +1,15 @@
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-sqlite";
-import { migrate } from "drizzle-orm/node-sqlite/migrator";
 import { describe, expect, test } from "vite-plus/test";
 import { canDeleteTask, grants, widest, type Grant } from "@newtab-todo/shared/task-access";
+import { migrate } from "./db/migrator";
 import { categories, categoryCollaborators, tasks, taskShares, users } from "./db/schema";
 
-// The migrations, applied by drizzle's migrator, into a database of the cases below
+// The migrations, applied as migrate.ts applies them, into a database of the cases below
 const sqlite = new DatabaseSync(":memory:");
 const db = drizzle({ client: sqlite });
-migrate(db, { migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)) });
+await migrate(db, fileURLToPath(new URL("../drizzle", import.meta.url)));
 
 const deletedAt = "2026-10-01T00:00:00.000Z";
 const lists = [
