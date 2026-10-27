@@ -103,6 +103,26 @@ test.describe("which lists and tasks you can add to or edit", () => {
     ).toBe(200);
   });
 
+  test("not moving a task in a list you collaborate on", async ({ user1Auth, user2Auth }) => {
+    const list = await newList(user1Auth.token, "Theirs to arrange");
+    await apiRequest(
+      "POST",
+      `/api/categories/${list.id}/collaborators`,
+      { username: user2Auth.username },
+      user1Auth.token,
+    );
+    const task = await apiRequest<{ id: string }>(
+      "POST",
+      "/api/tasks",
+      newTask({ categoryId: list.id }),
+      user1Auth.token,
+    );
+    const move = (categoryId: string | null) =>
+      status("PUT", "/api/tasks", { id: task.id, categoryId, updatedAt: now() }, user2Auth.token);
+    expect(await move(null)).toBe(403);
+    expect(await move((await newList(user2Auth.token, "Bob's")).id)).toBe(403);
+  });
+
   test("a subtask under a task shared with you", async ({ user1Auth, user2Auth }) => {
     const parent = await addTaskAs(user1Auth.token);
     await apiRequest(

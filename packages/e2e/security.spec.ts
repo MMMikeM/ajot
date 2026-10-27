@@ -352,7 +352,7 @@ test.describe("what a share lets you change", () => {
     expect(res.status).toBe(403);
   });
 
-  test("an edit share can't move the task into a list its owner can't open", async ({
+  test("an edit share files its share, but can't move the task itself", async ({
     user1Auth,
     user2Auth,
   }) => {
