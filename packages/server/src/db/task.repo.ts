@@ -3,7 +3,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db } from "./client";
-import { categories, tasks, taskShares, users } from "./schema";
+import { categories, taskAccess, tasks, taskShares, users } from "./schema";
 import { ConflictError, InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { now } from "@newtab-todo/shared/iso";
@@ -61,20 +61,12 @@ export const taskUpdateSchema = createUpdateSchema(tasks, { updatedAt: isoDateti
   .extend({ deletedAt: z.null().optional() })
   .strict();
 
-// task-access.ts's audience, as a query: the owner, a share's recipient, the list's people
-const reachedBy = (userId: string) => [
-  { userId },
-  { shares: { sharedWithUserId: userId } },
-  { category: { userId } },
-  { category: { collaborators: { userId } } },
-];
-
 const list = async (userId: string) =>
   db.query.tasks.findMany({
     where: {
       deletedAt: { isNull: true },
-      // Subtasks carry no shares or categoryId, so they're reached through their parent
-      OR: [...reachedBy(userId), ...reachedBy(userId).map((reach) => ({ parent: reach }))],
+      RAW: (task) =>
+        sql`${task.id} IN (SELECT ${taskAccess.taskId} FROM ${taskAccess} WHERE ${taskAccess.userId} = ${userId})`,
     },
     with: {
       user: { columns: { id: true, name: true } },
@@ -89,33 +81,20 @@ const list = async (userId: string) =>
     orderBy: { sortOrder: "asc", createdAt: "asc" },
   });
 
-const findById = async (id: string) => {
-  const row = await db.query.tasks.findFirst({ where: { id, deletedAt: { isNull: true } } });
-  if (!row) throw new NotFoundError("task", id);
-  return row;
-};
-
-// What task-access.ts reads, for a task and for its parent
-const holderWith = {
-  shares: { columns: { sharedWithUserId: true, permission: true } },
-  category: {
-    columns: { id: true, userId: true },
-    with: { collaborators: { columns: { userId: true } } },
-  },
-} as const;
-
 /** A deleted task reads as missing, unless asked for by the restore that brings it back. */
-const findByIdWithAccess = async (id: string, { deleted = false } = {}) => {
+const findById = async (id: string, { deleted = false } = {}) => {
   const row = await db.query.tasks.findFirst({
     where: deleted ? { id } : { id, deletedAt: { isNull: true } },
-    with: {
-      ...holderWith,
-      parent: { columns: { id: true, userId: true, deletedAt: true }, with: holderWith },
-    },
   });
   if (!row) throw new NotFoundError("task", id);
   return row;
 };
+
+/** Who can reach these tasks, and how far. */
+const accessTo = async (taskIds: string[]) =>
+  taskIds.length === 0
+    ? []
+    : db.select().from(taskAccess).where(inArray(taskAccess.taskId, taskIds));
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
 // Re-inserting a deleted task, as Undo did before restores went through update, restores it.
@@ -158,7 +137,13 @@ const markEdited = async (id: string, at: string) => {
   const [row] = await db
     .update(tasks)
     .set({ editedAt: at })
-    .where(and(eq(tasks.id, id), or(isNull(tasks.editedAt), lt(tasks.editedAt, at))))
+    .where(
+      and(
+        eq(tasks.id, id),
+        isNull(tasks.deletedAt),
+        or(isNull(tasks.editedAt), lt(tasks.editedAt, at)),
+      ),
+    )
     .returning();
   return row;
 };
@@ -298,7 +283,7 @@ const findOverdue = async (beforeDate: string) =>
 export default {
   list,
   findById,
-  findByIdWithAccess,
+  accessTo,
   insert,
   insertSent,
   update,

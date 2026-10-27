@@ -12,15 +12,14 @@ import taskRepo, {
 } from "../db/task.repo";
 import userRepo from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
-import categoryRepo, { isMember } from "../db/category.repo";
+import categoryRepo from "../db/category.repo";
 import { authed } from "../middleware";
 import { broadcast, broadcastAll } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import notificationQueueRepo from "../db/notification-queue.repo";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
-import { markTaskEdited, requireTask } from "./task-users";
-import { audience, canDeleteTask } from "@newtab-todo/shared/task-access";
+import { audienceOf, markTaskEdited, requireTask } from "./task-users";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 
 const shareSchema = z.object({
@@ -86,14 +85,14 @@ export const taskRoutes = authed()
       const userId = c.get("userId");
       if (data.parentId && data.categoryId) throw subtaskList();
 
-      const [parent, list, mayAssign] = await Promise.all([
+      const [parent, canUseList, mayAssign] = await Promise.all([
         data.parentId ? requireTask(data.parentId, userId, "edit") : null,
-        data.categoryId ? categoryRepo.findMembers(data.categoryId) : undefined,
+        data.categoryId ? categoryRepo.canUse(data.categoryId, userId) : true,
         canAssign(userId, data.assigneeId),
       ]);
-      if (parent?.parentId)
+      if (parent?.task.parentId)
         throw new HTTPException(400, { message: "Subtasks can't have subtasks." });
-      if (data.categoryId && !isMember(list, userId)) throw notYourList();
+      if (!canUseList) throw notYourList();
       if (!mayAssign) throw notAContact();
 
       // A client from before completedAt existed doesn't send it
@@ -102,9 +101,9 @@ export const taskRoutes = authed()
         ...data,
         userId,
       });
-      const reach = parent ?? { userId, category: list };
-      broadcast(c, "tasks", "insert", { ...result, subtasks: [], shares: [] }, audience(reach));
-      if (parent) await markTaskEdited(c, parent, userId, data.createdAt);
+      const added = { ...result, subtasks: [], shares: [] };
+      broadcast(c, "tasks", "insert", added, await audienceOf(result.id));
+      if (data.parentId) await markTaskEdited(c, data.parentId, userId, data.createdAt);
       return c.json(result, 200);
     },
   )
@@ -120,36 +119,36 @@ export const taskRoutes = authed()
       const userId = c.get("userId");
 
       const restoring = fields.deletedAt === null;
-      const [task, list, mayAssign] = await Promise.all([
+      const [{ task, mine, audience }, canUseList, mayAssign] = await Promise.all([
         // As with deleting, only the owner can bring a task back
         requireTask(id, userId, restoring ? "delete" : "edit", { deleted: restoring }),
-        fields.categoryId ? categoryRepo.findMembers(fields.categoryId) : undefined,
+        fields.categoryId ? categoryRepo.canUse(fields.categoryId, userId) : true,
         canAssign(userId, fields.assigneeId),
       ]);
       if (!mayAssign) throw notAContact();
       // Someone it's shared with files their share instead (PUT /share); anyone else moving it
       // could take it away from its owner or its list's people
-      if ("categoryId" in fields && !canDeleteTask(task, userId))
+      if ("categoryId" in fields && !mine.canDelete)
         throw new HTTPException(403, { message: "Only its owner can move it to another list." });
       if (fields.categoryId) {
         if (task.parentId) throw subtaskList();
-        if (!isMember(list, userId)) throw notYourList();
+        if (!canUseList) throw notYourList();
       }
 
       if (restoring) {
         const result = await taskRepo.restore(id, updatedAt);
         // Read again: a task whose list was deleted came back to the Inbox, away from the
         // list's collaborators
-        const restored = await taskRepo.findByIdWithAccess(id);
-        broadcast(c, "tasks", "insert", await taskRepo.findListItem(id), audience(restored));
+        broadcast(c, "tasks", "insert", await taskRepo.findListItem(id), await audienceOf(id));
         return c.json(result, 200);
       }
 
       // What the client stamped wins; one from before these columns existed sends neither
       const stamps = taskChangeStamps(fields, updatedAt);
       const result = await taskRepo.update(id, updatedAt, { ...stamps, ...fields });
-      broadcast(c, "tasks", "update", result, audience(task));
-      if (task.parent && stamps.editedAt) await markTaskEdited(c, task.parent, userId, updatedAt);
+      broadcast(c, "tasks", "update", result, audience);
+      if (task.parentId && stamps.editedAt)
+        await markTaskEdited(c, task.parentId, userId, updatedAt);
 
       const notifiableFields = ["title", "description", "status", "dueDate"] as const;
       const changedNotifiable = notifiableFields.filter((f) => f in fields);
@@ -158,7 +157,7 @@ export const taskRoutes = authed()
       if (changedNotifiable.length > 0 || assigneeChanged) {
         const actorName = await getUserName(userId);
 
-        const allRecipients = audience(task).filter((uid) => uid !== userId);
+        const allRecipients = audience.filter((uid) => uid !== userId);
 
         if (fields.status === "done" && task.status !== "done") {
           for (const recipientId of allRecipients) {
@@ -221,7 +220,7 @@ export const taskRoutes = authed()
       const { id } = c.req.valid("json");
       const userId = c.get("userId");
 
-      const task = await requireTask(id, userId, "delete");
+      const { audience } = await requireTask(id, userId, "delete");
 
       const { task: removed, subtaskIds } = await taskRepo.remove(id);
       broadcastAll(
@@ -231,7 +230,7 @@ export const taskRoutes = authed()
           action: "delete" as const,
           data: { id: removedId },
         })),
-        audience(task),
+        audience,
       );
       return c.json(removed, 200);
     },
