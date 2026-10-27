@@ -244,8 +244,7 @@ export const listMembers = sqliteView("list_members", {
   SELECT cc.category_id AS list_id, cc.user_id FROM category_collaborators cc
   JOIN categories c ON c.id = cc.category_id AND c.deleted_at IS NULL`);
 
-// Each path in shared/task-access.ts, as rows of (the task holding it, who, how far). The JS there
-// is keyed the same, so a path added to either fails to compile until both have it.
+// Each path in shared/task-access.ts, as rows of (the task holding it, who, how far)
 const holderAccess = {
   owner: sql`SELECT id AS holder_id, user_id, 1 AS can_edit, 1 AS can_delete FROM tasks`,
   share: sql`SELECT task_id AS holder_id, shared_with_user_id AS user_id,

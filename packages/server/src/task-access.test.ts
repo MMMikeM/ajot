@@ -1,112 +1,89 @@
-import { readdirSync, readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
+import { fileURLToPath } from "node:url";
+import { drizzle } from "drizzle-orm/node-sqlite";
+import { migrate } from "drizzle-orm/node-sqlite/migrator";
 import { describe, expect, test } from "vite-plus/test";
-import { canDeleteTask, grants, type Grant } from "@newtab-todo/shared/task-access";
+import { canDeleteTask, grants, widest, type Grant } from "@newtab-todo/shared/task-access";
+import { categories, categoryCollaborators, tasks, taskShares, users } from "./db/schema";
 
-// The migrations, as production runs them, into a database of the cases below
-const migrations = new URL("../drizzle/", import.meta.url);
-const db = new DatabaseSync(":memory:");
-for (const folder of readdirSync(migrations).sort()) {
-  const migration = readFileSync(new URL(`${folder}/migration.sql`, migrations), "utf8");
-  for (const statement of migration.split("--> statement-breakpoint")) db.exec(statement);
-}
+// The migrations, applied by drizzle's migrator, into a database of the cases below
+const sqlite = new DatabaseSync(":memory:");
+const db = drizzle({ client: sqlite });
+migrate(db, { migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)) });
 
-const rows = (query: string) => db.prepare(query).all() as Record<string, string | number | null>[];
-const insert = (table: string, ...values: Record<string, string>[]) => {
-  for (const row of values) {
-    const columns = Object.keys(row);
-    db.prepare(
-      `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
-    ).run(...Object.values(row));
-  }
-};
+const deletedAt = "2026-10-01T00:00:00.000Z";
+const lists = [
+  { id: "home", userId: "alice", name: "Home" },
+  { id: "gone", userId: "alice", name: "Gone", deletedAt },
+];
+const collaborators = [
+  { id: "cc1", categoryId: "home", userId: "bob" },
+  { id: "cc2", categoryId: "gone", userId: "carol" },
+];
+const taskRows = [
+  { id: "own", userId: "alice", title: "Alice's own" },
+  { id: "shared", userId: "alice", title: "Shared with Bob to edit, Carol to view" },
+  { id: "in-home", userId: "bob", categoryId: "home", title: "Bob's, in Alice's list" },
+  { id: "in-gone", userId: "alice", categoryId: "gone", title: "In a deleted list" },
+  { id: "deleted", userId: "alice", title: "Deleted", deletedAt },
+  { id: "sub-of-shared", userId: "carol", parentId: "shared", title: "Carol's subtask" },
+  { id: "sub-in-home", userId: "alice", parentId: "in-home", title: "Alice's subtask" },
+];
+const shares = [
+  { id: "sh1", taskId: "shared", sharedWithUserId: "bob", permission: "edit" as const },
+  { id: "sh2", taskId: "shared", sharedWithUserId: "carol", permission: "view" as const },
+];
 
-insert(
-  "users",
-  ...["alice", "bob", "carol", "dave"].map((id) => ({
-    id,
-    name: id,
-    username: id,
-    password_hash: "x",
-  })),
-);
-insert(
-  "categories",
-  { id: "home", user_id: "alice", name: "Home" },
-  { id: "gone", user_id: "alice", name: "Gone", deleted_at: "2026-10-01T00:00:00.000Z" },
-);
-insert(
-  "category_collaborators",
-  { id: "cc1", category_id: "home", user_id: "bob" },
-  { id: "cc2", category_id: "gone", user_id: "carol" },
-);
-insert(
-  "tasks",
-  { id: "own", user_id: "alice", title: "Alice's own" },
-  { id: "shared", user_id: "alice", title: "Shared with Bob to edit, Carol to view" },
-  { id: "in-home", user_id: "bob", category_id: "home", title: "Bob's, in Alice's list" },
-  { id: "in-gone", user_id: "alice", category_id: "gone", title: "In a deleted list" },
-  { id: "deleted", user_id: "alice", title: "Deleted", deleted_at: "2026-10-01T00:00:00.000Z" },
-  { id: "sub-of-shared", user_id: "carol", parent_id: "shared", title: "Carol's subtask" },
-  { id: "sub-in-home", user_id: "alice", parent_id: "in-home", title: "Alice's subtask" },
-);
-insert(
-  "task_shares",
-  { id: "sh1", task_id: "shared", shared_with_user_id: "bob", permission: "edit" },
-  { id: "sh2", task_id: "shared", shared_with_user_id: "carol", permission: "view" },
-);
+const people = ["alice", "bob", "carol", "dave"];
+db.insert(users)
+  .values(people.map((id) => ({ id, name: id, username: id, passwordHash: "x" })))
+  .run();
+db.insert(categories).values(lists).run();
+db.insert(categoryCollaborators).values(collaborators).run();
+db.insert(tasks).values(taskRows).run();
+db.insert(taskShares).values(shares).run();
 
-// What the JS is handed: the task's shares, and its list while that isn't deleted
+// What the JS is handed for a task: its shares, and its list while that isn't deleted
 const holder = (id: string) => {
-  const [task] = rows(`SELECT * FROM tasks WHERE id = '${id}'`);
-  const [list] = rows(
-    `SELECT * FROM categories WHERE id = '${task.category_id}' AND deleted_at IS NULL`,
-  );
+  const task = taskRows.find((t) => t.id === id)!;
+  const list = lists.find((l) => l.id === task.categoryId && !l.deletedAt);
   return {
-    userId: String(task.user_id),
-    parentId: task.parent_id as string | null,
-    shares: rows(`SELECT * FROM task_shares WHERE task_id = '${id}'`).map((s) => ({
-      sharedWithUserId: String(s.shared_with_user_id),
-      permission: s.permission as "view" | "edit",
-    })),
-    category: list
-      ? {
-          userId: String(list.user_id),
-          collaborators: rows(
-            `SELECT user_id FROM category_collaborators WHERE category_id = '${list.id}'`,
-          ).map((c) => ({ userId: String(c.user_id) })),
-        }
-      : null,
+    userId: task.userId,
+    parentId: task.parentId,
+    shares: shares.filter((s) => s.taskId === id),
+    category: list && {
+      userId: list.userId,
+      collaborators: collaborators.filter((c) => c.categoryId === list.id),
+    },
   };
 };
 
-const byUser = (a: Grant, b: Grant) => a.userId.localeCompare(b.userId);
-const tasks = rows("SELECT id FROM tasks").map((t) => String(t.id));
+const query = (sql: string) => sqlite.prepare(sql).all() as Record<string, string | number>[];
 
-describe("task_access and shared/task-access.ts", () => {
-  test.each(tasks)("agree on %s", (id) => {
-    const task = holder(id);
-    // A row per way in, folded to each person's widest as the server does
-    const fromView = rows(
-      `SELECT user_id, max(can_edit) AS can_edit, max(can_delete) AS can_delete
-       FROM task_access WHERE task_id = '${id}' GROUP BY user_id`,
-    ).map((r) => ({
+/** The view's rows for a task, folded to each person's widest, as the server does. */
+const viewGrants = (id: string): Grant[] =>
+  widest(
+    query(`SELECT * FROM task_access WHERE task_id = '${id}'`).map((r) => ({
       userId: String(r.user_id),
       canEdit: r.can_edit === 1,
       canDelete: r.can_delete === 1,
-    }));
+    })),
+  );
+
+const byUser = (a: Grant, b: Grant) => a.userId.localeCompare(b.userId);
+
+describe("task_access and shared/task-access.ts", () => {
+  test.each(taskRows.map((t) => t.id))("agree on %s", (id) => {
+    const task = holder(id);
     const fromJs = grants({ ...task, parent: task.parentId ? holder(task.parentId) : null });
-    expect(fromView.sort(byUser)).toEqual(fromJs.sort(byUser));
+    expect(viewGrants(id).sort(byUser)).toEqual(fromJs.sort(byUser));
   });
 });
 
 describe("who reaches what", () => {
   const access = (id: string) =>
     Object.fromEntries(
-      rows(
-        `SELECT user_id, max(can_edit) AS can_edit, max(can_delete) AS can_delete
-         FROM task_access WHERE task_id = '${id}' GROUP BY user_id`,
-      ).map((r) => [r.user_id, r.can_delete ? "delete" : r.can_edit ? "edit" : "view"]),
+      viewGrants(id).map((g) => [g.userId, g.canDelete ? "delete" : g.canEdit ? "edit" : "view"]),
     );
 
   test("an owner deletes; an edit share edits; a view share views", () => {
@@ -131,7 +108,7 @@ describe("who reaches what", () => {
   });
 
   test("not a stranger", () => {
-    for (const id of tasks) expect(access(id)).not.toHaveProperty("dave");
+    for (const { id } of taskRows) expect(access(id)).not.toHaveProperty("dave");
   });
 });
 
@@ -141,13 +118,20 @@ test("canDeleteTask: the owner, or the parent's for a subtask", () => {
   expect(canDeleteTask({ ...sub, parent: holder("shared") }, "bob")).toBe(false);
 });
 
-// Built over every task, share and list, the view has to let a lookup reach each branch's index
+// Built over every task, share and list, the view has to let each lookup the server makes reach
+// each branch's index
 test.each([
-  ["a task", "task_id = 'own'"],
-  ["a user", "user_id = 'alice'"],
-])("looking up %s searches indexes and scans no table", (_, where) => {
-  const plan = rows(`EXPLAIN QUERY PLAN SELECT * FROM task_access WHERE ${where}`).map((r) =>
-    String(r.detail),
-  );
-  expect(plan.filter((step) => step.startsWith("SCAN"))).toEqual([]);
+  ["a task", "SELECT * FROM task_access WHERE task_id = 'own'"],
+  ["a user", "SELECT * FROM task_access WHERE user_id = 'alice'"],
+  [
+    "a task with its row",
+    "SELECT * FROM task_access a JOIN tasks t ON t.id = a.task_id WHERE a.task_id = 'own'",
+  ],
+  [
+    "a user's task list",
+    "SELECT * FROM tasks WHERE id IN (SELECT task_id FROM task_access WHERE user_id = 'alice')",
+  ],
+])("looking up %s searches indexes and scans no table", (_, sql) => {
+  const steps = query(`EXPLAIN QUERY PLAN ${sql}`).map((r) => String(r.detail));
+  expect(steps.filter((step) => step.startsWith("SCAN"))).toEqual([]);
 });

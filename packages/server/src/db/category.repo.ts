@@ -2,7 +2,14 @@ import { and, eq, getColumns, inArray, isNull, lt, notInArray, or, sql } from "d
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db, inTransaction } from "./client";
-import { categories, listMembers, tasks, taskShares, type CategoryDeletion } from "./schema";
+import {
+  categories,
+  listMembers,
+  taskAccess,
+  tasks,
+  taskShares,
+  type CategoryDeletion,
+} from "./schema";
 import {
   BadRequestError,
   ConflictError,
@@ -57,7 +64,17 @@ const live = { deletedAt: { isNull: true } } as const;
 
 const list = async (userId: string) =>
   db.query.categories.findMany({
-    where: { ...live, OR: [{ userId }, { collaborators: { userId } }] },
+    where: {
+      ...live,
+      RAW: (list) =>
+        inArray(
+          list.id,
+          db
+            .select({ id: listMembers.listId })
+            .from(listMembers)
+            .where(eq(listMembers.userId, userId)),
+        ),
+    },
     columns: hidden,
     with: {
       user: { columns: { name: true } },
@@ -167,6 +184,12 @@ const removeWithTasks = async (
     });
     if (inCategory.length > 0 && !action)
       throw new BadRequestError("Move or delete this list's tasks first.");
+    // Read here, in the delete's transaction: afterwards the list reaches no one
+    const ids = inCategory.flatMap((t) => [t.id, ...t.subtasks.map((s) => s.id)]);
+    const reach =
+      ids.length === 0
+        ? []
+        : await tx.select().from(taskAccess).where(inArray(taskAccess.taskId, ids));
 
     // A client from before confirmed ids were sent meant everything in the category
     const confirmed = new Set(confirmedIds ?? inCategory.map((t) => t.id));
@@ -207,7 +230,7 @@ const removeWithTasks = async (
       .where(and(eq(categories.id, id), isNull(categories.deletedAt)))
       .returning(sentColumns);
     if (!category) throw new NotFoundError("category", id);
-    return { category, deletedIds, movedTasks, unfiledShares };
+    return { category, deletedIds, movedTasks, unfiledShares, reach };
   });
 
 /**

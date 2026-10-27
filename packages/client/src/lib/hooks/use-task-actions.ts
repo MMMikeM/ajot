@@ -56,8 +56,8 @@ export const useTaskActions = ({
       const task = activeTasks.find((t) => t.id === taskId);
       if (!task) return;
       const { mode } = placement(task, userId, collaboratedCategoryIds);
-      if (!moveToList(task, mode, targetCategoryId))
-        toastManager.add({ title: "Only its owner can move this task." });
+      if (mode === "list") toastManager.add({ title: "Only its owner can move this task." });
+      else moveToList(task, mode, targetCategoryId);
       return;
     }
 

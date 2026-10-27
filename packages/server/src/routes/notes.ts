@@ -8,14 +8,9 @@ import noteRepo, {
 import { authed } from "../middleware";
 import { broadcast } from "../broadcast";
 import { jsonBody, jsonContent, withAuth } from "./crud";
-import { markTaskEdited } from "./task-users";
+import { markTaskEdited, requireTask } from "./task-users";
 import taskRepo from "../db/task.repo";
 import { NotFoundError } from "../db/errors";
-
-// A deleted task still takes notes: they're hidden with it and come back when it's restored, so
-// task_access, which keeps deleted tasks, decides
-const canSee = (access: Awaited<ReturnType<typeof taskRepo.accessTo>>, userId: string) =>
-  access.some((a) => a.userId === userId);
 
 export const noteRoutes = authed()
   .openapi(
@@ -36,9 +31,10 @@ export const noteRoutes = authed()
     async (c) => {
       const data = c.req.valid("json");
       const userId = c.get("userId");
+      // A deleted task still takes notes: they're hidden with it and come back when it's restored
       const access = await taskRepo.accessTo([data.taskId]);
       // A retry after a lost response gets its note back, even if the task was unshared meanwhile
-      if (!canSee(access, userId) && !(await noteRepo.findOwn(data.id, userId)))
+      if (!access.some((a) => a.userId === userId) && !(await noteRepo.findOwn(data.id, userId)))
         throw new NotFoundError("task", data.taskId);
       const result = await noteRepo.insert({ ...data, userId });
       broadcast(c, "notes", "insert", result, [userId]);
@@ -59,12 +55,8 @@ export const noteRoutes = authed()
       // Only a move is checked: a note stays its author's after they lose the task
       if (fields.taskId) {
         const note = await noteRepo.findOwn(id, userId);
-        if (
-          note &&
-          note.taskId !== fields.taskId &&
-          !canSee(await taskRepo.accessTo([fields.taskId]), userId)
-        )
-          throw new NotFoundError("task", fields.taskId);
+        if (note && note.taskId !== fields.taskId)
+          await requireTask(fields.taskId, userId, "see", { deleted: true });
       }
       const result = await noteRepo.update(id, userId, updatedAt, fields);
       broadcast(c, "notes", "update", result, [userId]);
