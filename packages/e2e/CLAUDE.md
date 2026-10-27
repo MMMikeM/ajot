@@ -27,7 +27,7 @@ Playwright test suite. Two projects: `desktop` (Chrome) runs every spec, and `mo
 | `users.ts`      | `USER_1`, `USER_2` — dedicated e2e accounts (Alice / Bob)                                                     |
 | `stack.ts`      | `API_PORT`, `CLIENT_PORT`, `BASE_URL` — where the suite finds the app                                         |
 | `auth.ts`       | `getOrCreateUser(user, inviter?)` — login, or signup (invited) on first run; `signIn(page, auth)`             |
-| `api.ts`        | `apiRequest()` — raw fetch with Bearer token; `deleteAllTasksInCategory(token, categoryId)`                   |
+| `api.ts`        | `apiRequest()` (throws on a refusal), `send()` (returns it); `newTask`/`newNote`/`newList` rows; `addTask`, `addNote`, `addList`, `shareTask`, `addCollaborator`, `tasksOf`, `notesOf`; `deleteAllTasksInCategory` |
 | `app.ts`        | `waitForAppReady`, `createTask`, `createCategory`, `clearLocalStorage`, `clearIDB`                            |
 | `sync.ts`       | `createSyncTracker(page)` — tracks non-GET `/api/*` mutations, exposes `waitForSync()` + `assertNoFailures()` |
 | `screenshot.ts` | `takeScreenshot`, `forBothViewports`, `reportViolations` — used by the screenshot script                      |

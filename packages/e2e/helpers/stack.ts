@@ -6,3 +6,5 @@ export const PREVIEW_PORT = 4175;
 
 /** BASE_URL points the suite at a stack that's already running, which it then doesn't start */
 export const BASE_URL = process.env.BASE_URL || `http://localhost:${CLIENT_PORT}`;
+/** The API itself, past the preview server's proxy, for the server's own headers */
+export const API_URL = `http://localhost:${API_PORT}`;

@@ -1,40 +1,15 @@
 import { test, expect } from "./fixtures";
-import { apiRequest } from "./helpers/api";
-
-// eslint-disable-next-line no-empty-pattern
-test.beforeEach(({}, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "the sheet files a share the same way on touch");
-});
-
-const now = () => new Date().toISOString();
-const id = () => crypto.randomUUID();
-
-type Task = { id: string; shares: { sharedWithUserId: string; categoryId: string | null }[] };
+import { addList, addTask, newId, shareTask, tasksOf } from "./helpers/api";
 
 test("a task shared with you, filed offline, reaches the server once back online", async ({
   user1Auth,
   user2Auth,
   user2Page: page,
 }) => {
-  const title = `File me ${id().slice(0, 8)}`;
-  const task = await apiRequest<{ id: string }>(
-    "POST",
-    "/api/tasks",
-    { id: id(), userId: "", title, createdAt: now(), updatedAt: now() },
-    user1Auth.token,
-  );
-  await apiRequest(
-    "POST",
-    "/api/tasks/share",
-    { taskId: task.id, username: user2Auth.username, permission: "edit" },
-    user1Auth.token,
-  );
-  const list = await apiRequest<{ id: string }>(
-    "POST",
-    "/api/categories",
-    { id: id(), userId: "", name: "Bob's own", createdAt: now(), updatedAt: now() },
-    user2Auth.token,
-  );
+  const title = `File me ${newId().slice(0, 8)}`;
+  const task = await addTask(user1Auth.token, { title });
+  await shareTask(user1Auth.token, task.id, user2Auth.username);
+  const list = await addList(user2Auth.token, "Bob's own");
   await page.reload({ waitUntil: "domcontentloaded" });
 
   await page.getByRole("button", { name: new RegExp(`^${title}`) }).click();
@@ -50,7 +25,7 @@ test("a task shared with you, filed offline, reaches the server once back online
 
   await page.context().setOffline(false);
   const filedUnder = async () =>
-    (await apiRequest<Task[]>("GET", "/api/tasks", undefined, user2Auth.token))
+    (await tasksOf(user2Auth.token))
       .find((t) => t.id === task.id)
       ?.shares.find((s) => s.sharedWithUserId === user2Auth.userId)?.categoryId;
   await expect.poll(filedUnder, { timeout: 15_000 }).toBe(list.id);
