@@ -39,14 +39,14 @@ const list = async (userId: string) =>
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
 // An id another note already has updates nothing, so someone else's note isn't sent back.
-const insert = async (data: NoteInsert & { taskId: string }) => {
+const insert = async (data: NoteInsert) => {
   const [row] = await db
     .insert(notes)
     .values(data)
     .onConflictDoUpdate({
       target: notes.id,
       set: { updatedAt: sql`${notes.updatedAt}` },
-      setWhere: and(eq(notes.userId, data.userId), eq(notes.taskId, data.taskId)),
+      setWhere: eq(notes.userId, data.userId),
     })
     .returning();
   if (!row) throw new ConflictError("Note id taken");
