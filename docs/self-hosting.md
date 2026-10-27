@@ -54,6 +54,13 @@ Keep the private key secret. Changing the keys later makes every device subscrib
 | `CRON_SECRET`        | no       | Bearer token for `POST /api/notifications/process`                   |
 | `DEPLOY_PUSH_SECRET` | no       | Header for `POST /api/deploy/notify`, which CI calls after deploying |
 | `PORT`               | no       | Defaults to 3000                                                     |
+| `ALLOWED_ORIGINS`    | no       | The web app's address, if a proxy rewrites `Host` (see below)        |
+
+The API refuses changes sent from other sites. It knows its own web app by the `Host` header, or by
+the `Sec-Fetch-Site` header current browsers send. Behind a proxy that replaces `Host` (nginx does
+unless told `proxy_set_header Host $host;`), set `ALLOWED_ORIGINS` to the address the web app is
+opened at (comma-separated, e.g. `https://todo.example.com`), or a browser too old to send
+`Sec-Fetch-Site` (Safari before 16.4) can't save changes.
 
 On Fly, set the app name in `fly.toml`, then:
 

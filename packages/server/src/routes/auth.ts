@@ -32,11 +32,10 @@ const authResponseSchema = z.object({
 
 const inviterSchema = z.object({ inviterName: z.string() });
 
-const setAuthCookie = (c: { header: (name: string, value: string) => void }, token: string) => {
-  c.header(
-    "Set-Cookie",
-    `auth=${token}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=${60 * 60 * 24 * 365}`,
-  );
+// Every client sends its token as a Bearer header, so a cookie, which a browser attaches to
+// requests other sites start, only ever added risk. This expires the one earlier versions set.
+const clearAuthCookie = (c: { header: (name: string, value: string) => void }) => {
+  c.header("Set-Cookie", "auth=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0");
 };
 
 export const authRoutes = new OpenAPIHono()
@@ -56,7 +55,7 @@ export const authRoutes = new OpenAPIHono()
       try {
         const result = await login(data.username, data.password);
         console.log(`[login] success username=${data.username} userId=${result.userId}`);
-        setAuthCookie(c, result.token);
+        clearAuthCookie(c);
         return c.json(result, 200);
       } catch (e) {
         console.log(
@@ -90,7 +89,7 @@ export const authRoutes = new OpenAPIHono()
           () => {},
         );
       }
-      setAuthCookie(c, session.token);
+      clearAuthCookie(c);
       return c.json(session, 200);
     },
   )
@@ -125,6 +124,7 @@ export const authRoutes = new OpenAPIHono()
       if (!token) throw new HTTPException(401, { message: "Unauthorized" });
       const userId = await validateSession(token);
       await sessionRepo.removeAllForUser(userId);
+      clearAuthCookie(c);
       return c.json({ ok: true as const }, 200);
     },
   );
