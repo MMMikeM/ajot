@@ -13,7 +13,7 @@ const task = (extra: Partial<Parameters<typeof canEditTask>[0]> = {}) => ({
 
 const viewShare = { sharedWithUserId: other, permission: "view" as const };
 const editShare = { sharedWithUserId: other, permission: "edit" as const };
-const sharedList = { collaborators: [{ userId: other }] };
+const sharedList = { userId: owner, collaborators: [{ userId: other }] };
 
 describe("canEditTask", () => {
   test("the owner", () => {
@@ -93,5 +93,20 @@ describe("audience", () => {
       other,
       owner,
     ]);
+  });
+});
+
+describe("a list's owner", () => {
+  // Bob added this to Alice's list, which he collaborates on
+  const added = task({ userId: other, category: sharedList });
+
+  test("sees and edits a task someone else added to their list", () => {
+    expect(canSeeTask(added, owner)).toBe(true);
+    expect(canEditTask(added, owner)).toBe(true);
+    expect(audience(added)).toContain(owner);
+  });
+
+  test("but doesn't delete it", () => {
+    expect(canDeleteTask(added, owner)).toBe(false);
   });
 });
