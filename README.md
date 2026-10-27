@@ -47,10 +47,10 @@ Browsers make every web push show a notification, so the PWA can't refresh silen
 
 ## Development
 
-Copy `.env.example` to `.env.dev`, fill it in with a Turso database and Web Push keys made as in [self-hosting](docs/self-hosting.md), then push the schema and start everything:
+Copy `.env.example` to `.env.dev`, fill it in with a Turso database and Web Push keys made as in [self-hosting](docs/self-hosting.md), then create the tables and start everything:
 
 ```bash
-pnpm db:push
+pnpm db:migrate
 pnpm dev
 ```
 
