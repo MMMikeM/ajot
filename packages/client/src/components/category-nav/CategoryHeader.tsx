@@ -31,13 +31,14 @@ export function CategoryHeader() {
     <>
       <ColorDot
         color={active ? (active.color ?? undefined) : INBOX_COLOR}
+        // oxlint-disable-next-line better-tailwindcss/no-restricted-classes -- centred on the first line box
         className={isDesk ? "mt-1" : "mt-[0.96875rem]"}
       />
       <span
         dir="auto"
         className={cn(
-          "font-display text-[1.75rem] leading-tight text-foreground",
-          isDesk ? "truncate" : "line-clamp-2 [overflow-wrap:anywhere]",
+          "font-display text-3xl text-foreground",
+          isDesk ? "truncate" : "line-clamp-2 wrap-anywhere",
         )}
       >
         {active?.name ?? "Inbox"}
@@ -65,6 +66,7 @@ export function CategoryHeader() {
             {title}
             <ChevronDown
               size={18}
+              // oxlint-disable-next-line better-tailwindcss/no-restricted-classes -- centred on the first line box
               className="mt-[0.71875rem] shrink-0 text-hint"
               aria-hidden="true"
             />
@@ -72,6 +74,7 @@ export function CategoryHeader() {
         )}
       </h2>
       {openCount > 0 && (
+        // oxlint-disable-next-line better-tailwindcss/no-restricted-classes -- centred on the first line box
         <span className={cn("text-sm text-hint tabular-nums", !isDesk && "mt-[0.71875rem]")}>
           {openCount}
           <span className="sr-only"> open</span>

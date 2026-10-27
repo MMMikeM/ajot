@@ -25,7 +25,7 @@ export const DetailRow = ({
   >
     <span
       aria-hidden
-      className="flex h-9 w-4 shrink-0 items-center justify-center text-hint touch:h-11 touch:w-[18px] [&_svg]:size-4"
+      className="flex h-9 w-4 shrink-0 items-center justify-center text-hint touch:h-11 touch:w-4.5 [&_svg]:size-4"
     >
       {icon}
     </span>

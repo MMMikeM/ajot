@@ -214,7 +214,7 @@ const TaskDetailContent = ({
           onCheckedChange={() => handleToggle(task)}
           aria-label="Mark done"
           className={cn(
-            "mt-3 touch:mt-[11px] touch:size-[18px] touch:after:-inset-[13px]",
+            "mt-3 touch:mt-2.75 touch:size-4.5 touch:after:-inset-3.25",
             isReadyToTick(task, subtasks) && "border-primary",
           )}
         />
@@ -324,15 +324,12 @@ const TaskDetailContent = ({
 
       <div className="flex flex-col gap-1">
         {offering && (
-          <fieldset aria-label="Add to task" className="-ml-3 flex min-w-0 flex-wrap gap-x-1">
+          <fieldset
+            aria-label="Add to task"
+            className="-ml-3 flex min-w-0 flex-wrap gap-x-1 touch:-ml-3.5"
+          >
             {offers.map(({ key, label, icon: Icon }) => (
-              <Button
-                key={key}
-                variant="subtle"
-                size="sm"
-                className="touch:h-11 touch:px-3.5"
-                onClick={() => choose(key)}
-              >
+              <Button key={key} variant="subtle" size="sm" onClick={() => choose(key)}>
                 <Icon />
                 {label}
               </Button>
@@ -345,7 +342,7 @@ const TaskDetailContent = ({
             size="sm"
             aria-expanded={offering}
             onClick={() => setOffering((o) => !o)}
-            className="-ml-3 touch:h-11 touch:px-3.5"
+            bleed="start"
           >
             <Plus className={cn("transition-transform", offering && "rotate-45")} />
             Add
@@ -356,7 +353,7 @@ const TaskDetailContent = ({
               intent="destructive"
               size="sm"
               aria-label="Delete task"
-              className="-mr-3 touch:h-11 touch:px-3.5"
+              bleed="end"
               onClick={() => {
                 handleDelete(task);
                 onClose();
@@ -389,11 +386,11 @@ const DueDateRow = ({
           type="button"
           onClick={onPick}
           aria-label={`Due date: ${label}`}
-          className="flex h-9 flex-1 cursor-pointer items-center rounded-md text-left text-sm text-date outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 touch:h-11 touch:text-base"
+          className="flex h-9 flex-1 cursor-pointer items-center rounded-md text-left text-sm text-date outline-none focus-visible:ring-3 focus-visible:ring-ring/50 touch:h-11 touch:text-base"
         >
           {label}
         </button>
-        <Button variant="subtle" size="sm" onClick={onClear} className="-mr-3 touch:h-11">
+        <Button variant="subtle" size="sm" bleed="end" onClick={onClear}>
           Clear
         </Button>
       </div>

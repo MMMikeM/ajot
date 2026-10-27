@@ -81,7 +81,7 @@ function SearchPage() {
           }}
           enterKeyHint="search"
           autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent py-1 font-display text-[1.75rem] leading-tight text-foreground caret-primary outline-none placeholder:text-hint [&::-webkit-search-cancel-button]:hidden"
+          className="min-w-0 flex-1 bg-transparent py-1 font-display text-3xl text-foreground caret-primary outline-none placeholder:text-hint [&::-webkit-search-cancel-button]:hidden"
         />
         <Button
           variant="subtle"
@@ -89,7 +89,7 @@ function SearchPage() {
           icon
           onClick={close}
           aria-label="Close search"
-          className="-mr-2 touch:size-11"
+          bleed="end"
         >
           <X className="size-5" />
         </Button>
@@ -131,10 +131,7 @@ function SearchPage() {
               No task, subtask or note on this device mentions “{q}”.
             </p>
             {canAdd && (
-              <Button
-                onClick={add}
-                className="mt-6 h-11 gap-2 bg-primary-subtle px-5 text-primary hover:bg-primary-selected"
-              >
+              <Button onClick={add} className="mt-6 h-11 gap-2 px-5">
                 <Plus />
                 {addLabel}
               </Button>

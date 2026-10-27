@@ -42,7 +42,7 @@ function ResultRow({
         onCheckedChange={() => onToggle(task)}
         aria-label={task.title}
         className={cn(
-          "mt-1 touch:mt-[3px] touch:size-[18px] touch:after:-inset-3",
+          "mt-1 touch:mt-0.75 touch:size-4.5 touch:after:-inset-3",
           isSubtask && "size-3.5 touch:size-4",
           done && checkboxDoneClass,
         )}

@@ -13,6 +13,7 @@ import { setActiveCategoryId } from "~/lib/state/active-category";
 import { useCurrentUserId } from "~/lib/auth/current-user";
 import { isListPath } from "~/lib/list-path";
 import { cn } from "~/lib/utils";
+import { navRow } from "./nav-row";
 import type { Category } from "~/lib/types";
 import { useCategoryNavState } from "./use-category-nav-state";
 import { useCategoryActions } from "./use-category-actions";
@@ -182,11 +183,10 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
                     droppableRef(el);
                   }}
                   onClick={() => openList(cat.id)}
-                  className={cn(
-                    "flex min-w-0 flex-1 items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm transition-colors",
-                    isActive ? "text-foreground" : "text-hint hover:text-foreground",
-                    isDropTarget && "ring-1 ring-primary/30",
-                  )}
+                  className={navRow({
+                    active: isActive,
+                    class: cn("min-w-0 flex-1 text-left", isDropTarget && "ring-1 ring-primary/30"),
+                  })}
                 >
                   {isActive && <ActiveBar color={cat.color} />}
                   <ColorDot size="sm" color={cat.color ?? undefined} />
@@ -206,7 +206,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
                     render={
                       <button
                         data-slot="category-options"
-                        className="pointer-events-none absolute top-1/2 right-3 flex size-5 -translate-y-1/2 items-center justify-center rounded text-hint opacity-0 transition-opacity group-hover/pill:pointer-events-auto group-hover/pill:opacity-100 hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 data-[popup-open]:pointer-events-auto data-[popup-open]:text-foreground data-[popup-open]:opacity-100"
+                        className="pointer-events-none absolute top-1/2 right-3 flex size-5 -translate-y-1/2 items-center justify-center rounded-sm text-hint opacity-0 transition-opacity group-hover/pill:pointer-events-auto group-hover/pill:opacity-100 hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 data-[popup-open]:pointer-events-auto data-[popup-open]:text-foreground data-[popup-open]:opacity-100"
                         aria-label="List options"
                       />
                     }
@@ -242,7 +242,10 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
       >
         <Link
           to="/search"
-          className="group/search mb-3 flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-hint transition-colors hover:text-foreground data-[status=active]:bg-muted data-[status=active]:text-foreground"
+          className={navRow({
+            class:
+              "group/search mb-3 data-[status=active]:bg-muted data-[status=active]:text-foreground",
+          })}
         >
           <NavIcon>
             <Search className="size-3.5" aria-hidden="true" />
@@ -255,12 +258,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
 
         <button
           onClick={() => openList(null)}
-          className={cn(
-            "relative flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
-            onListPage && activeCategoryId === null
-              ? "text-foreground"
-              : "text-hint hover:text-foreground",
-          )}
+          className={navRow({ active: onListPage && activeCategoryId === null })}
         >
           {onListPage && activeCategoryId === null && <ActiveBar />}
           <ColorDot size="sm" color={INBOX_COLOR} />
@@ -298,7 +296,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
         ) : (
           <button
             onClick={() => setAdding(true)}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-hint transition-colors hover:text-foreground"
+            className={navRow({ class: "py-2 text-xs font-medium" })}
             aria-label="Add list"
           >
             <NavIcon>
@@ -319,7 +317,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
           <div className="mt-2 border-t border-ghost/15 pt-2">
             <Link
               to="/people"
-              className="relative flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-hint transition-colors hover:text-foreground data-[status=active]:text-foreground"
+              className={navRow({ class: "data-[status=active]:text-foreground" })}
             >
               {({ isActive }) => (
                 <>

@@ -14,7 +14,6 @@ import { Button } from "~/components/ui/button";
 import { MenuItem } from "~/components/ui/menu-item";
 import { Popover, PopoverTrigger, PopoverContent } from "~/components/ui/popover";
 import { cn } from "~/lib/utils";
-import { hitArea } from "~/components/hit-area";
 
 // The device's own connection, as distinct from whether the sync server answers
 const subscribeOnline = (onChange: () => void) => {
@@ -97,7 +96,7 @@ export const SyncSettings = () => {
       <Button
         variant="ghost"
         size="xs"
-        className={cn(hitArea, "touch:px-3 touch:text-sm desk:-mr-2.5")}
+        className="touch:text-sm desk:-mr-2.5"
         onClick={() => router.navigate({ to: "/auth" })}
       >
         Sign in
@@ -121,10 +120,7 @@ export const SyncSettings = () => {
           <Button
             variant="ghost"
             size="xs"
-            className={cn(
-              hitArea,
-              "gap-1.5 text-hint hover:text-muted-foreground touch:px-3 desk:-mr-2.5",
-            )}
+            className="gap-1.5 text-hint hover:text-muted-foreground desk:-mr-2.5"
             aria-label={`Sync settings: ${isOffline ? `${unreachable ? "not syncing" : "offline"}, changes saved on this device` : syncLabel}`}
           />
         }
@@ -150,7 +146,7 @@ export const SyncSettings = () => {
           sideOffset={8}
           backdrop
           aria-label="Account"
-          className="flex min-w-[200px] flex-col p-2"
+          className="flex min-w-50 flex-col p-2"
         >
           <div className="flex flex-col gap-0.5 px-2.5 pt-1 pb-2">
             <span className="text-sm font-medium text-foreground">{currentUser.name}</span>

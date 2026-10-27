@@ -7,17 +7,11 @@ import { cn, type StyledProps } from "~/lib/utils";
 const revealButtonVariants = tv({
   extend: buttonVariants,
   // Hover-revealed on desktop; always visible on touch, where there is no hover to reveal it
-  base: "opacity-0 transition-[color,opacity] group-hover/row:opacity-100 focus-visible:opacity-100 touch:h-9 touch:px-3 touch:opacity-100",
-  variants: {
-    intent: {
-      danger: "text-hint hover:text-destructive",
-      neutral: "text-hint hover:text-foreground",
-    },
-  },
+  base: "opacity-0 transition-[color,opacity] group-hover/row:opacity-100 focus-visible:opacity-100 touch:opacity-100",
   defaultVariants: {
     variant: "subtle",
     size: "xs",
-    intent: "danger",
+    intent: "destructive",
   },
 });
 
