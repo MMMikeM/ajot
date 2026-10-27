@@ -12,7 +12,11 @@ Routes are in `src/routes/`. Each file exports Hono route handlers.
 
 ## Database
 
-One Turso database, reached over HTTP by `@tursodatabase/serverless` (`db/client.ts`): every query is a round trip, and reads are retried once on a transport failure (`db/retry.ts`).
+One Turso database, reached over HTTP by `@tursodatabase/serverless` (`db/client.ts`): every statement is one round trip, so a query in a loop costs one each.
+
+- **A connection runs one statement at a time.** `db` sends SELECTs to three reader connections in turn and everything else to one, in order (`db/connections.ts`), so concurrent requests and a `Promise.all` of reads don't queue behind each other. Transactions get a connection of their own (`inTransaction`).
+- **libSQL server ends a session idle for 10 s** and refuses the next request on it, so a connection idle for 5 s starts a new one. Reads are retried once on a transport failure, and any statement once on an expired session, which never ran (`db/retry.ts`).
+- **Session lookups are cached for 30 s** (`db/session.repo.ts`); its deletes drop them. `reset-password.ts` runs in a process of its own, so the sessions it deletes keep working on the running server for up to 30 s, or until it restarts.
 
 ## Who can reach what
 
