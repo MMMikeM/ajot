@@ -28,6 +28,8 @@ import { Textarea } from "~/components/ui/field";
 import { cn } from "~/lib/utils";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 import { canDeleteTask } from "@newtab-todo/shared/task-access";
+import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
+import { holders } from "~/lib/task-holders";
 import { isReadyToTick } from "~/lib/ready-to-tick";
 import { useTasks } from "~/lib/db/hooks";
 import { useTaskActions } from "~/components/task/use-actions";
@@ -160,6 +162,7 @@ const TaskDetailContent = ({
   const notes = allNotes.filter((n) => n.taskId === task.id);
   const filing = useListFiling(task);
   const sharing = useSharing(task);
+  const lists = useCategoriesById();
 
   // Synchronous, so the field is focused inside the tap and a phone raises its keyboard.
   // A revealed field stays until the sheet closes: hiding it on blur shifted the sheet
@@ -347,7 +350,7 @@ const TaskDetailContent = ({
             <Plus className={cn("transition-transform", offering && "rotate-45")} />
             Add
           </Button>
-          {canDeleteTask({ ...task, parent }, userId) && (
+          {canDeleteTask(holders(task, lists, parent), userId) && (
             <Button
               variant="subtle"
               intent="destructive"

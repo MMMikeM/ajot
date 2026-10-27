@@ -4,8 +4,8 @@ import { isSortableOperation } from "@dnd-kit/react/sortable";
 import { generateKeyBetween } from "fractional-indexing";
 import { updateTask, updateCategory, moveToList } from "~/lib/db/hooks";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
-import { placement } from "~/lib/effective-category";
-import { useCollaboratedCategoryIds } from "~/lib/hooks/use-collaborated-categories";
+import { listChoices } from "~/lib/effective-category";
+import { categoriesById } from "~/lib/task-holders";
 import { toastManager } from "~/lib/undo-toast";
 import { CATEGORY_DROP_PREFIX } from "~/lib/constants";
 import type { Task, Category } from "~/lib/types";
@@ -28,7 +28,7 @@ export const useTaskActions = ({
   getSubtasks,
 }: Params) => {
   const userId = useOptimisticUserId();
-  const collaboratedCategoryIds = useCollaboratedCategoryIds(userId);
+  const lists = categoriesById(categories);
 
   const handleReorder = (taskId: string, newIndex: number, groupTasks: Task[]) => {
     const filtered = groupTasks.filter((t) => t.id !== taskId);
@@ -55,9 +55,10 @@ export const useTaskActions = ({
       if (targetCategoryId === activeCategoryId) return;
       const task = activeTasks.find((t) => t.id === taskId);
       if (!task) return;
-      const { mode } = placement(task, userId, collaboratedCategoryIds);
+      const { mode, choices } = listChoices(task, userId, lists);
       if (mode === "list") toastManager.add({ title: "Only its owner can move this task." });
-      else moveToList(task, mode, targetCategoryId);
+      else if (choices.some((c) => c.id === targetCategoryId))
+        moveToList(task, mode, targetCategoryId);
       return;
     }
 
