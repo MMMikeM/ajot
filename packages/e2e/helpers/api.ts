@@ -53,33 +53,20 @@ export const apiRequest = async <T>(
   return res.json() as Promise<T>;
 };
 
-/** Rows as the app would send them, with ids and stamps filled in. */
-export const newTask = (extra: Record<string, unknown> = {}) => ({
+// Rows as the app would send them, with an id and stamps filled in
+const row = (fields: Record<string, unknown>) => ({
   id: newId(),
   userId: "",
-  title: "Test task",
   createdAt: now(),
   updatedAt: now(),
-  ...extra,
+  ...fields,
 });
-export const newNote = (taskId: string, content: string, extra: Record<string, unknown> = {}) => ({
-  id: newId(),
-  userId: "",
-  taskId,
-  title: content,
-  content,
-  createdAt: now(),
-  updatedAt: now(),
-  ...extra,
-});
-export const newList = (name: string, extra: Record<string, unknown> = {}) => ({
-  id: newId(),
-  userId: "",
-  name,
-  createdAt: now(),
-  updatedAt: now(),
-  ...extra,
-});
+export const newTask = (extra: Record<string, unknown> = {}) =>
+  row({ title: "Test task", ...extra });
+export const newNote = (taskId: string, content: string, extra: Record<string, unknown> = {}) =>
+  row({ taskId, title: content, content, ...extra });
+export const newList = (name: string, extra: Record<string, unknown> = {}) =>
+  row({ name, ...extra });
 
 export const addTask = (token: string, extra: Record<string, unknown> = {}) =>
   apiRequest<ApiTask>("POST", "/api/tasks", newTask(extra), token);

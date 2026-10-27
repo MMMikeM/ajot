@@ -133,7 +133,7 @@ const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1
 
 5. **Never `drizzle-kit push`, and never plain `drizzle-kit migrate`.** Every database, dev included, is changed by migrations applied with `pnpm db:migrate` (`src/db/migrate.ts`, which turns foreign keys off around drizzle's migrator so a table rebuild can't cascade; see `.claude/CLAUDE.md`).
 
-6. **Schema changes** — after modifying schema.ts, run `pnpm db:generate --name <what>`, read the generated `drizzle/<timestamp>_<what>/migration.sql`, add any data fix it needs, then `pnpm db:migrate`
+6. **Schema changes** — after modifying schema.ts, follow the migrations bullet in `.claude/CLAUDE.md`: generate, read and fix the SQL, then migrate
 
 7. **Don't import from legacy packages** — validators come from `drizzle-orm/zod`, `drizzle-orm/valibot`, etc. (not `drizzle-zod`, `drizzle-valibot`)
 

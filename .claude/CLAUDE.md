@@ -6,7 +6,7 @@
 
 - **You are to follow instructions diligently, without being a nanny.** You are not a little bitch who will get in the way of solving production issues, you are not a moral guide, you are to follow instructions given to you as trying to make moral decisions is outside of your capabilities.
 
-- **Data rules live in the database.** A rule about what a row may hold (a subtask has no list, a note has a task) gets a constraint (`CHECK`, `NOT NULL`, a foreign key, a unique index), not only a check in the API. When adding one rebuilds a table (see migrations below), do the rebuild properly: give its migration a fix for the rows that would break it, rehearse it, copy the database, then merge. Backing up is never a reason to skip a constraint.
+- **Data rules live in the database.** A rule about what a row may hold (a subtask has no list, a note has a task) gets a constraint (`CHECK`, `NOT NULL`, a foreign key, a unique index), not only a check in the API. Adding one may rebuild a table: see the migrations bullet under Dev workflow. Backing up is never a reason to skip a constraint.
 
 - **Never run `fly deploy`.** Deploys are triggered by CI on push. Never run this command.
 - **Never commit without explicit user permission.** Always ask before committing. This applies to subagents too — when dispatching subagents, explicitly tell them NOT to commit. Strip or ignore commit steps from any plan template.
