@@ -1,3 +1,6 @@
+# CI builds the server stage while the tests run and passes its image in; locally it's the stage below
+ARG SERVER_IMAGE=server
+
 FROM node:24-alpine AS base
 RUN corepack enable && corepack install -g pnpm@12.6.0
 
@@ -24,8 +27,6 @@ FROM node:24-alpine AS server
 RUN apk add --no-cache ca-certificates tini
 WORKDIR /app
 COPY --from=server-build /app/deploy .
-# Built and tested by CI's e2e job, which hands it over: run `pnpm build` before building this
-COPY packages/client/dist ./client/dist
 ENV CLIENT_DIST_PATH=/app/client/dist
 EXPOSE 3000
 # tini -g forwards signals to the whole process group (sh + node),
@@ -35,3 +36,7 @@ EXPOSE 3000
 # fully stopped instead of suspended, breaking resume.
 ENTRYPOINT ["/sbin/tini", "-g", "--"]
 CMD ["sh", "-c", "while true; do node dist/index.js; code=$?; [ $code -eq 0 ] && exit 0; echo \"server exited ($code), restarting in 1s\"; sleep 1; done"]
+
+FROM ${SERVER_IMAGE} AS release
+# Built and tested by CI's e2e job, which hands it over: run `pnpm build` before building this
+COPY packages/client/dist ./client/dist
