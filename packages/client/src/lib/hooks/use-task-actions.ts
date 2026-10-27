@@ -1,11 +1,12 @@
 import { ComponentProps } from "react";
-import { Toast } from "@base-ui/react/toast";
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortableOperation } from "@dnd-kit/react/sortable";
 import { generateKeyBetween } from "fractional-indexing";
-import { updateTask, updateCategory, fileShare } from "~/lib/db/hooks";
+import { updateTask, updateCategory, moveToList } from "~/lib/db/hooks";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
-import { filingMode } from "~/lib/task-permissions";
+import { placement } from "~/lib/effective-category";
+import { useCollaboratedCategoryIds } from "~/lib/hooks/use-collaborated-categories";
+import { toastManager } from "~/lib/undo-toast";
 import { CATEGORY_DROP_PREFIX } from "~/lib/constants";
 import type { Task, Category } from "~/lib/types";
 
@@ -27,7 +28,7 @@ export const useTaskActions = ({
   getSubtasks,
 }: Params) => {
   const userId = useOptimisticUserId();
-  const toastManager = Toast.useToastManager();
+  const collaboratedCategoryIds = useCollaboratedCategoryIds(userId);
 
   const handleReorder = (taskId: string, newIndex: number, groupTasks: Task[]) => {
     const filtered = groupTasks.filter((t) => t.id !== taskId);
@@ -54,10 +55,9 @@ export const useTaskActions = ({
       if (targetCategoryId === activeCategoryId) return;
       const task = activeTasks.find((t) => t.id === taskId);
       if (!task) return;
-      const mode = filingMode(userId, task);
-      if (mode === "owner") updateTask(taskId, { categoryId: targetCategoryId });
-      else if (mode === "share") fileShare(taskId, targetCategoryId);
-      else toastManager.add({ title: "Only its owner can move this task." });
+      const { mode } = placement(task, userId, collaboratedCategoryIds);
+      if (!moveToList(task, mode, targetCategoryId))
+        toastManager.add({ title: "Only its owner can move this task." });
       return;
     }
 

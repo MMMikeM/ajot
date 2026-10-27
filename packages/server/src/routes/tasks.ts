@@ -342,7 +342,9 @@ export const taskRoutes = authed()
       const userId = c.get("userId");
       if (categoryId && !(await categoryRepo.canUse(categoryId, userId))) throw notYourList();
       const result = await taskRepo.updateShareCategory(taskId, userId, categoryId);
-      broadcast(c, "tasks", "update", { id: taskId }, [userId]);
+      // The user's other devices file it too
+      const [{ shares } = { shares: [] }] = await taskRepo.listSharesForTasks([taskId]);
+      broadcast(c, "tasks", "update", { id: taskId, shares }, [userId]);
       return c.json(result, 200);
     },
   );

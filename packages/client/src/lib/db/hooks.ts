@@ -15,6 +15,7 @@ import {
 import { getCurrentUserId } from "~/lib/auth/current-user";
 import type { CategoryTaskAction } from "~/lib/constants";
 import type { Task, Category, Note } from "~/lib/types";
+import type { Placement } from "~/lib/effective-category";
 import { now } from "~/lib/utils";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 export { contactsCollection };
@@ -36,8 +37,13 @@ export const updateTask = (id: string, fields: Partial<Task>) => {
   console.log("[mutation] optimistic applied, tx queued");
 };
 
-/** Files a task shared with this user under one of their own lists, or back in the Inbox. */
-export const fileShare = (taskId: string, categoryId: string | null) => {
+// Files this user's share of a task, which is where it appears for them
+const fileMyShare = (draft: Task, userId: string, categoryId: string | null) => {
+  for (const share of draft.shares)
+    if (share.sharedWithUserId === userId) share.categoryId = categoryId;
+};
+
+const fileShare = (taskId: string, categoryId: string | null) => {
   console.log(`[mutation] fileShare task=${taskId} list=${categoryId}`);
   const userId = getCurrentUserId();
   const tx = offline.createOfflineTransaction({
@@ -45,12 +51,15 @@ export const fileShare = (taskId: string, categoryId: string | null) => {
     metadata: { taskId, categoryId } satisfies ShareFilingMetadata,
   });
   tx.mutate(() =>
-    tasksCollection.update(taskId, (draft) => {
-      draft.shares = draft.shares.map((share) =>
-        share.sharedWithUserId === userId ? { ...share, categoryId } : share,
-      );
-    }),
+    tasksCollection.update(taskId, (draft) => fileMyShare(draft, userId, categoryId)),
   );
+};
+
+/** Moves a task to another list the way `mode` allows. False when this user can't move it. */
+export const moveToList = (task: Task, mode: Placement["mode"], categoryId: string | null) => {
+  if (mode === "owner") updateTask(task.id, { categoryId });
+  else if (mode === "share") fileShare(task.id, categoryId);
+  return mode !== "list";
 };
 
 /** Deletes the tasks and their subtasks in one transaction, so one Undo restores them all. */
@@ -157,9 +166,7 @@ export const deleteCategory = (id: string, tasks: CategoryTaskAction) => {
         );
       } else if (filedByMyShare(task)) {
         unfiledIds.push(task.id);
-        tasksCollection.update(task.id, (draft) => {
-          for (const share of draft.shares) if (isMine(share)) share.categoryId = null;
-        });
+        tasksCollection.update(task.id, (draft) => fileMyShare(draft, userId, null));
       }
     }
     categoriesCollection.delete(id);
@@ -199,10 +206,7 @@ const restoreCategory = (
         );
     for (const id of unfiledIds)
       if (tasksCollection.has(id))
-        tasksCollection.update(id, (draft) => {
-          for (const share of draft.shares)
-            if (share.sharedWithUserId === userId) share.categoryId = category.id;
-        });
+        tasksCollection.update(id, (draft) => fileMyShare(draft, userId, category.id));
   });
   return transaction.isPersisted.promise;
 };
