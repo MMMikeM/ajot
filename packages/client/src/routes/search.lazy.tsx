@@ -3,6 +3,7 @@ import { createLazyFileRoute, Outlet, useNavigate } from "@tanstack/react-router
 import { DragDropProvider } from "@dnd-kit/react";
 import { Plus, Search, X } from "lucide-react";
 import { compareSortOrder } from "@newtab-todo/shared/sort-order";
+import { MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { CategorySidebar } from "~/components/category-nav/CategorySidebar";
 import { SearchResults } from "~/components/search/results";
 import { moveRowFocus } from "~/components/task/row-focus";
@@ -114,6 +115,8 @@ function SearchPage() {
           placeholder="Search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          // Adding a task from it makes the search its title
+          maxLength={MAX_TITLE}
           onKeyDown={(e) => {
             if (e.key === "Escape") close();
             if (e.nativeEvent.isComposing) return;

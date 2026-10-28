@@ -6,7 +6,7 @@ import { pushSubscriptionKinds } from "../db/schema";
 import { authed } from "../middleware";
 import { okSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
-import { MAX_ID } from "../db/field-limits";
+import { MAX_ID } from "@newtab-todo/shared/field-limits";
 
 // Push services' endpoints run to a few hundred characters
 const MAX_ENDPOINT = 2_000;

@@ -1,23 +1,34 @@
 import { expect, test, vi } from "vite-plus/test";
-import { notifyMutation, registerClient, unregisterClient, writeNotification } from "./broadcast";
+import {
+  hasRoomForStream,
+  notifyMutation,
+  registerClient,
+  unregisterClient,
+  writeNotification,
+} from "./broadcast";
 
 vi.mock("./push-queue", () => ({ queueChanges: vi.fn() }));
 
 const stream = () => ({ write: vi.fn(), close: vi.fn() });
 
-test("one account's streams past a hundred close its oldest", () => {
-  const streams = Array.from({ length: 101 }, stream);
-  for (const writer of streams) registerClient("alice", writer);
+test("one account's hundredth stream leaves no room for another, and closes none", () => {
+  const streams = Array.from({ length: 100 }, stream);
+  for (const writer of streams) {
+    expect(hasRoomForStream("alice")).toBe(true);
+    registerClient("alice", writer);
+  }
+  expect(hasRoomForStream("alice")).toBe(false);
+  expect(hasRoomForStream("bob")).toBe(true);
 
   notifyMutation({ model: "tasks", action: "update", data: { id: "t" } }, ["alice"]);
-
-  const [oldest, ...rest] = streams;
-  expect(oldest!.close).toHaveBeenCalled();
-  expect(oldest!.write).not.toHaveBeenCalled();
-  for (const writer of rest) {
+  for (const writer of streams) {
     expect(writer.close).not.toHaveBeenCalled();
     expect(writer.write).toHaveBeenCalledTimes(1);
   }
+
+  unregisterClient("alice", streams[0]!);
+  expect(hasRoomForStream("alice")).toBe(true);
+  for (const writer of streams) unregisterClient("alice", writer);
 });
 
 test("a notification reaches only its user's open streams, as its own event", () => {

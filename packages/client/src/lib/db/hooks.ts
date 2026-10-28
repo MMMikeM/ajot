@@ -18,6 +18,7 @@ import type { CategoryTaskAction } from "~/lib/constants";
 import type { Task, Category, Note } from "~/lib/types";
 import type { Placement } from "~/lib/effective-category";
 import { now } from "~/lib/utils";
+import { MAX_TASK_IDS, MAX_TITLE, cutTo } from "@newtab-todo/shared/field-limits";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 export { contactsCollection };
 export const useTasks = () => useLiveQuery(tasksCollection);
@@ -151,7 +152,13 @@ export const deleteCategory = (id: string, tasks: CategoryTaskAction) => {
   const unfiledIds: string[] = [];
   const tx = createOfflineTransaction({
     mutationFnName: "deleteCategory",
-    metadata: { categoryId: id, tasks, taskIds: [...topLevelIds] } satisfies CategoryDeleteMetadata,
+    metadata: {
+      categoryId: id,
+      tasks,
+      // More than a request may name: naming none has the server take every task in the list,
+      // where a refused request would bring the list back
+      taskIds: topLevelIds.size <= MAX_TASK_IDS ? [...topLevelIds] : undefined,
+    } satisfies CategoryDeleteMetadata,
   });
   const transaction = tx.mutate(() => {
     for (const task of allTasks) {
@@ -212,11 +219,17 @@ const restoreCategory = (
   return transaction.isPersisted.promise;
 };
 
-export const addNote = (fields: Omit<Note, "id" | "createdAt" | "updatedAt">) => {
+type NewNote = Pick<Note, "userId" | "taskId"> & { content: string };
+
+/** A note's title is the start of its text, which is all a person writes. */
+export const addNote = (fields: NewNote) => {
   const id = crypto.randomUUID();
   console.log(`[mutation] addNote id=${id}`, fields);
   const tx = createOfflineTransaction({ mutationFnName: "syncNotes" });
-  tx.mutate(() => notesCollection.insert({ ...fields, id, createdAt: now(), updatedAt: now() }));
+  const title = cutTo(fields.content, MAX_TITLE);
+  tx.mutate(() =>
+    notesCollection.insert({ ...fields, title, id, createdAt: now(), updatedAt: now() }),
+  );
   console.log("[mutation] optimistic applied, tx queued");
   return { id };
 };

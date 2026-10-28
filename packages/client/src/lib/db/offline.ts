@@ -201,7 +201,7 @@ const fileShare = async ({
 export type CategoryDeleteMetadata = {
   categoryId: string;
   tasks: CategoryTaskAction;
-  taskIds: string[];
+  taskIds: string[] | undefined;
 };
 
 // One request for the category and its tasks: the server moves or deletes collaborators'

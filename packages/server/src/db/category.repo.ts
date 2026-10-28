@@ -8,7 +8,8 @@ import { BadRequestError, ConflictError, NotFoundError, StaleUpdateError } from 
 import { now } from "@newtab-todo/shared/iso";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { keptSortOrder } from "./sort-key";
-import { MAX_ID, MAX_NAME, MAX_SHORT, MAX_TASK_IDS, limited, limitedId } from "./field-limits";
+import { MAX_ID, MAX_NAME, MAX_SHORT, MAX_TASK_IDS } from "@newtab-todo/shared/field-limits";
+import { limited, limitedId } from "./field-limits";
 import { notAfterNow, stampsNotAfterNow } from "./stamps";
 import { CATEGORY_TASK_ACTIONS, type CategoryTaskAction } from "@newtab-todo/shared/constants";
 

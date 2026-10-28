@@ -12,6 +12,7 @@ import type { Task } from "~/lib/types";
 import { Button } from "~/components/ui/button";
 import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/field";
+import { MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { cn } from "~/lib/utils";
 import { Calendar, Plus, Users, X } from "lucide-react";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
@@ -515,6 +516,7 @@ function TaskRow({
             type="text"
             value={subtaskTitle}
             onChange={(e) => setSubtaskTitle(e.target.value)}
+            maxLength={MAX_TITLE}
             placeholder="New subtask"
             // Phones keep the primitive's 16px so iOS doesn't zoom on focus
             className="md:h-7 md:text-xs"

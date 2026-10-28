@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import type { Context } from "hono";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { HTTPException } from "hono/http-exception";
@@ -40,10 +41,25 @@ export const createLimiter = ({ limit, windowMs }: { limit: number; windowMs: nu
 
 export type Limiter = ReturnType<typeof createLimiter>;
 
-const isLoopback = (address: string) =>
-  address.startsWith("127.") || address === "::1" || address.startsWith("::ffff:127.");
-
 const IPV4_MAPPED = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i;
+
+const unmapped = (address: string) => IPV4_MAPPED.exec(address)?.[1] ?? address;
+
+const isLoopback = (address: string) => address.startsWith("127.") || address === "::1";
+
+/** RFC 1918, unique local (fc00::/7) and link-local: where a proxy in front of this server sits. */
+const isPrivate = (address: string) => {
+  if (isIP(address) === 4) {
+    const [a, b = 0] = address.split(".").map(Number);
+    return (
+      a === 10 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254)
+    );
+  }
+  return /^(f[cd][0-9a-f]{2}|fe[89ab][0-9a-f]):/i.test(address);
+};
 
 /**
  * The key an address is limited by. An IPv6 address by its /64, the block one subscriber or server
@@ -66,23 +82,40 @@ export const limitedAs = (address: string) => {
     .join(":")}::/64`;
 };
 
+const socketAddress = (c: Context) => {
+  try {
+    return getConnInfo(c).remote.address;
+  } catch {
+    // A request made in-process, as the tests make them, has no socket
+    return undefined;
+  }
+};
+
+/** The last address in X-Forwarded-For: the one the proxy in front of this server added. */
+const forwardedFor = (c: Context) => {
+  const added = c.req.header("x-forwarded-for")?.split(",").at(-1)?.trim();
+  return added && isIP(added) ? added : undefined;
+};
+
+const clientAddress = (c: Context) => {
+  const flyClientIp = process.env.FLY_APP_NAME ? c.req.header("fly-client-ip") : undefined;
+  if (flyClientIp) return flyClientIp;
+  const peer = socketAddress(c);
+  if (!peer) return undefined;
+  const local = unmapped(peer);
+  return isLoopback(local) || isPrivate(local) ? forwardedFor(c) : peer;
+};
+
 /**
  * Who sent the request, to limit by. Fly's proxy sets Fly-Client-IP on every request, overwriting
- * one a client sent; anywhere else that header is the client's to make up, so the socket's address
- * is used. Undefined for a loopback address: that's this machine or a proxy in front of it, which
- * every request would share, so limiting it would lock everyone out at once.
+ * one a client sent. Anywhere else a client can make up any header, so the socket's address is
+ * used, unless it's this machine or a private network's: that's a proxy every request would share,
+ * so limiting it would lock everyone out at once. Through one, the client is the address it added
+ * to X-Forwarded-For, and with none there's no one to limit (docs/self-hosting.md).
  */
 export const limitableIp = (c: Context) => {
-  const flyClientIp = process.env.FLY_APP_NAME ? c.req.header("fly-client-ip") : undefined;
-  let address = flyClientIp;
-  if (!address) {
-    try {
-      address = getConnInfo(c).remote.address;
-    } catch {
-      // A request made in-process, as the tests make them, has no socket
-    }
-  }
-  return address && !isLoopback(address) ? limitedAs(address) : undefined;
+  const address = clientAddress(c);
+  return address && !isLoopback(unmapped(address)) ? limitedAs(address) : undefined;
 };
 
 /** The limiters to check: the address's only when there's one to limit by. */

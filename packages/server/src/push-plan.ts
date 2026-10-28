@@ -42,7 +42,7 @@ export type PushBatch = {
 };
 
 type Recipient = {
-  userId: string | null;
+  userId: string;
   deviceId: string | null;
   kind: "web" | "extension";
 };
@@ -51,9 +51,7 @@ export type PlannedPush<S> = { subs: S[]; message: PushMessage; options: SendPus
 
 // Only the PWA uploads a device id, so the extensions always get the defaults
 const preferencesOf = (sub: Recipient, preferences: Map<string, DevicePreferences>) =>
-  (sub.userId !== null &&
-    sub.deviceId !== null &&
-    preferences.get(deviceKey(sub.userId, sub.deviceId))) ||
+  (sub.deviceId !== null && preferences.get(deviceKey(sub.userId, sub.deviceId))) ||
   DEFAULT_PUSH_PREFERENCES;
 
 /**
@@ -74,8 +72,7 @@ export const planPushes = <S extends Recipient>(
       : undefined;
   const planned = new Map<string, PlannedPush<S>>();
   const add = (sub: S, payload: PushPayload, options: SendPushOptions) => {
-    // A subscription with no account gets every account's pushes, so never anyone's rows
-    const message = rows && sub.userId === userId ? { ...payload, rows } : payload;
+    const message = rows ? { ...payload, rows } : payload;
     const key = JSON.stringify([message, options]);
     const push: PlannedPush<S> = planned.get(key) ?? { subs: [], message, options };
     push.subs.push(sub);
@@ -97,7 +94,7 @@ export const planPushes = <S extends Recipient>(
     }
     // Only a worker new enough to show "changes" uploads a device id; an older one would show
     // nothing, which is the silent push Chrome and Safari punish
-    if (sub.userId === null || sub.deviceId === null) continue;
+    if (sub.deviceId === null) continue;
     const triggers = batch.changes
       .filter(({ source }) => source.deviceId !== sub.deviceId)
       .map(({ source }): PushTrigger =>
