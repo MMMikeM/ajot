@@ -3,7 +3,7 @@ import { keyAfter } from "@newtab-todo/shared/sort-order";
 import { getCurrentUserId } from "~/lib/auth/current-user";
 import { now } from "~/lib/utils";
 import { tasksCollection } from "~/lib/db/collections";
-import { createOfflineTransaction, offline } from "~/lib/db/offline";
+import { createOfflineTransaction } from "~/lib/db/offline";
 
 export const addTask = async (
   title: string,
@@ -11,9 +11,8 @@ export const addTask = async (
   parentId?: string | null,
 ) => {
   // An insert before the first load settles can leave the collection stuck loading (signed
-  // out, its sync never completes), and the sort order below needs the loaded siblings. Before
-  // the executor has its leadership, a transaction skips the outbox and is lost if it can't send.
-  await Promise.all([tasksCollection.stateWhenReady(), offline.waitForInit().catch(() => {})]);
+  // out, its sync never completes), and the sort order below needs the loaded siblings.
+  await tasksCollection.stateWhenReady();
 
   const userId = getCurrentUserId();
 

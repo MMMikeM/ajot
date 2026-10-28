@@ -1,9 +1,7 @@
 import {
-  startOfflineExecutor,
   NonRetriableError,
   type CreateOfflineTransactionOptions,
 } from "@tanstack/offline-transactions";
-import { DeleteOperationItemNotFoundError } from "@tanstack/query-db-collection";
 import {
   tasksCollection,
   categoriesCollection,
@@ -14,6 +12,9 @@ import { client } from "~/lib/api";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
 import { getCurrentUserId, getSignedInUserId } from "~/lib/auth/current-user";
 import { createOutboxStorage } from "~/lib/db/outbox-storage";
+import { SharedOutboxExecutor } from "~/lib/db/shared-outbox";
+import { tabLeader } from "~/lib/db/tab-leader";
+import { refetchLater, writeAccepted, writeDeleted } from "~/lib/db/synced-writes";
 import type { CategoryTaskAction } from "~/lib/constants";
 import type { ISODateString } from "@newtab-todo/shared/iso";
 import type { Collection } from "@tanstack/db";
@@ -41,18 +42,6 @@ const assertOk = async (res: Response): Promise<Response> => {
 
 // A replay after a lost response finds the row already gone, which means the delete worked
 const assertDeleted = (res: Response) => (res.status === 404 ? res : assertOk(res));
-
-// This device's own SSE event can remove the row from the synced store before the response lands
-const writeDeleted = async (
-  collection: Collection<any, any, any>, // eslint-disable-line @typescript-eslint/no-explicit-any
-  key: string,
-) => {
-  try {
-    await collection.utils.writeDelete(key as never);
-  } catch (err) {
-    if (!(err instanceof DeleteOperationItemNotFoundError)) throw err;
-  }
-};
 
 type PendingWrite = {
   type: string;
@@ -157,9 +146,10 @@ const deleteTaskWithSubtasks = async ({
     await assertDeleted(await client.api.tasks.$delete({ json: { id: taskId } }));
   }
   for (const m of transaction.mutations)
-    // A delete queued before deletes kept notes also unlinked them here; the server no longer does
-    if (m.collection === notesCollection) await notesCollection.utils.refetch();
-    else await writeDeleted(tasksCollection, m.key);
+    if (m.collection !== notesCollection) await writeDeleted(tasksCollection, m.key);
+  // A delete queued before deletes kept notes also unlinked them here; the server no longer does
+  if (transaction.mutations.some((m) => m.collection === notesCollection))
+    refetchLater(notesCollection);
 };
 
 // A delete only hid the task on the server, so Undo clears that rather than adding it again
@@ -214,7 +204,7 @@ export type CategoryDeleteMetadata = {
 const deleteCategoryWithTasks = async ({
   transaction,
 }: {
-  transaction: { metadata: Record<string, unknown> };
+  transaction: { metadata: Record<string, unknown>; mutations: PendingWrite[] };
 }) => {
   assertSignedIn(transaction.metadata);
   const { categoryId, tasks, taskIds } = transaction.metadata as CategoryDeleteMetadata;
@@ -222,13 +212,9 @@ const deleteCategoryWithTasks = async ({
   await assertDeleted(
     await client.api.categories.$delete({ json: { id: categoryId, tasks, taskIds } }),
   );
-  // Refetch rather than write each row: SSE may already have applied some, and writing a
-  // delete for a row the synced store no longer holds throws
-  await Promise.all([
-    categoriesCollection.utils.refetch(),
-    tasksCollection.utils.refetch(),
-    notesCollection.utils.refetch(),
-  ]);
+  for (const m of transaction.mutations) await writeAccepted(m);
+  // The server also moved or deleted collaborators' tasks, which this device didn't touch
+  refetchLater(categoriesCollection, tasksCollection, notesCollection);
 };
 
 export type CategoryRestoreMetadata = { categoryId: string };
@@ -237,28 +223,23 @@ export type CategoryRestoreMetadata = { categoryId: string };
 const restoreCategoryWithTasks = async ({
   transaction,
 }: {
-  transaction: { metadata: Record<string, unknown> };
+  transaction: { metadata: Record<string, unknown>; mutations: PendingWrite[] };
 }) => {
   assertSignedIn(transaction.metadata);
   const { categoryId } = transaction.metadata as CategoryRestoreMetadata;
   console.log(`[sync:categories] restore → id=${categoryId}`);
-  await assertOk(await client.api.categories[":id"].restore.$post({ param: { id: categoryId } }));
-  await Promise.all([
-    categoriesCollection.utils.refetch(),
-    tasksCollection.utils.refetch(),
-    notesCollection.utils.refetch(),
-  ]);
+  const res = await assertOk(
+    await client.api.categories[":id"].restore.$post({ param: { id: categoryId } }),
+  );
+  for (const m of transaction.mutations) await writeAccepted(m);
+  await categoriesCollection.utils.writeUpsert((await res.json()) as never);
+  refetchLater(categoriesCollection, tasksCollection, notesCollection);
 };
 
 export type ContactRemovalMetadata = { contactId: string };
 
-// Removing a contact takes each out of the lists the other shared. Not awaited: a refetch that
-// overlaps a dropped connection can stay unsettled after reconnecting, which held up every queued
-// edit, this removal's Undo included, until a reload. Writing the row directly doesn't wait on it.
-const refetchSharedLists = () => {
-  categoriesCollection.utils.refetch().catch(console.error);
-  tasksCollection.utils.refetch().catch(console.error);
-};
+// Removing a contact takes each out of the lists the other shared
+const refetchSharedLists = () => refetchLater(categoriesCollection, tasksCollection);
 
 const removeContact = async ({
   transaction,
@@ -285,11 +266,12 @@ const restoreContact = async ({
   const [restored] = transaction.mutations;
   if (restored) await contactsCollection.utils.writeUpsert(restored.modified as never);
   // An invite accepted meanwhile made the pair a new row, which the server kept instead
-  contactsCollection.utils.refetch().catch(console.error);
+  refetchLater(contactsCollection);
   refetchSharedLists();
 };
 
-export const offline = startOfflineExecutor({
+export const offline = new SharedOutboxExecutor({
+  leaderElection: tabLeader(),
   storage: createOutboxStorage((value) => {
     const account = accountOf(value.metadata);
     return !account || account === getSignedInUserId();

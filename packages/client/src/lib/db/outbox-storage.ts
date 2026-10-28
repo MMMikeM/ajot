@@ -26,6 +26,15 @@ const writeJournal = (key: string, value: string) => {
 /** A queued transaction as the library stores it, which keeps its metadata at the top. */
 type StoredTransaction = { metadata?: unknown };
 
+export type OutboxStorage = StorageAdapter & {
+  /**
+   * Saves an edit for another tab, the leader, to send: in localStorage alone, where it has
+   * landed by the time this returns. Its IndexedDB write could commit after the leader had sent
+   * the edit and removed it, which queued it to be sent again.
+   */
+  keep: (key: string, value: string) => Promise<void>;
+};
+
 /**
  * The outbox in IndexedDB, each write also kept in localStorage until IndexedDB has committed it.
  * A page that unloads aborts its IndexedDB transactions still in flight, so a change made just
@@ -34,7 +43,7 @@ type StoredTransaction = { metadata?: unknown };
  * library's own fallback does. A transaction `isVisible` turns down stays stored but isn't
  * listed, so the executor neither shows nor sends it.
  */
-const journaledStorage = (isVisible: (stored: StoredTransaction) => boolean): StorageAdapter => {
+const journaledStorage = (isVisible: (stored: StoredTransaction) => boolean): OutboxStorage => {
   const durable = IndexedDBAdapter.probe().then(({ available }) =>
     available ? new IndexedDBAdapter() : null,
   );
@@ -53,18 +62,23 @@ const journaledStorage = (isVisible: (stored: StoredTransaction) => boolean): St
     }
   };
 
+  const set = async (key: string, value: string) => {
+    const journaled = writeJournal(key, value);
+    const store = await durable;
+    if (!store) {
+      if (!journaled) throw new Error("No storage for the outbox");
+      return;
+    }
+    await store.set(key, value);
+    // A later write to the same key has its own journal entry to clear
+    if (localStorage.getItem(journalKey(key)) === value) localStorage.removeItem(journalKey(key));
+  };
+
   return {
     get,
-    async set(key, value) {
-      const journaled = writeJournal(key, value);
-      const store = await durable;
-      if (!store) {
-        if (!journaled) throw new Error("No storage for the outbox");
-        return;
-      }
-      await store.set(key, value);
-      // A later write to the same key has its own journal entry to clear
-      if (localStorage.getItem(journalKey(key)) === value) localStorage.removeItem(journalKey(key));
+    set,
+    async keep(key, value) {
+      if (!writeJournal(key, value)) await set(key, value);
     },
     async delete(key) {
       localStorage.removeItem(journalKey(key));
@@ -82,6 +96,10 @@ const journaledStorage = (isVisible: (stored: StoredTransaction) => boolean): St
     },
   };
 };
+
+/** Another tab queued an edit: the `storage` event of its journal write. */
+export const isQueuedElsewhere = (event: StorageEvent) =>
+  event.newValue !== null && !!event.key?.startsWith(JOURNAL_PREFIX);
 
 /** Undefined leaves the choice to the library, which runs online-only with no storage at all. */
 export const createOutboxStorage = (isVisible: (stored: StoredTransaction) => boolean) =>
