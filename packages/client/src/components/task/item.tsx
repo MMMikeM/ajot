@@ -129,15 +129,16 @@ function TaskRow({
   const [completing, setCompleting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const completeTimer = useRef<number | undefined>(undefined);
+  // The row stays completing while it leaves after the tick is saved, so this says it was
+  const tickSaved = useRef(false);
   useEffect(() => () => window.clearTimeout(completeTimer.current), []);
   // A page being closed or put away gets no more timers, so a tick still lingering saves now
   useEffect(() => {
     if (!completing) return;
     const saveIfHidden = () => {
-      if (document.visibilityState !== "hidden") return;
+      if (document.visibilityState !== "hidden" || tickSaved.current) return;
       window.clearTimeout(completeTimer.current);
-      setCompleting(false);
-      setLeaving(false);
+      tickSaved.current = true;
       onToggle(task);
     };
     document.addEventListener("visibilitychange", saveIfHidden);
@@ -172,9 +173,13 @@ function TaskRow({
       return;
     }
     setCompleting(true);
+    tickSaved.current = false;
     completeTimer.current = window.setTimeout(() => {
       setLeaving(true);
-      completeTimer.current = window.setTimeout(() => onToggle(task), COMPLETE_LEAVE_MS);
+      completeTimer.current = window.setTimeout(() => {
+        tickSaved.current = true;
+        onToggle(task);
+      }, COMPLETE_LEAVE_MS);
     }, COMPLETE_LINGER_MS);
   };
 

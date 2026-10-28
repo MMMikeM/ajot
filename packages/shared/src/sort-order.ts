@@ -37,12 +37,14 @@ export const keyAfter = (keys: Iterable<SortKey>) => {
 };
 
 /**
- * A key between two neighbours. A malformed one counts as no neighbour, and two equal keys leave
- * no room between them, so the key goes after both.
+ * The key for a row dropped at `index` among its siblings' keys, in order and without the row.
+ * Malformed keys are passed over. It goes after the last valid key before the drop and before the
+ * first one after it that's greater: equal keys leave no room between them, so it goes after the
+ * tie rather than past the rows that follow it.
  */
-export const keyBetween = (prev: SortKey, next: SortKey) => {
-  const after = isSortKey(prev) ? prev : null;
-  const before = isSortKey(next) ? next : null;
-  if (after !== null && after === before) return generateKeyBetween(after, null);
+export const keyAt = (keys: readonly SortKey[], index: number) => {
+  const after = keys.slice(0, index).filter(isSortKey).at(-1) ?? null;
+  const before =
+    keys.slice(index).find((key) => isSortKey(key) && (after === null || key > after)) ?? null;
   return generateKeyBetween(after, before);
 };
