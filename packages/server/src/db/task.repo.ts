@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
-import { generateKeyBetween } from "fractional-indexing";
+import { keyAfter } from "@newtab-todo/shared/sort-order";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db } from "./client";
@@ -177,14 +177,14 @@ const markEdited = async (id: string, at: string) => {
   return row;
 };
 
-// After the user's other top-level tasks, where the app puts a task they add themselves
+// After the user's other top-level tasks, where the app puts a task they add themselves. Every key
+// is read, not only the largest: that one could be malformed.
 const nextSortOrder = async (userId: string) => {
-  const last = await db.query.tasks.findFirst({
+  const rows = await db.query.tasks.findMany({
     where: { userId, parentId: { isNull: true }, sortOrder: { isNotNull: true } },
     columns: { sortOrder: true },
-    orderBy: { sortOrder: "desc" },
   });
-  return generateKeyBetween(last?.sortOrder ?? null, null);
+  return keyAfter(rows.map((row) => row.sortOrder));
 };
 
 /**

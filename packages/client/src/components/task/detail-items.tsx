@@ -1,5 +1,6 @@
 import { useState, type Ref } from "react";
 import { StickyNote } from "lucide-react";
+import { compareSortOrder } from "@newtab-todo/shared/sort-order";
 import type { Task, Note } from "~/lib/types";
 import { addNote, updateNote, deleteNote, deleteTask } from "~/lib/db/hooks";
 import { addTask } from "~/lib/db/add-task";
@@ -67,9 +68,7 @@ export const Subtasks = ({
 
   if (rawSubtasks.length === 0 && !adding) return null;
 
-  const subtasks = [...rawSubtasks].sort((a, b) =>
-    (a.sortOrder ?? "").localeCompare(b.sortOrder ?? ""),
-  );
+  const subtasks = [...rawSubtasks].sort((a, b) => compareSortOrder(a.sortOrder, b.sortOrder));
 
   return (
     <DetailRow label="Subtasks">

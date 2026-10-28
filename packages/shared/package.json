@@ -8,10 +8,12 @@
     "./iso": "./src/iso.ts",
     "./iso-schema": "./src/iso-schema.ts",
     "./push-payload": "./src/push-payload.ts",
+    "./sort-order": "./src/sort-order.ts",
     "./task-access": "./src/task-access.ts",
     "./task-stamps": "./src/task-stamps.ts"
   },
   "dependencies": {
+    "fractional-indexing": "^4.0.0",
     "zod": "^4.6.7"
   }
 }

@@ -90,6 +90,9 @@ export const SyncSettings = () => {
     await logout();
     clearSession();
     setOpen(false);
+    // Edits still queued stay on screen until the page starts again without them; they wait for
+    // this account to sign back in
+    if (hasPending) location.reload();
   };
 
   const isAuthPage = useRouterState({ select: (s) => s.location.pathname === "/auth" });

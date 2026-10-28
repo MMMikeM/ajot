@@ -1,4 +1,8 @@
-import { startOfflineExecutor, NonRetriableError } from "@tanstack/offline-transactions";
+import {
+  startOfflineExecutor,
+  NonRetriableError,
+  type CreateOfflineTransactionOptions,
+} from "@tanstack/offline-transactions";
 import { DeleteOperationItemNotFoundError } from "@tanstack/query-db-collection";
 import {
   tasksCollection,
@@ -8,7 +12,8 @@ import {
 } from "~/lib/db/collections";
 import { client } from "~/lib/api";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
-import { getCurrentUserId } from "~/lib/auth/current-user";
+import { getCurrentUserId, getSignedInUserId } from "~/lib/auth/current-user";
+import { createOutboxStorage } from "~/lib/db/outbox-storage";
 import type { CategoryTaskAction } from "~/lib/constants";
 import type { ISODateString } from "@newtab-todo/shared/iso";
 import type { Collection } from "@tanstack/db";
@@ -23,6 +28,8 @@ interface ResourceEndpoint {
 }
 
 class SessionExpiredError extends Error {}
+
+class HeldForAccountError extends Error {}
 
 const assertOk = async (res: Response): Promise<Response> => {
   if (res.ok) return res;
@@ -95,16 +102,32 @@ const syncMutation =
     );
   };
 
+/** Who queued an edit, null when signed out: anyone who signs in next may send it. */
+type AccountMetadata = { accountId?: string | null };
+
+/** Every edit goes through here, so it's sent only by the account that made it. */
+export const createOfflineTransaction = (options: CreateOfflineTransactionOptions) =>
+  offline.createOfflineTransaction({
+    ...options,
+    metadata: { ...options.metadata, accountId: getSignedInUserId() } satisfies AccountMetadata,
+  });
+
+const accountOf = (metadata: unknown) => (metadata as AccountMetadata | undefined)?.accountId;
+
 // No auth token — defer sync until login. A retriable error (not NonRetriableError)
-// keeps the transaction in the IDB outbox and holds the optimistic mutation visible.
-const assertSignedIn = () => {
+// keeps the transaction in the IDB outbox and holds the optimistic mutation visible. One queued
+// by another account waits the same way, for that account.
+const assertSignedIn = (metadata: unknown) => {
   if (!getAuthToken()) throw new Error("Not authenticated");
+  const account = accountOf(metadata);
+  if (account && account !== getSignedInUserId())
+    throw new HeldForAccountError(`Queued by account ${account}`);
 };
 
 const syncEach =
   (sync: (m: PendingWrite) => Promise<void>) =>
-  async ({ transaction }: { transaction: { mutations: PendingWrite[] } }) => {
-    assertSignedIn();
+  async ({ transaction }: { transaction: { metadata: unknown; mutations: PendingWrite[] } }) => {
+    assertSignedIn(transaction.metadata);
     for (const m of transaction.mutations) await sync(m);
   };
 
@@ -126,7 +149,7 @@ const deleteTaskWithSubtasks = async ({
 }: {
   transaction: { metadata: Record<string, unknown>; mutations: PendingWrite[] };
 }) => {
-  assertSignedIn();
+  assertSignedIn(transaction.metadata);
   const metadata = transaction.metadata as TaskDeleteMetadata | LegacyTaskDeleteMetadata;
   const taskIds = "taskIds" in metadata ? metadata.taskIds : [metadata.taskId];
   for (const taskId of taskIds) {
@@ -155,9 +178,9 @@ const restoreTask = async (m: PendingWrite) => {
 const restoreTasksAndNotes = async ({
   transaction,
 }: {
-  transaction: { mutations: PendingWrite[] };
+  transaction: { metadata: unknown; mutations: PendingWrite[] };
 }) => {
-  assertSignedIn();
+  assertSignedIn(transaction.metadata);
   for (const m of transaction.mutations)
     await (m.collection === notesCollection ? syncNote(m) : restoreTask(m));
 };
@@ -170,7 +193,7 @@ const fileShare = async ({
 }: {
   transaction: { metadata: Record<string, unknown>; mutations: PendingWrite[] };
 }) => {
-  assertSignedIn();
+  assertSignedIn(transaction.metadata);
   const { taskId, categoryId } = transaction.metadata as ShareFilingMetadata;
   console.log(`[sync:tasks] file share → task=${taskId} list=${categoryId}`);
   await assertOk(await client.api.tasks.share.$put({ json: { taskId, categoryId } }));
@@ -193,7 +216,7 @@ const deleteCategoryWithTasks = async ({
 }: {
   transaction: { metadata: Record<string, unknown> };
 }) => {
-  assertSignedIn();
+  assertSignedIn(transaction.metadata);
   const { categoryId, tasks, taskIds } = transaction.metadata as CategoryDeleteMetadata;
   console.log(`[sync:categories] DELETE → id=${categoryId} tasks=${tasks}`);
   await assertDeleted(
@@ -216,7 +239,7 @@ const restoreCategoryWithTasks = async ({
 }: {
   transaction: { metadata: Record<string, unknown> };
 }) => {
-  assertSignedIn();
+  assertSignedIn(transaction.metadata);
   const { categoryId } = transaction.metadata as CategoryRestoreMetadata;
   console.log(`[sync:categories] restore → id=${categoryId}`);
   await assertOk(await client.api.categories[":id"].restore.$post({ param: { id: categoryId } }));
@@ -228,6 +251,10 @@ const restoreCategoryWithTasks = async ({
 };
 
 export const offline = startOfflineExecutor({
+  storage: createOutboxStorage((value) => {
+    const account = accountOf(value.metadata);
+    return !account || account === getSignedInUserId();
+  }),
   collections: { tasks: tasksCollection, categories: categoriesCollection, notes: notesCollection },
   mutationFns: {
     syncTasks: syncEach(syncTask),
@@ -240,19 +267,19 @@ export const offline = startOfflineExecutor({
     restoreCategory: restoreCategoryWithTasks,
   },
   // The default policy drops any error whose message contains "401" or "403", so decide by type.
-  shouldRetry: (error) => (error instanceof SessionExpiredError ? true : undefined),
+  shouldRetry: (error) =>
+    error instanceof SessionExpiredError || error instanceof HeldForAccountError ? true : undefined,
 });
 
 // Kick off storage probe + leader election + outbox replay as early as possible.
 offline.waitForInit().catch(console.error);
 
+// Signed out, the refetches empty the lists, and drop an answer still on its way for the account
 subscribeAuthToken(() => {
-  if (getAuthToken()) {
-    // Replays queued edits now instead of after their retry backoff, ahead of the refetches.
-    offline.getOnlineDetector().notifyOnline();
-    tasksCollection.utils.refetch().catch(console.error);
-    categoriesCollection.utils.refetch().catch(console.error);
-    notesCollection.utils.refetch().catch(console.error);
-    contactsCollection.utils.refetch().catch(console.error);
-  }
+  // Replays queued edits now instead of after their retry backoff, ahead of the refetches.
+  if (getAuthToken()) offline.getOnlineDetector().notifyOnline();
+  tasksCollection.utils.refetch().catch(console.error);
+  categoriesCollection.utils.refetch().catch(console.error);
+  notesCollection.utils.refetch().catch(console.error);
+  contactsCollection.utils.refetch().catch(console.error);
 });

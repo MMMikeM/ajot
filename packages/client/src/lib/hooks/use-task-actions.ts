@@ -1,7 +1,7 @@
 import { ComponentProps } from "react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortableOperation } from "@dnd-kit/react/sortable";
-import { generateKeyBetween } from "fractional-indexing";
+import { keyBetween } from "@newtab-todo/shared/sort-order";
 import { updateTask, updateCategory, moveToList } from "~/lib/db/hooks";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { listChoices } from "~/lib/effective-category";
@@ -34,14 +34,14 @@ export const useTaskActions = ({
     const filtered = groupTasks.filter((t) => t.id !== taskId);
     const prevOrder = newIndex > 0 ? (filtered[newIndex - 1]?.sortOrder ?? null) : null;
     const nextOrder = filtered[newIndex]?.sortOrder ?? null;
-    updateTask(taskId, { sortOrder: generateKeyBetween(prevOrder, nextOrder) });
+    updateTask(taskId, { sortOrder: keyBetween(prevOrder, nextOrder) });
   };
 
   const handleReorderCategory = (catId: string, newIndex: number, cats: Category[]) => {
     const filtered = cats.filter((c) => c.id !== catId);
     const prevOrder = newIndex > 0 ? (filtered[newIndex - 1]?.sortOrder ?? null) : null;
     const nextOrder = filtered[newIndex]?.sortOrder ?? null;
-    updateCategory(catId, { sortOrder: generateKeyBetween(prevOrder, nextOrder) });
+    updateCategory(catId, { sortOrder: keyBetween(prevOrder, nextOrder) });
   };
 
   const handleDragEnd = (event: DragEndEvent) => {

@@ -12,6 +12,12 @@ const SCHEMA_VERSION = 1;
 
 export const SNAPSHOT_KEYS = ["tasks", "categories", "notes", "contacts"] as const;
 
+/**
+ * The account the lists were saved for, written with them: a page signed into another one, or
+ * signed out, doesn't open on them. Lists saved before it existed have none.
+ */
+export const OWNER_KEY = "owner";
+
 export const openSnapshotDb = () =>
   new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, SCHEMA_VERSION);
@@ -62,6 +68,10 @@ export const saveSnapshot = async (entries: Iterable<readonly [string, unknown]>
     db.close();
   }
 };
+
+/** Leaves the worker's session, kept in the same store, alone. */
+export const clearSavedLists = () =>
+  saveSnapshot([...SNAPSHOT_KEYS, OWNER_KEY].map((key) => [key, undefined] as const));
 
 /** For a reader that keeps no connection open, like the PWA's service worker. */
 export const loadSnapshotEntry = async (key: string) => {

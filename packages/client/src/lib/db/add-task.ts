@@ -1,12 +1,9 @@
 import { nanoid } from "nanoid";
-import { generateKeyBetween } from "fractional-indexing";
+import { keyAfter } from "@newtab-todo/shared/sort-order";
 import { getCurrentUserId } from "~/lib/auth/current-user";
 import { now } from "~/lib/utils";
 import { tasksCollection } from "~/lib/db/collections";
-import { offline } from "~/lib/db/offline";
-import type { Task } from "~/lib/types";
-
-const bySortOrder = (a: Task, b: Task) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? "");
+import { createOfflineTransaction, offline } from "~/lib/db/offline";
 
 export const addTask = async (
   title: string,
@@ -14,20 +11,18 @@ export const addTask = async (
   parentId?: string | null,
 ) => {
   // An insert before the first load settles can leave the collection stuck loading (signed
-  // out, its sync never completes), and the sort order below needs the loaded siblings
-  await tasksCollection.stateWhenReady();
+  // out, its sync never completes), and the sort order below needs the loaded siblings. Before
+  // the executor has its leadership, a transaction skips the outbox and is lost if it can't send.
+  await Promise.all([tasksCollection.stateWhenReady(), offline.waitForInit().catch(() => {})]);
 
   const userId = getCurrentUserId();
 
   const allTasks = [...(tasksCollection.state?.values() ?? [])];
-  const siblings = parentId
-    ? allTasks.filter((t) => t.parentId === parentId).sort(bySortOrder)
-    : allTasks.filter((t) => !t.parentId).sort(bySortOrder);
-  const lastOrder = siblings.length > 0 ? siblings[siblings.length - 1].sortOrder : null;
-  const sortOrder = generateKeyBetween(lastOrder, null);
+  const siblings = allTasks.filter((t) => (parentId ? t.parentId === parentId : !t.parentId));
+  const sortOrder = keyAfter(siblings.map((t) => t.sortOrder));
 
   const timestamp = now();
-  const tx = offline.createOfflineTransaction({ mutationFnName: "syncTasks" });
+  const tx = createOfflineTransaction({ mutationFnName: "syncTasks" });
   tx.mutate(() =>
     tasksCollection.insert({
       id: nanoid(),
