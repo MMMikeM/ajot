@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useCategories, useContacts } from "~/lib/db/hooks";
-import { addCollaborator, removeCollaborator } from "~/lib/actions";
+import { addCollaborator, removeCollaborator, restoreCollaborator } from "~/lib/actions";
 import { useAuthToken } from "~/lib/auth/token";
-import { pushUndoToast } from "~/lib/undo-toast";
+import { pushUndoToast, toastManager } from "~/lib/undo-toast";
 import {
   Drawer,
   DrawerContent,
@@ -25,6 +25,7 @@ import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { TextStack } from "~/components/ui/text-stack";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
+import { dockedSheet } from "~/components/docked-sheet";
 import { useBackToClose } from "~/lib/hooks/use-back-to-close";
 
 export function CategoryCollabSheet({
@@ -67,13 +68,28 @@ export function CategoryCollabSheet({
     }
   };
 
+  /** Whether it worked; the reason is shown in the sheet. */
   const handleRemove = async (userId: string) => {
     setError(null);
     try {
       await removeCollaborator(categoryId, userId);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't remove them. Try again.");
+      return false;
     }
+  };
+
+  const removeWithUndo = async ({ id, name }: { id: string; name: string }) => {
+    if (!(await handleRemove(id))) return;
+    pushUndoToast(`Removed ${name}`, () => {
+      restoreCollaborator(categoryId, id).catch((err) => {
+        console.error("[collaborators] restore failed:", err);
+        toastManager.add({
+          title: err instanceof Error ? err.message : `Couldn't bring back ${name}`,
+        });
+      });
+    });
   };
 
   return (
@@ -83,7 +99,7 @@ export function CategoryCollabSheet({
         if (!next) onClose();
       })}
     >
-      <DrawerContent className="max-w-(--column-w) border-x touch:max-w-none touch:border-x-0 desk:translate-x-(--column-shift)">
+      <DrawerContent className={dockedSheet}>
         <DrawerHeader className="gap-1 px-6 pt-4 pb-2 touch:px-5">
           <DrawerTitle className="font-display text-2xl leading-tight font-normal">
             Share list
@@ -104,7 +120,7 @@ export function CategoryCollabSheet({
                   <InitialsAvatar name={collab.name} size="md" />
                   <TextStack title={collab.name} subtitle={`@${collab.username}`} />
                   <RevealGroup>
-                    <RevealButton onClick={() => handleRemove(collab.id)}>Remove</RevealButton>
+                    <RevealButton onClick={() => void removeWithUndo(collab)}>Remove</RevealButton>
                   </RevealGroup>
                 </ListRow>
               ))}

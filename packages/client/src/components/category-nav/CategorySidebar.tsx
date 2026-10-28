@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode, type RefCallback } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { useDroppable } from "@dnd-kit/react";
-import { Ellipsis, Plus, Search, UsersRound } from "lucide-react";
+import { Ellipsis, Plus, Search, Settings as SettingsIcon, UsersRound } from "lucide-react";
 import { INBOX_COLOR, CATEGORY_DROP_PREFIX } from "~/lib/constants";
 import { Popover, PopoverTrigger, PopoverContent } from "~/components/ui/popover";
 import { CategoryCollabSheet } from "~/components/CategoryCollabSheet";
@@ -11,6 +11,7 @@ import { Input } from "~/components/ui/field";
 import { ColorDot } from "~/components/ui/color-dot";
 import { setActiveCategoryId } from "~/lib/state/active-category";
 import { useCurrentUserId } from "~/lib/auth/current-user";
+import { getBuildTarget } from "~/lib/build-target";
 import { isListPath } from "~/lib/list-path";
 import { cn } from "~/lib/utils";
 import { navRow } from "./nav-row";
@@ -329,6 +330,22 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
                 </>
               )}
             </Link>
+            {getBuildTarget() === "browser" && (
+              <Link
+                to="/settings"
+                className={navRow({ class: "data-[status=active]:text-foreground" })}
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && <ActiveBar />}
+                    <NavIcon>
+                      <SettingsIcon className="size-3.5" aria-hidden="true" />
+                    </NavIcon>
+                    Settings
+                  </>
+                )}
+              </Link>
+            )}
           </div>
         )}
       </nav>

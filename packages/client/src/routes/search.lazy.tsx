@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { createLazyFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { DragDropProvider } from "@dnd-kit/react";
 import { Plus, Search, X } from "lucide-react";
 import { CategorySidebar } from "~/components/category-nav/CategorySidebar";
 import { SearchResults } from "~/components/search/results";
+import { moveRowFocus } from "~/components/task/row-focus";
 import { useTaskActions } from "~/components/task/use-actions";
 import { Button } from "~/components/ui/button";
 import { useCategories, useNotes, useTasks } from "~/lib/db/hooks";
@@ -22,10 +23,34 @@ export const Route = createLazyFileRoute("/search")({
 const bySortOrder = (a: Category, b: Category) =>
   (a.sortOrder ?? "").localeCompare(b.sortOrder ?? "");
 
+const RESULT = "[data-search-result]";
+
+const useResultKeys = (
+  resultsRef: RefObject<HTMLElement | null>,
+  fieldRef: RefObject<HTMLInputElement | null>,
+) => {
+  useEffect(() => {
+    const results = resultsRef.current!;
+    const toField = () => fieldRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !e.defaultPrevented) {
+        e.preventDefault();
+        toField();
+        return;
+      }
+      moveRowFocus(results, e, { focusIn: RESULT, beforeFirst: toField });
+    };
+    results.addEventListener("keydown", onKeyDown);
+    return () => results.removeEventListener("keydown", onKeyDown);
+  }, [resultsRef, fieldRef]);
+};
+
 // The layout keeps the query, so closing a task opened from the results lands back on them
 function SearchPage() {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  useResultKeys(resultsRef, inputRef);
   const navigate = useNavigate();
   const isDesk = useIsDesk();
   const userId = useOptimisticUserId();
@@ -48,10 +73,15 @@ function SearchPage() {
 
   const q = query.trim();
   const searched = q.length >= 2;
-  const found = results.groups.length > 0 || results.done.length > 0;
+  const hitCount =
+    results.groups.reduce((n, group) => n + group.hits.length, 0) + results.done.length;
+  const found = hitCount > 0;
+  const firstHit = results.groups[0]?.hits[0] ?? results.done[0];
   const canAdd = searched && !results.exact && !results.corrected;
 
   const close = () => void navigate({ to: "/" });
+  const open = (taskId: string) =>
+    void navigate({ to: "/search/task/$taskId", params: { taskId } });
   const add = async () => {
     await addTask(q, fromList?.id ?? null);
     void navigate({ to: "/" });
@@ -77,7 +107,15 @@ function SearchPage() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Escape") close();
-            if (e.key === "Enter" && searched && !found && canAdd) void add();
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === "ArrowDown" && searched && found) {
+              e.preventDefault();
+              resultsRef.current?.querySelector<HTMLElement>(RESULT)?.focus();
+            }
+            if (e.key === "Enter" && searched) {
+              if (firstHit) open(firstHit.task.id);
+              else if (canAdd) void add();
+            }
           }}
           enterKeyHint="search"
           autoComplete="off"
@@ -95,7 +133,14 @@ function SearchPage() {
         </Button>
       </search>
 
-      <div className="scroll-edge-fade touch:-mx-2 touch:flex touch:min-h-0 touch:flex-1 touch:flex-col touch:overflow-y-auto touch:px-2 touch:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
+      <output className="sr-only">
+        {searched && (hitCount === 1 ? "1 result" : `${hitCount || "No"} results`)}
+      </output>
+
+      <div
+        ref={resultsRef}
+        className="scroll-edge-fade touch:-mx-2 touch:flex touch:min-h-0 touch:flex-1 touch:flex-col touch:overflow-y-auto touch:px-2 touch:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]"
+      >
         {!searched && <p className="text-sm text-hint">Every list, done tasks and notes.</p>}
 
         {searched && results.corrected && (
@@ -108,7 +153,7 @@ function SearchPage() {
           <SearchResults
             results={results}
             categories={categories}
-            onOpen={(taskId) => navigate({ to: "/search/task/$taskId", params: { taskId } })}
+            onOpen={open}
             onToggle={handleToggle}
           />
         )}

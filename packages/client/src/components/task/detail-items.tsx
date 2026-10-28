@@ -83,7 +83,7 @@ export const Subtasks = ({
               aria-label={sub.title}
               onCheckedChange={() => onToggle(sub)}
               className={cn(
-                "mt-1.75 size-3.5 touch:mt-2.5 touch:size-4 touch:after:-inset-3.5",
+                "mt-1.75 size-3.5 touch:mt-2.5 touch:size-4 touch:after:-inset-3.75",
                 done && checkboxDoneClass,
               )}
             />

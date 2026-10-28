@@ -48,7 +48,11 @@ const useSyncAnnouncement = (syncState: keyof typeof SYNC_LABELS, deviceOnline: 
     if (syncState === "connecting") return;
     const offline = syncState === "disconnected";
     if (wasOffline.current !== null && wasOffline.current !== offline) {
-      setAnnouncement(offline ? (deviceOnline ? "Not syncing" : "Offline") : "Back online");
+      setAnnouncement(
+        offline
+          ? `${deviceOnline ? "Not syncing" : "Offline"}, changes saved on this device`
+          : "Back online",
+      );
     }
     wasOffline.current = offline;
   }, [syncState, deviceOnline]);
@@ -108,7 +112,7 @@ export const SyncSettings = () => {
   // Online but not syncing is the server or the sign-in, not something waiting will fix
   const unreachable = isOffline && deviceOnline;
   const syncLabel = unreachable
-    ? "Not syncing"
+    ? "Not syncing · saved here"
     : hasPending && !isOffline
       ? "Syncing…"
       : SYNC_LABELS[syncState];
@@ -121,7 +125,7 @@ export const SyncSettings = () => {
             variant="ghost"
             size="xs"
             className="gap-1.5 text-hint hover:text-muted-foreground desk:-mr-2.5"
-            aria-label={`Sync settings: ${isOffline ? `${unreachable ? "not syncing" : "offline"}, changes saved on this device` : syncLabel}`}
+            aria-label={`Sync settings: ${syncLabel}${isOffline ? ", changes saved on this device" : ""}`}
           />
         }
       >
@@ -155,8 +159,8 @@ export const SyncSettings = () => {
           {isOffline && (
             <p className="max-w-52 px-2.5 pb-2 text-xs text-hint">
               {unreachable
-                ? "Can't reach the sync server. Changes stay on this device and sync once it answers."
-                : "You're offline. Changes stay on this device and sync once you're back."}
+                ? "Can't reach Ajot's server. Your changes are saved on this device and will sync once it's back."
+                : "You're offline. Your changes are saved on this device and will sync once you're back online."}
             </p>
           )}
           <div className="mb-1 h-px bg-border" />

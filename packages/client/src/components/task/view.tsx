@@ -1,4 +1,12 @@
-import { memo, useEffect, useRef, useState, type ComponentProps } from "react";
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type RefObject,
+} from "react";
 import { ChevronRight } from "lucide-react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
@@ -16,6 +24,13 @@ import { TaskRowsSkeleton } from "./rows-skeleton";
 import { finishStartup } from "~/lib/startup-timing";
 import { useTaskActions } from "./use-actions";
 import { handOffRowFocus } from "./focus-handoff";
+import {
+  createRowFocus,
+  listenForRowKeys,
+  RowFocusContext,
+  rowIdsOf,
+  type RowFocus,
+} from "./row-focus";
 import { rowDragSensors } from "./row-drag";
 import { useTaskActions as useDndActions } from "~/lib/hooks/use-task-actions";
 import { canDeleteTask } from "@newtab-todo/shared/task-access";
@@ -245,6 +260,19 @@ const SortableTask = memo(function SortableTask({
   );
 }, sameRowProps);
 
+const RowList = ({
+  rowFocus,
+  listRef,
+  ...props
+}: { rowFocus: RowFocus; listRef: RefObject<HTMLUListElement | null> } & ComponentProps<"ul">) => {
+  useEffect(() => listenForRowKeys(listRef.current!, rowFocus), [listRef, rowFocus]);
+  return (
+    <RowFocusContext value={rowFocus}>
+      <ul ref={listRef} {...props} />
+    </RowFocusContext>
+  );
+};
+
 const NO_SUBTASKS: Task[] = [];
 
 const bySortOrder = (a: Task, b: Task) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? "");
@@ -302,6 +330,16 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
     activeCategoryId,
   );
   const subtasksByParent = groupSubtasks(allTasks ?? []);
+  const doneTasks = categoryTasks.filter((t) => t.status === "done");
+
+  const [activeRowFocus] = useState(createRowFocus);
+  const [doneRowFocus] = useState(createRowFocus);
+  const activeRowIds = rowIdsOf(activeTasks, subtasksByParent);
+  const doneRowIds = rowIdsOf(doneTasks, subtasksByParent);
+  useLayoutEffect(() => {
+    activeRowFocus.setRows(activeRowIds);
+    doneRowFocus.setRows(doneRowIds);
+  }, [activeRowFocus, doneRowFocus, activeRowIds, doneRowIds]);
 
   const { handleDragEnd } = useDndActions({
     categories,
@@ -325,7 +363,6 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   }, [hasRows, isLoading]);
   if (isLoading && !hasRows) return <TaskRowsSkeleton />;
 
-  const doneTasks = categoryTasks.filter((t) => t.status === "done");
   // Deleting a task deletes its subtasks, so one still holding open work stays
   const clearableDoneTasks = doneTasks.filter(
     (t) =>
@@ -338,7 +375,12 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
       <FlipList list={columnRef} resetKey={activeCategoryId}>
         <div ref={columnRef} className="flex flex-1 flex-col gap-4">
           <FlipList list={activeListRef} resetKey={activeCategoryId} arrivals>
-            <ul ref={activeListRef} data-flip-key="active" className="flex flex-col gap-1">
+            <RowList
+              rowFocus={activeRowFocus}
+              listRef={activeListRef}
+              data-flip-key="active"
+              className="flex flex-col gap-1"
+            >
               {activeTasks.map((task, index) => (
                 <SortableTask
                   key={task.id}
@@ -355,7 +397,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
                   swipeHint={index === 0}
                 />
               ))}
-            </ul>
+            </RowList>
           </FlipList>
 
           <EmptySection
@@ -379,7 +421,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
             clearsAll={clearableDoneTasks.length === doneTasks.length}
           >
             <FlipList list={doneListRef} arrivals>
-              <ul ref={doneListRef} className="mt-2 flex flex-col">
+              <RowList rowFocus={doneRowFocus} listRef={doneListRef} className="mt-2 flex flex-col">
                 {doneTasks.map((task) => (
                   <li key={task.id} data-flip-key={task.id}>
                     <TaskItem
@@ -397,7 +439,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
                     />
                   </li>
                 ))}
-              </ul>
+              </RowList>
             </FlipList>
           </DoneSection>
         </div>
