@@ -64,14 +64,14 @@ test("an empty category deletes without asking", async ({ page }) => {
     taskIds: [],
   });
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
-  await expect(page.getByText("List deleted")).toBeVisible();
+  await expect(page.getByText("“Home” deleted")).toBeVisible();
 });
 
 test("Undo brings a deleted list back", async ({ page }) => {
   await openList(page);
   await openOptions(page, "Home");
   await page.getByRole("button", { name: "Delete", exact: true }).click();
-  const toast = page.locator("[data-toast-undo]", { hasText: "List deleted" });
+  const toast = page.locator("[data-toast-undo]", { hasText: "“Home” deleted" });
   await expect(toast).toBeVisible();
   await expect(page.getByRole("button", { name: /^Home/ })).toHaveCount(0);
 

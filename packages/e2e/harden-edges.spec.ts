@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
-import { mockApi } from "./helpers/mock-api";
+import { mockApi, noteOn } from "./helpers/mock-api";
+import { expectTapTarget } from "./helpers/touch";
 
 // Edge cases in the list chrome, against the dev server with /api mocked
 
@@ -65,15 +66,7 @@ test("a long URL or list name keeps the task sheet's controls on screen", async 
   flights.categoryId = "c-long";
   data.tasks[1]!.categoryId = "c-long";
   data.tasks[1]!.title = URL;
-  data.notes.push({
-    id: "n-url",
-    userId: flights.userId,
-    taskId: flights.id,
-    title: URL,
-    content: URL,
-    createdAt: flights.createdAt,
-    updatedAt: flights.createdAt,
-  });
+  data.notes.push(noteOn(flights, URL, { title: URL }));
   await page.goto(`/task/${flights.id}`, { waitUntil: "domcontentloaded" });
   const sheet = page.locator('[data-slot="drawer-content"]');
   await expect(sheet.getByText(URL).first()).toBeVisible({ timeout: 15000 });
@@ -91,6 +84,23 @@ test("a long URL or list name keeps the task sheet's controls on screen", async 
       expect(right).toBeLessThanOrEqual(sheetRight);
     }
   }
+});
+
+test("on a 320px phone a note keeps most of its row", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === "desktop", "desktop floats the actions over the row");
+  await page.setViewportSize({ width: 320, height: 568 });
+  const data = await mockApi(page);
+  const flights = data.tasks[0]!;
+  data.notes.push(noteOn(flights, "Window seat if possible"));
+  await page.goto(`/task/${flights.id}`, { waitUntil: "domcontentloaded" });
+  const notes = page.locator('[data-slot="drawer-content"]').getByRole("group", { name: "Notes" });
+  const text = notes.getByRole("button", { name: /^Edit note/ });
+  await expect(text).toBeVisible({ timeout: 15000 });
+  const rowBox = (await text.locator("xpath=..").boundingBox())!;
+  const textBox = (await text.boundingBox())!;
+  expect(textBox.width / rowBox.width).toBeGreaterThan(0.75);
+
+  await expectTapTarget(notes.getByRole("button", { name: "Delete note" }));
 });
 
 test.describe("done section", () => {
@@ -112,6 +122,14 @@ test.describe("done section", () => {
 
   test("Clear removes your done tasks, and Undo brings them back", async ({ page }) => {
     const data = await mockApi(page);
+    const oatMilk = data.tasks.find((t) => t.title === "Buy oat milk")!;
+    data.tasks.push({
+      ...oatMilk,
+      id: "t-oat-receipt",
+      title: "Keep the receipt",
+      parentId: oatMilk.id,
+      sortOrder: "b0",
+    });
     const deleted: string[] = [];
     page.on("request", (request) => {
       if (request.method() === "DELETE" && new URL(request.url()).pathname === "/api/tasks")
@@ -123,6 +141,7 @@ test.describe("done section", () => {
     await expect(page.getByRole("button", { name: "Clear done tasks" })).toBeVisible();
     await page.getByRole("button", { name: "Clear done tasks" }).click();
 
+    await expect(page.locator("[data-toast-undo]")).toContainText("Cleared 2 done tasks");
     await expect(page.getByRole("button", { name: /done \(\d+\)/i })).toHaveCount(0);
     await expect(row(page, "Buy oat milk")).toHaveCount(0);
     await expect(row(page, "Return library books")).toHaveCount(0);
@@ -140,6 +159,13 @@ test.describe("done section", () => {
     await expect(page.getByRole("button", { name: /done \(2\)/i })).toBeVisible();
     await expect(row(page, "Buy oat milk")).toBeVisible();
     await expect(row(page, "Return library books")).toBeVisible();
+    // A done parent hides its subtasks in the list, so look in its sheet
+    await row(page, "Buy oat milk")
+      .getByRole("button", { name: /^Buy oat milk/ })
+      .click();
+    await expect(
+      page.getByRole("dialog").getByRole("checkbox", { name: "Keep the receipt" }),
+    ).toBeVisible();
   });
 
   test("Clear is absent when none of the done tasks are yours", async ({ page }) => {

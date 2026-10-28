@@ -25,7 +25,7 @@ const buttonVariants = tv({
       default:
         "h-9 gap-1.5 px-3 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5 touch:h-11",
       // 36px on touch, with a 44px target around it
-      xs: "relative h-6 gap-1 px-2.5 text-xs has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 touch:h-9 touch:px-3 touch:after:absolute touch:after:inset-x-0 touch:after:-inset-y-1 [&_svg:not([class*='size-'])]:size-3",
+      xs: "relative h-6 gap-1 px-2.5 text-xs has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 touch:h-9 touch:px-3 touch:after:absolute touch:after:inset-x-0 touch:after:-inset-y-1.25 [&_svg:not([class*='size-'])]:size-3",
       sm: "h-8 gap-1 px-3 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 touch:h-11 touch:px-3.5",
     },
     icon: {
@@ -58,7 +58,7 @@ const buttonVariants = tv({
       icon: true,
       size: "xs",
       class:
-        "size-6 touch:size-9 touch:px-0 touch:after:-inset-1 [&_svg:not([class*='size-'])]:size-3",
+        "size-6 touch:size-9 touch:px-0 touch:after:-inset-1.25 [&_svg:not([class*='size-'])]:size-3",
     },
     { icon: true, size: "sm", class: "size-8 touch:size-11 touch:px-0" },
     { bleed: "start", size: "xs", icon: false, class: "-ml-2.5 touch:-ml-3" },

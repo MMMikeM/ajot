@@ -9,12 +9,12 @@ import {
 import { Toast } from "@base-ui/react/toast";
 import { X } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { UNDO_KEYS, pressUndo } from "~/lib/undo-toast";
+import { UNDO_KEYS, pressUndo, type ToastData } from "~/lib/undo-toast";
 import { cn } from "~/lib/utils";
 
 const DURATION = 5000;
 
-type ToastObject = Toast.Root.Props["toast"];
+type ToastObject = Toast.Root.ToastObject<ToastData>;
 
 const subscribeVisibility = (onChange: () => void) => {
   document.addEventListener("visibilitychange", onChange);
@@ -58,7 +58,7 @@ const usePauseWhileHidden = (
   duration: number,
   bar: RefObject<HTMLDivElement | null>,
 ) => {
-  const { update, close } = Toast.useToastManager();
+  const { update, close } = Toast.useToastManager<ToastData>();
   const hidden = usePageHidden();
   const remaining = useRef<number | null>(null);
   useEffect(() => {
@@ -88,6 +88,8 @@ function ToastItem({ toast, windowBlurred }: { toast: ToastObject; windowBlurred
   const bar = useRef<HTMLDivElement>(null);
   const hidden = usePauseWhileHidden(toast, duration, bar);
   const away = hidden || windowBlurred;
+  const named = toast.data?.named;
+  const onUndo = toast.data?.onUndo;
   return (
     <Toast.Root
       toast={toast}
@@ -99,16 +101,18 @@ function ToastItem({ toast, windowBlurred }: { toast: ToastObject; windowBlurred
         // Base UI sets --toast-index, --toast-height, etc.
         "[--gap:0.75rem] [--peek:0.625rem]",
         "[--scale:calc(max(0,1-(var(--toast-index)*0.075)))]",
-        "[--shrink:calc(1-var(--scale))]",
         "[--height:var(--toast-frontmost-height,var(--toast-height))]",
         "absolute right-0 bottom-0 left-0 w-full origin-bottom select-none",
         "z-[calc(1000-var(--toast-index))]",
-        "[--stacked:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-(var(--shrink)*var(--height))))_scale(var(--scale))]",
+        // A toast behind keeps its own height and sits so its top peeks above the front one's,
+        // then is clipped to the front one's height, so stacking never changes a toast's size
+        "[--stacked:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-var(--height)+(var(--scale)*var(--toast-height))))_scale(var(--scale))]",
         "[transform:var(--stacked)]",
+        "[--behind:min(1,var(--toast-index))]",
+        "[clip-path:inset(-2rem_-2rem_calc((var(--toast-height)-var(--height))*var(--behind)-2rem*(1-var(--behind)))_-2rem)]",
         // Hover-gap bridge so pointer can reach lower toasts
         "after:absolute after:top-full after:left-0 after:h-[calc(var(--gap)+1px)] after:w-full after:content-['']",
         "overflow-hidden rounded-lg border border-border bg-card shadow-lg",
-        "h-[var(--height)]",
         "data-[starting-style]:[transform:translateY(150%)]",
         "data-[ending-style]:opacity-0",
         "data-[limited]:opacity-0",
@@ -117,7 +121,7 @@ function ToastItem({ toast, windowBlurred }: { toast: ToastObject; windowBlurred
         "data-[ending-style]:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(0)]",
         "data-[ending-style]:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]",
         "data-[ending-style]:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))]",
-        "[transition:transform_0.5s_cubic-bezier(0.22,1,0.36,1),opacity_0.5s,height_0.15s]",
+        "[transition:transform_0.5s_cubic-bezier(0.22,1,0.36,1),opacity_0.5s,clip-path_0.5s_cubic-bezier(0.22,1,0.36,1)]",
         "motion-reduce:data-[starting-style]:[transform:var(--stacked)] motion-reduce:data-[starting-style]:opacity-0",
         "motion-reduce:[&[data-ending-style]:not([data-limited]):not([data-swipe-direction])]:[transform:var(--stacked)]",
       )}
@@ -125,12 +129,27 @@ function ToastItem({ toast, windowBlurred }: { toast: ToastObject; windowBlurred
       <Toast.Content className="py-2.5 pr-2.5 pl-4">
         <div className="flex items-center gap-2 text-sm">
           {/* select-text: the invite fallback toast holds a link to copy */}
-          <Toast.Title className="min-w-0 flex-1 [overflow-wrap:anywhere] text-hint select-text" />
-          {toast.data?.onUndo && (
+          <Toast.Title
+            className={cn(
+              "min-w-0 flex-1 [overflow-wrap:anywhere] text-hint select-text",
+              named && "flex whitespace-pre",
+            )}
+          >
+            {named && (
+              <>
+                {named.before}
+                <bdi className="min-w-0 truncate">{named.name}</bdi>
+                {/* Shrinks too, in proportion: a long ending can't squeeze the name out or run
+                    under Undo on a narrow phone */}
+                <span className="min-w-0 truncate">{named.after}</span>
+              </>
+            )}
+          </Toast.Title>
+          {onUndo && (
             <Toast.Action
               render={<Button variant="link" className="h-8 px-2 touch:h-9" />}
               aria-keyshortcuts={UNDO_KEYS}
-              onClick={() => pressUndo(toast.id, toast.data.onUndo)}
+              onClick={() => pressUndo(toast.id, onUndo)}
             >
               Undo
             </Toast.Action>
@@ -155,7 +174,7 @@ function ToastItem({ toast, windowBlurred }: { toast: ToastObject; windowBlurred
 }
 
 export const Toasts = () => {
-  const { toasts } = Toast.useToastManager();
+  const { toasts } = Toast.useToastManager<ToastData>();
   const windowBlurred = useWindowBlurred();
   return toasts.map((toast) => (
     <ToastItem key={toast.id} toast={toast} windowBlurred={windowBlurred} />

@@ -123,11 +123,12 @@ const DoneSection = ({
           // The count's inline-block would read as "Done ( 3 )"
           aria-label={`Done (${count})`}
           bleed="start"
-          className="font-medium tracking-wider text-muted-foreground uppercase hover:text-foreground aria-expanded:bg-transparent"
+          className="gap-2 font-medium tracking-wider text-muted-foreground uppercase hover:text-foreground aria-expanded:bg-transparent"
         >
           <ChevronRight
-            size={14}
-            className="transition-transform"
+            // Pulled past the button's border and the glyph's inset, so the open chevron's ink
+            // starts on the checkboxes' left edge
+            className="-ml-1 size-3 transition-transform"
             style={{ transform: open ? "rotate(90deg)" : "none" }}
           />
           <span>

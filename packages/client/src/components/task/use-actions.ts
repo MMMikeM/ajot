@@ -3,7 +3,7 @@ import { compareSortOrder } from "@newtab-todo/shared/sort-order";
 import { updateTask, deleteTask, deleteTasks } from "~/lib/db/hooks";
 import { tasksCollection } from "~/lib/db/collections";
 import { addTask } from "~/lib/db/add-task";
-import { pushUndoToast as pushUndo } from "~/lib/undo-toast";
+import { pushUndoToast as pushUndo, quoted } from "~/lib/undo-toast";
 import type { Task } from "~/lib/types";
 
 // Read when an action runs, not subscribed to: handlers that close over the list change on every
@@ -20,12 +20,12 @@ export const useTaskActions = () => {
         (t) => t.parentId === task.id && t.status !== "done",
       );
       for (const sub of incomplete) updateTask(sub.id, { status: "done" });
-      pushUndo("Marked done", () => {
+      pushUndo(quoted(task.title, " done"), () => {
         updateTask(task.id, { status: "todo" });
         for (const sub of incomplete) updateTask(sub.id, { status: "todo" });
       });
     } else {
-      pushUndo("Marked incomplete", () => updateTask(task.id, { status: "done" }));
+      pushUndo(quoted(task.title, " not done"), () => updateTask(task.id, { status: "done" }));
     }
   };
 
@@ -37,7 +37,7 @@ export const useTaskActions = () => {
       originEl.style.viewTransitionName = "undo-morph";
       const vt = document.startViewTransition(() => {
         flushSync(() => {
-          pushUndo("Task deleted", deleteTask(task.id));
+          pushUndo(quoted(task.title, " deleted"), deleteTask(task.id));
         });
         const toastEl = document.querySelector<HTMLElement>("[data-toast-undo]");
         if (toastEl) toastEl.style.viewTransitionName = "undo-morph";
@@ -47,7 +47,7 @@ export const useTaskActions = () => {
         if (toastEl) toastEl.style.viewTransitionName = "";
       });
     } else {
-      pushUndo("Task deleted", deleteTask(task.id));
+      pushUndo(quoted(task.title, " deleted"), deleteTask(task.id));
     }
   };
 
