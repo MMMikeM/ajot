@@ -13,19 +13,22 @@ type Membership = { categoryId: string; userId: string };
 /** What someone leaving a list took out of it, so an Undo can put it back. */
 type Leaving = Membership & { movedTaskIds: string[]; unfiledTaskIds: string[] };
 
-/** Adding someone afresh drops the Undo of their removal, which would move their tasks again. */
+/**
+ * Adding someone afresh drops the Undo of their removal, which would move their tasks again. Null
+ * when they were already in the list.
+ */
 const add = async (categoryId: string, userId: string) => {
   await db
     .delete(removedCollaborators)
     .where(
       and(eq(removedCollaborators.categoryId, categoryId), eq(removedCollaborators.userId, userId)),
     );
-  const [row] = await db
+  const rows = await db
     .insert(categoryCollaborators)
     .values({ id: createId(), categoryId, userId })
     .onConflictDoNothing()
     .returning();
-  return row;
+  return rows.at(0) ?? null;
 };
 
 /**

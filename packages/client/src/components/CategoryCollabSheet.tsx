@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { useCategories, useContacts } from "~/lib/db/hooks";
 import { addCollaborator, removeCollaborator, restoreCollaborator } from "~/lib/actions";
 import { useAuthToken } from "~/lib/auth/token";
@@ -27,6 +26,7 @@ import { TextStack } from "~/components/ui/text-stack";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 import { dockedSheet } from "~/components/docked-sheet";
 import { useBackToClose } from "~/lib/hooks/use-back-to-close";
+import { InviteButton } from "~/components/InviteButton";
 
 export function CategoryCollabSheet({
   categoryId,
@@ -40,6 +40,7 @@ export function CategoryCollabSheet({
   useBackToClose(open, onClose);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [addedLastContact, setAddedLastContact] = useState(false);
 
   const { data: allCategories = [] } = useCategories();
   const { data: allContacts = [] } = useContacts();
@@ -59,6 +60,7 @@ export function CategoryCollabSheet({
     setError(null);
     try {
       await addCollaborator(categoryId, username);
+      setAddedLastContact(addableContacts.length === 1);
       if (contact)
         pushUndoToast(`Shared with ${contact.name}`, () => void handleRemove(contact.id));
     } catch (err) {
@@ -96,7 +98,9 @@ export function CategoryCollabSheet({
     <Drawer
       open={open}
       onOpenChange={keepOpenOnToastPress((next) => {
-        if (!next) onClose();
+        if (next) return;
+        setAddedLastContact(false);
+        onClose();
       })}
     >
       <DrawerContent className={dockedSheet}>
@@ -117,7 +121,7 @@ export function CategoryCollabSheet({
               <SectionLabel>Shared with</SectionLabel>
               {collabs.map((collab) => (
                 <ListRow key={collab.id} className="-mx-2">
-                  <InitialsAvatar name={collab.name} size="md" />
+                  <InitialsAvatar name={collab.name} userId={collab.id} size="md" />
                   <TextStack title={collab.name} subtitle={`@${collab.username}`} />
                   <RevealGroup>
                     <RevealButton onClick={() => void removeWithUndo(collab)}>Remove</RevealButton>
@@ -154,14 +158,18 @@ export function CategoryCollabSheet({
             </div>
           )}
 
-          {addableContacts.length === 0 && collabs.length === 0 && (
-            <p className="text-sm text-hint">
-              No contacts yet.{" "}
-              <Link to="/people" className="underline hover:text-foreground">
-                Invite someone
-              </Link>{" "}
-              to share this list with them.
-            </p>
+          {addableContacts.length === 0 && (
+            <div className="flex flex-col items-start gap-3">
+              <p className="text-sm text-hint">
+                {collabs.length === 0
+                  ? "No contacts yet."
+                  : "Everyone in your contacts is on this list."}
+              </p>
+              <InviteButton
+                label={collabs.length === 0 ? "Invite someone" : "Invite someone new"}
+                takeFocus={addedLastContact}
+              />
+            </div>
           )}
         </div>
         <div className="h-[env(safe-area-inset-bottom,12px)] min-h-3" />

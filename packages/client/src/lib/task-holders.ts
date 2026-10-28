@@ -33,3 +33,15 @@ export const holders = (task: Task, lists: CategoriesById, parent?: Task): TaskW
     category: listOf(parent, lists),
   },
 });
+
+/**
+ * Who owns the task, by name: a task someone adds to a list arrives live without its owner, whose
+ * name the list already has.
+ */
+export const ownerNameOf = (task: Task, lists: CategoriesById) => {
+  if (task.user) return task.user.name;
+  const list = task.categoryId ? lists.get(task.categoryId) : undefined;
+  if (!list) return undefined;
+  if (list.userId === task.userId) return list.user?.name;
+  return list.collaborators?.find((c) => c.userId === task.userId)?.user?.name;
+};

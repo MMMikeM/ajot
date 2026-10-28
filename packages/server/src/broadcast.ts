@@ -1,7 +1,8 @@
 import type { Context } from "hono";
 import { queueChanges } from "./push-queue";
 import type { ChangeSource } from "./push-plan";
-import type { MutationEvent, ModelName } from "@newtab-todo/shared";
+import { SSE_NOTIFICATION, type MutationEvent, type ModelName } from "@newtab-todo/shared";
+import type { NotificationPayload } from "./push-plan";
 
 export type { MutationEvent };
 
@@ -38,6 +39,11 @@ const writeEvents = (events: MutationEvent[], userIds: string[]) => {
       for (const payload of payloads) client.write("data-changed", payload);
     }
   }
+};
+
+export const writeNotification = (userId: string, payload: NotificationPayload) => {
+  const data = JSON.stringify(payload);
+  for (const client of sseClients.get(userId) ?? []) client.write(SSE_NOTIFICATION, data);
 };
 
 export const notifyMutation = (

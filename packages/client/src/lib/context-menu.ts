@@ -137,6 +137,8 @@ const notify = (title: string, message: string) =>
 
 const failureMessage = (err: unknown) => {
   if (err instanceof RequestError && err.status === 401) return "Sign in to Ajot again.";
+  if (err instanceof RequestError && err.status === 429)
+    return "That's a lot of sharing at once. Try again in a few minutes.";
   if (err instanceof RequestError) return "The server couldn't save it. Try again.";
   return "Couldn't reach the server. Check your connection and try again.";
 };

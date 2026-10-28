@@ -13,10 +13,10 @@ Any module that accesses `localStorage`, `window`, or browser-only APIs (`Indexe
 - **`snapshot-store.ts`** — the IndexedDB lists a new tab starts from; outside `db/` so the backgrounds can write them
 - **`auth/`** — Identity: `signed-in.ts` (the token and its user, one store so no tab ever holds one account's token with another's user), `token.ts` and `current-user.ts` (read it), `session.ts` (sign-in, sign-out, the backgrounds' copy, and expiry on a 401 from `api.ts`)
 - **`state/`** — App UI state: `active-category.ts`, `undo.ts`
-- **`hooks/`** — Standalone React hooks: `use-install-prompt.ts`, `use-swipe-reveal.ts`
+- **`hooks/`** — Standalone React hooks: `use-install-prompt.ts`, `use-swipe-reveal.ts`, `use-invite.ts` (People's invite link, also offered by the sharing sheets)
 - **`constants.ts`** — re-exports from `@newtab-todo/shared`
 
 ## Non-obvious decisions
 
-- **`sse.ts` vs `push.ts`** — SSE is for browser tabs (always-connected). Push is for when no tabs are open (service worker receives push event). In the Firefox extension, tabs use neither: they get runtime messages from the background page, which holds SSE. Chrome extension tabs open their own SSE, and the background service worker receives push.
+- **`sse.ts` vs `push.ts`** — SSE is for browser tabs (always-connected). Push is for when no tabs are open (service worker receives push event). In the Firefox extension, tabs use neither: they get runtime messages from the background page, which holds SSE. With no Web Push there, the server also writes each notification on the stream (`notification` events), and that background shows it with `browser.notifications`; like Chrome's extension it has no Settings, so every kind shows. Chrome extension tabs open their own SSE, and the background service worker receives push.
 - **Everything that can run with no page open pre-warms the snapshot**, so the app opens in flight mode on recent lists. Firefox's background saves after SSE opens and after each burst of changes; Chrome's on startup, sign-in and every push except `deploy`; both every 5 minutes on an alarm. The PWA's worker saves on every push and on Periodic Background Sync. Each save fetches all four lists and is dropped if the account changed meanwhile. A push's rows (`saved-rows.ts`) are saved first, only for the signed-in account, so they're kept when that fetch fails. A tab saves each change as it lands, and anything still waiting when it's hidden or closed.
