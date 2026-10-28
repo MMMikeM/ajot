@@ -293,11 +293,11 @@ function TaskRow({
             }}
             aria-label={task.title}
             tabIndex={tabIndex}
-            // Pinned to the first line of the title, which can wrap. On touch a task's target fills
-            // its 44px row, reaching left into the gutter so it stops short of the title. Subtask
-            // rows sit closer than 44px, so theirs stays smaller.
+            // Pinned to the first line of the title, which can wrap. Its target ends where the
+            // row's gap does, so the title's first letter opens the task; it reaches left instead.
+            // On touch a task's fills its 44px row; subtask rows sit closer, so theirs stays smaller.
             className={cn(
-              "mt-1 touch:mt-0.75 touch:size-4.5",
+              "mt-1 after:-right-2 after:-left-4 touch:mt-0.75 touch:size-4.5",
               isSubtask
                 ? "mt-0.5 touch:mt-px touch:after:-inset-y-3 touch:after:-right-2.5 touch:after:-left-3.75"
                 : "touch:after:-inset-y-3.5 touch:after:-right-2.5 touch:after:-left-5",

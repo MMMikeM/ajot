@@ -76,13 +76,14 @@ export const Subtasks = ({
         const done = sub.status === "done";
         return (
           <ListRow key={sub.id} size="sm" className="-mx-2 min-h-9 items-start touch:min-h-11">
-            {/* Checkbox, title and Delete centre on the title's first line */}
+            {/* Checkbox, title and Delete centre on the title's first line. The target ends
+                where the gap does and reaches left into the gutter, off the title. */}
             <Checkbox
               checked={done}
               aria-label={sub.title}
               onCheckedChange={() => onToggle(sub)}
               className={cn(
-                "mt-1.75 size-3.5 touch:mt-2.5 touch:size-4 touch:after:-inset-3.75",
+                "mt-1.75 size-3.5 after:-right-2 after:-left-4 touch:mt-2.5 touch:size-4 touch:after:-inset-y-3.75 touch:after:-right-2 touch:after:-left-6",
                 done && checkboxDoneClass,
               )}
             />

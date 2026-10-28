@@ -209,7 +209,7 @@ const TaskDetailContent = ({
           onCheckedChange={() => handleToggle(task)}
           aria-label="Mark done"
           className={cn(
-            "mt-3 touch:mt-2.75 touch:size-4.5 touch:after:-inset-3.5",
+            "mt-3 touch:mt-2.75 touch:size-4.5 touch:after:-inset-y-3.5 touch:after:-right-3 touch:after:-left-4",
             isReadyToTick(task, subtasks) && "border-primary",
           )}
         />
