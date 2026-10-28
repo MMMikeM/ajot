@@ -12,7 +12,7 @@ import { useActiveCategoryId, setActiveCategoryId } from "~/lib/state/active-cat
 import { useCurrentUserId, useOptimisticUserId } from "~/lib/auth/current-user";
 import { categoriesById } from "~/lib/task-holders";
 import { leaveCategory } from "~/lib/actions";
-import { pushUndoToast } from "~/lib/undo-toast";
+import { pushUndoToast, quoted, type NamedTitle } from "~/lib/undo-toast";
 import { countOpenTasksByCategory } from "~/lib/effective-category";
 import type { CategoryTaskAction } from "~/lib/constants";
 import type { Category } from "~/lib/types";
@@ -54,7 +54,7 @@ export const useCategoryActions = () => {
 
   const handleSetColor = (id: string, color: string | null) => updateCategory(id, { color });
 
-  const deleteAndMoveOn = (cat: Category, tasks: CategoryTaskAction, title: string) => {
+  const deleteAndMoveOn = (cat: Category, tasks: CategoryTaskAction, title: NamedTitle) => {
     const wasActive = cat.id === activeCategoryId;
     const { transaction, undo } = deleteCategory(cat.id, tasks);
     const undoToastId = pushUndoToast(title, () => {
@@ -85,16 +85,20 @@ export const useCategoryActions = () => {
       return;
     }
 
-    deleteAndMoveOn(cat, "uncategorise", "List deleted");
+    deleteAndMoveOn(cat, "uncategorise", quoted(cat.name, " deleted"));
   };
 
   const confirmDelete = (tasks: CategoryTaskAction) => {
     setConfirmingDelete(false);
     if (!pendingDelete) return;
+    const { category } = pendingDelete;
     deleteAndMoveOn(
-      pendingDelete.category,
+      category,
       tasks,
-      tasks === "delete" ? "List and tasks deleted" : "List deleted, tasks moved to Inbox",
+      quoted(
+        category.name,
+        tasks === "delete" ? " and its tasks deleted" : " deleted, tasks in Inbox",
+      ),
     );
   };
 

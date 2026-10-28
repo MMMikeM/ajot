@@ -167,3 +167,20 @@ test("People with no contacts offers one invite", async ({ page }) => {
   await expect(page.getByRole("button", { name: /invite/i })).toHaveCount(1);
   await expect(page.getByText(/^No contacts yet/)).not.toContainText("Invite someone");
 });
+
+test("accepting an invite leads back to your lists, with People a step away", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/invite/abc", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Accept invite" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "You're connected with Sarah Murray." }),
+  ).toBeVisible();
+  const toLists = page.getByRole("button", { name: "Go to your lists" });
+  await expect(toLists).toBeFocused();
+  await expect(page.getByRole("button", { name: "See People" })).toBeVisible();
+
+  await toLists.click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator("[data-task-id]").first()).toBeVisible();
+});

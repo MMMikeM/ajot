@@ -14,12 +14,24 @@ type MockUser = typeof MOCK_ME;
 const TIMESTAMP = "2026-09-20T09:00:00.000Z";
 
 /** Local YYYY-MM-DD, `offsetDays` from today — due dates render relative to the device's today */
-const isoDay = (offsetDays: number) => {
+export const isoDay = (offsetDays: number) => {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
+
+/** A mock task's `isoDay(offsetDays)` due date as the list shows it, in the page's locale */
+export const dueLabel = (page: Page, offsetDays: number) =>
+  page.evaluate((offset) => {
+    const date = new Date();
+    date.setDate(date.getDate() + offset);
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
+    });
+  }, offsetDays);
 
 export const mockData = () => {
   let order = 0;
@@ -153,6 +165,22 @@ export const mockData = () => {
 };
 
 type MockData = ReturnType<typeof mockData>;
+
+/** A note on `task`, as the API sends one: content only, unless `extra` gives it a title */
+export const noteOn = (
+  task: { id: string; userId: string; createdAt: string },
+  content: string,
+  extra: { id?: string; title?: string | null } = {},
+) => ({
+  id: `n-${task.id}`,
+  userId: task.userId,
+  taskId: task.id,
+  title: null,
+  content,
+  createdAt: task.createdAt,
+  updatedAt: task.createdAt,
+  ...extra,
+});
 
 type MockApiOptions = {
   signedIn?: boolean;

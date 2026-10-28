@@ -4,6 +4,7 @@ import {
   canMoveTo,
   listMemberIds,
 } from "@newtab-todo/shared/task-access";
+import { compareSortOrder } from "@newtab-todo/shared/sort-order";
 import { asList, holders, type CategoriesById } from "~/lib/task-holders";
 import type { Category, Task } from "~/lib/types";
 
@@ -31,6 +32,10 @@ export const placement = (task: Task, userId: string, lists: CategoriesById): Pl
   return { mode: "list", categoryId: task.categoryId ?? undefined };
 };
 
+export const bySidebarOrder = (userId: string) => (a: Category, b: Category) =>
+  Number(a.userId !== userId) - Number(b.userId !== userId) ||
+  compareSortOrder(a.sortOrder, b.sortOrder);
+
 /**
  * Where it appears for `userId`, and the lists besides the Inbox they can move it to: what the
  * sheet's List picker offers, and the only lists a drag onto the sidebar accepts.
@@ -43,7 +48,8 @@ export const listChoices = (task: Task, userId: string, lists: CategoriesById) =
     share: (list: Category) => canFileShareIn(held, asList(list), userId),
     list: () => false,
   }[where.mode];
-  return { ...where, choices: [...lists.values()].filter(allowed) };
+  const choices = [...lists.values()].filter(allowed).sort(bySidebarOrder(userId));
+  return { ...where, choices };
 };
 
 export const getEffectiveCategoryId = (task: Task, userId: string, lists: CategoriesById) =>

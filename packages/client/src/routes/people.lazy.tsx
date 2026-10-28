@@ -6,6 +6,8 @@ import { removeContact, useContacts } from "~/lib/db/hooks";
 import { pushUndoToast } from "~/lib/undo-toast";
 import type { Contact } from "~/lib/types";
 import { useIsDesk } from "~/lib/hooks/use-is-desk";
+import { getBuildTarget } from "~/lib/build-target";
+import { BuildStamp } from "~/components/BuildStamp";
 import { CategorySidebar } from "~/components/category-nav/CategorySidebar";
 import { InviteButton } from "~/components/InviteButton";
 import { Button } from "~/components/ui/button";
@@ -28,7 +30,7 @@ export function PeoplePage() {
   const remove = (contact: Contact) => {
     const name = contact.contactUser?.name ?? "this contact";
     const { transaction, undo } = removeContact(contact.id);
-    const undoToastId = pushUndoToast(`Removed ${name}`, () => {
+    const undoToastId = pushUndoToast({ before: "Removed ", name }, () => {
       undo().catch((err) => {
         console.error("[contacts] restore failed:", err);
         toastManager.add({ title: `Couldn't bring back ${name}` });
@@ -93,6 +95,8 @@ export function PeoplePage() {
           </ListRow>
         ))}
       </div>
+      {/* The PWA keeps it in Settings, which the extension doesn't have */}
+      {getBuildTarget() === "extension" && <BuildStamp />}
     </div>
   );
 }

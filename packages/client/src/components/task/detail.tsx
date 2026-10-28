@@ -342,22 +342,15 @@ const TaskDetailContent = ({
           </fieldset>
         )}
         <div className="flex items-center justify-between">
-          <Button
-            variant="subtle"
-            size="sm"
-            aria-expanded={offering}
-            onClick={() => setOffering((o) => !o)}
-            bleed="start"
-          >
+          <Button variant="subtle" size="sm" onClick={() => setOffering((o) => !o)} bleed="start">
             <Plus className={cn("transition-transform", offering && "rotate-45")} />
-            Add
+            {offering ? "Cancel" : "Add"}
           </Button>
           {canDeleteTask(holders(task, lists, parent), userId) && (
             <Button
               variant="subtle"
               intent="destructive"
               size="sm"
-              aria-label="Delete task"
               bleed="end"
               onClick={() => {
                 handleDelete(task);
@@ -365,7 +358,7 @@ const TaskDetailContent = ({
               }}
             >
               <Trash2 />
-              Delete
+              {isTopLevel ? "Delete task" : "Delete subtask"}
             </Button>
           )}
         </div>

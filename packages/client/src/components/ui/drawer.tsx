@@ -160,4 +160,8 @@ const DrawerDescription = ({
   );
 };
 
-export { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription };
+const DrawerClose = (props: ComponentProps<typeof DrawerPrimitive.Close>) => (
+  <DrawerPrimitive.Close data-slot="drawer-close" {...props} />
+);
+
+export { Drawer, DrawerClose, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription };

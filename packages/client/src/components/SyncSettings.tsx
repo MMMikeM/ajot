@@ -192,8 +192,6 @@ export const SyncSettings = () => {
           <MenuItem intent="destructive" onClick={handleLogout}>
             Sign out
           </MenuItem>
-          <div className="my-1 h-px bg-border" />
-          <span className="px-2.5 pb-0.5 text-xs text-hint tabular-nums">{__BUILD_VERSION__}</span>
         </PopoverContent>
       )}
       {/* On body, so it stays audible while a sheet hides the page */}

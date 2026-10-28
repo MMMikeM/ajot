@@ -1,5 +1,5 @@
 import { createFuzzySearch, SCORES, type HighlightRanges, type MatchResult } from "ekrina";
-import { getEffectiveCategoryId } from "~/lib/effective-category";
+import { bySidebarOrder, getEffectiveCategoryId } from "~/lib/effective-category";
 import { categoriesById } from "~/lib/task-holders";
 import type { Category, Note, Task } from "~/lib/types";
 
@@ -135,11 +135,7 @@ export const searchTasks = ({
 
   const ranked = [...hits.values()].sort((a, b) => a.score - b.score);
 
-  const listOrder = [
-    null,
-    ...categories.filter((c) => c.userId === userId).map((c) => c.id),
-    ...categories.filter((c) => c.userId !== userId).map((c) => c.id),
-  ];
+  const listOrder = [null, ...[...categories].sort(bySidebarOrder(userId)).map((c) => c.id)];
   const open = ranked.filter((h) => h.task.status !== "done");
   const groups = listOrder
     .map((listId) => ({ listId, hits: open.filter((h) => h.listId === listId) }))

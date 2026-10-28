@@ -31,6 +31,8 @@
   --font-heading: "Figtree Variable", sans-serif;
   --font-sans: "Figtree Variable", "Inter Variable", sans-serif;
   --color-date: var(--date);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
   --color-hint: var(--hint);
   --color-ghost: var(--ghost);
   --color-face-foreground: var(--face-foreground);
@@ -116,6 +118,9 @@
   --primary-foreground: oklch(0.986 0.031 120.757);
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.21 0.006 285.885);
+  --highlight: oklch(0.91 0.07 95);
+  /* No wash light enough for muted text would still show on white, so a match darkens */
+  --highlight-foreground: var(--foreground);
   --muted: oklch(0.96 0.002 17.2);
   --muted-foreground: oklch(0.547 0.021 43.1);
   --accent: oklch(0.96 0.002 17.2);
@@ -172,6 +177,9 @@
   --primary-foreground: oklch(0.97 0.03 105);
   --secondary: oklch(0.274 0.011 262);
   --secondary-foreground: oklch(0.95 0.012 90);
+  /* A search match: dark enough that hint text on it still meets 4.5:1 */
+  --highlight: oklch(0.33 0.035 80);
+  --highlight-foreground: currentcolor;
   --muted: oklch(0.245 0.013 262);
   --muted-foreground: oklch(0.75 0.02 255);
   --accent: oklch(0.245 0.013 262);
@@ -304,9 +312,10 @@
     --scroll-fade-top: 1.25rem;
   }
 }
+/* About a row deep, so it dims the last row's text even when the fold falls between rows */
 @keyframes scroll-fade-bottom {
   from {
-    --scroll-fade-bottom: 1.5rem;
+    --scroll-fade-bottom: 4.5rem;
   }
   to {
     --scroll-fade-bottom: 0px;
@@ -328,7 +337,7 @@
       animation-timeline: scroll(self), scroll(self);
       animation-range:
         0 1.25rem,
-        calc(100% - 1.5rem) 100%;
+        calc(100% - 4.5rem) 100%;
     }
   }
 }

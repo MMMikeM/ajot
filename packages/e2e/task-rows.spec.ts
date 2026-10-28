@@ -20,6 +20,13 @@ test("a right-to-left title reads right to left wherever it shows", async ({ pag
   expect(await sheet.getByRole("textbox", { name: "Title" }).evaluate(isRtl)).toBe(true);
 });
 
+test("the capture input keeps its name once something is typed", async ({ page }) => {
+  await openList(page);
+  const input = page.getByRole("textbox", { name: "New task" });
+  await input.fill("Water the plants");
+  await expect(input).toHaveAccessibleName("New task");
+});
+
 test("hover actions take no space at rest and appear on hover", async ({ page }) => {
   await openList(page);
   const target = row(page, "Pick up dry cleaning");

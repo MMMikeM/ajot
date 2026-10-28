@@ -62,7 +62,10 @@ export function CategoryCollabSheet({
       await addCollaborator(categoryId, username);
       setAddedLastContact(addableContacts.length === 1);
       if (contact)
-        pushUndoToast(`Shared with ${contact.name}`, () => void handleRemove(contact.id));
+        pushUndoToast(
+          { before: "Shared with ", name: contact.name },
+          () => void handleRemove(contact.id),
+        );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't add them. Try again.");
     } finally {
@@ -84,7 +87,7 @@ export function CategoryCollabSheet({
 
   const removeWithUndo = async ({ id, name }: { id: string; name: string }) => {
     if (!(await handleRemove(id))) return;
-    pushUndoToast(`Removed ${name}`, () => {
+    pushUndoToast({ before: "Removed ", name }, () => {
       restoreCollaborator(categoryId, id).catch((err) => {
         console.error("[collaborators] restore failed:", err);
         toastManager.add({

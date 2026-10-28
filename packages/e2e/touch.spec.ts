@@ -49,6 +49,30 @@ test.describe("the lists sheet", () => {
     ).toBeVisible();
   });
 
+  test("a list's options open as a sheet at the bottom, where the thumb is", async ({ page }) => {
+    await openList(page);
+    await openListsSheet(page);
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^Work/ })
+      .locator("..")
+      .getByRole("button", { name: "List options" })
+      .click();
+
+    const options = page.getByRole("dialog", { name: "Work options" });
+    await expect(options.getByRole("button", { name: "Rename" })).toBeVisible();
+    await expect
+      .poll(async () => {
+        const box = await options.boundingBox();
+        return box && Math.round(box.y + box.height);
+      })
+      .toBe(page.viewportSize()!.height);
+
+    await options.getByRole("button", { name: "Rename" }).click();
+    await expect(options).toBeHidden();
+    await expect(page.getByRole("textbox", { name: "List name" })).toBeFocused();
+  });
+
   test("a list with tasks asks before it's deleted, and Cancel keeps it", async ({ page }) => {
     await openList(page);
     await openListsSheet(page);
@@ -124,10 +148,25 @@ test("an iPhone that hasn't installed Ajot is told how, until it's dismissed", a
 test("the Undo window lasts longer on touch", async ({ page }) => {
   await openList(page);
   await row(page, "Pick up dry cleaning").getByRole("checkbox").click();
-  const toast = page.locator("[data-toast-undo]", { hasText: "Marked done" });
+  const toast = page.locator("[data-toast-undo]", { hasText: "“Pick up dry cleaning” done" });
   await expect(toast).toBeVisible();
   await page.waitForTimeout(6500);
   await expect(toast).toBeVisible();
+});
+
+test("a long task title keeps its toast on one line, with Undo in view", async ({ page }) => {
+  await openList(page);
+  const title =
+    "Book flights for the October trip and check whether the Tuesday fare is still under €200";
+  await row(page, "Book flights").getByRole("checkbox").first().click();
+  const toast = page.locator("[data-toast-undo]", { hasText: `“${title}” done` });
+  await expect(toast).toBeVisible();
+
+  const heading = toast.getByRole("heading");
+  const lineHeight = await heading.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+  expect((await heading.boundingBox())!.height).toBeLessThanOrEqual(lineHeight + 1);
+  await expect(heading).toContainText("” done");
+  await expect(toast.getByRole("button", { name: "Undo" })).toBeInViewport({ ratio: 1 });
 });
 
 test.describe("accessibility of the phone layout", () => {
