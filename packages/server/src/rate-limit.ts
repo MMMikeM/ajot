@@ -105,3 +105,18 @@ export const refuseIfLimited = (
     message: `Too many tries at ${action}. Try again in ${wait} minute${wait === 1 ? "" : "s"}.`,
   });
 };
+
+// Each one notifies someone, so a script can't flood a person's phone with titles it chose
+const sharing = createLimiter({
+  limit: Number(process.env.SHARES_PER_10_MINUTES) || 30,
+  windowMs: 10 * 60_000,
+});
+
+/** Counts a share, send or list invite by this user, and refuses one too many. */
+export const limitSharing = (userId: string) => {
+  if (sharing.waitMs(userId) > 0)
+    throw new HTTPException(429, {
+      message: "That's a lot of sharing at once. Try again in a few minutes.",
+    });
+  sharing.count(userId);
+};

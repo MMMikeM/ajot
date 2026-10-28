@@ -42,10 +42,10 @@ const task = (id: string, sortOrder: string | null, more = "") =>
     '2026-01-01T00:00:0${id.length % 10}.000Z', '2026-02-01T00:00:00.000Z'${more})`;
 const ids = (rows: Row[]) => rows.map((row) => row.id);
 const keys = (rows: Row[]) => rows.map((row) => row.sort_order);
-// live is new, and only the database reads it
+// live is new, and only the database reads it; sent_by_id is new too
 const without = (rows: Row[], column: string) =>
   rows
-    .map(({ [column]: _dropped, live: _live, ...rest }) => rest)
+    .map(({ [column]: _dropped, live: _live, sent_by_id: _sentBy, ...rest }) => rest)
     .sort((a, b) => String(a.id).localeCompare(String(b.id)));
 
 describe("tables holding keys the CHECK refuses", async () => {
@@ -160,5 +160,29 @@ describe("rows stamped ahead of the server's clock, which no edit could beat", a
       without([row(was.tasks, "kept")], "live"),
     );
     expect(row(now.categories, "kept")).toEqual(row(was.categories, "kept"));
+  });
+});
+
+describe("a task shared with the same person more than once", async () => {
+  const { sqlite } = await seeded((sqlite) => {
+    sqlite.exec(`INSERT INTO users (id, name, username, password_hash)
+      VALUES ('carol', 'Carol', 'carol', 'x')`);
+    sqlite.exec(`INSERT INTO tasks (id, user_id, title, sort_order, created_at, updated_at) VALUES
+      ${task("a", "a0")}, ${task("b", "a1")}`);
+    sqlite.exec(`INSERT INTO task_shares (id, task_id, shared_with_user_id) VALUES
+      ('first', 'a', 'bob'), ('again', 'a', 'bob'), ('carols', 'a', 'carol'),
+      ('other', 'b', 'bob'), ('third', 'a', 'bob')`);
+  });
+  const shares = sqlite.prepare("SELECT id FROM task_shares ORDER BY id").all() as Row[];
+
+  test("keeps the first share each person had, and every other share", () => {
+    expect(ids(shares)).toEqual(["carols", "first", "other"]);
+  });
+
+  test("can't be shared with them again", () => {
+    expect(() =>
+      sqlite.exec(`INSERT INTO task_shares (id, task_id, shared_with_user_id)
+        VALUES ('more', 'a', 'bob')`),
+    ).toThrow(/UNIQUE/);
   });
 });

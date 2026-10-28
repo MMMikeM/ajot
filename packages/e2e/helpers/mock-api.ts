@@ -30,6 +30,7 @@ export const mockData = () => {
       userId: MOCK_ME.id,
       categoryId: null as string | null,
       assigneeId: null,
+      sentById: null as string | null,
       parentId: null as string | null,
       title,
       description: null as string | null,
@@ -45,6 +46,7 @@ export const mockData = () => {
       subtasks: [],
       shares: [] as unknown[],
       assignee: null as MockUser | null,
+      sentBy: null as { id: string; name: string } | null,
       ...extra,
     };
   };

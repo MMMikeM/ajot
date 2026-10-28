@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { UserRound, Users } from "lucide-react";
 import { grants } from "@newtab-todo/shared/task-access";
 import type { Task } from "~/lib/types";
@@ -22,6 +21,7 @@ import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { TogglePill } from "~/components/ui/toggle-pill";
 import { DetailRow } from "~/components/task/detail-row";
+import { InviteButton } from "~/components/InviteButton";
 
 const INBOX_VALUE = "__inbox__";
 
@@ -156,7 +156,11 @@ export const SharingField = ({
     <DetailRow icon={<Users />} label="Shared with">
       {shares.map((share) => (
         <ListRow key={share.id} size="sm" className="-mx-2 min-h-9 touch:min-h-11">
-          <InitialsAvatar name={share.sharedWithUser?.name ?? "?"} size="sm" />
+          <InitialsAvatar
+            name={share.sharedWithUser?.name ?? "?"}
+            userId={share.sharedWithUserId}
+            size="sm"
+          />
           <span dir="auto" className="min-w-0 flex-1 truncate text-sm">
             {share.sharedWithUser?.name ?? share.sharedWithUserId}
           </span>
@@ -175,16 +179,19 @@ export const SharingField = ({
 const AddShare = ({ taskId, sharing }: { taskId: string; sharing: Sharing }) => {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sharedWithLastContact, setSharedWithLastContact] = useState(false);
 
-  if (!sharing.hasContacts)
+  if (sharing.addableContacts.length === 0)
     return (
-      <p className="py-2 text-sm text-hint">
-        No contacts yet.{" "}
-        <Link to="/people" className="text-foreground underline underline-offset-4">
-          Invite someone
-        </Link>{" "}
-        to share this task.
-      </p>
+      <div className="flex flex-col items-start gap-2 py-2">
+        <p className="text-sm text-hint">
+          {sharing.hasContacts ? "Shared with all your contacts." : "No contacts yet."}
+        </p>
+        <InviteButton
+          label={sharing.hasContacts ? "Invite someone new" : "Invite someone"}
+          takeFocus={sharedWithLastContact}
+        />
+      </div>
     );
 
   const share = async (username: string) => {
@@ -192,6 +199,7 @@ const AddShare = ({ taskId, sharing }: { taskId: string; sharing: Sharing }) => 
     setError(null);
     try {
       await shareTask(taskId, username, "edit");
+      setSharedWithLastContact(sharing.addableContacts.length === 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't share. Try again.");
     } finally {

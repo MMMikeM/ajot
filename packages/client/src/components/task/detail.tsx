@@ -30,7 +30,7 @@ import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 import { dockedSheet } from "~/components/docked-sheet";
 import { canDeleteTask } from "@newtab-todo/shared/task-access";
 import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
-import { holders } from "~/lib/task-holders";
+import { holders, ownerNameOf } from "~/lib/task-holders";
 import { isReadyToTick } from "~/lib/ready-to-tick";
 import { useTasks } from "~/lib/db/hooks";
 import { useTaskActions } from "~/components/task/use-actions";
@@ -158,6 +158,7 @@ const TaskDetailContent = ({
   const filing = useListFiling(task);
   const sharing = useSharing(task);
   const lists = useCategoriesById();
+  const ownerName = ownerNameOf(task, lists);
 
   // Synchronous, so the field is focused inside the tap and a phone raises its keyboard.
   // A revealed field stays until the sheet closes: hiding it on blur shifted the sheet
@@ -188,7 +189,6 @@ const TaskDetailContent = ({
     sharing.isOwner &&
       isTopLevel &&
       !sharing.sharedList &&
-      (!sharing.hasContacts || sharing.addableContacts.length > 0) &&
       !revealed.has("share") && { key: "share", label: "Share", icon: UserPlus },
     canAssign &&
       !revealed.has("assignee") && { key: "assignee", label: "Assignee", icon: UserRound },
@@ -243,9 +243,14 @@ const TaskDetailContent = ({
               isDone && "text-muted-foreground line-through",
             )}
           />
-          {!sharing.isOwner && task.user && (
+          {!sharing.isOwner && ownerName && (
             <p className="text-sm text-hint">
-              <span dir="auto">{task.user.name}</span>’s task
+              <span dir="auto">{ownerName}</span>’s task
+            </p>
+          )}
+          {sharing.isOwner && task.sentBy && (
+            <p className="text-sm text-hint">
+              Sent by <span dir="auto">{task.sentBy.name}</span>
             </p>
           )}
         </div>

@@ -18,7 +18,7 @@ import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { useSwipeReveal } from "~/lib/hooks/use-swipe-reveal";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { canDeleteTask } from "@newtab-todo/shared/task-access";
-import { holders, type CategoriesById } from "~/lib/task-holders";
+import { holders, ownerNameOf, type CategoriesById } from "~/lib/task-holders";
 import { isReadyToTick } from "~/lib/ready-to-tick";
 import { rowDragSensors } from "./row-drag";
 import { formatDueDate } from "~/lib/due-date";
@@ -54,20 +54,33 @@ const listNames = new Intl.ListFormat(undefined, { type: "conjunction" });
 
 // As in the sidebar: a face always means whose task it is, so a task you shared never shows a
 // recipient's face
-function ShareChip({ ownerName, sharedWith }: { ownerName?: string; sharedWith: string[] }) {
-  if (ownerName)
-    return (
-      <InitialsAvatar
-        name={ownerName}
-        label={`${ownerName}'s task`}
-        className="bg-collab text-collab-foreground"
-      />
-    );
+function ShareChip({
+  owner,
+  sharedWith,
+}: {
+  owner?: { id: string; name: string };
+  sharedWith: string[];
+}) {
+  if (owner)
+    return <InitialsAvatar name={owner.name} userId={owner.id} label={`${owner.name}'s task`} />;
 
   const label = `Shared with ${listNames.format(sharedWith)}`;
   return (
     <span title={label} className="flex size-5.5 shrink-0 items-center justify-center text-hint">
       <Users size={14} aria-hidden="true" />
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
+// A sent task is the recipient's own, so the sender gets words, never a face
+function SentBy({ name }: { name: string }) {
+  const label = `Sent by ${name}`;
+  return (
+    <span title={label} className="text-xs whitespace-nowrap text-hint">
+      <span aria-hidden="true">
+        From <bdi>{name.trim().split(/\s+/)[0]}</bdi>
+      </span>
       <span className="sr-only">{label}</span>
     </span>
   );
@@ -109,16 +122,19 @@ function TaskRow({
   const isDone = task.status === "done";
   const due = task.dueDate ? formatDueDate(task.dueDate) : null;
   const showDate = !!due && (!hideDate || due.overdue);
-  const showsSharing = !isSubtask && !isInSharedCategory && task.shares.length > 0;
-  const ownerName = showsSharing && !isOwned ? task.user?.name : undefined;
+  // In a shared list everyone sees every task, so only whose it is needs saying
+  const reachesOthers = !isSubtask && (isInSharedCategory || task.shares.length > 0);
+  const ownerName = reachesOthers && !isOwned ? ownerNameOf(task, lists) : undefined;
+  const owner = ownerName ? { id: task.userId, name: ownerName } : undefined;
   const sharedWith =
-    showsSharing && isOwned
+    reachesOthers && !isInSharedCategory && isOwned
       ? task.shares.flatMap((s) =>
           s.sharedWithUser && s.sharedWithUser.id !== currentUserId ? [s.sharedWithUser.name] : [],
         )
       : [];
-  const hasShareChip = !!ownerName || sharedWith.length > 0;
-  const hasMeta = showDate || hasShareChip || !!task.assignee;
+  const hasShareChip = !!owner || sharedWith.length > 0;
+  const sentBy = !isSubtask && isOwned ? task.sentBy?.name : undefined;
+  const hasMeta = showDate || hasShareChip || !!sentBy || !!task.assignee;
   const canSetDate = !isDone && !showDate;
   const canAddSubtask = !isSubtask && !isDone;
   const canDelete = canDeleteTask(holders(task, lists, parent), currentUserId);
@@ -386,13 +402,14 @@ function TaskRow({
                   {due.label}
                 </button>
               )}
-              {hasShareChip && <ShareChip ownerName={ownerName} sharedWith={sharedWith} />}
-              {/* Hollow, so an assignee doesn't read as the owner */}
+              {sentBy && <SentBy name={sentBy} />}
+              {hasShareChip && <ShareChip owner={owner} sharedWith={sharedWith} />}
               {task.assignee && (
                 <InitialsAvatar
                   name={task.assignee.name}
+                  userId={task.assignee.id}
                   label={`Assigned to ${task.assignee.name}`}
-                  className="bg-transparent text-hint ring-1 ring-ghost ring-inset"
+                  hollow
                 />
               )}
             </div>

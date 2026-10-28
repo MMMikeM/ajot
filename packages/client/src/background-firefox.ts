@@ -1,6 +1,8 @@
+import { toNotification, type PushPayload } from "@newtab-todo/shared/push-payload";
 import {
   EVENTS_PATH,
   SSE_DATA_CHANGED,
+  SSE_NOTIFICATION,
   MSG_TOKEN_CHANGED,
   MSG_GET_STATUS,
   MSG_BG_STATUS,
@@ -18,6 +20,30 @@ const schedulePrewarm = () => {
   clearTimeout(prewarmTimer);
   prewarmTimer = setTimeout(() => void prewarmSnapshot(), PREWARM_DELAY_MS);
 };
+
+// The add-on has no Web Push, so what the server notifies arrives on the event stream. Like
+// Chrome's extension, it has no Settings, so no kind is turned off.
+const notificationUrls = new Map<string, string>();
+const showNotification = async (payload: PushPayload) => {
+  const notification = toNotification(payload);
+  // Firefox for Android has no notifications API
+  if (!notification || !browser.notifications) return;
+  const id = await browser.notifications.create({
+    type: "basic",
+    iconUrl: browser.runtime.getURL("icons/icon-192.png"),
+    title: notification.title,
+    message: notification.body,
+  });
+  notificationUrls.set(id, notification.url);
+};
+// The context menu's notifications aren't in the map, so clicking one opens nothing
+browser.notifications?.onClicked.addListener((id) => {
+  const url = notificationUrls.get(id);
+  if (!url) return;
+  void browser.notifications.clear(id);
+  void browser.tabs.create({ url: browser.runtime.getURL(`index.html#${url}`) });
+});
+browser.notifications?.onClosed.addListener((id) => notificationUrls.delete(id));
 
 let eventSource: EventSource | null = null;
 let connectAttempt = 0;
@@ -70,6 +96,14 @@ const connect = async () => {
       }
     }
     void notifyTabs();
+  });
+
+  source.addEventListener(SSE_NOTIFICATION, (e: MessageEvent) => {
+    try {
+      showNotification(JSON.parse(e.data) as PushPayload).catch(console.error);
+    } catch (err) {
+      console.error("[bg-sse] unreadable notification:", err);
+    }
   });
 
   source.addEventListener("open", () => {

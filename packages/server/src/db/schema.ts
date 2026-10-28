@@ -71,6 +71,8 @@ export const tasks = sqliteTable(
     userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
     categoryId: nullableFk("category_id", () => categories.id, { onDelete: "set null" }),
     assigneeId: nullableFk("assignee_id", () => users.id, { onDelete: "set null" }),
+    // Who sent it with "Send to", which makes it the recipient's own; set by the server only
+    sentById: nullableFk("sent_by_id", () => users.id, { onDelete: "set null" }),
     parentId: nullableFk("parent_id", (): AnySQLiteColumn => tasks.id, { onDelete: "cascade" }),
     title: string("title"),
     description: nullableString("description"),
@@ -152,7 +154,7 @@ export const taskShares = sqliteTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    index("task_shares_task_idx").on(t.taskId),
+    uniqueIndex("task_shares_task_user_idx").on(t.taskId, t.sharedWithUserId),
     index("task_shares_user_idx").on(t.sharedWithUserId),
   ],
 );
@@ -331,6 +333,10 @@ export const relations = defineRelations(
       }),
       assignee: r.one.users({
         from: r.tasks.assigneeId,
+        to: r.users.id,
+      }),
+      sentBy: r.one.users({
+        from: r.tasks.sentById,
         to: r.users.id,
       }),
       parent: r.one.tasks({

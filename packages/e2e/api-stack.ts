@@ -44,6 +44,8 @@ const env = {
   TURSO_AUTH_TOKEN: "e2e",
   PORT: String(API_PORT),
   VAPID_SUBJECT: "mailto:e2e@example.com",
+  // Each worker's Alice shares far more in a run than a person would in ten minutes
+  SHARES_PER_10_MINUTES: "100000",
 };
 const pnpm = (...args: string[]) =>
   execFileSync("pnpm", ["--filter", "@newtab-todo/server", ...args], {

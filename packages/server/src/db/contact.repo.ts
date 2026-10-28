@@ -46,6 +46,15 @@ const exists = async (userId: string, contactUserId: string): Promise<boolean> =
   return !!row;
 };
 
+/** userId's contact with this username; null alike for a stranger and a username no one has. */
+const findContactUser = async (userId: string, username: string) => {
+  const row = await db.query.contacts.findFirst({
+    where: { userId, contactUser: { username } },
+    with: withContactUser,
+  });
+  return row?.contactUser ?? null;
+};
+
 // One transaction: deleting only one direction would leave one user still seeing the other.
 // Sharing a list needs a contact, so each leaves the lists the other shared with them, and the
 // record keeps all of it for Undo. Returns who reached those lists and their tasks before.
@@ -153,4 +162,4 @@ const restore = async (id: string, userId: string) =>
     return { contact, restored, before, changed };
   });
 
-export default { list, listByIds, insert, exists, remove, restore };
+export default { list, listByIds, insert, exists, findContactUser, remove, restore };

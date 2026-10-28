@@ -21,8 +21,13 @@ colors:
   destructive: "oklch(0.704 0.191 22.216)"
   destructive-subtle: "oklch(0.22 0.04 22)"
   pending: "oklch(0.7 0.1 75)"
-  collab: "oklch(0.46 0.06 228)"
-  collab-foreground: "oklch(0.9 0.01 80)"
+  face-slate: "oklch(0.46 0.06 228)"
+  face-iris: "oklch(0.46 0.06 275)"
+  face-plum: "oklch(0.46 0.06 325)"
+  face-clay: "oklch(0.46 0.06 25)"
+  face-ochre: "oklch(0.46 0.06 70)"
+  face-teal: "oklch(0.46 0.06 180)"
+  face-foreground: "oklch(0.9 0.01 80)"
   inbox: "oklch(0.90 0.008 80)"
   category-rust: "oklch(0.58 0.17 25)"
   category-amber: "oklch(0.68 0.16 58)"
@@ -161,7 +166,7 @@ A near-monochrome ink palette: blue-black surfaces, slate secondary text and war
 - **Date** (`oklch(0.8 0.06 75)`): due-date labels, a warm sand against the ink.
 - **Destructive** (`oklch(0.704 0.191 22.216)`) on **Destructive Subtle** (`oklch(0.22 0.04 22)`): overdue dates, delete actions and errors.
 - **Pending** (`oklch(0.7 0.1 75)`): syncing state.
-- **Collab** (`oklch(0.46 0.06 228)`): owner faces on lists and tasks shared with you.
+- **Faces** (Slate, Iris, Plum, Clay, Ochre, Teal: `oklch(0.46 0.06 h)` at hues 228, 275, 325, 25, 70 and 180, with `face-foreground` initials): one per person, picked from their user id, so the same person has the same colour everywhere (People, the sharing sheets, the sidebar, rows). Muted and equally light, so no person reads louder than another and the initials stay above 5:1 at every hue.
 - **Category swatches** (Rust, Amber, Gold, Sage, Spruce, Slate, Mauve, Blush): warm-leaning, lower-chroma colours chosen to sit on the dark background. The Inbox uses a warm off-white (`oklch(0.90 0.008 80)`). A list without a colour shows a `ghost` dot everywhere (sidebar, sheet, list title, adding-to chip), never the Inbox white.
 
 ### Named Rules
@@ -229,7 +234,7 @@ Flat at rest. Depth comes from tonal layering (background, then surface, surface
 
 ### Task Row
 
-- A checkbox pinned to the first title line, then the title (wraps to two lines), then the meta: due date (`date`, or `destructive` when overdue), whose task it is, and the assignee. As in the sidebar, a face means whose task it is: a task shared with you shows its owner's face on `collab`, while a task you shared shows a `hint` people glyph ("Shared with …" on hover and for screen readers), never a recipient's face. The assignee is a hollow face (`hint` initials in a `ghost` ring), so it doesn't read as the owner. Every chip carries an accessible name ("Sarah Murray's task", "Assigned to Sam Okafor"). Checkboxes align with the capture input's left edge and the meta with its right edge; the title takes all the width between. Titles, like everything people write (notes, list and people's names, fields), take their own direction (`dir="auto"`), so a Hebrew or Arabic title orders its words and punctuation and truncates right to left. It stays left-aligned beside its checkbox, since the swipe tray and hover actions cover the row's right end; names inside English copy are isolated the same way. On touch a task's checkbox and its due date each take a 44px target (a `::after`, so the row doesn't grow); the checkbox's reaches left into the gutter (the list's clip sits 20px out for it) and stops short of the title, so a tap on the title's first letter opens the task. Subtask rows sit closer than 44px, so their checkbox and date keep their smaller targets.
+- A checkbox pinned to the first title line, then the title (wraps to two lines), then the meta: due date (`date`, or `destructive` when overdue), whose task it is, and the assignee. As in the sidebar, a face means whose task it is: a task shared with you, or someone else's task in a list shared with you or by you, shows its owner's face, while a task you shared shows a `hint` people glyph ("Shared with …" on hover and for screen readers), never a recipient's face. The assignee is a hollow face (`hint` initials in a ring of their colour), so it doesn't read as the owner. A task sent to you is yours, so its sender gets words, never a face: a `hint` "From Sarah" (their first name) in the meta. Every chip carries an accessible name ("Sarah Murray's task", "Assigned to Sam Okafor", "Sent by Sarah Murray"). Checkboxes align with the capture input's left edge and the meta with its right edge; the title takes all the width between. Titles, like everything people write (notes, list and people's names, fields), take their own direction (`dir="auto"`), so a Hebrew or Arabic title orders its words and punctuation and truncates right to left. It stays left-aligned beside its checkbox, since the swipe tray and hover actions cover the row's right end; names inside English copy are isolated the same way. On touch a task's checkbox and its due date each take a 44px target (a `::after`, so the row doesn't grow); the checkbox's reaches left into the gutter (the list's clip sits 20px out for it) and stops short of the title, so a tap on the title's first letter opens the task. Subtask rows sit closer than 44px, so their checkbox and date keep their smaller targets.
 - **Reordering:** there's no grip; the row itself is the handle. On touch a long press (250ms, before the finger moves) picks it up, so a tap still opens the task, a quick flick still scrolls, and the swipe tray stays shut while dragging. Rows don't select text or show the iOS callout during the hold. With a mouse the row picks up once it moves 5px, so a click still opens the task. Subtasks reorder only within their parent. Done rows, and subtasks under them, aren't sortable. A dragged row lifts onto `popover` with `shadow-md`, carrying its subtasks inside one lift. Keyboard reordering isn't offered yet.
 - **Keyboard:** the open list and the Done list are one tab stop each. Tab lands on the checkbox of the row last focused (the first row once that one has left), walks that row's controls, then leaves the list. Up/Down or j/k move to the next row's checkbox, subtasks included, and Home/End to the first and last; Space ticks and Enter opens.
 - **Desktop quick actions:** hover or keyboard focus reveals Set due date (only when undated), Add subtask and Delete as `hint` icon buttons floating over the row's end. Nothing reserves space for them at rest: the title's tail fades out beneath them (`fade-under-actions`, sized by the row's `--actions-w`) and the meta slides left to clear them.
@@ -265,7 +270,8 @@ Flat at rest. Depth comes from tonal layering (background, then surface, surface
 - Shows only what the task has: the title and checkbox, then the description, date, list, sharing and assignee rows, subtasks and notes. Icons hang in a gutter under the checkbox, so values start at the title's left edge. Anything missing is offered by one `+ Add` control that opens a row of chips (Date, Description, Subtask, Note, List, Share, Assignee); a field added this way stays until the sheet closes. The footer holds Add and Delete.
 - Ticking, deleting the task, and deleting a subtask or note all offer Undo, as in the list.
 - A subtask's title edits in place on a tap or click, at the same size, so the row doesn't move; Enter or leaving the field saves, Escape keeps the old title and the sheet open. On a view-only share it's plain text. Being a control of its own, it also keeps a tap on its first letters from landing on the checkbox beside it.
-- Someone a task was shared with sees the owner's name ("Sarah Murray’s task"), never assignee pills, and is never listed under "Shared with".
+- Someone a task was shared with sees the owner's name ("Sarah Murray’s task"), never assignee pills, and is never listed under "Shared with". So does anyone looking at someone else's task in a shared list. A task sent to you says "Sent by Sarah Murray" there instead.
+- Sharing only offers contacts. With everyone already on it (or no contacts yet), the sharing row and the list's share sheet say so and offer People's invite ("Invite someone new"), which takes focus when it replaces the picker after the last contact is added.
 
 ### Toasts
 

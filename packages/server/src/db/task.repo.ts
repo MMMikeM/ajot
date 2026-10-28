@@ -42,6 +42,7 @@ export const taskListItemSchema = taskResponseSchema.extend({
     }),
   ),
   assignee: sharedWithUserSchema.nullable(),
+  sentBy: z.object({ id: z.string(), name: z.string() }).nullable(),
 });
 const limitedFields = {
   id: limitedId,
@@ -61,7 +62,7 @@ export const taskInsertSchema = createInsertSchema(tasks, {
   updatedAt: isoDatetime,
 })
   .required({ id: true, createdAt: true, updatedAt: true })
-  .omit({ deletedAt: true });
+  .omit({ deletedAt: true, sentById: true });
 // The fields a client may change, so a column added later isn't editable until it's listed. Its
 // owner and parent are fixed: a task taken, planted in someone's Inbox or hung under theirs
 // would be theirs. Deleting goes through DELETE; an update can only bring a deleted task back.
@@ -109,6 +110,7 @@ const list = async (userId: string) =>
         },
       },
       assignee: { columns: { id: true, name: true, username: true } },
+      sentBy: { columns: { id: true, name: true } },
     },
     orderBy: { sortOrder: "asc", createdAt: "asc" },
   });
@@ -274,6 +276,7 @@ const listItemWith = {
     },
   },
   assignee: { columns: { id: true, name: true, username: true } },
+  sentBy: { columns: { id: true, name: true } },
 } as const;
 
 /** A task in the shape the list sends, for broadcasting one that's back. */
@@ -306,10 +309,15 @@ const findListItems = async (ids: string[]) => {
 
 export type TaskWithRelations = Awaited<ReturnType<typeof list>>[number];
 
+/** The share, and whether it's new: sharing a task with someone again changes nothing. */
 const insertShare = async (data: TaskShareInsert) => {
-  const [row] = await db.insert(taskShares).values(data).returning();
-  if (!row) throw new InsertFailedError("task share");
-  return row;
+  const [row] = await db.insert(taskShares).values(data).onConflictDoNothing().returning();
+  if (row) return { share: row, added: true };
+  const existing = await db.query.taskShares.findFirst({
+    where: { taskId: data.taskId, sharedWithUserId: data.sharedWithUserId },
+  });
+  if (!existing) throw new InsertFailedError("task share");
+  return { share: existing, added: false };
 };
 
 const findShare = async (id: string) => {
