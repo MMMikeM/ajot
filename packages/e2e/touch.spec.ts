@@ -104,7 +104,7 @@ test.describe("deleting someone else's task", () => {
   // By name: on touch the category sheet is still closing when the task's sheet opens
   const openDetail = async (page: Page, title: string) => {
     await row(page, title).getByRole("button", { name: title, exact: true }).click();
-    const detail = page.getByRole("dialog", { name: title });
+    const detail = page.getByRole("dialog", { name: title, exact: true });
     await expect(detail).toBeVisible();
     return detail.getByRole("button", { name: "Delete task" });
   };

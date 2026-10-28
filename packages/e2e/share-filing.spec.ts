@@ -28,7 +28,7 @@ test("a task shared with you, filed offline, reaches the server once back online
   await page.reload({ waitUntil: "domcontentloaded" });
 
   await page.getByRole("button", { name: startsWith(title) }).click();
-  const sheet = page.getByRole("dialog", { name: title });
+  const sheet = page.getByRole("dialog", { name: title, exact: true });
   await page.context().setOffline(true);
   await addField(sheet, "List");
   await page.getByRole("option", { name: listName }).click();
@@ -140,7 +140,7 @@ for (const role of roles)
 
     await page.context().setOffline(true);
     await page.getByRole("button", { name: startsWith(title) }).click();
-    const sheet = page.getByRole("dialog", { name: title });
+    const sheet = page.getByRole("dialog", { name: title, exact: true });
     expect(await offeredLists(page, sheet)).toEqual(droppable);
     await page.getByRole("option", { name: mine }).click();
     await expect(sheet.getByRole("combobox", { name: "List" })).toHaveText(mine);
@@ -189,7 +189,7 @@ test("in someone else's list you're in, neither the sheet nor a drag moves it, s
   });
   for (const title of titles) {
     await page.getByRole("button", { name: startsWith(title) }).click();
-    const sheet = page.getByRole("dialog", { name: title });
+    const sheet = page.getByRole("dialog", { name: title, exact: true });
     await expect(
       sheet.getByRole("group", { name: "List" }).getByText(`Ours ${id}`, { exact: true }),
     ).toBeVisible();
@@ -232,7 +232,7 @@ test("a task in your own list stays there, even when it's also shared with you",
   await expect(rowOf(page, title)).toHaveCount(0);
   await pill(page, `Ours ${id}`).click();
   await page.getByRole("button", { name: startsWith(title) }).click();
-  const sheet = page.getByRole("dialog", { name: title });
+  const sheet = page.getByRole("dialog", { name: title, exact: true });
   await expect(
     sheet.getByRole("group", { name: "List" }).getByText(`Ours ${id}`, { exact: true }),
   ).toBeVisible();

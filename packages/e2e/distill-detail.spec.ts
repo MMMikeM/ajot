@@ -15,7 +15,7 @@ const openDetail = async (page: Page, title: string) => {
   await row(page, title)
     .getByRole("button", { name: startsWith(title) })
     .click();
-  const sheet = page.getByRole("dialog", { name: title });
+  const sheet = page.getByRole("dialog", { name: title, exact: true });
   await expect(sheet).toBeVisible();
   return sheet;
 };
@@ -228,7 +228,7 @@ test("the list picker shows every list, in the sidebar's order", async ({ page }
   await row(page, "Pick up dry cleaning")
     .getByRole("button", { name: startsWith("Pick up dry cleaning") })
     .click();
-  const sheet = page.getByRole("dialog", { name: "Pick up dry cleaning" });
+  const sheet = page.getByRole("dialog", { name: "Pick up dry cleaning", exact: true });
   await addField(sheet, "List");
 
   const options = page.getByRole("option");
