@@ -91,6 +91,7 @@ function ResultRow({
           className={cn("mt-0.5 shrink-0 text-xs", due.overdue ? "text-destructive" : "text-date")}
         >
           {due.label}
+          {due.overdue && <span className="sr-only">, overdue</span>}
         </span>
       )}
       {done && (

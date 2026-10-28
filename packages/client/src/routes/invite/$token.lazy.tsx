@@ -18,7 +18,6 @@ export function InviteAcceptPage() {
   const [isPending, setIsPending] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
   useEffect(() => {
     if (!authToken) {
       sessionStorage.setItem("pending-invite", token);
@@ -44,20 +43,42 @@ export function InviteAcceptPage() {
   return (
     <div className="flex flex-col items-center justify-start pt-[20vh] pb-16 touch:flex-1 touch:overflow-y-auto touch:pt-[12vh] touch:pb-10">
       <div className="flex w-full max-w-xs flex-col gap-8 touch:max-w-none">
-        <h2 className="font-display text-3xl text-balance text-foreground">
-          {isSuccess
-            ? inviterName
-              ? `You're connected with ${inviterName}.`
-              : "You're connected."
-            : inviterName
-              ? `${inviterName} invited you to share tasks and lists.`
-              : "You're invited to share tasks and lists."}
-        </h2>
+        <div className="flex flex-col gap-3">
+          <h2 className="font-display text-3xl text-balance text-foreground">
+            {isSuccess
+              ? inviterName
+                ? `You're connected with ${inviterName}.`
+                : "You're connected."
+              : inviterName
+                ? `${inviterName} invited you to share tasks and lists.`
+                : "You're invited to share tasks and lists."}
+          </h2>
+          {isSuccess && (
+            <p className="text-sm text-pretty text-hint touch:text-base">
+              You can now share lists and tasks with each other.
+            </p>
+          )}
+        </div>
         {isSuccess ? (
-          <Button className="w-full" onClick={() => router.navigate({ to: "/people" })}>
-            Go to People
-            <ArrowRight data-icon="inline-end" />
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- Accept unmounts once it's done, which would drop keyboard focus to the page
+              autoFocus
+              className="w-full"
+              onClick={() => router.navigate({ to: "/" })}
+            >
+              Go to your lists
+              <ArrowRight data-icon="inline-end" />
+            </Button>
+            <Button
+              variant="subtle"
+              size="xs"
+              className="self-center touch:text-sm"
+              onClick={() => router.navigate({ to: "/people" })}
+            >
+              See People
+            </Button>
+          </div>
         ) : (
           <div className="flex flex-col gap-2">
             {errorMsg && (

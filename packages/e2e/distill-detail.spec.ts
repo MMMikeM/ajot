@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
-import { startsWith } from "./helpers/app";
-import { mockApi } from "./helpers/mock-api";
+import { addField, startsWith } from "./helpers/app";
+import { mockApi, noteOn } from "./helpers/mock-api";
 
 // The task detail sheet shows only what a task has, against the dev server with /api mocked
 
@@ -15,7 +15,7 @@ const openDetail = async (page: Page, title: string) => {
   await row(page, title)
     .getByRole("button", { name: startsWith(title) })
     .click();
-  const sheet = page.getByRole("dialog", { name: title });
+  const sheet = page.getByRole("dialog", { name: title, exact: true });
   await expect(sheet).toBeVisible();
   return sheet;
 };
@@ -127,7 +127,7 @@ test("ticking in the sheet offers Undo, and Undo restores it", async ({ page }) 
 
   await checkbox.click();
   await expect(checkbox).toBeChecked();
-  await expect(toast(page)).toContainText("Marked done");
+  await expect(toast(page)).toContainText("“Pick up dry cleaning” done");
 
   await toast(page).getByRole("button", { name: "Undo" }).click();
   await expect(checkbox).not.toBeChecked();
@@ -143,9 +143,9 @@ test("deleting a subtask or a note offers Undo", async ({ page }) => {
   );
   const subtask = sheet.locator(".group\\/row", { hasText: "Compare Tuesday and Wednesday fares" });
   await subtask.hover();
-  await subtask.getByRole("button", { name: "Delete" }).click();
+  await subtask.getByRole("button", { name: "Delete subtask" }).click();
   await expect(subtask).toHaveCount(0);
-  await expect(toast(page)).toContainText("Subtask deleted");
+  await expect(toast(page)).toContainText("“Compare Tuesday and Wednesday fares” deleted");
   await toast(page).getByRole("button", { name: "Undo" }).click();
   await expect(
     sheet.getByRole("checkbox", { name: "Compare Tuesday and Wednesday fares" }),
@@ -160,11 +160,94 @@ test("deleting a subtask or a note offers Undo", async ({ page }) => {
   await page.keyboard.press("Enter");
   const note = sheet.locator(".group\\/row", { hasText: "Window seat" });
   await note.hover();
-  await note.getByRole("button", { name: "Delete" }).click();
+  await note.getByRole("button", { name: "Delete note" }).click();
   await expect(note).toHaveCount(0);
-  await expect(toast(page).first()).toContainText("Note deleted");
+  await expect(toast(page).first()).toContainText("Note “Window seat” deleted");
   await toast(page).first().getByRole("button", { name: "Undo" }).click();
   await expect(sheet.getByText("Window seat")).toBeVisible();
+});
+
+test("each Delete in the sheet says what it removes", async ({ page }) => {
+  const data = await mockApi(page);
+  const flights = data.tasks[0]!;
+  data.notes.push(noteOn(flights, "Window seat"));
+  await page.goto(`/task/${flights.id}`, { waitUntil: "domcontentloaded" });
+  const sheet = page.locator('[data-slot="drawer-content"]');
+  await expect(sheet.getByText("Window seat")).toBeVisible({ timeout: 15000 });
+
+  await expect(sheet.getByRole("button", { name: "Delete task", exact: true })).toHaveText(
+    "Delete task",
+  );
+  await expect(
+    sheet.getByRole("group", { name: "Subtasks" }).getByRole("button", { name: "Delete subtask" }),
+  ).toHaveCount(2);
+  await expect(
+    sheet.getByRole("group", { name: "Notes" }).getByRole("button", { name: "Delete note" }),
+  ).toHaveCount(1);
+  await expect(sheet.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
+});
+
+test("a note edits in place when its text is clicked", async ({ page }) => {
+  const data = await mockApi(page);
+  const flights = data.tasks[0]!;
+  data.notes.push(noteOn(flights, "Window seat"));
+  await page.goto(`/task/${flights.id}`, { waitUntil: "domcontentloaded" });
+  const sheet = page.locator('[data-slot="drawer-content"]');
+  await sheet.getByRole("button", { name: "Edit note: Window seat" }).click({ timeout: 15000 });
+  const field = sheet.getByRole("textbox", { name: "Note" });
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue("Window seat");
+  await field.fill("Aisle seat");
+  await field.blur();
+  await expect(sheet.getByRole("button", { name: "Edit note: Aisle seat" })).toBeVisible();
+});
+
+test("the open Add toggle says it cancels", async ({ page }) => {
+  const sheet = await openDetail(page, "Pick up dry cleaning");
+  const offers = sheet.getByRole("group", { name: "Add to task" });
+  await sheet.getByRole("button", { name: "Add", exact: true }).click();
+  const cancel = sheet.getByRole("button", { name: "Cancel", exact: true });
+  await expect(offers).toBeVisible();
+
+  await cancel.click();
+  await expect(offers).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Add", exact: true })).toBeVisible();
+});
+
+test("the list picker shows every list, in the sidebar's order", async ({ page }) => {
+  const data = await mockApi(page);
+  for (const [i, name] of ["Garden", "Reading", "Errands", "Birthday party"].entries())
+    data.categories.push({
+      ...data.categories[0]!,
+      id: `c-extra-${i}`,
+      name,
+      sortOrder: `a${3 + i}`,
+      collaborators: [],
+    });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await row(page, "Pick up dry cleaning")
+    .getByRole("button", { name: startsWith("Pick up dry cleaning") })
+    .click();
+  const sheet = page.getByRole("dialog", { name: "Pick up dry cleaning", exact: true });
+  await addField(sheet, "List");
+
+  const options = page.getByRole("option");
+  await expect(options).toHaveText([
+    "Inbox",
+    "Work",
+    "Home",
+    "Garden",
+    "Reading",
+    "Errands",
+    "Birthday party",
+    "Groceries",
+  ]);
+  // Every one in view at once: inside the sheet's scroll box the popup was cut to two rows
+  const popup = page.locator('[data-slot="select-popup"]');
+  await expect
+    .poll(() => popup.evaluate((el) => el.scrollHeight <= el.clientHeight + 1))
+    .toBe(true);
+  for (const option of await options.all()) await expect(option).toBeInViewport({ ratio: 1 });
 });
 
 test("Delete task closes the sheet and offers Undo", async ({ page }) => {

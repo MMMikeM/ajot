@@ -7,7 +7,7 @@ import { cn, type StyledProps } from "~/lib/utils";
 const revealButtonVariants = tv({
   extend: buttonVariants,
   // Hover-revealed on desktop; always visible on touch, where there is no hover to reveal it
-  base: "opacity-0 transition-[color,opacity] group-hover/row:opacity-100 focus-visible:opacity-100 touch:opacity-100",
+  base: "opacity-0 transition-[color,opacity] group-hover/row:opacity-100 focus-visible:opacity-100 touch:text-sm touch:opacity-100",
   defaultVariants: {
     variant: "subtle",
     size: "xs",
@@ -17,16 +17,29 @@ const revealButtonVariants = tv({
 
 type RevealButtonProps = StyledProps<ButtonPrimitive.Props, typeof revealButtonVariants>;
 
+const splitProps = <P extends object, K extends keyof P>(props: P, keys: readonly K[]) => {
+  const picked = {} as Pick<P, K>;
+  const rest = { ...props };
+  for (const key of keys) {
+    picked[key] = props[key];
+    delete rest[key];
+  }
+  return [picked, rest as Omit<P, K>] as const;
+};
+
 // Renders the primitive directly: revealButtonVariants already extends the full Button
 // class set. Going through <Button> would re-apply Button's own defaults (variant
 // "default" = bg-primary) underneath these classes.
-export const RevealButton = ({ intent, className, variant, size, ...props }: RevealButtonProps) => (
-  <ButtonPrimitive
-    data-slot="button"
-    className={revealButtonVariants({ intent, variant, size, class: className })}
-    {...props}
-  />
-);
+export const RevealButton = ({ className, ...props }: RevealButtonProps) => {
+  const [variants, rest] = splitProps(props, revealButtonVariants.variantKeys);
+  return (
+    <ButtonPrimitive
+      data-slot="button"
+      className={revealButtonVariants({ ...variants, class: className })}
+      {...rest}
+    />
+  );
+};
 
 // Desktop: floats over the row's end instead of reserving space. Touch: in flow.
 export const RevealGroup = ({ className, ...props }: ComponentProps<"div">) => (

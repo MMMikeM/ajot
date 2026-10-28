@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page, type TestInfo } from "@playwright/test";
-import { mockApi, mockData } from "./helpers/mock-api";
+import { dueLabel, mockApi, mockData } from "./helpers/mock-api";
+import { expectTapTarget } from "./helpers/touch";
 
 // Touch layout of the task list: swipe tray, drag, and the input bar's list chip.
 
@@ -115,31 +116,6 @@ test.describe("swipe tray", () => {
   });
 });
 
-// boundingBox() leaves out ::after, where these targets grow. Walks out from the centre until a
-// tap would land elsewhere, so a clip or a neighbour drawn on top counts too.
-const tapTarget = (el: Element) => {
-  const box = el.getBoundingClientRect();
-  const cx = box.left + box.width / 2;
-  const cy = box.top + box.height / 2;
-  const reach = (dx: number, dy: number) => {
-    let n = 0;
-    while (n < 60) {
-      const hit = document.elementFromPoint(cx + dx * (n + 1), cy + dy * (n + 1));
-      if (!hit || !el.contains(hit)) break;
-      n++;
-    }
-    return n;
-  };
-  return { width: reach(-1, 0) + reach(1, 0) + 1, height: reach(0, -1) + reach(0, 1) + 1 };
-};
-
-const expectTapTarget = async (target: Locator) => {
-  await target.scrollIntoViewIfNeeded();
-  const { width, height } = await target.evaluate(tapTarget);
-  expect(width).toBeGreaterThanOrEqual(44);
-  expect(height).toBeGreaterThanOrEqual(44);
-};
-
 const openSheet = async (page: Page, title: string) => {
   await titleOf(page, title).click();
   const sheet = page.locator('[data-slot="drawer-content"]');
@@ -168,7 +144,9 @@ test("a task's checkbox and date, and the detail sheet's checkboxes, take a 44px
   await openList(page);
   const passport = row(page, "Renew passport");
   await expectTapTarget(passport.getByRole("checkbox"));
-  await expectTapTarget(passport.getByRole("button", { name: "3d ago" }));
+  await expectTapTarget(
+    passport.getByRole("button", { name: `${await dueLabel(page, -3)}, overdue` }),
+  );
 
   const sheet = await openSheet(page, "Book flights");
   const checkboxes = sheet.getByRole("checkbox");

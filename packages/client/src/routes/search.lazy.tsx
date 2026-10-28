@@ -105,8 +105,9 @@ function SearchPage() {
         </DragDropProvider>
       )}
 
-      <search className="mb-3 flex shrink-0 items-center gap-2.5">
-        <Search size={18} className="shrink-0 text-hint" aria-hidden="true" />
+      {/* The icon takes the list title's colour dot's place, centred on it, so the text doesn't move */}
+      <search className="mb-3 flex shrink-0 items-center gap-1.25">
+        <Search size={18} className="-ml-1.25 shrink-0 text-hint" aria-hidden="true" />
         <input
           ref={inputRef}
           type="search"

@@ -10,7 +10,7 @@ const deleteControls = (page: Page, title: string) =>
 
 const openDetail = async (page: Page, title: string) => {
   await row(page, title).getByRole("button", { name: title, exact: true }).click();
-  const detail = page.getByRole("dialog", { name: title });
+  const detail = page.getByRole("dialog", { name: title, exact: true });
   await expect(detail).toBeVisible();
   return detail.getByRole("button", { name: "Delete task" });
 };

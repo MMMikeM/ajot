@@ -25,5 +25,5 @@ test("Undo of a delete sends the task's own updatedAt, not the time of the Undo"
 
   await expect.poll(() => restores.length).toBe(1);
   expect(restores[0]).toMatchObject({ id: task.id, updatedAt: task.updatedAt });
-  await expect(page.getByText("Renew passport")).toBeVisible();
+  await expect(row).toBeVisible();
 });

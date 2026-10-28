@@ -67,8 +67,9 @@ const SelectValue = ({ ...props }: ComponentProps<typeof SelectPrimitive.Value>)
 // No Portal wrapper: Base UI Drawer is modal=true by default, which marks
 // everything outside the drawer's DOM subtree as `inert`. A portalled popup
 // would land outside the drawer and be blocked. Rendering inline keeps the
-// popup inside the drawer's accessible scope while Positioner's fixed
-// positioning still floats it visually above all content.
+// popup inside the drawer's accessible scope, and fixed positioning floats it
+// out of the sheet's scroll box: positioned absolutely, that box clipped it to
+// the two rows between the trigger and the sheet's edge.
 
 const SelectContent = ({
   className,
@@ -78,6 +79,7 @@ const SelectContent = ({
 }: ComponentProps<typeof SelectPrimitive.Popup> & { sideOffset?: number }) => (
   <SelectPrimitive.Positioner
     sideOffset={sideOffset}
+    positionMethod="fixed"
     alignItemWithTrigger={false}
     align="start"
     className="z-50"
@@ -109,8 +111,8 @@ const SelectItem = ({
   <SelectPrimitive.Item
     data-slot="select-item"
     className={cn(
-      "flex cursor-default items-center gap-2 rounded-md px-3 py-1.5",
-      "text-sm text-hint outline-none",
+      "flex cursor-default items-center gap-2 rounded-md px-3 py-1.5 touch:min-h-11",
+      "text-sm text-hint outline-none touch:text-base",
       "hover:bg-muted hover:text-foreground",
       "data-[highlighted]:bg-muted data-[highlighted]:text-foreground",
       "data-[selected]:text-foreground",

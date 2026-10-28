@@ -22,6 +22,7 @@ import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { TogglePill } from "~/components/ui/toggle-pill";
 import { DetailRow } from "~/components/task/detail-row";
 import { InviteButton } from "~/components/InviteButton";
+import { INBOX_COLOR } from "~/lib/constants";
 
 const INBOX_VALUE = "__inbox__";
 
@@ -49,7 +50,7 @@ export const ListField = ({ filing, choosing }: { filing: Filing; choosing: bool
   const { category, choices, move } = filing;
   if (!category && !choosing) return null;
 
-  const icon = category && <ColorDot color={category.color ?? undefined} />;
+  const icon = <ColorDot color={category ? (category.color ?? undefined) : INBOX_COLOR} />;
 
   if (choices.length === 0)
     return (
@@ -61,8 +62,8 @@ export const ListField = ({ filing, choosing }: { filing: Filing; choosing: bool
     );
 
   const items = [
-    { value: INBOX_VALUE, label: "Inbox" },
-    ...choices.map((c) => ({ value: c.id, label: c.name })),
+    { value: INBOX_VALUE, label: "Inbox", color: INBOX_COLOR },
+    ...choices.map((c) => ({ value: c.id, label: c.name, color: c.color ?? undefined })),
   ];
 
   return (
@@ -82,7 +83,12 @@ export const ListField = ({ filing, choosing }: { filing: Filing; choosing: bool
         <SelectContent>
           {items.map((item) => (
             <SelectItem key={item.value} value={item.value}>
-              {item.label}
+              <span className="flex min-w-0 items-center gap-2.5">
+                <ColorDot color={item.color} />
+                <span dir="auto" className="truncate">
+                  {item.label}
+                </span>
+              </span>
             </SelectItem>
           ))}
         </SelectContent>
