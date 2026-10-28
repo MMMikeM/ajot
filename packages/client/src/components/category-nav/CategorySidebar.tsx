@@ -191,7 +191,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
                 >
                   {isActive && <ActiveBar color={cat.color} />}
                   <ColorDot size="sm" color={cat.color ?? undefined} />
-                  <span className="min-w-0 truncate" title={cat.name}>
+                  <span dir="auto" className="min-w-0 truncate" title={cat.name}>
                     {cat.name}
                   </span>
                   <CollabBadge category={cat} currentUserId={currentUserId} />

@@ -42,6 +42,7 @@ const FieldError = ({ className, ...props }: FieldPrimitive.Error.Props) => (
 
 const Input = ({ className, ...props }: ComponentProps<"input">) => (
   <InputPrimitive
+    dir="auto"
     className={cn(
       // Strip the box style from the primitive
       "h-auto rounded-none border-0 border-b py-2 shadow-none",
@@ -57,6 +58,7 @@ const Input = ({ className, ...props }: ComponentProps<"input">) => (
 
 const Textarea = ({ className, ...props }: ComponentProps<"textarea">) => (
   <TextareaPrimitive
+    dir="auto"
     className={cn(
       // Strip the box style
       "rounded-none border-0 border-b shadow-none",

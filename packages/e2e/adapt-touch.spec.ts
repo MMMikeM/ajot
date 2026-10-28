@@ -161,6 +161,36 @@ test("a task's checkbox and date, and the detail sheet's checkboxes, take a 44px
   for (const checkbox of await checkboxes.all()) await expectTapTarget(checkbox);
 });
 
+test("a tap on a title's first letter opens the task rather than ticking it", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "the touch targets");
+  await openList(page);
+  for (const title of ["Renew passport", "Compare Tuesday and Wednesday fares"]) {
+    const box = (await titleOf(page, title).locator("span").first().boundingBox())!;
+    await page.touchscreen.tap(box.x + 2, box.y + 10);
+    await expect(page.locator('[data-slot="drawer-content"]')).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator('[data-slot="drawer-content"]')).toHaveCount(0);
+    await expect(page.getByRole("checkbox", { name: title, exact: true })).not.toBeChecked();
+  }
+});
+
+test("People's empty state isn't clipped", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "the touch layout scrolls the page itself");
+  const data = mockData();
+  data.contacts = [];
+  await mockApi(page, { data });
+  await page.goto("/people", { waitUntil: "domcontentloaded" });
+  const empty = page.getByText(/^No contacts yet/);
+  await expect(empty).toBeVisible();
+  const invite = (await page.getByRole("button", { name: "Invite someone" }).boundingBox())!;
+  const text = (await empty.boundingBox())!;
+  expect(text.x).toBe(invite.x);
+  const scroller = empty.locator("..");
+  expect(await scroller.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+});
+
 type Point = { x: number; y: number };
 
 const centreOf = async (locator: Locator): Promise<Point> => {

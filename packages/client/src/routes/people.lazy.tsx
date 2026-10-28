@@ -77,7 +77,7 @@ export function PeoplePage() {
 
   return (
     // AppShell already provides the column and gutters; on touch this is the scroll area
-    <div className="flex flex-col gap-6 pt-1 touch:min-h-0 touch:flex-1 touch:overflow-y-auto touch:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
+    <div className="flex flex-col gap-6 pt-1 touch:-mx-2 touch:min-h-0 touch:flex-1 touch:overflow-x-hidden touch:overflow-y-auto touch:px-2 touch:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
       {isDesk && (
         <DragDropProvider>
           <CategorySidebar reorderable={false} />
@@ -108,13 +108,13 @@ export function PeoplePage() {
         {inviting ? "Generating link…" : "Invite someone"}
       </Button>
 
-      <div className="-mx-2 flex flex-col gap-1">
-        {isLoading && <p className="text-sm text-hint">Loading…</p>}
-        {!isLoading && contacts.length === 0 && (
-          <p className="text-sm text-hint">
-            No contacts yet. Invite someone to share tasks and lists with them.
-          </p>
-        )}
+      {isLoading && <p className="text-sm text-hint">Loading…</p>}
+      {!isLoading && contacts.length === 0 && (
+        <p className="text-sm text-hint">
+          No contacts yet. Invite someone to share tasks and lists with them.
+        </p>
+      )}
+      <div className="-mx-2 flex flex-col gap-1 empty:hidden">
         {contacts.map((contact) => (
           <ListRow key={contact.id}>
             <InitialsAvatar

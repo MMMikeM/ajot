@@ -39,22 +39,28 @@ const SYNC_LABELS = {
 
 /**
  * What a screen reader hears when sync goes offline or comes back. Silent for the state the page
- * opens in, and while a reconnect is still being tried.
+ * opens in, and while a reconnect is still being tried. "Back online" only once the device itself
+ * was offline: a server that answers again after refusing is "Syncing again".
  */
 const useSyncAnnouncement = (syncState: keyof typeof SYNC_LABELS, deviceOnline: boolean) => {
   const [announcement, setAnnouncement] = useState("");
   const wasOffline = useRef<boolean | null>(null);
+  const deviceWentOffline = useRef(!deviceOnline);
   useEffect(() => {
+    if (!deviceOnline) deviceWentOffline.current = true;
     if (syncState === "connecting") return;
     const offline = syncState === "disconnected";
     if (wasOffline.current !== null && wasOffline.current !== offline) {
       setAnnouncement(
         offline
           ? `${deviceOnline ? "Not syncing" : "Offline"}, changes saved on this device`
-          : "Back online",
+          : deviceWentOffline.current
+            ? "Back online"
+            : "Syncing again",
       );
     }
     wasOffline.current = offline;
+    if (!offline) deviceWentOffline.current = false;
   }, [syncState, deviceOnline]);
   return announcement;
 };
@@ -156,7 +162,9 @@ export const SyncSettings = () => {
           className="flex min-w-50 flex-col p-2"
         >
           <div className="flex flex-col gap-0.5 px-2.5 pt-1 pb-2">
-            <span className="text-sm font-medium text-foreground">{currentUser.name}</span>
+            <span dir="auto" className="text-sm font-medium text-foreground">
+              {currentUser.name}
+            </span>
             <span className="text-xs text-hint">@{currentUser.username}</span>
           </div>
           {isOffline && (

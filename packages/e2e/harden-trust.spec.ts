@@ -75,6 +75,25 @@ test.describe("sync status", () => {
     await syncButton(page).click();
     await expect(page.getByText("Can't reach Ajot's server.", { exact: false })).toBeVisible();
   });
+
+  test("a server that answers again reads as syncing again, not back online", async ({ page }) => {
+    let refusing = false;
+    await mockApi(page);
+    await page.route("**/api/events**", (route) =>
+      refusing ? route.fulfill({ status: 503 }) : route.continue({ url: streamUrl }),
+    );
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(syncButton(page)).toHaveText("Sync", { timeout: 15000 });
+
+    refusing = true;
+    stream.closeAllConnections();
+    await expect(syncButton(page)).toHaveText("Not syncing · saved here", { timeout: 15000 });
+    await expect(syncStatus(page)).toHaveText("Not syncing, changes saved on this device");
+
+    refusing = false;
+    await expect(syncButton(page)).toHaveText("Sync", { timeout: 15000 });
+    await expect(syncStatus(page)).toHaveText("Syncing again");
+  });
 });
 
 test("a task sheet that failed to load offline keeps the list and loads on the next open", async ({
