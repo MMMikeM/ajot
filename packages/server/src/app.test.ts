@@ -1,9 +1,12 @@
-import { expect, test, vi } from "vite-plus/test";
-import app from "./app";
+import { beforeEach, expect, test, vi } from "vite-plus/test";
+import app, { MAX_BODY_BYTES } from "./app";
+import { MAX_TEXT, MAX_TITLE } from "./db/field-limits";
 import { signup } from "./auth-service";
 
 vi.mock("./db/client", () => ({ db: {}, inTransaction: vi.fn() }));
 vi.mock("./auth-service", () => ({ login: vi.fn(), signup: vi.fn() }));
+
+beforeEach(() => vi.clearAllMocks());
 
 // routes/auth.test.ts mounts the hook itself; this is the app the server runs
 const signUp = (body: object) =>
@@ -35,4 +38,38 @@ test.each([
 
   expect(res.status).toBe(422);
   expect(await res.json()).toEqual({ error });
+});
+
+test("a body over the limit is refused in words, with CORS headers an extension can read", async () => {
+  const res = await app.request("/api/auth/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "chrome-extension://abc" },
+    body: JSON.stringify({ username: "alice", password: "x".repeat(MAX_BODY_BYTES), name: "A" }),
+  });
+
+  expect(res.status).toBe(413);
+  expect(await res.json()).toEqual({ error: "That's too much to save in one go." });
+  expect(res.headers.get("Access-Control-Allow-Origin")).toBe("chrome-extension://abc");
+  expect(signup).not.toHaveBeenCalled();
+});
+
+test("the longest note a person can write fits in a request", () => {
+  const longest = JSON.stringify({ title: "说".repeat(MAX_TITLE), content: "说".repeat(MAX_TEXT) });
+  expect(new TextEncoder().encode(longest).length).toBeLessThan(MAX_BODY_BYTES);
+});
+
+test("a field past its length is refused with a message saying how long it may be", async () => {
+  const res = await signUp({ username: "alice", password: "long enough", name: "A".repeat(201) });
+
+  expect(res.status).toBe(400);
+  expect(await res.json()).toEqual({ error: "Name can be at most 200 characters" });
+});
+
+test("a new username in another script is refused", async () => {
+  const res = await signUp({ username: "аlice", password: "long enough", name: "Alice" });
+
+  expect(res.status).toBe(400);
+  expect(await res.json()).toEqual({
+    error: "Username can have only letters, numbers, dots, dashes and underscores",
+  });
 });

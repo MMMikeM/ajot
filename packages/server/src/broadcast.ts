@@ -9,9 +9,19 @@ type SSEWriter = { write: (event: string, data: string) => void; close: () => vo
 
 const sseClients = new Map<string, Set<SSEWriter>>();
 
+// Far more tabs than anyone keeps open, so a reconnecting tab never pushes out one in use; enough
+// to stop one account holding the server's connections open
+const MAX_STREAMS_PER_USER = 100;
+
 export const registerClient = (userId: string, writer: SSEWriter) => {
   if (!sseClients.has(userId)) sseClients.set(userId, new Set());
-  sseClients.get(userId)!.add(writer);
+  const writers = sseClients.get(userId)!;
+  if (writers.size >= MAX_STREAMS_PER_USER) {
+    const [oldest] = writers;
+    writers.delete(oldest!);
+    oldest!.close();
+  }
+  writers.add(writer);
 };
 
 export const unregisterClient = (userId: string, writer: SSEWriter) => {

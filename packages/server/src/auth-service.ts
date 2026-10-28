@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { HTTPException } from "hono/http-exception";
 import { createId } from "@paralleldrive/cuid2";
 import { now } from "@newtab-todo/shared/iso";
@@ -5,7 +6,7 @@ import userRepo from "./db/user.repo";
 import sessionRepo from "./db/session.repo";
 import categoryRepo from "./db/category.repo";
 import inviteTokenRepo from "./db/invite-token.repo";
-import { ConflictError, ForbiddenError, NotFoundError } from "./db/errors";
+import { ConflictError, ForbiddenError } from "./db/errors";
 import { hashPassword, verifyPassword } from "./password";
 
 /** A server's first account signs up freely; everyone after needs an invite from someone on it. */
@@ -47,6 +48,8 @@ const createAccount = async (username: string, password: string, name: string) =
   return user;
 };
 
+// Without an invite that works, a signup learns nothing about who's here: the invite is checked
+// before the username, so only someone already invited finds out whether a name is taken
 export const signup = async (
   username: string,
   password: string,
@@ -54,18 +57,11 @@ export const signup = async (
   inviteToken?: string,
 ) => {
   const normalizedUsername = username.toLowerCase();
-  let existing = false;
-  try {
-    await userRepo.findByUsername(normalizedUsername);
-    existing = true;
-  } catch (e) {
-    if (!(e instanceof NotFoundError)) throw e;
-  }
-  if (existing) throw new ConflictError("That username is taken. Try another.");
-
   const invite = await admit(inviteToken);
   let user;
   try {
+    if (await userRepo.exists(normalizedUsername))
+      throw new ConflictError("That username is taken. Try another.");
     user = await createAccount(normalizedUsername, password, name);
   } catch (e) {
     if (invite) await inviteTokenRepo.release(invite.id);
@@ -81,22 +77,19 @@ export const signup = async (
   };
 };
 
-export const login = async (username: string, password: string) => {
-  const normalized = username.toLowerCase();
-  let user;
-  try {
-    user = await userRepo.findByUsernameWithPassword(normalized);
-    console.log(`[login] found user id=${user.id} username=${user.username}`);
-  } catch (e) {
-    console.log(
-      `[login] user not found username=${normalized} error=${e instanceof Error ? e.message : String(e)}`,
-    );
-    throw new HTTPException(401, { message: "Wrong username or password." });
-  }
+const wrongPassword = () => new HTTPException(401, { message: "Wrong username or password." });
 
-  const valid = await verifyPassword(user.passwordHash, password);
-  console.log(`[login] password valid=${valid} userId=${user.id}`);
-  if (!valid) throw new HTTPException(401, { message: "Wrong username or password." });
+// Checked against when there's no such user, so a wrong username takes as long as a wrong password
+let unknownUserHash: Promise<string> | undefined;
+
+export const login = async (username: string, password: string) => {
+  const user = await userRepo.findWithPassword(username.toLowerCase());
+  if (!user) {
+    unknownUserHash ??= hashPassword(randomBytes(32).toString("hex"));
+    await verifyPassword(await unknownUserHash, password);
+    throw wrongPassword();
+  }
+  if (!(await verifyPassword(user.passwordHash, password))) throw wrongPassword();
 
   const token = await sessionRepo.insert(user.id);
   return { userId: user.id, token, name: user.name, username: user.username };
