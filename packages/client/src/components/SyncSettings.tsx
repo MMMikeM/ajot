@@ -4,9 +4,8 @@ import { useRouter, useRouterState } from "@tanstack/react-router";
 import { Toast } from "@base-ui/react/toast";
 import { useAuthToken } from "~/lib/auth/token";
 import { useCurrentUser } from "~/lib/auth/current-user";
-import { clearSession, onSessionExpired } from "~/lib/auth/session";
-import { unregisterPushSubscription } from "~/lib/sync/push";
-import { logout } from "~/lib/actions";
+import { onSessionExpired } from "~/lib/auth/session";
+import { signOut } from "~/lib/actions";
 import { getBuildTarget } from "~/lib/build-target";
 import { useSyncState, usePendingMutations } from "~/lib/sync/sse";
 import { useInstallPrompt } from "~/lib/hooks/use-install-prompt";
@@ -30,6 +29,9 @@ const useDeviceOnline = () =>
     () => navigator.onLine,
     () => true,
   );
+
+const SERVER_SIGN_OUT_WAIT_MS = 2000;
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const SYNC_LABELS = {
   connecting: "Syncing…",
@@ -90,15 +92,16 @@ export const SyncSettings = () => {
     [],
   );
 
-  const handleLogout = async () => {
-    // The server only drops the subscription while the session is still valid.
-    await unregisterPushSubscription();
-    await logout();
-    clearSession();
+  const handleLogout = () => {
+    const signedOutOnServer = signOut();
     setOpen(false);
     // Edits still queued stay on screen until the page starts again without them; they wait for
-    // this account to sign back in
-    if (hasPending) location.reload();
+    // this account to sign back in. Starting again cancels what the server hasn't heard yet, so
+    // give it a moment first.
+    if (hasPending)
+      void Promise.race([signedOutOnServer, delay(SERVER_SIGN_OUT_WAIT_MS)]).then(() =>
+        location.reload(),
+      );
   };
 
   const isAuthPage = useRouterState({ select: (s) => s.location.pathname === "/auth" });

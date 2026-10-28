@@ -1,31 +1,9 @@
-import { TOKEN_KEY } from "~/lib/constants";
-import { getBuildTarget } from "~/lib/build-target";
-import { ext } from "~/lib/ext";
-import { createExternalStore } from "~/lib/external-store";
+import { useSyncExternalStore } from "react";
+import { getSignedIn, subscribeSignedIn } from "~/lib/auth/signed-in";
 
-const store = createExternalStore<string | null>(
-  typeof localStorage !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null,
-);
+export const getAuthToken = () => getSignedIn().token;
 
-export const getAuthToken = store.get;
+/** Called once the user has changed too, so a listener never sees one without the other. */
+export const subscribeAuthToken = subscribeSignedIn;
 
-export const setAuthToken = (value: string | null) => {
-  if (value) localStorage.setItem(TOKEN_KEY, value);
-  else localStorage.removeItem(TOKEN_KEY);
-
-  if (getBuildTarget() === "extension" && value) {
-    ext.storage.local.set({ [TOKEN_KEY]: value }).catch(console.error);
-  }
-
-  store.set(value);
-};
-
-// Sync across tabs (browser only — window is undefined during SSR prerender)
-if (typeof window !== "undefined") {
-  window.addEventListener("storage", (e) => {
-    if (e.key === TOKEN_KEY) store.set(e.newValue);
-  });
-}
-
-export const subscribeAuthToken = store.subscribe;
-export const useAuthToken = store.useStore;
+export const useAuthToken = () => useSyncExternalStore(subscribeSignedIn, getAuthToken);
