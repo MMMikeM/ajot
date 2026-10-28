@@ -397,7 +397,7 @@ test("Undo in the app brings back a shared list deleted with its tasks", async (
     .toBe(false);
 
   await page
-    .locator("[data-toast-undo]", { hasText: "List and tasks deleted" })
+    .locator("[data-toast-undo]", { hasText: `“${name}” and its tasks deleted` })
     .getByRole("button", { name: "Undo" })
     .click();
   await expect

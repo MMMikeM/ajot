@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { taskRow as row } from "./helpers/app";
-import { openList } from "./helpers/mock-api";
+import { dueLabel, openList } from "./helpers/mock-api";
 
 test("tasks saved on the device show before a slow server answers", async ({ page }) => {
   await openList(page);
@@ -37,7 +37,7 @@ test("due dates and the detail sheet work where the browser lacks Temporal", asy
   await openList(page);
   await polyfill;
 
-  await expect(row(page, "Renew passport")).toContainText("3d ago");
+  await expect(row(page, "Renew passport")).toContainText(await dueLabel(page, -3));
   await row(page, "Call the plumber")
     .getByRole("button", { name: /^Call the plumber/ })
     .click();

@@ -1,14 +1,37 @@
 import { useEffect } from "react";
 import { Toast } from "@base-ui/react/toast";
 
-export const toastManager = Toast.createToastManager();
+/**
+ * A title naming what Undo brings back: `name` is cut short to keep the toast on one line, so the
+ * words around it, which say what happened, always show.
+ */
+export type NamedTitle = { before: string; name: string; after?: string };
+
+export type ToastData = { onUndo?: () => void; named?: NamedTitle };
+
+export const toastManager = Toast.createToastManager<ToastData>();
 
 // A thumb has further to travel to the toast than a pointer, and nothing to hover it with
 const undoWindowMs = () => (matchMedia("(pointer: coarse)").matches ? 8000 : 5000);
 
+const fullTitle = ({ before, name, after = "" }: NamedTitle) => `${before}${name}${after}`;
+
 /** Pushes a toast whose Undo runs `onUndo`; returns the toast's id. */
-export const pushUndoToast = (title: string, onUndo: () => void) =>
-  toastManager.add({ title, timeout: undoWindowMs(), data: { onUndo } });
+export const pushUndoToast = (title: string | NamedTitle, onUndo: () => void) => {
+  const isText = typeof title === "string";
+  return toastManager.add({
+    title: isText ? title : fullTitle(title),
+    timeout: undoWindowMs(),
+    data: { onUndo, named: isText ? undefined : title },
+  });
+};
+
+/** A task, note or list as an Undo toast names it, first and quoted, so it gets the most room. */
+export const quoted = (name: string, after: string, before = ""): NamedTitle => ({
+  before: `${before}“`,
+  name: name.split("\n", 1)[0],
+  after: `”${after}`,
+});
 
 export const UNDO_KEYS = "Control+Z Meta+Z";
 
@@ -31,10 +54,11 @@ export const pressUndo = (id: string, onUndo: () => void) => {
  * capture input while it's empty, which is focused on every new tab.
  */
 export function UndoShortcut() {
-  const { toasts } = Toast.useToastManager();
+  const { toasts } = Toast.useToastManager<ToastData>();
   useEffect(() => {
     const newest = toasts.find((t) => t.data?.onUndo && t.transitionStatus !== "ending");
-    if (!newest) return;
+    const onUndo = newest?.data?.onUndo;
+    if (!newest || !onUndo) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() !== "z" || !(e.metaKey || e.ctrlKey)) return;
       if (e.shiftKey || e.altKey || e.defaultPrevented) return;
@@ -44,7 +68,7 @@ export function UndoShortcut() {
       );
       if (field && !(field.id === "add-task-input" && !field.value)) return;
       e.preventDefault();
-      pressUndo(newest.id, newest.data.onUndo);
+      pressUndo(newest.id, onUndo);
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);

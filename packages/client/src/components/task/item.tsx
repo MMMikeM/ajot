@@ -14,7 +14,7 @@ import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/field";
 import { MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { cn } from "~/lib/utils";
-import { Calendar, Plus, Users, X } from "lucide-react";
+import { Calendar, Plus, Trash2, Users } from "lucide-react";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { useSwipeReveal } from "~/lib/hooks/use-swipe-reveal";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
@@ -139,6 +139,7 @@ function TaskRow({
   const canSetDate = !isDone && !showDate;
   const canAddSubtask = !isSubtask && !isDone;
   const canDelete = canDeleteTask(holders(task, lists, parent), currentUserId);
+  const deleteLabel = isSubtask ? "Delete subtask" : "Delete task";
   const hoverActionCount = Number(canSetDate) + Number(canAddSubtask) + Number(canDelete);
   const dateRef = useRef<HTMLInputElement>(null);
   const tabIndex = useIsTabStop(task.id) ? 0 : -1;
@@ -300,7 +301,7 @@ function TaskRow({
                   "bg-destructive-subtle text-destructive active:bg-destructive/20",
                 )}
               >
-                <X size={16} />
+                <Trash2 size={16} />
                 Delete
               </button>
             )}
@@ -388,6 +389,8 @@ function TaskRow({
                 <button
                   type="button"
                   onClick={openPicker}
+                  // Not an sr-only span: Chromium spaces out an absolutely positioned child ("Oct 25 , overdue")
+                  aria-label={!isDone && due.spoken !== due.label ? due.spoken : undefined}
                   tabIndex={tabIndex}
                   className={cn(
                     "relative cursor-pointer text-xs whitespace-nowrap after:absolute after:-inset-x-1.5 after:-inset-y-2.5 hover:underline",
@@ -454,11 +457,11 @@ function TaskRow({
                 size="xs"
                 icon
                 onClick={() => onDelete(task)}
-                aria-label="Delete task"
-                title="Delete task"
+                aria-label={deleteLabel}
+                title={deleteLabel}
                 tabIndex={tabIndex}
               >
-                <X size={14} />
+                <Trash2 size={14} />
               </Button>
             )}
           </div>

@@ -72,6 +72,16 @@ test.beforeEach(async ({ page }) => {
   await page.waitForSelector("[data-task-id]");
 });
 
+test("the search field's text starts where the list title's did", async ({ page }, testInfo) => {
+  const title = page.getByRole("heading", { level: 2 }).locator("span.font-display");
+  const titleLeft = (await title.boundingBox())!.x;
+  const field = await openSearch(page, testInfo);
+  const fieldLeft = await field.evaluate(
+    (el) => el.getBoundingClientRect().left + parseFloat(getComputedStyle(el).paddingLeft),
+  );
+  expect(Math.abs(fieldLeft - titleLeft)).toBeLessThan(1);
+});
+
 test("finds tasks across every list, grouped by list, with what matched", async ({
   page,
 }, testInfo) => {
@@ -139,7 +149,9 @@ test("ticking a result offers Undo", async ({ page }, testInfo) => {
   const field = await openSearch(page, testInfo);
   await field.fill("photos");
   await result(page, "Find the old passport photos").getByRole("checkbox").click();
-  await expect(page.locator("[data-toast-undo]")).toContainText("Marked done");
+  await expect(page.locator("[data-toast-undo]")).toContainText(
+    "“Find the old passport photos” done",
+  );
   await expect(
     page.getByRole("region", { name: "Done" }).getByText("Find the old passport photos"),
   ).toBeVisible();

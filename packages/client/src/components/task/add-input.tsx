@@ -27,6 +27,9 @@ export function AddTaskInput({ onAdd }: { onAdd: (title: string) => void }) {
         setValue("");
       }}
     >
+      <label htmlFor="add-task-input" className="sr-only">
+        New task
+      </label>
       <Input
         id="add-task-input"
         type="text"

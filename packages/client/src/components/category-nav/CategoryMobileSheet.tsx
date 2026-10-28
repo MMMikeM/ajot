@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Ellipsis, Plus, Search, Settings, Users } from "lucide-react";
 import { INBOX_COLOR } from "~/lib/constants";
-import { Drawer, DrawerContent, DrawerTitle } from "~/components/ui/drawer";
-import { Popover, PopoverTrigger, PopoverContent } from "~/components/ui/popover";
+import { Drawer, DrawerClose, DrawerContent, DrawerTitle } from "~/components/ui/drawer";
 import { CategoryCollabSheet } from "~/components/CategoryCollabSheet";
 import { CollabBadge } from "./CollabBadge";
 import { Button } from "~/components/ui/button";
@@ -70,6 +69,14 @@ function CategoryMobileSheet() {
   } = useCategoryNavState(handleRename);
   const { navOpen, setNavOpen } = useNavContext();
   useBackToClose(navOpen, () => setNavOpen(false));
+  const [optionsOpened, setOptionsOpened] = useState<Category>();
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const liveOptionsFor = categories.find((c) => c.id === optionsOpened?.id);
+  // Back closes the lists sheet and the options inside it; a list gone from another device (deleted,
+  // or you were removed) closes its options before they act on it
+  if (optionsOpen && (!navOpen || !liveOptionsFor)) setOptionsOpen(false);
+  // The list as opened stays shown while the sheet slides away after Delete or Leave takes it
+  const optionsFor = liveOptionsFor ?? optionsOpened;
   const signedIn = useCurrentUserId() !== null;
 
   useEffect(() => {
@@ -140,33 +147,20 @@ function CategoryMobileSheet() {
           <OpenCount count={openCounts.get(cat.id) ?? 0} />
         </button>
 
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button
-                variant="subtle"
-                size="sm"
-                icon
-                className="size-11 rounded-lg"
-                aria-label="List options"
-              />
-            }
-          >
-            <Ellipsis size={16} />
-          </PopoverTrigger>
-          {/* backdrop: dismissing the menu must not also select the row underneath */}
-          <PopoverContent backdrop aria-label={`${cat.name} options`}>
-            <CategoryOptionsContent
-              cat={cat}
-              isOwned={isOwned}
-              onRenameStart={startRename}
-              onSetColor={handleSetColor}
-              onShare={setSharingCategoryId}
-              onDelete={handleDelete}
-              onLeave={handleLeave}
-            />
-          </PopoverContent>
-        </Popover>
+        <Button
+          variant="subtle"
+          size="sm"
+          icon
+          className="size-11 rounded-lg"
+          aria-label="List options"
+          aria-haspopup="dialog"
+          onClick={() => {
+            setOptionsOpened(cat);
+            setOptionsOpen(true);
+          }}
+        >
+          <Ellipsis size={16} />
+        </Button>
       </div>
     );
   };
@@ -272,6 +266,46 @@ function CategoryMobileSheet() {
           )}
 
           <div className="h-[max(0.75rem,env(safe-area-inset-bottom,0px))]" />
+
+          {/* Inside the lists sheet, so Base UI nests it: a tap on it isn't a press outside that one */}
+          <Drawer open={optionsOpen} onOpenChange={keepOpenOnToastPress(setOptionsOpen)}>
+            <DrawerContent
+              // Rename swaps the row that opened it for a field, which keeps the focus
+              finalFocus={renamingId === null}
+            >
+              {optionsFor && (
+                <>
+                  <DrawerTitle className="flex items-start gap-2.5 px-5 pt-3 pb-3 font-display text-2xl font-normal">
+                    {/* Centred on the first line, since a long name wraps */}
+                    <ColorDot color={optionsFor.color ?? undefined} className="mt-3" />
+                    <span className="min-w-0 wrap-anywhere">
+                      <span dir="auto">{optionsFor.name}</span>
+                      <span className="sr-only"> options</span>
+                    </span>
+                  </DrawerTitle>
+                  <div className="flex flex-col px-2">
+                    <CategoryOptionsContent
+                      cat={optionsFor}
+                      isOwned={optionsFor.userId === currentUserId}
+                      onRenameStart={(id, name) => {
+                        setOptionsOpen(false);
+                        startRename(id, name);
+                      }}
+                      onSetColor={handleSetColor}
+                      onShare={setSharingCategoryId}
+                      onDelete={handleDelete}
+                      onLeave={(id) => {
+                        setOptionsOpen(false);
+                        void handleLeave(id);
+                      }}
+                      Close={DrawerClose}
+                    />
+                  </div>
+                  <div className="h-[max(0.75rem,env(safe-area-inset-bottom,0px))]" />
+                </>
+              )}
+            </DrawerContent>
+          </Drawer>
         </DrawerContent>
       </Drawer>
 

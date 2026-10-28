@@ -17,6 +17,7 @@ import {
   unregisterPushSubscription,
   type PushPreferences,
 } from "~/lib/sync/push";
+import { BuildStamp } from "~/components/BuildStamp";
 import { CategorySidebar } from "~/components/category-nav/CategorySidebar";
 import {
   AlertDialog,
@@ -108,6 +109,7 @@ export function SettingsPage() {
       ) : (
         <BackgroundUpdates />
       )}
+      <BuildStamp />
     </div>
   );
 }

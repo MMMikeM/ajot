@@ -1,5 +1,12 @@
-import { useRef, useState, type Ref } from "react";
-import { StickyNote } from "lucide-react";
+import {
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ComponentProps,
+  type KeyboardEvent,
+  type Ref,
+} from "react";
+import { StickyNote, Trash2 } from "lucide-react";
 import { compareSortOrder } from "@newtab-todo/shared/sort-order";
 import type { Task, Note } from "~/lib/types";
 import { addNote, updateNote, deleteNote, deleteTask, updateTask } from "~/lib/db/hooks";
@@ -15,7 +22,7 @@ import { canDeleteTask, canEditTask } from "@newtab-todo/shared/task-access";
 import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
 import { holders } from "~/lib/task-holders";
 import { DetailRow } from "~/components/task/detail-row";
-import { pushUndoToast } from "~/lib/undo-toast";
+import { pushUndoToast, quoted } from "~/lib/undo-toast";
 
 const AddLine = ({
   inputRef,
@@ -55,72 +62,95 @@ const AddLine = ({
 };
 
 /**
+ * Text edited in place: `start` swaps it for its field, a blur saves a changed value, and Escape
+ * cancels only the edit, leaving the sheet open.
+ */
+const useInlineEdit = (value: string, save: (value: string) => void) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const cancelled = useRef(false);
+  return {
+    editing,
+    start: () => {
+      cancelled.current = false;
+      setDraft(value);
+      setEditing(true);
+    },
+    field: {
+      value: draft,
+      onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+        setDraft(e.target.value),
+      onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+        if (e.key !== "Escape") return;
+        e.stopPropagation();
+        cancelled.current = true;
+        e.currentTarget.blur();
+      },
+      onBlur: () => {
+        const trimmed = draft.trim();
+        if (!cancelled.current && trimmed && trimmed !== value) save(trimmed);
+        setEditing(false);
+      },
+    },
+  };
+};
+
+// touch:py-1.5 centres the first line on the h-9 touch buttons
+const itemTextClass = "min-w-0 flex-1 py-1 text-sm touch:py-1.5 touch:text-base";
+
+const EditTrigger = ({ className, ...props }: Omit<ComponentProps<"button">, "type">) => (
+  <button
+    type="button"
+    dir="auto"
+    className={cn(
+      itemTextClass,
+      "cursor-text rounded-sm text-left wrap-anywhere outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+      className,
+    )}
+    {...props}
+  />
+);
+
+/**
  * A subtask's title, edited in place by a tap or click on it. Being a control of its own also keeps
  * a touch on its first letters from being moved to the checkbox beside it.
  */
 const SubtaskTitle = ({ sub, done, canEdit }: { sub: Task; done: boolean; canEdit: boolean }) => {
-  const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(sub.title);
-  const cancelled = useRef(false);
-  // The same size and padding while editing, so the row doesn't move
-  const textClass = "min-w-0 flex-1 py-1 text-sm touch:py-1.5 touch:text-base";
+  const { editing, start, field } = useInlineEdit(sub.title, (title) =>
+    updateTask(sub.id, { title }),
+  );
   const doneClass = done && "text-muted-foreground line-through";
 
   if (editing) {
     return (
       <Input
         aria-label="Subtask"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        maxLength={MAX_TITLE}
+        {...field}
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
-          if (e.key === "Escape") {
-            // Leaves the sheet open: only the edit is cancelled
-            e.stopPropagation();
-            cancelled.current = true;
-            e.currentTarget.blur();
-          }
+          field.onKeyDown(e);
         }}
-        onBlur={() => {
-          const value = title.trim();
-          if (!cancelled.current && value && value !== sub.title)
-            updateTask(sub.id, { title: value });
-          setEditing(false);
-        }}
+        maxLength={MAX_TITLE}
         // eslint-disable-next-line jsx-a11y/no-autofocus -- inline edit, user just tapped the title
         autoFocus
         enterKeyHint="done"
-        className={cn(textClass, "border-hint")}
+        // The same size and padding while editing, so the row doesn't move
+        className={cn(itemTextClass, "border-hint")}
       />
     );
   }
 
   if (!canEdit)
     return (
-      <span dir="auto" className={cn(textClass, "wrap-anywhere", doneClass)}>
+      <span dir="auto" className={cn(itemTextClass, "wrap-anywhere", doneClass)}>
         {sub.title}
       </span>
     );
 
   return (
-    <button
-      type="button"
-      dir="auto"
-      aria-label={`Edit ${sub.title}`}
-      onClick={() => {
-        cancelled.current = false;
-        setTitle(sub.title);
-        setEditing(true);
-      }}
-      className={cn(
-        textClass,
-        "cursor-text rounded-sm text-left wrap-anywhere outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-        doneClass,
-      )}
-    >
+    <EditTrigger aria-label={`Edit ${sub.title}`} onClick={start} className={cn(doneClass)}>
       {sub.title}
-    </button>
+    </EditTrigger>
   );
 };
 
@@ -168,9 +198,10 @@ export const Subtasks = ({
             />
             {canDeleteTask(holders(sub, lists, task), userId) && (
               <RevealGroup className="items-start pt-1.5 touch:pt-0">
-                <RevealButton onClick={() => pushUndoToast("Subtask deleted", deleteTask(sub.id))}>
-                  Delete
-                </RevealButton>
+                <DeleteItemButton
+                  label="Delete subtask"
+                  onClick={() => pushUndoToast(quoted(sub.title, " deleted"), deleteTask(sub.id))}
+                />
               </RevealGroup>
             )}
           </ListRow>
@@ -188,22 +219,24 @@ export const Subtasks = ({
   );
 };
 
+const DeleteItemButton = ({ label, onClick }: { label: string; onClick: () => void }) => (
+  <RevealButton icon aria-label={label} title={label} onClick={onClick}>
+    <Trash2 className="size-3.5 touch:size-4" />
+  </RevealButton>
+);
+
 const NoteItem = ({ note }: { note: Note }) => {
-  const [editing, setEditing] = useState(false);
-  const [content, setContent] = useState(note.content ?? "");
+  const text = note.content || note.title || "";
+  const { editing, start, field } = useInlineEdit(text, (content) =>
+    updateNote(note.id, { content }),
+  );
 
   if (editing) {
     return (
       <Textarea
         aria-label="Note"
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
+        {...field}
         maxLength={MAX_TEXT}
-        onBlur={() => {
-          const val = content.trim();
-          if (val) updateNote(note.id, { content: val });
-          setEditing(false);
-        }}
         // eslint-disable-next-line jsx-a11y/no-autofocus -- inline edit, user just clicked
         autoFocus
         rows={2}
@@ -214,20 +247,18 @@ const NoteItem = ({ note }: { note: Note }) => {
 
   return (
     <ListRow size="sm" className="-mx-2 min-h-9 items-start touch:min-h-11">
-      {/* touch:py-1.5 centres the first line on the h-9 touch buttons */}
-      <span
-        dir="auto"
-        className="min-w-0 flex-1 py-1 text-sm wrap-anywhere whitespace-pre-wrap touch:py-1.5 touch:text-base"
+      <EditTrigger
+        aria-label={`Edit note: ${text}`}
+        onClick={start}
+        className="whitespace-pre-wrap"
       >
-        {note.content || note.title}
-      </span>
-      <RevealGroup className="items-start pt-0.5 touch:pt-0">
-        <RevealButton intent="default" onClick={() => setEditing(true)}>
-          Edit
-        </RevealButton>
-        <RevealButton onClick={() => pushUndoToast("Note deleted", deleteNote(note.id))}>
-          Delete
-        </RevealButton>
+        {text}
+      </EditTrigger>
+      <RevealGroup className="items-start pt-1.5 touch:pt-0">
+        <DeleteItemButton
+          label="Delete note"
+          onClick={() => pushUndoToast(quoted(text, " deleted", "Note "), deleteNote(note.id))}
+        />
       </RevealGroup>
     </ListRow>
   );

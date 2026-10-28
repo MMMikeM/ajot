@@ -32,7 +32,7 @@ const openDetail = async (page: Page, title: string) => {
     .first()
     .getByRole("button", { name: startsWith(title) })
     .click();
-  const sheet = page.getByRole("dialog", { name: title });
+  const sheet = page.getByRole("dialog", { name: title, exact: true });
   await expect(sheet).toBeVisible();
   return sheet;
 };

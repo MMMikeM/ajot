@@ -18,7 +18,7 @@ test("waits while the page is hidden, as when switching apps", async ({ page }) 
   test.slow();
   await openList(page);
   await row(page, "Pick up dry cleaning").getByRole("checkbox").click();
-  const toast = page.locator("[data-toast-undo]", { hasText: "Marked done" });
+  const toast = page.locator("[data-toast-undo]", { hasText: "“Pick up dry cleaning” done" });
   await expect(toast).toBeVisible();
 
   await hide(page, true);
@@ -39,7 +39,7 @@ test("pauses without sending the window a blur or focus of its own", async ({ pa
     document.hasFocus = () => false;
   })()`);
   await row(page, "Pick up dry cleaning").getByRole("checkbox").click();
-  const toast = page.locator("[data-toast-undo]", { hasText: "Marked done" });
+  const toast = page.locator("[data-toast-undo]", { hasText: "“Pick up dry cleaning” done" });
   await expect(toast).toBeVisible();
   await hide(page, true);
   await hide(page, false);
@@ -52,7 +52,7 @@ test("stays paused while the page shows but another window has focus", async ({ 
   test.slow();
   await openList(page);
   await row(page, "Pick up dry cleaning").getByRole("checkbox").click();
-  const toast = page.locator("[data-toast-undo]", { hasText: "Marked done" });
+  const toast = page.locator("[data-toast-undo]", { hasText: "“Pick up dry cleaning” done" });
   await expect(toast).toBeVisible();
 
   await page.evaluate(() => window.dispatchEvent(new FocusEvent("blur")));

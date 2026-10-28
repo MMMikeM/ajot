@@ -18,6 +18,8 @@ These are unmodified shadcn output. Do not add app opinions here.
 
 Regenerate any of these with: `npx shadcn@latest add <name> --overwrite`
 
+`select.tsx`'s Positioner also uses `positionMethod="fixed"`: positioned absolutely, a sheet's scroll box clipped the popup to the two rows between the trigger and the sheet's edge. Its items take `touch:min-h-11 touch:text-base`. Keep both after a regenerate.
+
 `drawer.tsx` also ends every sheet with a Close that shows only on keyboard focus, for screen readers on a phone, which can't swipe a sheet away. Keep it after a regenerate.
 
 ## Tier 2 — App-level compositions (app opinions live here)
