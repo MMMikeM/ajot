@@ -28,7 +28,7 @@ app.post("/process", async (c) => {
   for (const row of pending) {
     if (row.type === "reminder-due" && row.task) {
       if (row.task.status !== "done" && !row.task.deletedAt) {
-        await sendNotification(row.userId, {
+        sendNotification(row.userId, {
           type: "reminder-due",
           taskId: row.task.id,
           taskTitle: row.task.title,
@@ -59,7 +59,7 @@ app.post("/process", async (c) => {
   let digestCount = 0;
   for (const [userId, userTasks] of byUser) {
     // Only the count shows, and a long list wouldn't fit in a push
-    await sendNotification(userId, {
+    sendNotification(userId, {
       type: "overdue-digest",
       tasks: userTasks
         .slice(0, DIGEST_TASKS)

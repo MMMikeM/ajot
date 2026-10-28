@@ -4,8 +4,7 @@ import pushPreferenceRepo, { pushPreferencesSchema } from "../db/push-preference
 import pushSubscriptionRepo from "../db/push-subscription.repo";
 import { pushSubscriptionKinds } from "../db/schema";
 import { authed } from "../middleware";
-import { okSchema } from "./openapi-schemas";
-import { jsonBody, jsonContent, withAuth } from "./crud";
+import { jsonBody, jsonContent, okBody, okResponse, withAuth } from "./crud";
 import { MAX_ID } from "@newtab-todo/shared/field-limits";
 
 // Push services' endpoints run to a few hundred characters
@@ -33,7 +32,7 @@ export const pushRoutes = authed()
         headers: z.object({ "x-device-id": z.string().max(MAX_ID).optional() }),
         ...jsonBody(subscriptionSchema),
       },
-      responses: withAuth({ 200: jsonContent(okSchema) }),
+      responses: withAuth(okResponse),
     }),
     async (c) => {
       const { endpoint, keys } = c.req.valid("json");
@@ -45,7 +44,7 @@ export const pushRoutes = authed()
         userId: c.get("userId"),
         deviceId: c.req.valid("header")["x-device-id"] ?? null,
       });
-      return c.json({ ok: true as const }, 200);
+      return c.json(okBody, 200);
     },
   )
   .openapi(
@@ -53,11 +52,11 @@ export const pushRoutes = authed()
       method: "post",
       path: "/unsubscribe",
       request: jsonBody(z.object({ endpoint: z.string().max(MAX_ENDPOINT) })),
-      responses: withAuth({ 200: jsonContent(okSchema) }),
+      responses: withAuth(okResponse),
     }),
     async (c) => {
       await pushSubscriptionRepo.remove(c.req.valid("json").endpoint, c.get("userId"));
-      return c.json({ ok: true as const }, 200);
+      return c.json(okBody, 200);
     },
   )
   .openapi(
@@ -78,7 +77,7 @@ export const pushRoutes = authed()
       method: "put",
       path: "/preferences",
       request: { headers: deviceHeaders, ...jsonBody(pushPreferencesSchema) },
-      responses: withAuth({ 200: jsonContent(okSchema) }),
+      responses: withAuth(okResponse),
     }),
     async (c) => {
       await pushPreferenceRepo.save(
@@ -86,6 +85,6 @@ export const pushRoutes = authed()
         c.req.valid("header")["x-device-id"],
         c.req.valid("json"),
       );
-      return c.json({ ok: true as const }, 200);
+      return c.json(okBody, 200);
     },
   );

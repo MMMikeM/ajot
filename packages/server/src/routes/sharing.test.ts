@@ -38,7 +38,7 @@ vi.mock("./task-users", () => ({
 }));
 vi.mock("./reach", () => ({ sendReachChanges: vi.fn() }));
 vi.mock("../notify", () => ({
-  sendNotification: vi.fn(async () => {}),
+  sendNotification: vi.fn(),
   getUserName: vi.fn(async () => "Alice"),
 }));
 vi.mock("../broadcast", () => ({ broadcast: vi.fn(), broadcastAll: vi.fn() }));
@@ -74,7 +74,7 @@ beforeEach(() => {
 
 describe("sharing a task", () => {
   test("with someone who isn't a contact, or a username no one has, is refused plainly", async () => {
-    vi.mocked(contactRepo.findContactUser).mockResolvedValueOnce(null);
+    vi.mocked(contactRepo.findContactUser).mockResolvedValueOnce(undefined);
     const res = await shareWith("mallory");
     expect(res.status).toBe(400);
     expect(await res.text()).toBe("Only your contacts can be added.");
@@ -124,7 +124,7 @@ describe("sharing a task", () => {
 
 describe("adding someone to a list", () => {
   test("who isn't a contact is refused plainly", async () => {
-    vi.mocked(contactRepo.findContactUser).mockResolvedValueOnce(null);
+    vi.mocked(contactRepo.findContactUser).mockResolvedValueOnce(undefined);
     const res = await addToList("mallory");
     expect(res.status).toBe(400);
     expect(await res.text()).toBe("Only your contacts can be added.");
@@ -133,7 +133,7 @@ describe("adding someone to a list", () => {
 
   test("who's already in it tells no one again", async () => {
     vi.mocked(contactRepo.findContactUser).mockResolvedValueOnce(bob);
-    vi.mocked(categoryCollaboratorRepo.add).mockResolvedValueOnce(null);
+    vi.mocked(categoryCollaboratorRepo.add).mockResolvedValueOnce(undefined);
     const res = await addToList("bob");
     expect(res.status).toBe(200);
     expect(sendNotification).not.toHaveBeenCalled();

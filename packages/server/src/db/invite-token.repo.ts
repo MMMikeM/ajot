@@ -3,7 +3,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { now } from "@newtab-todo/shared/iso";
 import { db, inTransaction } from "./client";
 import { contacts, inviteTokens, removedContacts } from "./schema";
-import { InsertFailedError } from "./errors";
+import { InsertFailedError, NotFoundError } from "./errors";
 
 const create = async (createdByUserId: string, expiresAt: string) => {
   const id = createId();
@@ -15,14 +15,18 @@ const create = async (createdByUserId: string, expiresAt: string) => {
   return row;
 };
 
-/** The display name of whoever made a still-usable invite, or null. */
+/**
+ * The display name of whoever made a still-usable invite. An unknown, used or expired one is the
+ * same NotFoundError, without the token, which is the link's secret.
+ */
 const findInviterName = async (token: string) => {
   const invite = await db.query.inviteTokens.findFirst({
     columns: {},
     where: { id: token, usedAt: { isNull: true }, expiresAt: { gt: now() } },
     with: { createdByUser: { columns: { name: true } } },
   });
-  return invite?.createdByUser?.name ?? null;
+  if (!invite?.createdByUser) throw new NotFoundError("invite");
+  return invite.createdByUser.name;
 };
 
 // Marks the invite used in one statement, so two signups or accepts racing on the same link can't

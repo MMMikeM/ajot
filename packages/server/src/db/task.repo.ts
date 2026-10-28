@@ -5,7 +5,7 @@ import { createInsertSchema, createSelectSchema, createUpdateSchema } from "driz
 import { z } from "@hono/zod-openapi";
 import { db } from "./client";
 import { categories, taskAccess, tasks, taskShares, users } from "./schema";
-import { ConflictError, InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
+import { IdTakenError, InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { now } from "@newtab-todo/shared/iso";
 import { MAX_SHORT, MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
@@ -171,7 +171,7 @@ const insert = async (data: TaskInsert) => {
       setWhere: eq(tasks.userId, data.userId),
     })
     .returning(sentColumns);
-  if (!row) throw new ConflictError("Task id taken");
+  if (!row) throw new IdTakenError("task", data.id);
   return row;
 };
 
@@ -183,7 +183,7 @@ const insertSent = async (data: TaskInsert) => {
     .values(stampsNotAfterNow(data, [...STAMPS]))
     .onConflictDoNothing()
     .returning(sentColumns);
-  if (!row) throw new ConflictError("Task id taken");
+  if (!row) throw new IdTakenError("task", data.id);
   return row;
 };
 
@@ -357,7 +357,7 @@ const updateShareCategory = async (
     .set({ categoryId })
     .where(and(eq(taskShares.taskId, taskId), eq(taskShares.sharedWithUserId, sharedWithUserId)))
     .returning();
-  if (!row) throw new NotFoundError("task share", taskId);
+  if (!row) throw new NotFoundError("task shared with you", taskId);
   return row;
 };
 

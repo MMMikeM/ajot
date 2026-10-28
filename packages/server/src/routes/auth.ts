@@ -3,9 +3,10 @@ import { HTTPException } from "hono/http-exception";
 import { login, signup } from "../auth-service";
 import sessionRepo from "../db/session.repo";
 import inviteTokenRepo from "../db/invite-token.repo";
+import { INVITE_GONE } from "../db/errors";
 import { extractToken } from "../auth";
-import { errorSchema, okSchema } from "./openapi-schemas";
-import { jsonBody, jsonContent } from "./crud";
+import { errorSchema } from "./openapi-schemas";
+import { errors, jsonBody, jsonContent, okBody, okResponse } from "./crud";
 import { MIN_PASSWORD_LENGTH } from "../password";
 import {
   MAX_ID,
@@ -47,10 +48,7 @@ const signupSchema = z.object({
     .string()
     .min(1, "Name is required")
     .max(MAX_NAME, `Name can be at most ${MAX_NAME} characters`),
-  invite: z
-    .string()
-    .max(MAX_ID, "This invite link has expired or been used. Ask for a new one.")
-    .optional(),
+  invite: z.string().max(MAX_ID, INVITE_GONE).optional(),
 });
 
 const authResponseSchema = z.object({
@@ -88,7 +86,7 @@ export const authRoutes = new OpenAPIHono()
       responses: {
         200: jsonContent(authResponseSchema),
         401: jsonContent(errorSchema, "Login failed"),
-        429: jsonContent(errorSchema, "Too many tries"),
+        ...errors(429),
       },
     }),
     async (c) => {
@@ -118,8 +116,7 @@ export const authRoutes = new OpenAPIHono()
       responses: {
         200: jsonContent(authResponseSchema),
         403: jsonContent(errorSchema, "No invite, or the invite is no longer valid"),
-        409: jsonContent(errorSchema, "Conflict"),
-        429: jsonContent(errorSchema, "Too many tries"),
+        ...errors(409, 429),
       },
     }),
     async (c) => {
@@ -141,9 +138,7 @@ export const authRoutes = new OpenAPIHono()
       );
       await sendContactChanges(c, { addedIds: contacts.map((row) => row.id) });
       if (invitedBy) {
-        sendNotification(invitedBy, { type: "contact-accepted", contactName: session.name }).catch(
-          () => {},
-        );
+        sendNotification(invitedBy, { type: "contact-accepted", contactName: session.name });
       }
       return c.json(session, 200);
     },
@@ -159,18 +154,15 @@ export const authRoutes = new OpenAPIHono()
     }),
     // Before signing up, so it can't ask for a session. It names only the inviter, and an
     // invite that's unknown, used or expired answers the same way.
-    async (c) => {
-      const inviterName = await inviteTokenRepo.findInviterName(c.req.param("token"));
-      if (!inviterName) throw new HTTPException(404, { message: "Invite not found" });
-      return c.json({ inviterName }, 200);
-    },
+    async (c) =>
+      c.json({ inviterName: await inviteTokenRepo.findInviterName(c.req.param("token")) }, 200),
   )
   .openapi(
     createRoute({
       method: "post",
       path: "/logout",
       responses: {
-        200: jsonContent(okSchema),
+        ...okResponse,
         401: jsonContent(errorSchema, "Unauthorized"),
       },
     }),
@@ -179,7 +171,7 @@ export const authRoutes = new OpenAPIHono()
       if (!token) throw new HTTPException(401, { message: "Unauthorized" });
       // Only this device's session: the account stays signed in everywhere else
       await sessionRepo.remove(token);
-      return c.json({ ok: true as const }, 200);
+      return c.json(okBody, 200);
     },
   )
   .openapi(
@@ -189,7 +181,7 @@ export const authRoutes = new OpenAPIHono()
       hide: true,
       request: jsonBody(revocationSchema),
       responses: {
-        200: jsonContent(okSchema),
+        ...okResponse,
         401: jsonContent(errorSchema, "Not signed with this server's database token"),
       },
     }),
@@ -200,6 +192,6 @@ export const authRoutes = new OpenAPIHono()
       if (!isSignedRevocation(process.env.TURSO_AUTH_TOKEN, revocation))
         throw new HTTPException(401, { message: "Unauthorized" });
       sessionRepo.forgetUser(revocation.userId);
-      return c.json({ ok: true as const }, 200);
+      return c.json(okBody, 200);
     },
   );

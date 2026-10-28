@@ -1,13 +1,12 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { HTTPException } from "hono/http-exception";
 import { hoursFromNow } from "@newtab-todo/shared/iso";
 import inviteTokenRepo from "../db/invite-token.repo";
-import { sendNotification } from "../notify";
+import { BadRequestError, GoneError, INVITE_GONE } from "../db/errors";
+import { getUserName, sendNotification } from "../notify";
 import { sendContactChanges } from "./contact-changes";
-import userRepo from "../db/user.repo";
 import { authed } from "../middleware";
-import { errorSchema, okSchema } from "./openapi-schemas";
-import { jsonContent, withAuth } from "./crud";
+import { errorSchema } from "./openapi-schemas";
+import { errors, jsonContent, okBody, okResponse, withAuth } from "./crud";
 
 const inviteResponseSchema = z.object({
   token: z.string(),
@@ -33,8 +32,8 @@ export const inviteRoutes = authed()
       method: "post",
       path: "/:token/accept",
       responses: withAuth({
-        200: jsonContent(okSchema),
-        400: jsonContent(errorSchema, "Bad request"),
+        ...okResponse,
+        ...errors(400),
         410: jsonContent(errorSchema, "Token expired or already used"),
       }),
     }),
@@ -44,15 +43,10 @@ export const inviteRoutes = authed()
 
       // Claimed in one statement, so two accepts racing on the same link can't both pass
       const invite = await inviteTokenRepo.claim(token);
-      if (!invite)
-        throw new HTTPException(410, {
-          message: "This invite link has expired or been used. Ask for a new one.",
-        });
+      if (!invite) throw new GoneError(INVITE_GONE);
       if (invite.createdByUserId === userId) {
         await inviteTokenRepo.release(invite.id);
-        throw new HTTPException(400, {
-          message: "That's your own invite. Send it to someone else.",
-        });
+        throw new BadRequestError("That's your own invite. Send it to someone else.");
       }
 
       let added;
@@ -64,15 +58,11 @@ export const inviteRoutes = authed()
       }
       await sendContactChanges(c, { addedIds: added.map((row) => row.id) });
 
-      const accepterName = await userRepo
-        .findById(userId)
-        .then((u) => u.name)
-        .catch(() => "Someone");
       sendNotification(invite.createdByUserId, {
         type: "contact-accepted",
-        contactName: accepterName,
-      }).catch(() => {});
+        contactName: await getUserName(userId),
+      });
 
-      return c.json({ ok: true as const }, 200);
+      return c.json(okBody, 200);
     },
   );

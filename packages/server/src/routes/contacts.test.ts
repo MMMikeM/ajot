@@ -17,7 +17,7 @@ vi.mock("../db/contact.repo", async (importOriginal) => ({
 vi.mock("../db/invite-token.repo", () => ({
   default: { claim: vi.fn(), release: vi.fn(), consume: vi.fn() },
 }));
-vi.mock("../notify", () => ({ sendNotification: vi.fn(async () => {}) }));
+vi.mock("../notify", () => ({ sendNotification: vi.fn(), getUserName: vi.fn(async () => "Bob") }));
 vi.mock("./reach", () => ({ sendReachChanges: vi.fn() }));
 vi.mock("../broadcast", () => ({ broadcastPerUser: vi.fn() }));
 
