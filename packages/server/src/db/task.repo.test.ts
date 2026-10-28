@@ -75,6 +75,8 @@ describe("a malformed sortOrder a client sends", () => {
 describe("restore", () => {
   const editAfterTheDelete = async (deletedAt: string) => {
     const at = new Date(Date.parse(deletedAt) + 1).toISOString();
+    // The server stores no stamp ahead of its own clock, so the edit has to come after it too
+    while (new Date().toISOString() <= at) await new Promise((resolve) => setTimeout(resolve, 1));
     return taskRepo.update("t", at, { title: "Edited after the delete" });
   };
 
@@ -94,7 +96,8 @@ describe("restore", () => {
   test("restamped at the Undo, it turns that edit away", async () => {
     await addTask("t", "a0");
     const { task: deleted } = await taskRepo.remove("t");
-    const undoneAt = new Date(Date.parse(deleted.updatedAt) + 60_000).toISOString();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const undoneAt = new Date().toISOString();
 
     await taskRepo.restore("t", undoneAt);
 
@@ -142,5 +145,30 @@ describe("a subtask's restore", () => {
     await expect(
       db.update(tasks).set({ deletedAt: BEFORE_THE_DELETE }).where(eq(tasks.id, "parent")),
     ).rejects.toHaveProperty(...refusedByAForeignKey);
+  });
+});
+
+describe("sharing again with the same person", () => {
+  beforeEach(async () => {
+    await db.insert(users).values({ id: "bob", name: "Bob", username: "bob", passwordHash: "x" });
+    await addTask("t", "a0");
+  });
+  const shareWithBob = (id: string, permission: "view" | "edit") =>
+    taskRepo.insertShare({ id, taskId: "t", sharedWithUserId: "bob", permission });
+
+  test("with another permission changes it on the one share", async () => {
+    await shareWithBob("first", "view");
+    const again = await shareWithBob("second", "edit");
+    expect(again).toMatchObject({
+      added: false,
+      changed: true,
+      share: { id: "first", permission: "edit" },
+    });
+  });
+
+  test("with the same permission changes nothing", async () => {
+    await shareWithBob("first", "edit");
+    const again = await shareWithBob("second", "edit");
+    expect(again).toMatchObject({ added: false, changed: false, share: { id: "first" } });
   });
 });

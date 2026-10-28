@@ -1,4 +1,5 @@
 import { purgeExpired } from "./db/purge.repo";
+import sessionRepo from "./db/session.repo";
 
 const DAY_MS = 24 * 3_600_000;
 // Timers stop while Fly has the machine suspended, and it may be awake only minutes at a time,
@@ -14,7 +15,8 @@ const purgeIfDue = async () => {
   try {
     const purged = await purgeExpired();
     lastPurgedAt = Date.now();
-    console.log("[purge]", JSON.stringify(purged));
+    const hashedSessions = await hashStoredTokens();
+    console.log("[purge]", JSON.stringify({ ...purged, hashedSessions }));
   } catch (err) {
     console.error("[purge] failed; trying again in a minute:", err);
   } finally {
@@ -22,9 +24,20 @@ const purgeIfDue = async () => {
   }
 };
 
+// A token stored as itself still signs in and is hashed once used, so one left over waits for
+// tomorrow's purge rather than rerunning today's
+const hashStoredTokens = async () => {
+  try {
+    return await sessionRepo.hashStoredTokens();
+  } catch (err) {
+    console.error("[purge] couldn't hash stored session tokens; trying again tomorrow:", err);
+    return "failed";
+  }
+};
+
 /**
- * Deleted tasks and lists, Undo records, sessions, invites and notifications past keeping: now,
- * then daily while awake.
+ * Deleted tasks and lists, Undo records, sessions, invites and notifications past keeping, and
+ * sessions still stored as their token: now, then daily while awake.
  */
 export const startPurging = () => {
   void purgeIfDue();

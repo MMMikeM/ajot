@@ -4,13 +4,24 @@ import { db } from "./client";
 import { notes } from "./schema";
 import { ConflictError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
+import { MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
+import { limited, limitedId } from "./field-limits";
+import { notAfterNow, stampsNotAfterNow } from "./stamps";
 
 export type NoteInsert = typeof notes.$inferInsert;
 export type NoteSelect = typeof notes.$inferSelect;
 
-export const noteSelectSchema = createSelectSchema(notes).pick({ id: true });
+export const noteSelectSchema = createSelectSchema(notes, { id: limitedId }).pick({ id: true });
 export const noteResponseSchema = createSelectSchema(notes);
+const limitedFields = {
+  id: limitedId,
+  userId: limitedId,
+  taskId: limitedId,
+  title: limited("A note's title", MAX_TITLE),
+  content: limited("A note", MAX_TEXT),
+};
 export const noteInsertSchema = createInsertSchema(notes, {
+  ...limitedFields,
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
 })
@@ -18,7 +29,10 @@ export const noteInsertSchema = createInsertSchema(notes, {
   .strict();
 // The fields a client may change. An edit sends only what changed, so it can leave out taskId,
 // but it can't clear it.
-export const noteUpdateSchema = createUpdateSchema(notes, { updatedAt: isoDatetime })
+export const noteUpdateSchema = createUpdateSchema(notes, {
+  ...limitedFields,
+  updatedAt: isoDatetime,
+})
   .pick({ id: true, updatedAt: true, title: true, content: true, taskId: true })
   .required({ id: true, updatedAt: true })
   .strict();
@@ -35,7 +49,7 @@ const list = async (userId: string) =>
 const insert = async (data: NoteInsert) => {
   const [row] = await db
     .insert(notes)
-    .values(data)
+    .values(stampsNotAfterNow(data, ["updatedAt"]))
     .onConflictDoUpdate({
       target: notes.id,
       set: { updatedAt: sql`${notes.updatedAt}` },
@@ -56,10 +70,11 @@ const update = async (
   updatedAt: string,
   fields: Partial<NoteInsert>,
 ) => {
+  const at = notAfterNow(updatedAt);
   const [row] = await db
     .update(notes)
-    .set({ ...fields, updatedAt })
-    .where(and(eq(notes.id, id), eq(notes.userId, userId), lt(notes.updatedAt, updatedAt)))
+    .set({ ...fields, updatedAt: at })
+    .where(and(eq(notes.id, id), eq(notes.userId, userId), lt(notes.updatedAt, at)))
     .returning();
   if (!row) throw new StaleUpdateError("note", id);
   return row;

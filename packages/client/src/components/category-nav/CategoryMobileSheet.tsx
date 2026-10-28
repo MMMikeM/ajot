@@ -8,6 +8,7 @@ import { CategoryCollabSheet } from "~/components/CategoryCollabSheet";
 import { CollabBadge } from "./CollabBadge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/field";
+import { MAX_NAME } from "@newtab-todo/shared/field-limits";
 import { ColorDot } from "~/components/ui/color-dot";
 import { setActiveCategoryId } from "~/lib/state/active-category";
 import { useCurrentUserId } from "~/lib/auth/current-user";
@@ -110,6 +111,7 @@ function CategoryMobileSheet() {
             aria-label="List name"
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
+            maxLength={MAX_NAME}
             onBlur={submitRename}
           />
         </form>
@@ -228,6 +230,7 @@ function CategoryMobileSheet() {
                 aria-label="New list name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
+                maxLength={MAX_NAME}
                 placeholder="List name..."
                 enterKeyHint="done"
                 onBlur={() => {

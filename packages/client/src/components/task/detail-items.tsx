@@ -7,6 +7,7 @@ import { addTask } from "~/lib/db/add-task";
 import { getCurrentUserId, useOptimisticUserId } from "~/lib/auth/current-user";
 import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { Input, Textarea } from "~/components/ui/field";
+import { MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { cn } from "~/lib/utils";
@@ -19,10 +20,12 @@ import { pushUndoToast } from "~/lib/undo-toast";
 const AddLine = ({
   inputRef,
   placeholder,
+  maxLength,
   onAdd,
 }: {
   inputRef: Ref<HTMLInputElement>;
   placeholder: string;
+  maxLength: number;
   onAdd: (value: string) => void;
 }) => {
   const [value, setValue] = useState("");
@@ -42,6 +45,7 @@ const AddLine = ({
         aria-label={placeholder}
         value={value}
         onChange={(e) => setValue(e.target.value)}
+        maxLength={maxLength}
         placeholder={placeholder}
         enterKeyHint="enter"
         className="md:h-8 touch:h-11"
@@ -68,6 +72,7 @@ const SubtaskTitle = ({ sub, done, canEdit }: { sub: Task; done: boolean; canEdi
         aria-label="Subtask"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
+        maxLength={MAX_TITLE}
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
           if (e.key === "Escape") {
@@ -175,6 +180,7 @@ export const Subtasks = ({
         <AddLine
           inputRef={inputRef}
           placeholder="New subtask"
+          maxLength={MAX_TITLE}
           onAdd={(title) => void addTask(title, null, task.id)}
         />
       )}
@@ -192,6 +198,7 @@ const NoteItem = ({ note }: { note: Note }) => {
         aria-label="Note"
         value={content}
         onChange={(e) => setContent(e.target.value)}
+        maxLength={MAX_TEXT}
         onBlur={() => {
           const val = content.trim();
           if (val) updateNote(note.id, { content: val });
@@ -247,9 +254,8 @@ export const Notes = ({
         <AddLine
           inputRef={inputRef}
           placeholder="New note"
-          onAdd={(content) =>
-            addNote({ userId: getCurrentUserId(), taskId, title: content, content })
-          }
+          maxLength={MAX_TEXT}
+          onAdd={(content) => addNote({ userId: getCurrentUserId(), taskId, content })}
         />
       )}
     </DetailRow>

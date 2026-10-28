@@ -24,18 +24,24 @@ import {
   bool,
 } from "./columns";
 import type { PushTrigger } from "@newtab-todo/shared/push-payload";
+import { MAX_NAME, MAX_SORT_KEY, MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
 
 /** isSortKey (shared/sort-order.ts) in SQL: null, or a key fractional-indexing makes. */
 const sortOrderIsAKey = (key: AnySQLiteColumn) => {
   const integerLength = sql`CASE WHEN ${key} GLOB '[a-z]*' THEN unicode(${key}) - 95 ELSE 92 - unicode(${key}) END`;
   return check(
     "sort_order_is_a_key",
-    sql`${key} IS NULL OR (${key} GLOB '[A-Za-z]*' AND ${key} NOT GLOB '*[^0-9A-Za-z]*'
+    sql`${key} IS NULL OR (length(${key}) <= ${sql.raw(String(MAX_SORT_KEY))}
+      AND ${key} GLOB '[A-Za-z]*' AND ${key} NOT GLOB '*[^0-9A-Za-z]*'
       AND ${key} <> 'A00000000000000000000000000'
       AND (length(${key}) = ${integerLength}
         OR (length(${key}) > ${integerLength} AND ${key} NOT GLOB '*0')))`,
   );
 };
+
+/** The API's limit (shared/field-limits.ts) in SQL, which counts code points as it does. */
+const atMost = (name: string, column: AnySQLiteColumn, max: number) =>
+  check(name, sql`length(${column}) <= ${sql.raw(String(max))}`);
 
 export const categories = sqliteTable(
   "categories",
@@ -52,7 +58,11 @@ export const categories = sqliteTable(
     deletedAt: nullableString("deleted_at"),
     deletion: nullableJson<CategoryDeletion>("deletion"),
   },
-  (t) => [sortOrderIsAKey(t.sortOrder), index("categories_user_idx").on(t.userId)],
+  (t) => [
+    sortOrderIsAKey(t.sortOrder),
+    atMost("category_name_length", t.name, MAX_NAME),
+    index("categories_user_idx").on(t.userId),
+  ],
 );
 
 /** What deleting a list changed beyond the list itself, so Undo can put exactly that back. */
@@ -71,6 +81,8 @@ export const tasks = sqliteTable(
     userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
     categoryId: nullableFk("category_id", () => categories.id, { onDelete: "set null" }),
     assigneeId: nullableFk("assignee_id", () => users.id, { onDelete: "set null" }),
+    // Who sent it with "Send to", which makes it the recipient's own; set by the server only
+    sentById: nullableFk("sent_by_id", () => users.id, { onDelete: "set null" }),
     parentId: nullableFk("parent_id", (): AnySQLiteColumn => tasks.id, { onDelete: "cascade" }),
     title: string("title"),
     description: nullableString("description"),
@@ -92,6 +104,8 @@ export const tasks = sqliteTable(
     // A subtask goes wherever its parent is; a list of its own would add that list's people to it
     check("subtask_has_no_list", sql`${t.parentId} IS NULL OR ${t.categoryId} IS NULL`),
     sortOrderIsAKey(t.sortOrder),
+    atMost("task_title_length", t.title, MAX_TITLE),
+    atMost("task_description_length", t.description, MAX_TEXT),
     // A live subtask under a deleted parent is shown nowhere, and the purge would take it with the
     // parent. A deleted subtask's live is null, which a foreign key doesn't check.
     uniqueIndex("tasks_id_live_idx").on(t.id, t.live),
@@ -107,15 +121,19 @@ export const tasks = sqliteTable(
   ],
 );
 
-export const users = sqliteTable("users", {
-  id: pk(),
-  name: string("name"),
-  username: string("username").unique(),
-  passwordHash: string("password_hash"),
-  avatarUrl: nullableString("avatar_url"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const users = sqliteTable(
+  "users",
+  {
+    id: pk(),
+    name: string("name"),
+    username: string("username").unique(),
+    passwordHash: string("password_hash"),
+    avatarUrl: nullableString("avatar_url"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [atMost("user_name_length", t.name, MAX_NAME)],
+);
 
 export const sessions = sqliteTable("sessions", {
   id: pk(),
@@ -135,7 +153,11 @@ export const notes = sqliteTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("notes_user_idx").on(t.userId)],
+  (t) => [
+    atMost("note_title_length", t.title, MAX_TITLE),
+    atMost("note_content_length", t.content, MAX_TEXT),
+    index("notes_user_idx").on(t.userId),
+  ],
 );
 
 export const sharePermissions = ["view", "edit"] as const;
@@ -152,7 +174,7 @@ export const taskShares = sqliteTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    index("task_shares_task_idx").on(t.taskId),
+    uniqueIndex("task_shares_task_user_idx").on(t.taskId, t.sharedWithUserId),
     index("task_shares_user_idx").on(t.sharedWithUserId),
   ],
 );
@@ -162,7 +184,7 @@ export const pushSubscriptionKinds = ["web", "extension"] as const;
 
 export const pushSubscriptions = sqliteTable("push_subscriptions", {
   id: pk(),
-  userId: nullableFk("user_id", () => users.id, { onDelete: "set null" }),
+  userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
   endpoint: string("endpoint").unique(),
   p256dh: string("p256dh"),
   auth: string("auth"),
@@ -331,6 +353,10 @@ export const relations = defineRelations(
       }),
       assignee: r.one.users({
         from: r.tasks.assigneeId,
+        to: r.users.id,
+      }),
+      sentBy: r.one.users({
+        from: r.tasks.sentById,
         to: r.users.id,
       }),
       parent: r.one.tasks({

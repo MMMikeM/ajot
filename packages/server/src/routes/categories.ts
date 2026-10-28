@@ -10,17 +10,22 @@ import categoryCollaboratorRepo from "../db/category-collaborator.repo";
 import reachRepo from "../db/reach.repo";
 import { requireList } from "./task-users";
 import { sendReachChanges } from "./reach";
-import userRepo, { userPublicSchema } from "../db/user.repo";
+import { userPublicSchema } from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
-import { NotFoundError } from "../db/errors";
+import { BadRequestError, NotFoundError } from "../db/errors";
 import { authed } from "../middleware";
 import { broadcast } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
+import { MAX_USERNAME } from "@newtab-todo/shared/field-limits";
+import { limitSharing } from "../rate-limit";
 
 const collaboratorSchema = z.object({
-  username: z.string().min(1, "Choose someone to share with."),
+  username: z
+    .string()
+    .min(1, "Choose someone to share with.")
+    .max(MAX_USERNAME, "Only your contacts can be added."),
 });
 const collaboratorIdSchema = z.object({ userId: z.string() });
 
@@ -167,21 +172,16 @@ export const categoryRoutes = authed()
       const userId = c.get("userId");
       const { username } = c.req.valid("json");
 
+      limitSharing(userId);
       const [cat, targetUser] = await Promise.all([
         requireList(id, userId, "manage"),
-        userRepo.findByUsername(username.toLowerCase()),
+        contactRepo.findContactUser(userId, username.toLowerCase()),
       ]);
-      if (targetUser.id === userId)
-        throw new HTTPException(400, { message: "That's you. Choose someone else." });
-
-      const isContact = await contactRepo.exists(userId, targetUser.id);
-      if (!isContact)
-        throw new HTTPException(400, {
-          message: "You can only share lists with your contacts. Invite them first.",
-        });
+      if (!targetUser) throw new BadRequestError("Only your contacts can be added.");
 
       const before = await reachRepo.read({ listIds: [id] });
-      await categoryCollaboratorRepo.add(id, targetUser.id);
+      const added = await categoryCollaboratorRepo.add(id, targetUser.id);
+      if (!added) return c.json(targetUser, 200);
       await sendReachChanges(c, before);
 
       const actorName = await getUserName(userId);
@@ -192,15 +192,7 @@ export const categoryRoutes = authed()
         fromUser: actorName,
       }).catch(() => {});
 
-      return c.json(
-        {
-          id: targetUser.id,
-          name: targetUser.name,
-          username: targetUser.username,
-          avatarUrl: targetUser.avatarUrl,
-        },
-        200,
-      );
+      return c.json(targetUser, 200);
     },
   )
   .openapi(

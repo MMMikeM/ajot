@@ -29,6 +29,8 @@ WORKDIR /app
 COPY --from=server-build /app/deploy .
 ENV CLIENT_DIST_PATH=/app/client/dist
 EXPOSE 3000
+# The image's own unprivileged user: the server writes nothing to disk, and reads what root copied
+USER node
 # tini -g forwards signals to the whole process group (sh + node),
 # so SIGTERM from Fly reaches node directly for graceful shutdown.
 # The restart loop keeps the machine alive for clean Fly snapshots —

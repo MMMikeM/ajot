@@ -1,16 +1,13 @@
-import { useState } from "react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { Toast } from "@base-ui/react/toast";
 import { createLazyFileRoute, useRouter } from "@tanstack/react-router";
-import { ChevronLeft, UserPlus } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { removeContact, useContacts } from "~/lib/db/hooks";
-import { createInvite } from "~/lib/actions";
 import { pushUndoToast } from "~/lib/undo-toast";
 import type { Contact } from "~/lib/types";
-import { getBuildTarget } from "~/lib/build-target";
-import { getServerUrl } from "~/lib/server-url";
 import { useIsDesk } from "~/lib/hooks/use-is-desk";
 import { CategorySidebar } from "~/components/category-nav/CategorySidebar";
+import { InviteButton } from "~/components/InviteButton";
 import { Button } from "~/components/ui/button";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { ListRow } from "~/components/ui/list-row";
@@ -24,40 +21,9 @@ export const Route = createLazyFileRoute("/people")({
 export function PeoplePage() {
   const router = useRouter();
   const toastManager = Toast.useToastManager();
-  const [inviting, setInviting] = useState(false);
   const isDesk = useIsDesk();
 
   const { data: contacts = [], isLoading } = useContacts();
-
-  const invite = async () => {
-    setInviting(true);
-    try {
-      const { token } = await createInvite();
-      // The extension's own origin only opens in that browser, so its links go to the
-      // server's PWA too
-      const origin = getBuildTarget() === "extension" ? getServerUrl() : window.location.origin;
-      const url = `${origin}/invite/${token}`;
-      if (navigator.share) {
-        try {
-          await navigator.share({ title: "Join me on Ajot", url });
-          return;
-        } catch (err) {
-          if (err instanceof DOMException && err.name === "AbortError") return;
-        }
-      }
-      try {
-        await navigator.clipboard.writeText(url);
-        toastManager.add({ title: "Invite link copied", timeout: 5000, data: {} });
-      } catch {
-        toastManager.add({ title: `Copy this invite link: ${url}`, timeout: 0, data: {} });
-      }
-    } catch (err) {
-      const title = err instanceof Error ? err.message : "Couldn't make an invite link. Try again.";
-      toastManager.add({ title, timeout: 5000, data: {} });
-    } finally {
-      setInviting(false);
-    }
-  };
 
   const remove = (contact: Contact) => {
     const name = contact.contactUser?.name ?? "this contact";
@@ -97,21 +63,13 @@ export function PeoplePage() {
         <h2 className="font-display text-3xl text-foreground">People</h2>
       </div>
 
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={invite}
-        disabled={inviting}
-        className="self-start"
-      >
-        <UserPlus />
-        {inviting ? "Generating link…" : "Invite someone"}
-      </Button>
+      <InviteButton />
 
       {isLoading && <p className="text-sm text-hint">Loading…</p>}
       {!isLoading && contacts.length === 0 && (
         <p className="text-sm text-hint">
-          No contacts yet. Invite someone to share tasks and lists with them.
+          No contacts yet. People who accept your invite show up here, to share tasks and lists
+          with.
         </p>
       )}
       <div className="-mx-2 flex flex-col gap-1 empty:hidden">
@@ -119,6 +77,7 @@ export function PeoplePage() {
           <ListRow key={contact.id}>
             <InitialsAvatar
               name={contact.contactUser?.name ?? "?"}
+              userId={contact.contactUserId}
               size="md"
               className="size-8 text-sm"
             />
