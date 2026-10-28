@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-sqlite";
 import { describe, expect, test } from "vite-plus/test";
 import { generateKeyBetween } from "fractional-indexing";
-import { compareSortOrder, isSortKey, keyAfter, keyBetween } from "@newtab-todo/shared/sort-order";
+import { compareSortOrder, isSortKey, keyAfter, keyAt } from "@newtab-todo/shared/sort-order";
 import { migrate } from "./db/migrator";
 
 const isValid = (key: string) => {
@@ -40,28 +40,38 @@ describe("keyAfter", () => {
   });
 });
 
-describe("keyBetween", () => {
+describe("keyAt", () => {
   test("goes between two neighbours", () => {
-    const key = keyBetween("a0", "a1");
+    const key = keyAt(["a0", "a1"], 1);
     expect(key > "a0" && key < "a1").toBe(true);
   });
 
-  test("goes after two equal keys, which leave no room between them", () => {
-    const key = keyBetween("a1", "a1");
+  test("goes first and last", () => {
+    expect(keyAt(["a0", "a1"], 0) < "a0").toBe(true);
+    expect(keyAt(["a0", "a1"], 2) > "a1").toBe(true);
+  });
+
+  test("goes after a tie, and before the row that follows it", () => {
+    const key = keyAt(["a0", "a0", "a0V"], 1);
+    expect(key > "a0" && key < "a0V" && isValid(key)).toBe(true);
+  });
+
+  test("goes after two equal keys with nothing after them", () => {
+    const key = keyAt(["a1", "a1"], 1);
     expect(key > "a1" && isValid(key)).toBe(true);
   });
 
   test.each([
-    ["a10", "a2"],
-    ["", "a2"],
-  ])("treats a malformed previous key (%j) as none", (prev, next) => {
-    const key = keyBetween(prev, next);
+    [["a10", "a2"], 1],
+    [["", "a2"], 1],
+  ])("passes over a malformed previous key (%j)", (keys, index) => {
+    const key = keyAt(keys, index);
     expect(key < "a2" && isValid(key)).toBe(true);
   });
 
-  test("treats a malformed next key as none", () => {
-    const key = keyBetween("a1", "a10");
-    expect(key > "a1" && isValid(key)).toBe(true);
+  test("passes over a malformed next key", () => {
+    const key = keyAt(["a1", "a10", "a3"], 1);
+    expect(key > "a1" && key < "a3" && isValid(key)).toBe(true);
   });
 });
 

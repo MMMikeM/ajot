@@ -1,13 +1,15 @@
 -- A table holding a key the new CHECK refuses has every key renumbered, in the order the server
 -- reads them (ties as the server breaks them), so each list keeps its order however its rows
--- are drawn from the table: c000, c001 and on, fixed width so they sort as they count. Past the
+-- are drawn from the table: X000, X001 and on, fixed width so they sort as they count. Past the
 -- 238,328th the key is '', which the CHECK refuses, failing the migration rather than the order.
+-- X keys sort below every key a device made before this, so one still holding the old keys
+-- that adds a task (a key after its last) puts it at the end, not above every renumbered row.
 -- A table with none refused keeps its keys. Null stays null. updatedAt is left alone, so edits
 -- queued against these rows aren't turned away as stale.
 UPDATE `categories` SET `sort_order` = `renumbered`.`key`
 FROM (
   SELECT `id`, CASE WHEN `n` < 238328
-    THEN 'c' || substr('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', `n` / 3844 + 1, 1)
+    THEN 'X' || substr('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', `n` / 3844 + 1, 1)
       || substr('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', `n` / 62 % 62 + 1, 1)
       || substr('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', `n` % 62 + 1, 1)
     ELSE '' END AS `key`
@@ -25,7 +27,7 @@ WHERE `renumbered`.`id` = `categories`.`id`
 UPDATE `tasks` SET `sort_order` = `renumbered`.`key`
 FROM (
   SELECT `id`, CASE WHEN `n` < 238328
-    THEN 'c' || substr('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', `n` / 3844 + 1, 1)
+    THEN 'X' || substr('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', `n` / 3844 + 1, 1)
       || substr('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', `n` / 62 % 62 + 1, 1)
       || substr('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', `n` % 62 + 1, 1)
     ELSE '' END AS `key`

@@ -1,7 +1,7 @@
 import { ComponentProps } from "react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortableOperation } from "@dnd-kit/react/sortable";
-import { keyBetween } from "@newtab-todo/shared/sort-order";
+import { keyAt } from "@newtab-todo/shared/sort-order";
 import { updateTask, updateCategory, moveToList } from "~/lib/db/hooks";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { listChoices } from "~/lib/effective-category";
@@ -31,17 +31,13 @@ export const useTaskActions = ({
   const lists = categoriesById(categories);
 
   const handleReorder = (taskId: string, newIndex: number, groupTasks: Task[]) => {
-    const filtered = groupTasks.filter((t) => t.id !== taskId);
-    const prevOrder = newIndex > 0 ? (filtered[newIndex - 1]?.sortOrder ?? null) : null;
-    const nextOrder = filtered[newIndex]?.sortOrder ?? null;
-    updateTask(taskId, { sortOrder: keyBetween(prevOrder, nextOrder) });
+    const others = groupTasks.filter((t) => t.id !== taskId).map((t) => t.sortOrder);
+    updateTask(taskId, { sortOrder: keyAt(others, newIndex) });
   };
 
   const handleReorderCategory = (catId: string, newIndex: number, cats: Category[]) => {
-    const filtered = cats.filter((c) => c.id !== catId);
-    const prevOrder = newIndex > 0 ? (filtered[newIndex - 1]?.sortOrder ?? null) : null;
-    const nextOrder = filtered[newIndex]?.sortOrder ?? null;
-    updateCategory(catId, { sortOrder: keyBetween(prevOrder, nextOrder) });
+    const others = cats.filter((c) => c.id !== catId).map((c) => c.sortOrder);
+    updateCategory(catId, { sortOrder: keyAt(others, newIndex) });
   };
 
   const handleDragEnd = (event: DragEndEvent) => {

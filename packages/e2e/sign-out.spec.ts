@@ -18,8 +18,7 @@ const savedTasks = (page: Page) =>
     };
   })`);
 
-// mockApi signs in on every load; signing out with edits queued reloads the page, which must stay
-// signed out
+// mockApi signs in on every load; a page reloaded after signing out must stay signed out
 const signInOnce = (page: Page) =>
   page.addInitScript(() => {
     if (sessionStorage.getItem("signed-in-once")) return;
@@ -135,6 +134,31 @@ test("signing out drops the push subscription while the session still works", as
     { path: "/api/auth/logout", auth: "Bearer mock-token", body: null },
   ]);
   expect(await page.evaluate("window.unsubscribedFromPushService")).toBe(true);
+});
+
+test("signing out ends the session even when the push service never answers", async ({ page }) => {
+  await page.addInitScript(`
+    navigator.serviceWorker.getRegistration = async () => ({
+      active: {},
+      pushManager: {
+        getSubscription: async () => ({
+          endpoint: "https://fcm.googleapis.com/fcm/send/e2e",
+          unsubscribe: () => new Promise(() => {}),
+        }),
+      },
+    });
+  `);
+  await mockApi(page);
+  const sent: string[] = [];
+  await page.route(/\/api\/(auth\/logout|push\/unsubscribe)/, async (route) => {
+    sent.push(new URL(route.request().url()).pathname);
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#add-task-input");
+
+  await signOut(page);
+  await expect.poll(() => sent).toEqual(["/api/push/unsubscribe", "/api/auth/logout"]);
 });
 
 test("edits queued by one account are never sent as the next", async ({ context }) => {

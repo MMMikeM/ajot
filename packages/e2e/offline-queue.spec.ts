@@ -170,6 +170,16 @@ test("a tick whose tab closes while the row still holds it is sent by the first"
   await expectSentOnce(() => leader.sent(), ["PUT /api/tasks t-6"]);
 });
 
+test("a tick already saved isn't saved again when the page hides", async ({ context }) => {
+  const { page, sent } = await open(context, mockData());
+  await tick(page, "Pick up dry cleaning");
+  await page.evaluate(`
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  `);
+  await expectSentOnce(sent, ["PUT /api/tasks t-6"]);
+});
+
 test("a second tab's edit shows there at once and stays once the first has sent it", async ({
   context,
 }) => {

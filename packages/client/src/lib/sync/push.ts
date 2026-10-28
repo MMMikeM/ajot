@@ -88,16 +88,14 @@ export const unregisterPushSubscription = async (headers = apiHeaders()): Promis
   try {
     const subscription = await findSubscription();
     if (!subscription) return;
-    // Neither waits on the other: the push service may not answer, and the server needs only the
-    // endpoint to stop sending
-    await Promise.all([
-      subscription.unsubscribe().catch(console.error),
-      removeSubscriptionFromServer(
-        subscription.endpoint,
-        `${getServerUrl()}/api/push/unsubscribe`,
-        { method: "POST", headers, keepalive: true },
-      ),
-    ]);
+    // Nothing waits on the push service, which may never answer: signing out ends the session
+    // once the server has dropped the endpoint, and the server needs only that to stop sending
+    subscription.unsubscribe().catch(console.error);
+    await removeSubscriptionFromServer(
+      subscription.endpoint,
+      `${getServerUrl()}/api/push/unsubscribe`,
+      { method: "POST", headers, keepalive: true },
+    );
     console.log("[push] unregistered");
   } catch (err) {
     console.error("[push] unregister failed:", err);
