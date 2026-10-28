@@ -332,12 +332,14 @@ export const relations = defineRelations(
       user: r.one.users({
         from: r.sessions.userId,
         to: r.users.id,
+        optional: false,
       }),
     },
     categories: {
       user: r.one.users({
         from: r.categories.userId,
         to: r.users.id,
+        optional: false,
       }),
       tasks: r.many.tasks(),
       collaborators: r.many.categoryCollaborators(),
@@ -346,6 +348,7 @@ export const relations = defineRelations(
       user: r.one.users({
         from: r.tasks.userId,
         to: r.users.id,
+        optional: false,
       }),
       category: r.one.categories({
         from: r.tasks.categoryId,
@@ -371,10 +374,12 @@ export const relations = defineRelations(
       task: r.one.tasks({
         from: r.taskShares.taskId,
         to: r.tasks.id,
+        optional: false,
       }),
       sharedWithUser: r.one.users({
         from: r.taskShares.sharedWithUserId,
         to: r.users.id,
+        optional: false,
       }),
       category: r.one.categories({
         from: r.taskShares.categoryId,
@@ -385,26 +390,31 @@ export const relations = defineRelations(
       user: r.one.users({
         from: r.notes.userId,
         to: r.users.id,
+        optional: false,
       }),
       task: r.one.tasks({
         from: r.notes.taskId,
         to: r.tasks.id,
+        optional: false,
       }),
     },
     contacts: {
       user: r.one.users({
         from: r.contacts.userId,
         to: r.users.id,
+        optional: false,
       }),
       contactUser: r.one.users({
         from: r.contacts.contactUserId,
         to: r.users.id,
+        optional: false,
       }),
     },
     inviteTokens: {
       createdByUser: r.one.users({
         from: r.inviteTokens.createdByUserId,
         to: r.users.id,
+        optional: false,
       }),
       usedByUser: r.one.users({
         from: r.inviteTokens.usedByUserId,
@@ -415,16 +425,19 @@ export const relations = defineRelations(
       category: r.one.categories({
         from: r.categoryCollaborators.categoryId,
         to: r.categories.id,
+        optional: false,
       }),
       user: r.one.users({
         from: r.categoryCollaborators.userId,
         to: r.users.id,
+        optional: false,
       }),
     },
     notificationQueue: {
       user: r.one.users({
         from: r.notificationQueue.userId,
         to: r.users.id,
+        optional: false,
       }),
       task: r.one.tasks({
         from: r.notificationQueue.taskId,

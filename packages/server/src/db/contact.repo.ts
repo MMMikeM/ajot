@@ -10,7 +10,7 @@ import { undoableSince } from "./undo-window";
 import reachRepo from "./reach.repo";
 
 export const contactResponseSchema = createSelectSchema(contacts).extend({
-  contactUser: userPublicSchema.nullable(),
+  contactUser: userPublicSchema,
 });
 
 const withContactUser = {
@@ -42,7 +42,7 @@ const findContactUser = async (userId: string, username: string) => {
     where: { userId, contactUser: { username } },
     with: withContactUser,
   });
-  return row?.contactUser ?? undefined;
+  return row?.contactUser;
 };
 
 // One transaction: deleting only one direction would leave one user still seeing the other.
