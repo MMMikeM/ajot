@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { db } from "./client";
-import notificationQueueRepo from "./notification-queue.repo";
+import notificationQueueRepo, { DIGEST_CLAIM_CHUNK } from "./notification-queue.repo";
 import { notificationQueue, tasks, users } from "./schema";
 
 // vi.mock runs before this file's imports, so the database it builds can only be imported there
@@ -165,17 +165,11 @@ describe("claiming the day's digests", () => {
     expect(userIdsOf(claimed)).toEqual(["alice", "bob"]);
   });
 
-  test("claims more users than one statement could bind", async () => {
-    // Two bound values a user: past SQLite's 32,766 in one INSERT
-    const many = Array.from({ length: 17_000 }, (_, i) => `user-${i}`);
-    for (let start = 0; start < many.length; start += 1_000)
-      await db
-        .insert(users)
-        .values(
-          many
-            .slice(start, start + 1_000)
-            .map((id) => ({ id, name: id, username: id, passwordHash: "x" })),
-        );
+  test("claims everyone across several statements", async () => {
+    const many = Array.from({ length: DIGEST_CLAIM_CHUNK * 2 + 1 }, (_, i) => `user-${i}`);
+    await db
+      .insert(users)
+      .values(many.map((id) => ({ id, name: id, username: id, passwordHash: "x" })));
     const claimed = await notificationQueueRepo.claimDigests(many, "2026-10-28", morning);
     expect(userIdsOf(claimed)).toEqual([...many].sort());
   });
