@@ -74,7 +74,14 @@ const STEPS = new Map([
   ["k", -1],
 ]);
 
-const moveRowFocus = (list: HTMLElement, e: KeyboardEvent) => {
+/** The control the arrow keys focus in a row, and where Up from the first row goes instead. */
+type RowKeys = { focusIn: string; beforeFirst?: () => void };
+
+export const moveRowFocus = (
+  list: HTMLElement,
+  e: KeyboardEvent,
+  { focusIn, beforeFirst }: RowKeys,
+) => {
   if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
   const target = e.target as HTMLElement;
   if (target.closest(TEXT_ENTRY)) return;
@@ -93,11 +100,12 @@ const moveRowFocus = (list: HTMLElement, e: KeyboardEvent) => {
       : e.key === "End"
         ? rows.length - 1
         : step !== undefined
-          ? Math.min(Math.max(from + step, 0), rows.length - 1)
+          ? Math.min(from + step, rows.length - 1)
           : undefined;
   if (to === undefined) return;
   e.preventDefault();
-  rows[to]!.querySelector<HTMLElement>(CHECKBOX)?.focus();
+  if (to < 0) beforeFirst?.();
+  else rows[to]!.querySelector<HTMLElement>(focusIn)?.focus();
 };
 
 export const listenForRowKeys = (list: HTMLElement, rowFocus: RowFocus) => {
@@ -105,7 +113,7 @@ export const listenForRowKeys = (list: HTMLElement, rowFocus: RowFocus) => {
     const id = (e.target as HTMLElement).closest<HTMLElement>(ROW)?.dataset.taskId;
     if (id) rowFocus.focused(id);
   };
-  const onKeyDown = (e: KeyboardEvent) => moveRowFocus(list, e);
+  const onKeyDown = (e: KeyboardEvent) => moveRowFocus(list, e, { focusIn: CHECKBOX });
   list.addEventListener("focusin", onFocusIn);
   list.addEventListener("keydown", onKeyDown);
   return () => {

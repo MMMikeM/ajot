@@ -4,6 +4,7 @@ import { DragDropProvider } from "@dnd-kit/react";
 import { Plus, Search, X } from "lucide-react";
 import { CategorySidebar } from "~/components/category-nav/CategorySidebar";
 import { SearchResults } from "~/components/search/results";
+import { moveRowFocus } from "~/components/task/row-focus";
 import { useTaskActions } from "~/components/task/use-actions";
 import { Button } from "~/components/ui/button";
 import { useCategories, useNotes, useTasks } from "~/lib/db/hooks";
@@ -22,9 +23,7 @@ export const Route = createLazyFileRoute("/search")({
 const bySortOrder = (a: Category, b: Category) =>
   (a.sortOrder ?? "").localeCompare(b.sortOrder ?? "");
 
-const resultButtons = (results: HTMLElement | null) => [
-  ...(results?.querySelectorAll<HTMLElement>("[data-search-result]") ?? []),
-];
+const RESULT = "[data-search-result]";
 
 const useResultKeys = (
   resultsRef: RefObject<HTMLElement | null>,
@@ -32,21 +31,14 @@ const useResultKeys = (
 ) => {
   useEffect(() => {
     const results = resultsRef.current!;
+    const toField = () => fieldRef.current?.focus();
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !e.defaultPrevented) {
         e.preventDefault();
-        fieldRef.current?.focus();
+        toField();
         return;
       }
-      const step = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
-      const row = (e.target as HTMLElement).closest("[data-task-id]");
-      if (!step || !row) return;
-      e.preventDefault();
-      const buttons = resultButtons(results);
-      const to = buttons.findIndex((button) => row.contains(button)) + step;
-      if (to < 0) fieldRef.current?.focus();
-      else buttons[Math.min(to, buttons.length - 1)]?.focus();
+      moveRowFocus(results, e, { focusIn: RESULT, beforeFirst: toField });
     };
     results.addEventListener("keydown", onKeyDown);
     return () => results.removeEventListener("keydown", onKeyDown);
@@ -118,7 +110,7 @@ function SearchPage() {
             if (e.nativeEvent.isComposing) return;
             if (e.key === "ArrowDown" && searched && found) {
               e.preventDefault();
-              resultButtons(resultsRef.current)[0]?.focus();
+              resultsRef.current?.querySelector<HTMLElement>(RESULT)?.focus();
             }
             if (e.key === "Enter" && searched) {
               if (firstHit) open(firstHit.task.id);
