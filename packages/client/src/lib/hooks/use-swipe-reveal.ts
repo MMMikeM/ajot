@@ -13,21 +13,27 @@ const closeRegistry = new Set<() => void>();
  * a horizontal swipe. Transform is applied directly to the DOM to avoid
  * per-pixel re-renders during drag — state only changes on snap.
  *
+ * The tray slides in over the row's end rather than pushing the row aside, so the start of the
+ * title stays in view and says which task the actions are for.
+ *
  * `data-swiping` marks a row that is dragged, open or settling, so it's opaque only then.
  * `hint` peeks the tray once per device.
  *
  * Usage:
  *   const swipe = useSwipeReveal(disabled, hint);
- *   <div ref={swipe.containerRef}>                 // receives touch events + outside-tap guard
- *     <div ref={swipe.trayRef} className="absolute right-0 ..."> // action tray, sized by its actions
- *     <div ref={swipe.contentRef}>                  // slides left by the tray's width
+ *   <div ref={swipe.containerRef} className="relative overflow-hidden"> // touch events + outside-tap guard
+ *     <div>…</div>                                  // the row, which stays put
+ *     <div ref={swipe.trayRef} className="absolute right-0 z-1 translate-x-full ..."> // sized by its actions
+ *
+ * `translate-x-full` parks the tray past the row's end; the hook's inline transform (0 down to
+ * minus the tray's width) composes with it to pull the tray in.
  */
 export const useSwipeReveal = (disabled = false, hint = false) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
   const trayRef = useRef<HTMLDivElement>(null);
   // Read at gesture time: the tray holds one to three actions, and it's invisible but laid out
-  const trayWidth = () => trayRef.current?.offsetWidth ?? 0;
+  // Unrounded, unlike offsetWidth, so pulling it in by this undoes translate-x-full exactly
+  const trayWidth = () => trayRef.current?.getBoundingClientRect().width ?? 0;
   // Measured once per gesture: reading it on each move would force a layout every frame
   const gestureWidth = useRef(0);
 
@@ -58,7 +64,7 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
   };
 
   const close = () => {
-    const el = contentRef.current;
+    const el = trayRef.current;
     if (el) {
       el.style.transition = `transform ${SNAP_MS}ms ease-out`;
       el.style.transform = "translateX(0px)";
@@ -99,7 +105,7 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
         if (Math.abs(dx) > 6) {
           isDraggingRef.current = true;
           markSwiping();
-          const el = contentRef.current;
+          const el = trayRef.current;
           if (el) el.style.transition = "none";
         }
       }
@@ -111,7 +117,7 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
       const base = isOpenRef.current ? -width : 0;
       const next = Math.min(0, Math.max(-width, base + dx));
       currentPx.current = next;
-      const el = contentRef.current;
+      const el = trayRef.current;
       if (el) el.style.transform = `translateX(${next}px)`;
     };
 
@@ -134,7 +140,7 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
         });
       }
 
-      const el = contentRef.current;
+      const el = trayRef.current;
       if (el) {
         el.style.transition = `transform ${SNAP_MS}ms ease-out`;
         el.style.transform = shouldOpen ? `translateX(${-width}px)` : "translateX(0px)";
@@ -179,7 +185,7 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
     let peeking = false;
     let returnTimer: number | undefined;
     const startTimer = window.setTimeout(() => {
-      const el = contentRef.current;
+      const el = trayRef.current;
       if (!el || isOpenRef.current || isDraggingRef.current) return;
       localStorage.setItem(HINT_SEEN_KEY, "1");
       peeking = true;
@@ -198,7 +204,7 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
     return () => {
       window.clearTimeout(startTimer);
       window.clearTimeout(returnTimer);
-      const el = contentRef.current;
+      const el = trayRef.current;
       if (peeking && el && !isOpenRef.current && !isDraggingRef.current) {
         el.style.transform = "translateX(0px)";
         clearSwipingAfter(0);
@@ -208,7 +214,6 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
 
   return {
     containerRef,
-    contentRef,
     trayRef,
     isOpen,
     close,
