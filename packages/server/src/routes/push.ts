@@ -48,7 +48,7 @@ export const pushRoutes = authed()
       responses: withAuth({ 200: jsonContent(okSchema) }),
     }),
     async (c) => {
-      await pushSubscriptionRepo.remove(c.req.valid("json").endpoint);
+      await pushSubscriptionRepo.remove(c.req.valid("json").endpoint, c.get("userId"));
       return c.json({ ok: true as const }, 200);
     },
   )

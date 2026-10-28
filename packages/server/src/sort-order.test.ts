@@ -1,6 +1,10 @@
+import { DatabaseSync } from "node:sqlite";
+import { fileURLToPath } from "node:url";
+import { drizzle } from "drizzle-orm/node-sqlite";
 import { describe, expect, test } from "vite-plus/test";
 import { generateKeyBetween } from "fractional-indexing";
-import { compareSortOrder, keyAfter, keyBetween } from "@newtab-todo/shared/sort-order";
+import { compareSortOrder, isSortKey, keyAfter, keyBetween } from "@newtab-todo/shared/sort-order";
+import { migrate } from "./db/migrator";
 
 const isValid = (key: string) => {
   try {
@@ -58,5 +62,67 @@ describe("keyBetween", () => {
   test("treats a malformed next key as none", () => {
     const key = keyBetween("a1", "a10");
     expect(key > "a1" && isValid(key)).toBe(true);
+  });
+});
+
+describe("isSortKey", () => {
+  const keys = {
+    valid: ["a0", "a1", "az", "aV", "Zz", "Z0", "b00", "b0V", "a0V", "zzzzzzzzzzzzzzzzzzzzzzzzzzz"],
+    malformed: [
+      "",
+      "a",
+      "a00",
+      "a10",
+      "b0",
+      "0a",
+      "a!",
+      "a0!",
+      "a0 ",
+      "aé",
+      "a0é",
+      `A${"0".repeat(26)}`,
+    ],
+  };
+  const all = [...keys.valid, ...keys.malformed];
+  const libraryTakes = (key: string) => {
+    try {
+      generateKeyBetween(key, null);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  test("takes the keys fractional-indexing makes and refuses the rest", () => {
+    expect(keys.valid.filter((key) => !isSortKey(key))).toEqual([]);
+    expect(keys.malformed.filter(isSortKey)).toEqual([]);
+  });
+
+  test("agrees with fractional-indexing on every base-62 key", () => {
+    const base62 = all.filter((key) => /^[0-9A-Za-z]*$/.test(key));
+    expect(base62.filter((key) => isSortKey(key) !== libraryTakes(key))).toEqual([]);
+  });
+
+  test("agrees with the database's CHECK on every key", async () => {
+    const sqlite = new DatabaseSync(":memory:");
+    await migrate(
+      drizzle({ client: sqlite }),
+      fileURLToPath(new URL("../drizzle", import.meta.url)),
+    );
+    sqlite.exec(
+      "INSERT INTO users (id, name, username, password_hash) VALUES ('u', 'U', 'u', 'x')",
+    );
+    const insert = sqlite.prepare(
+      "INSERT INTO tasks (id, user_id, title, sort_order) VALUES (?, 'u', 't', ?)",
+    );
+    const databaseTakes = (key: string) => {
+      try {
+        insert.run(key, key);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    expect(all.filter((key) => isSortKey(key) !== databaseTakes(key))).toEqual([]);
   });
 });

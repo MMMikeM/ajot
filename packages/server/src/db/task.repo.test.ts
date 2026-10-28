@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { generateKeyBetween } from "fractional-indexing";
 import { db } from "./client";
@@ -34,16 +35,40 @@ const addTask = (id: string, sortOrder: string | null) =>
     .values({ id, userId: "alice", title: id, sortOrder, updatedAt: BEFORE_THE_DELETE });
 
 describe("nextSortOrder", () => {
-  test("goes after the last valid key, past a malformed one", async () => {
+  test("goes after the user's last top-level task", async () => {
     await addTask("first", "a0");
     await addTask("last", "a1");
-    // Sorts after every valid key, and fractional-indexing throws on it
-    await addTask("bad", "a10");
 
     const key = await taskRepo.nextSortOrder("alice");
 
     expect(key > "a1").toBe(true);
     expect(() => generateKeyBetween(key, null)).not.toThrow();
+  });
+});
+
+describe("a malformed sortOrder a client sends", () => {
+  test("is left out of an update, which still goes through", async () => {
+    await addTask("t", "a0");
+
+    const row = await taskRepo.update("t", "2026-01-01T10:00:00.000Z", {
+      title: "Renamed",
+      sortOrder: "a10",
+    });
+
+    expect(row).toMatchObject({ title: "Renamed", sortOrder: "a0" });
+  });
+
+  test("is left out of an insert, which sorts first", async () => {
+    const row = await taskRepo.insert({ id: "t", userId: "alice", title: "t", sortOrder: "a10" });
+
+    expect(row.sortOrder).toBeNull();
+  });
+
+  test("is refused by the database", async () => {
+    await expect(addTask("t", "a10")).rejects.toHaveProperty(
+      "cause.message",
+      expect.stringMatching(/CHECK constraint failed: sort_order_is_a_key/),
+    );
   });
 });
 
@@ -76,5 +101,46 @@ describe("restore", () => {
     await expect(editAfterTheDelete(deleted.updatedAt)).rejects.toThrow(StaleUpdateError);
     const row = await db.query.tasks.findFirst({ where: { id: "t" } });
     expect(row?.title).toBe("t");
+  });
+});
+
+// Drizzle wraps the driver's error, as app.ts's onError says
+const refusedByAForeignKey = ["cause.message", expect.stringMatching(/FOREIGN KEY/)] as const;
+
+describe("a subtask's restore", () => {
+  const addSubtask = (id: string, parentId: string) =>
+    db.insert(tasks).values({ id, userId: "alice", parentId, title: id });
+
+  beforeEach(async () => {
+    await addTask("parent", "a0");
+    await addSubtask("sub", "parent");
+  });
+
+  test("is refused while its parent is deleted, where it would be shown nowhere", async () => {
+    await taskRepo.remove("parent");
+
+    await expect(taskRepo.restore("sub", BEFORE_THE_DELETE)).rejects.toHaveProperty(
+      ...refusedByAForeignKey,
+    );
+    await expect(
+      taskRepo.insert({ id: "sub", userId: "alice", parentId: "parent", title: "Re-added" }),
+    ).rejects.toHaveProperty(...refusedByAForeignKey);
+    const sub = await db.query.tasks.findFirst({ where: { id: "sub" } });
+    expect(sub?.deletedAt).not.toBeNull();
+  });
+
+  test("goes through once Undo has restored the parent first", async () => {
+    await taskRepo.remove("parent");
+
+    await taskRepo.restore("parent", BEFORE_THE_DELETE);
+    const sub = await taskRepo.restore("sub", BEFORE_THE_DELETE);
+
+    expect(sub.deletedAt).toBeNull();
+  });
+
+  test("leaves no way to hide a parent from under a live subtask", async () => {
+    await expect(
+      db.update(tasks).set({ deletedAt: BEFORE_THE_DELETE }).where(eq(tasks.id, "parent")),
+    ).rejects.toHaveProperty(...refusedByAForeignKey);
   });
 });

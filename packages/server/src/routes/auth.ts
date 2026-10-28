@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { login, signup } from "../auth-service";
 import sessionRepo from "../db/session.repo";
 import inviteTokenRepo from "../db/invite-token.repo";
-import { extractToken, validateSession } from "../auth";
+import { extractToken } from "../auth";
 import { errorSchema, okSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent } from "./crud";
 import { MIN_PASSWORD_LENGTH } from "../password";
@@ -119,8 +119,8 @@ export const authRoutes = new OpenAPIHono()
     async (c) => {
       const token = extractToken(c.req.raw);
       if (!token) throw new HTTPException(401, { message: "Unauthorized" });
-      const userId = await validateSession(token);
-      await sessionRepo.removeAllForUser(userId);
+      // Only this device's session: the account stays signed in everywhere else
+      await sessionRepo.remove(token);
       return c.json({ ok: true as const }, 200);
     },
   )
