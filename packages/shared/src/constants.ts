@@ -19,6 +19,8 @@ export const CATEGORY_COLORS = [
 ] as const;
 export const EVENTS_PATH = "/api/events";
 export const SSE_DATA_CHANGED = "data-changed";
+// A notification payload, for the Firefox extension's background, which has no Web Push
+export const SSE_NOTIFICATION = "notification";
 export const MSG_TOKEN_CHANGED = "TOKEN_CHANGED";
 export const MSG_GET_STATUS = "GET_STATUS";
 export const MSG_BG_STATUS = "BG_STATUS";

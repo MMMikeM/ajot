@@ -11,7 +11,6 @@ import taskRepo, {
   taskShareResponseSchema,
   taskListItemSchema,
 } from "../db/task.repo";
-import userRepo from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
 import categoryRepo from "../db/category.repo";
 import { authed } from "../middleware";
@@ -25,13 +24,14 @@ import { audienceOf, markTaskEdited, requireTask } from "./task-users";
 import { sendReachChanges } from "./reach";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 import { MAX_ID, MAX_USERNAME } from "../db/field-limits";
+import { limitSharing } from "../rate-limit";
 
 const shareSchema = z.object({
   taskId: z.string().max(MAX_ID),
   username: z
     .string()
     .min(1, "Choose someone to share with.")
-    .max(MAX_USERNAME, "No one here has that username."),
+    .max(MAX_USERNAME, "Only your contacts can be added."),
   permission: z.enum(["view", "edit"]).default("edit"),
 });
 
@@ -57,6 +57,7 @@ const canAssign = async (userId: string, assigneeId: string | null | undefined) 
 
 const notYourList = () => new ForbiddenError("That list isn't yours.");
 const notAContact = () => new BadRequestError("You can only assign tasks to your contacts.");
+const onlyContacts = () => new BadRequestError("Only your contacts can be added.");
 const subtaskGoesWithParent = () => new BadRequestError("A subtask goes wherever its parent is.");
 
 const shareCategorySchema = z.object({
@@ -253,6 +254,7 @@ export const taskRoutes = authed()
     async (c) => {
       const { recipientId, ...data } = c.req.valid("json");
       const userId = c.get("userId");
+      limitSharing(userId);
       if (!(await contactRepo.exists(userId, recipientId)))
         throw new HTTPException(403, { message: "You can only send tasks to your contacts." });
 
@@ -260,9 +262,11 @@ export const taskRoutes = authed()
       const result = await taskRepo.insertSent({
         ...data,
         userId: recipientId,
+        sentById: userId,
         sortOrder: await taskRepo.nextSortOrder(recipientId),
       });
-      broadcast(c, "tasks", "insert", { ...result, subtasks: [], shares: [] }, [recipientId]);
+      // As the list sends it, so the recipient's devices can say who sent it, offline too
+      broadcast(c, "tasks", "insert", await taskRepo.findListItem(result.id), [recipientId]);
 
       const actorName = await getUserName(userId);
       sendNotification(recipientId, {
@@ -290,21 +294,22 @@ export const taskRoutes = authed()
     async (c) => {
       const data = c.req.valid("json");
       const userId = c.get("userId");
+      limitSharing(userId);
       const [{ task }, targetUser] = await Promise.all([
         requireTask(data.taskId, userId, "manage"),
-        userRepo.findByUsername(data.username.toLowerCase()),
+        contactRepo.findContactUser(userId, data.username.toLowerCase()),
       ]);
       if (task.parentId) throw subtaskGoesWithParent();
-      if (targetUser.id === userId)
-        throw new HTTPException(400, { message: "That's you. Choose someone else." });
+      if (!targetUser) throw onlyContacts();
 
       const before = await reachRepo.read({ taskIds: [task.id] });
-      const result = await taskRepo.insertShare({
+      const { share: result, added } = await taskRepo.insertShare({
         id: createId(),
         taskId: task.id,
         sharedWithUserId: targetUser.id,
         permission: data.permission,
       });
+      if (!added) return c.json(result, 200);
       await sendReachChanges(c, before, [task.id]);
 
       const actorName = await getUserName(userId);

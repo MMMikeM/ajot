@@ -1,5 +1,5 @@
 import { expect, test, vi } from "vite-plus/test";
-import { notifyMutation, registerClient } from "./broadcast";
+import { notifyMutation, registerClient, unregisterClient, writeNotification } from "./broadcast";
 
 vi.mock("./push-queue", () => ({ queueChanges: vi.fn() }));
 
@@ -18,4 +18,22 @@ test("one account's streams past a hundred close its oldest", () => {
     expect(writer.close).not.toHaveBeenCalled();
     expect(writer.write).toHaveBeenCalledTimes(1);
   }
+});
+
+test("a notification reaches only its user's open streams, as its own event", () => {
+  const bobs = stream();
+  const carols = stream();
+  registerClient("bob", bobs);
+  registerClient("carol", carols);
+  const payload = {
+    type: "task-sent",
+    taskId: "t1",
+    taskTitle: "Milk",
+    fromUser: "Alice",
+  } as const;
+  writeNotification("bob", payload);
+  expect(bobs.write).toHaveBeenCalledWith("notification", JSON.stringify(payload));
+  expect(carols.write).not.toHaveBeenCalled();
+  unregisterClient("bob", bobs);
+  unregisterClient("carol", carols);
 });
