@@ -30,6 +30,19 @@ test("signed-out: task survives a page reload", async ({ page }) => {
   await expect(page.getByText("Reload survivor")).toBeVisible({ timeout: 8000 });
 });
 
+test("signed-out: a task added just before a reload survives it", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#add-task-input", { timeout: 10000 });
+
+  await page.fill("#add-task-input", "Added mid-reload");
+  await page.keyboard.press("Enter");
+  // No wait: the page unloads while the outbox's IndexedDB write may still be in flight
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#add-task-input", { timeout: 10000 });
+
+  await expect(page.getByText("Added mid-reload")).toBeVisible({ timeout: 8000 });
+});
+
 test("signed-out: task does NOT disappear immediately (no NonRetriableError rollback)", async ({
   page,
 }) => {

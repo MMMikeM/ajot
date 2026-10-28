@@ -1,9 +1,7 @@
 import {
-  getCurrentSubscription,
   removeSubscriptionFromServer,
   sendSubscriptionToServer,
   subscribe,
-  unsubscribe,
 } from "@mmmike/web-push/client";
 import { apiHeaders, client } from "~/lib/api";
 import { getOrCreateDeviceId } from "~/lib/auth/current-user";
@@ -14,6 +12,27 @@ import { getBuildTarget } from "~/lib/build-target";
 // Extension tabs never touch push: the Chrome background worker owns the extension's subscription,
 // and a Firefox extension page has no service worker to subscribe with.
 const ownsSubscription = () => getBuildTarget() === "browser";
+
+/**
+ * The page's worker registration, without waiting for one. The library otherwise waits on
+ * `serviceWorker.ready`, which never settles where no worker registers (blocked, failed to
+ * install, a browser without them).
+ */
+const findRegistration = async () => {
+  if (!("serviceWorker" in navigator)) return undefined;
+  try {
+    return await navigator.serviceWorker.getRegistration();
+  } catch {
+    return undefined;
+  }
+};
+
+// Only an active worker can have been subscribed, so this never waits for one to install
+const findSubscription = async () => {
+  const registration = await findRegistration();
+  if (!registration?.active || !("PushManager" in window)) return null;
+  return registration.pushManager.getSubscription();
+};
 
 const uploadSubscription = async (subscription: PushSubscription) => {
   const ok = await sendSubscriptionToServer(subscription, `${getServerUrl()}/api/push/subscribe`, {
@@ -31,7 +50,12 @@ export const registerPushSubscription = async (): Promise<boolean> => {
       console.warn("[push] the server has no VAPID_PUBLIC_KEY");
       return false;
     }
-    const result = await subscribe(vapidPublicKey);
+    const registration = await findRegistration();
+    if (!registration) {
+      console.log("[push] not subscribed: no service worker");
+      return false;
+    }
+    const result = await subscribe(vapidPublicKey, { registration });
     if (result.status !== "subscribed") {
       console.log("[push] not subscribed:", result.status);
       return false;
@@ -51,19 +75,27 @@ export const registerPushSubscription = async (): Promise<boolean> => {
  */
 export const refreshPushSubscription = async () => {
   if (!ownsSubscription()) return;
-  const subscription = await getCurrentSubscription();
+  const subscription = await findSubscription();
   if (subscription) await uploadSubscription(subscription);
 };
 
-export const unregisterPushSubscription = async (): Promise<void> => {
+/**
+ * Stops this device's pushes, and asks the server to drop its subscription. `headers` sign the
+ * request: signing out passes the session it's about to end, which the server still has to accept.
+ */
+export const unregisterPushSubscription = async (headers = apiHeaders()): Promise<void> => {
   if (!ownsSubscription()) return;
   try {
-    const endpoint = await unsubscribe();
-    if (!endpoint) return;
-    await removeSubscriptionFromServer(endpoint, `${getServerUrl()}/api/push/unsubscribe`, {
-      method: "POST",
-      headers: apiHeaders(),
-    });
+    const subscription = await findSubscription();
+    if (!subscription) return;
+    // Nothing waits on the push service, which may never answer: signing out ends the session
+    // once the server has dropped the endpoint, and the server needs only that to stop sending
+    subscription.unsubscribe().catch(console.error);
+    await removeSubscriptionFromServer(
+      subscription.endpoint,
+      `${getServerUrl()}/api/push/unsubscribe`,
+      { method: "POST", headers, keepalive: true },
+    );
     console.log("[push] unregistered");
   } catch (err) {
     console.error("[push] unregister failed:", err);
@@ -71,7 +103,7 @@ export const unregisterPushSubscription = async (): Promise<void> => {
 };
 
 export const isPushSubscribed = async (): Promise<boolean> =>
-  ownsSubscription() && !!(await getCurrentSubscription());
+  ownsSubscription() && !!(await findSubscription());
 
 /** Why this device can't turn push on, if it can't. */
 export const pushBlocker = (): "unsupported" | "denied" | null => {

@@ -1,11 +1,13 @@
 import { useSyncExternalStore } from "react";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
+import { getSignedInUserId } from "~/lib/auth/current-user";
+import { shareSessionWithBackground } from "~/lib/auth/session";
 import {
-  getSignedInUserId,
-  shareUserWithBackground,
-  subscribeCurrentUser,
-} from "~/lib/auth/current-user";
-import { tasksCollection, categoriesCollection, notesCollection } from "~/lib/db/collections";
+  tasksCollection,
+  categoriesCollection,
+  notesCollection,
+  contactsCollection,
+} from "~/lib/db/collections";
 import { refreshPushSubscription, registerPushSubscription } from "~/lib/sync/push";
 import { createBackoff } from "~/lib/sync/backoff";
 import { getBuildTarget } from "~/lib/build-target";
@@ -21,6 +23,7 @@ import {
 import type { MutationEvent } from "~/lib/constants";
 import { createExternalStore } from "~/lib/external-store";
 import { offline } from "~/lib/db/offline";
+import { writeDeleted } from "~/lib/db/synced-writes";
 import { trackSyncState, type SyncState } from "~/lib/sync/sync-state";
 import { shareSessionWithWorker } from "~/lib/sync/worker-session";
 
@@ -34,6 +37,8 @@ const syncStateStore = createExternalStore<SyncState>("disconnected");
 export const useSyncState = syncStateStore.useStore;
 const ownSyncState = trackSyncState(syncStateStore.set);
 
+const countPending = () => offline.getPendingCount() + offline.getRunningCount();
+
 let pendingSnapshot = 0;
 const pendingListeners = new Set<() => void>();
 let pendingInterval: ReturnType<typeof setInterval> | null = null;
@@ -42,7 +47,7 @@ const subscribePending = (cb: () => void) => {
   pendingListeners.add(cb);
   if (pendingListeners.size === 1) {
     pendingInterval = setInterval(() => {
-      const next = offline.getPendingCount() + offline.getRunningCount();
+      const next = countPending();
       if (next !== pendingSnapshot) {
         pendingSnapshot = next;
         pendingListeners.forEach((fn) => fn());
@@ -66,18 +71,17 @@ const collectionMap = {
   tasks: tasksCollection,
   categories: categoriesCollection,
   notes: notesCollection,
+  contacts: contactsCollection,
 } as const;
 
 const refetchAll = () => {
-  tasksCollection.utils.refetch().catch(console.error);
-  categoriesCollection.utils.refetch().catch(console.error);
-  notesCollection.utils.refetch().catch(console.error);
+  for (const collection of Object.values(collectionMap))
+    collection.utils.refetch().catch(console.error);
 };
 
-const writeMutation = (
-  collection: (typeof collectionMap)[keyof typeof collectionMap],
-  event: MutationEvent,
-) => {
+type SyncedCollection = (typeof collectionMap)[keyof typeof collectionMap];
+
+const writeMutation = (collection: SyncedCollection, event: MutationEvent) => {
   switch (event.action) {
     case "insert":
       console.log(`[sse] writeUpsert → ${event.model}`);
@@ -87,7 +91,8 @@ const writeMutation = (
       return collection.utils.writeUpdate(event.data as never);
     case "delete":
       console.log(`[sse] writeDelete → ${event.model}`);
-      return collection.utils.writeDelete((event.data as { id: string }).id);
+      // Already gone, as on the device that made the change once its own response has landed
+      return writeDeleted(collection, (event.data as { id: string }).id);
     default:
       console.log(`[sse] unknown action ${String(event.action)}, refetching all`);
       refetchAll();
@@ -103,6 +108,9 @@ const applyMutation = async (event: MutationEvent) => {
     return;
   }
   try {
+    // Nothing on this page has read it yet, so it holds no rows to change: load it, which also
+    // saves the change for a page opened offline
+    if (collection.status !== "ready") await collection.preload();
     await writeMutation(collection, event);
   } catch (err) {
     // e.g. an update for a row this device never received
@@ -220,12 +228,10 @@ export const initSync = () => {
     shareSession();
     if (getAuthToken()) refreshPushSubscription().catch(console.error);
     subscribeAuthToken(shareSession);
-    subscribeCurrentUser(shareSession);
   }
   if (target === "extension") {
     listenExtensionMessages();
-    // Installs signed in before the background needed the account
-    shareUserWithBackground();
+    shareSessionWithBackground();
     if (!backgroundHoldsSse()) return;
     // Probe the background page for its current SSE connection state so the
     // indicator isn't stuck at "Offline" on fresh tab load. It broadcasts later changes.

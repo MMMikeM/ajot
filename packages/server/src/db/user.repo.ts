@@ -34,13 +34,13 @@ const findByUsername = async (username: string) => {
     where: { username },
     columns: { passwordHash: false },
   });
-  if (!row) throw new NotFoundError("user", username);
+  if (!row) throw new NotFoundError("username", username);
   return row;
 };
 
 const findByUsernameWithPassword = async (username: string) => {
   const row = await db.query.users.findFirst({ where: { username } });
-  if (!row) throw new NotFoundError("user", username);
+  if (!row) throw new NotFoundError("username", username);
   return row;
 };
 

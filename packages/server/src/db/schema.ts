@@ -1,7 +1,9 @@
 import { defineRelations, sql } from "drizzle-orm";
 import {
   check,
+  foreignKey,
   index,
+  integer,
   primaryKey,
   sqliteTable,
   uniqueIndex,
@@ -23,6 +25,18 @@ import {
 } from "./columns";
 import type { PushTrigger } from "@newtab-todo/shared/push-payload";
 
+/** isSortKey (shared/sort-order.ts) in SQL: null, or a key fractional-indexing makes. */
+const sortOrderIsAKey = (key: AnySQLiteColumn) => {
+  const integerLength = sql`CASE WHEN ${key} GLOB '[a-z]*' THEN unicode(${key}) - 95 ELSE 92 - unicode(${key}) END`;
+  return check(
+    "sort_order_is_a_key",
+    sql`${key} IS NULL OR (${key} GLOB '[A-Za-z]*' AND ${key} NOT GLOB '*[^0-9A-Za-z]*'
+      AND ${key} <> 'A00000000000000000000000000'
+      AND (length(${key}) = ${integerLength}
+        OR (length(${key}) > ${integerLength} AND ${key} NOT GLOB '*0')))`,
+  );
+};
+
 export const categories = sqliteTable(
   "categories",
   {
@@ -38,7 +52,7 @@ export const categories = sqliteTable(
     deletedAt: nullableString("deleted_at"),
     deletion: nullableJson<CategoryDeletion>("deletion"),
   },
-  (t) => [index("categories_user_idx").on(t.userId)],
+  (t) => [sortOrderIsAKey(t.sortOrder), index("categories_user_idx").on(t.userId)],
 );
 
 /** What deleting a list changed beyond the list itself, so Undo can put exactly that back. */
@@ -69,10 +83,23 @@ export const tasks = sqliteTable(
     completedAt: nullableString("completed_at"),
     // Deleting hides a task rather than removing it, so Undo restores it for everyone
     deletedAt: nullableString("deleted_at"),
+    // 1 while not deleted, else null: only for live_subtask_has_live_parent, never sent
+    live: integer("live").generatedAlwaysAs(sql`CASE WHEN deleted_at IS NULL THEN 1 END`, {
+      mode: "virtual",
+    }),
   },
-  // A subtask goes wherever its parent is; a list of its own would add that list's people to it
   (t) => [
+    // A subtask goes wherever its parent is; a list of its own would add that list's people to it
     check("subtask_has_no_list", sql`${t.parentId} IS NULL OR ${t.categoryId} IS NULL`),
+    sortOrderIsAKey(t.sortOrder),
+    // A live subtask under a deleted parent is shown nowhere, and the purge would take it with the
+    // parent. A deleted subtask's live is null, which a foreign key doesn't check.
+    uniqueIndex("tasks_id_live_idx").on(t.id, t.live),
+    foreignKey({
+      name: "live_subtask_has_live_parent",
+      columns: [t.parentId, t.live],
+      foreignColumns: [t.id, t.live],
+    }),
     // For task_access, looked up by task and by user
     index("tasks_user_idx").on(t.userId),
     index("tasks_category_idx").on(t.categoryId),

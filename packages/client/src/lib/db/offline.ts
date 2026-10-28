@@ -1,5 +1,7 @@
-import { startOfflineExecutor, NonRetriableError } from "@tanstack/offline-transactions";
-import { DeleteOperationItemNotFoundError } from "@tanstack/query-db-collection";
+import {
+  NonRetriableError,
+  type CreateOfflineTransactionOptions,
+} from "@tanstack/offline-transactions";
 import {
   tasksCollection,
   categoriesCollection,
@@ -8,7 +10,11 @@ import {
 } from "~/lib/db/collections";
 import { client } from "~/lib/api";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
-import { getCurrentUserId } from "~/lib/auth/current-user";
+import { getCurrentUserId, getSignedInUserId } from "~/lib/auth/current-user";
+import { createOutboxStorage } from "~/lib/db/outbox-storage";
+import { SharedOutboxExecutor } from "~/lib/db/shared-outbox";
+import { tabLeader } from "~/lib/db/tab-leader";
+import { refetchLater, writeAccepted, writeDeleted } from "~/lib/db/synced-writes";
 import type { CategoryTaskAction } from "~/lib/constants";
 import type { ISODateString } from "@newtab-todo/shared/iso";
 import type { Collection } from "@tanstack/db";
@@ -24,6 +30,8 @@ interface ResourceEndpoint {
 
 class SessionExpiredError extends Error {}
 
+class HeldForAccountError extends Error {}
+
 const assertOk = async (res: Response): Promise<Response> => {
   if (res.ok) return res;
   // Keep the edit queued: it replays once the user signs in again.
@@ -34,18 +42,6 @@ const assertOk = async (res: Response): Promise<Response> => {
 
 // A replay after a lost response finds the row already gone, which means the delete worked
 const assertDeleted = (res: Response) => (res.status === 404 ? res : assertOk(res));
-
-// This device's own SSE event can remove the row from the synced store before the response lands
-const writeDeleted = async (
-  collection: Collection<any, any, any>, // eslint-disable-line @typescript-eslint/no-explicit-any
-  key: string,
-) => {
-  try {
-    await collection.utils.writeDelete(key as never);
-  } catch (err) {
-    if (!(err instanceof DeleteOperationItemNotFoundError)) throw err;
-  }
-};
 
 type PendingWrite = {
   type: string;
@@ -95,16 +91,37 @@ const syncMutation =
     );
   };
 
+/** Who queued an edit, null when signed out: anyone who signs in next may send it. */
+type AccountMetadata = { accountId?: string | null };
+
+/** Every edit goes through here, so it's sent only by the account that made it. */
+export const createOfflineTransaction = (options: CreateOfflineTransactionOptions) =>
+  offline.createOfflineTransaction({
+    ...options,
+    metadata: { ...options.metadata, accountId: getSignedInUserId() } satisfies AccountMetadata,
+  });
+
+const accountOf = (metadata: unknown) => (metadata as AccountMetadata | undefined)?.accountId;
+
+const canSend = (metadata: unknown) => {
+  const account = accountOf(metadata);
+  return !account || account === getSignedInUserId();
+};
+
 // No auth token — defer sync until login. A retriable error (not NonRetriableError)
-// keeps the transaction in the IDB outbox and holds the optimistic mutation visible.
-const assertSignedIn = () => {
+// keeps the transaction in the IDB outbox and holds the optimistic mutation visible. One queued
+// by another account waits the same way, for that account.
+const assertSignedIn = (metadata: unknown) => {
   if (!getAuthToken()) throw new Error("Not authenticated");
+  const account = accountOf(metadata);
+  if (account && account !== getSignedInUserId())
+    throw new HeldForAccountError(`Queued by account ${account}`);
 };
 
 const syncEach =
   (sync: (m: PendingWrite) => Promise<void>) =>
-  async ({ transaction }: { transaction: { mutations: PendingWrite[] } }) => {
-    assertSignedIn();
+  async ({ transaction }: { transaction: { metadata: unknown; mutations: PendingWrite[] } }) => {
+    assertSignedIn(transaction.metadata);
     for (const m of transaction.mutations) await sync(m);
   };
 
@@ -126,7 +143,7 @@ const deleteTaskWithSubtasks = async ({
 }: {
   transaction: { metadata: Record<string, unknown>; mutations: PendingWrite[] };
 }) => {
-  assertSignedIn();
+  assertSignedIn(transaction.metadata);
   const metadata = transaction.metadata as TaskDeleteMetadata | LegacyTaskDeleteMetadata;
   const taskIds = "taskIds" in metadata ? metadata.taskIds : [metadata.taskId];
   for (const taskId of taskIds) {
@@ -134,9 +151,10 @@ const deleteTaskWithSubtasks = async ({
     await assertDeleted(await client.api.tasks.$delete({ json: { id: taskId } }));
   }
   for (const m of transaction.mutations)
-    // A delete queued before deletes kept notes also unlinked them here; the server no longer does
-    if (m.collection === notesCollection) await notesCollection.utils.refetch();
-    else await writeDeleted(tasksCollection, m.key);
+    if (m.collection !== notesCollection) await writeDeleted(tasksCollection, m.key);
+  // A delete queued before deletes kept notes also unlinked them here; the server no longer does
+  if (transaction.mutations.some((m) => m.collection === notesCollection))
+    refetchLater(notesCollection);
 };
 
 // A delete only hid the task on the server, so Undo clears that rather than adding it again
@@ -155,9 +173,9 @@ const restoreTask = async (m: PendingWrite) => {
 const restoreTasksAndNotes = async ({
   transaction,
 }: {
-  transaction: { mutations: PendingWrite[] };
+  transaction: { metadata: unknown; mutations: PendingWrite[] };
 }) => {
-  assertSignedIn();
+  assertSignedIn(transaction.metadata);
   for (const m of transaction.mutations)
     await (m.collection === notesCollection ? syncNote(m) : restoreTask(m));
 };
@@ -170,7 +188,7 @@ const fileShare = async ({
 }: {
   transaction: { metadata: Record<string, unknown>; mutations: PendingWrite[] };
 }) => {
-  assertSignedIn();
+  assertSignedIn(transaction.metadata);
   const { taskId, categoryId } = transaction.metadata as ShareFilingMetadata;
   console.log(`[sync:tasks] file share → task=${taskId} list=${categoryId}`);
   await assertOk(await client.api.tasks.share.$put({ json: { taskId, categoryId } }));
@@ -191,21 +209,17 @@ export type CategoryDeleteMetadata = {
 const deleteCategoryWithTasks = async ({
   transaction,
 }: {
-  transaction: { metadata: Record<string, unknown> };
+  transaction: { metadata: Record<string, unknown>; mutations: PendingWrite[] };
 }) => {
-  assertSignedIn();
+  assertSignedIn(transaction.metadata);
   const { categoryId, tasks, taskIds } = transaction.metadata as CategoryDeleteMetadata;
   console.log(`[sync:categories] DELETE → id=${categoryId} tasks=${tasks}`);
   await assertDeleted(
     await client.api.categories.$delete({ json: { id: categoryId, tasks, taskIds } }),
   );
-  // Refetch rather than write each row: SSE may already have applied some, and writing a
-  // delete for a row the synced store no longer holds throws
-  await Promise.all([
-    categoriesCollection.utils.refetch(),
-    tasksCollection.utils.refetch(),
-    notesCollection.utils.refetch(),
-  ]);
+  for (const m of transaction.mutations) await writeAccepted(m);
+  // The server also moved or deleted collaborators' tasks, which this device didn't touch
+  refetchLater(categoriesCollection, tasksCollection, notesCollection);
 };
 
 export type CategoryRestoreMetadata = { categoryId: string };
@@ -214,21 +228,63 @@ export type CategoryRestoreMetadata = { categoryId: string };
 const restoreCategoryWithTasks = async ({
   transaction,
 }: {
-  transaction: { metadata: Record<string, unknown> };
+  transaction: { metadata: Record<string, unknown>; mutations: PendingWrite[] };
 }) => {
-  assertSignedIn();
+  assertSignedIn(transaction.metadata);
   const { categoryId } = transaction.metadata as CategoryRestoreMetadata;
   console.log(`[sync:categories] restore → id=${categoryId}`);
-  await assertOk(await client.api.categories[":id"].restore.$post({ param: { id: categoryId } }));
-  await Promise.all([
-    categoriesCollection.utils.refetch(),
-    tasksCollection.utils.refetch(),
-    notesCollection.utils.refetch(),
-  ]);
+  const res = await assertOk(
+    await client.api.categories[":id"].restore.$post({ param: { id: categoryId } }),
+  );
+  for (const m of transaction.mutations) await writeAccepted(m);
+  await categoriesCollection.utils.writeUpsert((await res.json()) as never);
+  refetchLater(categoriesCollection, tasksCollection, notesCollection);
 };
 
-export const offline = startOfflineExecutor({
-  collections: { tasks: tasksCollection, categories: categoriesCollection, notes: notesCollection },
+export type ContactRemovalMetadata = { contactId: string };
+
+// Removing a contact takes each out of the lists the other shared
+const refetchSharedLists = () => refetchLater(categoriesCollection, tasksCollection);
+
+const removeContact = async ({
+  transaction,
+}: {
+  transaction: { metadata: Record<string, unknown> };
+}) => {
+  assertSignedIn(transaction.metadata);
+  const { contactId } = transaction.metadata as ContactRemovalMetadata;
+  console.log(`[sync:contacts] DELETE → id=${contactId}`);
+  await assertDeleted(await client.api.contacts[":id"].$delete({ param: { id: contactId } }));
+  await writeDeleted(contactsCollection, contactId);
+  refetchSharedLists();
+};
+
+const restoreContact = async ({
+  transaction,
+}: {
+  transaction: { metadata: Record<string, unknown>; mutations: PendingWrite[] };
+}) => {
+  assertSignedIn(transaction.metadata);
+  const { contactId } = transaction.metadata as ContactRemovalMetadata;
+  console.log(`[sync:contacts] restore → id=${contactId}`);
+  await assertOk(await client.api.contacts[":id"].restore.$post({ param: { id: contactId } }));
+  const [restored] = transaction.mutations;
+  if (restored) await contactsCollection.utils.writeUpsert(restored.modified as never);
+  // An invite accepted meanwhile made the pair a new row, which the server kept instead
+  refetchLater(contactsCollection);
+  refetchSharedLists();
+};
+
+export const offline = new SharedOutboxExecutor({
+  leaderElection: tabLeader(),
+  storage: createOutboxStorage((value) => canSend(value.metadata)),
+  canSend,
+  collections: {
+    tasks: tasksCollection,
+    categories: categoriesCollection,
+    notes: notesCollection,
+    contacts: contactsCollection,
+  },
   mutationFns: {
     syncTasks: syncEach(syncTask),
     syncCategories: syncEach(syncCategory),
@@ -238,21 +294,29 @@ export const offline = startOfflineExecutor({
     fileShare,
     deleteCategory: deleteCategoryWithTasks,
     restoreCategory: restoreCategoryWithTasks,
+    removeContact,
+    restoreContact,
   },
   // The default policy drops any error whose message contains "401" or "403", so decide by type.
-  shouldRetry: (error) => (error instanceof SessionExpiredError ? true : undefined),
+  shouldRetry: (error) =>
+    error instanceof SessionExpiredError || error instanceof HeldForAccountError ? true : undefined,
 });
 
 // Kick off storage probe + leader election + outbox replay as early as possible.
 offline.waitForInit().catch(console.error);
 
+let account = getSignedInUserId();
+
+// Signed out, the refetches empty the lists, and drop an answer still on its way for the account
 subscribeAuthToken(() => {
-  if (getAuthToken()) {
-    // Replays queued edits now instead of after their retry backoff, ahead of the refetches.
-    offline.getOnlineDetector().notifyOnline();
-    tasksCollection.utils.refetch().catch(console.error);
-    categoriesCollection.utils.refetch().catch(console.error);
-    notesCollection.utils.refetch().catch(console.error);
-    contactsCollection.utils.refetch().catch(console.error);
+  if (getSignedInUserId() !== account) {
+    account = getSignedInUserId();
+    offline.accountChanged();
   }
+  // Replays queued edits now instead of after their retry backoff, ahead of the refetches.
+  if (getAuthToken()) offline.getOnlineDetector().notifyOnline();
+  tasksCollection.utils.refetch().catch(console.error);
+  categoriesCollection.utils.refetch().catch(console.error);
+  notesCollection.utils.refetch().catch(console.error);
+  contactsCollection.utils.refetch().catch(console.error);
 });

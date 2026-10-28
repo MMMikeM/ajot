@@ -3,11 +3,13 @@ import { HTTPException } from "hono/http-exception";
 import { login, signup } from "../auth-service";
 import sessionRepo from "../db/session.repo";
 import inviteTokenRepo from "../db/invite-token.repo";
-import { extractToken, validateSession } from "../auth";
+import { extractToken } from "../auth";
 import { errorSchema, okSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent } from "./crud";
 import { MIN_PASSWORD_LENGTH } from "../password";
 import { sendNotification } from "../notify";
+import { isSignedRevocation } from "../session-revocation";
+import { sendContactChanges } from "./contact-changes";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -31,6 +33,8 @@ const authResponseSchema = z.object({
 });
 
 const inviterSchema = z.object({ inviterName: z.string() });
+
+const revocationSchema = z.object({ userId: z.string(), at: z.number(), signature: z.string() });
 
 export const authRoutes = new OpenAPIHono()
   .openapi(
@@ -71,12 +75,13 @@ export const authRoutes = new OpenAPIHono()
     }),
     async (c) => {
       const data = c.req.valid("json");
-      const { session, invitedBy } = await signup(
+      const { session, invitedBy, contacts } = await signup(
         data.username,
         data.password,
         data.name,
         data.invite,
       );
+      await sendContactChanges(c, { addedIds: contacts.map((row) => row.id) });
       if (invitedBy) {
         sendNotification(invitedBy, { type: "contact-accepted", contactName: session.name }).catch(
           () => {},
@@ -114,8 +119,29 @@ export const authRoutes = new OpenAPIHono()
     async (c) => {
       const token = extractToken(c.req.raw);
       if (!token) throw new HTTPException(401, { message: "Unauthorized" });
-      const userId = await validateSession(token);
-      await sessionRepo.removeAllForUser(userId);
+      // Only this device's session: the account stays signed in everywhere else
+      await sessionRepo.remove(token);
+      return c.json({ ok: true as const }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "post",
+      path: "/sessions-revoked",
+      hide: true,
+      request: jsonBody(revocationSchema),
+      responses: {
+        200: jsonContent(okSchema),
+        401: jsonContent(errorSchema, "Not signed with this server's database token"),
+      },
+    }),
+    // reset-password.ts deletes the sessions itself; this only stops this process's cache
+    // vouching for them
+    async (c) => {
+      const revocation = c.req.valid("json");
+      if (!isSignedRevocation(process.env.TURSO_AUTH_TOKEN, revocation))
+        throw new HTTPException(401, { message: "Unauthorized" });
+      sessionRepo.forgetUser(revocation.userId);
       return c.json({ ok: true as const }, 200);
     },
   );

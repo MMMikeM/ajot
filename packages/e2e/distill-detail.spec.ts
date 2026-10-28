@@ -200,3 +200,33 @@ test("on desktop the sheet docks inside the notepad's inset", async ({ page }, t
   expect(sheetBox.y + sheetBox.height).toBeLessThanOrEqual(height - inset + 1);
   expect(sheetBox.y).toBeGreaterThanOrEqual(inset);
 });
+
+test("a subtask's title edits in place: Enter saves it, Escape keeps the old one", async ({
+  page,
+}) => {
+  const sheet = await openDetail(
+    page,
+    "Book flights for the October trip and check whether the Tuesday fare is still under €200",
+  );
+  const saved: unknown[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "PUT" && new URL(request.url()).pathname === "/api/tasks")
+      saved.push(request.postDataJSON());
+  });
+
+  await sheet.getByRole("button", { name: "Edit Compare Tuesday and Wednesday fares" }).click();
+  const field = sheet.getByRole("textbox", { name: "Subtask" });
+  await field.fill("Compare the midweek fares");
+  await page.keyboard.press("Enter");
+  await expect(sheet.getByRole("button", { name: "Edit Compare the midweek fares" })).toBeVisible();
+  await expect
+    .poll(() => saved)
+    .toContainEqual(expect.objectContaining({ title: "Compare the midweek fares" }));
+
+  await sheet.getByRole("button", { name: "Edit Compare the midweek fares" }).click();
+  await field.fill("Not this");
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Edit Compare the midweek fares" })).toBeVisible();
+  expect(saved).toHaveLength(1);
+});

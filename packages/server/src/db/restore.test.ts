@@ -136,6 +136,7 @@ describe("restoring a removed contact", () => {
       { id: "c1", categoryId: "live", userId: collaborator, addedAt: "then" },
       { id: "c2", categoryId: "gone", userId: collaborator, addedAt: "then" },
     ],
+    removedAt: hoursFromNow(-0.1),
   };
 
   test("is only for the person who removed it", async () => {
@@ -174,6 +175,38 @@ describe("restoring a removed contact", () => {
 
   test("with nothing left to restore is not found", async () => {
     await expect(contactRepo.restore("mine", owner)).rejects.toMatchObject({ status: 404 });
+  });
+
+  test("more than an hour later is not found", async () => {
+    tables.removedContacts = [{ ...record, removedAt: hoursFromNow(-1.1) }];
+    await expect(contactRepo.restore("mine", owner)).rejects.toMatchObject({ status: 404 });
+    expect(writes).toEqual([]);
+  });
+
+  test("replayed after it landed changes nothing, so a lost response doesn't undo the Undo", async () => {
+    tables.contacts = [record.contacts[0]];
+    await expect(contactRepo.restore("mine", owner)).resolves.toMatchObject({
+      contact: record.contacts[0],
+      restored: [],
+    });
+    expect(writes).toEqual([]);
+  });
+
+  test("replayed by someone else is still not found", async () => {
+    tables.contacts = [record.contacts[1]];
+    await expect(contactRepo.restore("theirs", owner)).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe("removing a contact", () => {
+  test("drops Undo records past their hour before keeping its own", async () => {
+    tables.contacts = [{ id: "mine", userId: owner, contactUserId: collaborator }];
+    await contactRepo.remove("mine", owner);
+    expect(writes.map(({ op, table }) => ({ op, table }))).toEqual([
+      { op: "delete", table: contacts },
+      { op: "delete", table: removedContacts },
+      { op: "insert", table: removedContacts },
+    ]);
   });
 });
 

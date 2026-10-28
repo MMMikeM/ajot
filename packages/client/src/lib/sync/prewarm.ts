@@ -1,6 +1,8 @@
 import type { PushRows } from "@newtab-todo/shared/push-payload";
 import {
+  OWNER_KEY,
   SNAPSHOT_KEYS,
+  loadSnapshotEntry,
   openSnapshotDb,
   readSnapshot,
   saveSnapshot,
@@ -31,7 +33,10 @@ const saveRows = async (getSession: GetSession, rows: PushRows) => {
   const db = await openSnapshotDb();
   try {
     const models = [...new Set(rows.events.map((event) => event.model))];
-    await writeSnapshot(db, applyRows(await readSnapshot(db, models), rows.events));
+    const saved = await readSnapshot(db, [...models, OWNER_KEY]);
+    const owner = saved.get(OWNER_KEY);
+    if (owner !== undefined && owner !== rows.userId) return;
+    await writeSnapshot(db, [...applyRows(saved, rows.events), [OWNER_KEY, rows.userId]]);
   } finally {
     db.close();
   }
@@ -48,7 +53,15 @@ const prewarmOnce = async (getSession: GetSession) => {
     console.error("[prewarm]", result.reason);
     return [];
   });
-  if (lists.length > 0) await saveSnapshot(lists);
+  if (lists.length === 0) return;
+  const owner = session.userId ?? undefined;
+  // A list that failed to fetch keeps what was saved, unless that was another account's
+  const fetched = new Set(lists.map(([key]) => key));
+  const stale =
+    (await loadSnapshotEntry(OWNER_KEY)) === owner
+      ? []
+      : SNAPSHOT_KEYS.filter((key) => !fetched.has(key)).map((key) => [key, undefined] as const);
+  await saveSnapshot([...lists, ...stale, [OWNER_KEY, owner]]);
 };
 
 /**

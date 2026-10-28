@@ -20,8 +20,9 @@ function TaskListView() {
        */}
       <CategoryHeader />
       <TaskInputBar />
-      {/* Touch: widened by the rows' -mx-2, or overflow-x-hidden cuts off a swiped row's tray */}
-      <div className="scroll-edge-fade touch:order-1 touch:-mx-2 touch:flex touch:min-h-0 touch:flex-1 touch:flex-col touch:overflow-x-hidden touch:overflow-y-auto touch:px-2">
+      {/* Touch: widened past the rows, or overflow-x-hidden cuts off a swiped row's tray at the end
+          and a checkbox's tap target at the start */}
+      <div className="scroll-edge-fade touch:order-1 touch:-mr-2 touch:-ml-5 touch:flex touch:min-h-0 touch:flex-1 touch:flex-col touch:overflow-x-hidden touch:overflow-y-auto touch:pr-2 touch:pl-5">
         <Suspense fallback={null}>
           <SyncHint />
           <SetupHint />

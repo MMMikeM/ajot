@@ -3,8 +3,8 @@ import { DragDropProvider } from "@dnd-kit/react";
 import { Toast } from "@base-ui/react/toast";
 import { createLazyFileRoute, useRouter } from "@tanstack/react-router";
 import { ChevronLeft, UserPlus } from "lucide-react";
-import { useContacts } from "~/lib/db/hooks";
-import { createInvite, removeContact, restoreContact } from "~/lib/actions";
+import { removeContact, useContacts } from "~/lib/db/hooks";
+import { createInvite } from "~/lib/actions";
 import { pushUndoToast } from "~/lib/undo-toast";
 import type { Contact } from "~/lib/types";
 import { getBuildTarget } from "~/lib/build-target";
@@ -59,26 +59,25 @@ export function PeoplePage() {
     }
   };
 
-  const remove = async (contact: Contact) => {
+  const remove = (contact: Contact) => {
     const name = contact.contactUser?.name ?? "this contact";
-    try {
-      await removeContact(contact.id);
-    } catch (err) {
-      console.error("[contacts] remove failed:", err);
-      toastManager.add({ title: `Couldn't remove ${name}. Check your connection and try again.` });
-      return;
-    }
-    pushUndoToast(`Removed ${name}`, () => {
-      restoreContact(contact.id).catch((err) => {
+    const { transaction, undo } = removeContact(contact.id);
+    const undoToastId = pushUndoToast(`Removed ${name}`, () => {
+      undo().catch((err) => {
         console.error("[contacts] restore failed:", err);
         toastManager.add({ title: `Couldn't bring back ${name}` });
       });
+    });
+    transaction.isPersisted.promise.catch((err) => {
+      console.error("[contacts] remove failed:", err);
+      toastManager.close(undoToastId);
+      toastManager.add({ title: `Couldn't remove ${name}. Try again.` });
     });
   };
 
   return (
     // AppShell already provides the column and gutters; on touch this is the scroll area
-    <div className="flex flex-col gap-6 pt-1 touch:min-h-0 touch:flex-1 touch:overflow-y-auto touch:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
+    <div className="flex flex-col gap-6 pt-1 touch:-mx-2 touch:min-h-0 touch:flex-1 touch:overflow-x-hidden touch:overflow-y-auto touch:px-2 touch:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
       {isDesk && (
         <DragDropProvider>
           <CategorySidebar reorderable={false} />
@@ -109,13 +108,13 @@ export function PeoplePage() {
         {inviting ? "Generating link…" : "Invite someone"}
       </Button>
 
-      <div className="-mx-2 flex flex-col gap-1">
-        {isLoading && <p className="text-sm text-hint">Loading…</p>}
-        {!isLoading && contacts.length === 0 && (
-          <p className="text-sm text-hint">
-            No contacts yet. Invite someone to share tasks and lists with them.
-          </p>
-        )}
+      {isLoading && <p className="text-sm text-hint">Loading…</p>}
+      {!isLoading && contacts.length === 0 && (
+        <p className="text-sm text-hint">
+          No contacts yet. Invite someone to share tasks and lists with them.
+        </p>
+      )}
+      <div className="-mx-2 flex flex-col gap-1 empty:hidden">
         {contacts.map((contact) => (
           <ListRow key={contact.id}>
             <InitialsAvatar

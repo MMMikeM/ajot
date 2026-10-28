@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, lt, or } from "drizzle-orm";
 import { createSelectSchema } from "drizzle-orm/zod";
 import { createId } from "@paralleldrive/cuid2";
 import { db, inTransaction } from "./client";
@@ -7,21 +7,27 @@ import { now } from "@newtab-todo/shared/iso";
 import { NotFoundError } from "./errors";
 import { userPublicSchema } from "./user.repo";
 import categoryCollaboratorRepo from "./category-collaborator.repo";
+import { undoableSince } from "./undo-window";
 import reachRepo from "./reach.repo";
 
 export const contactResponseSchema = createSelectSchema(contacts).extend({
   contactUser: userPublicSchema.nullable(),
 });
 
+const withContactUser = {
+  contactUser: { columns: { id: true, name: true, username: true, avatarUrl: true } },
+} as const;
+
 const list = async (userId: string) =>
-  db.query.contacts.findMany({
-    where: { userId },
-    with: {
-      contactUser: { columns: { id: true, name: true, username: true, avatarUrl: true } },
-    },
-  });
+  db.query.contacts.findMany({ where: { userId }, with: withContactUser });
 
 export type ContactWithUser = Awaited<ReturnType<typeof list>>[number];
+
+/** As `list` has them, for the people whose rows they are. */
+const listByIds = async (ids: string[]): Promise<ContactWithUser[]> => {
+  if (ids.length === 0) return [];
+  return db.query.contacts.findMany({ where: { id: { in: ids } }, with: withContactUser });
+};
 
 const insert = async (userId: string, contactUserId: string) => {
   const [row] = await db
@@ -80,6 +86,7 @@ const remove = async (id: string, userId: string) => {
       const { movedTaskIds, unfiledTaskIds } = leavings[i]!;
       return { ...row, left: { movedTaskIds, unfiledTaskIds } };
     });
+    await tx.delete(removedContacts).where(lt(removedContacts.removedAt, undoableSince()));
     await tx
       .insert(removedContacts)
       .values({ id: contact.id, userId, contacts: removed, collaborators })
@@ -88,24 +95,34 @@ const remove = async (id: string, userId: string) => {
         set: { contacts: removed, collaborators, removedAt: now() },
       });
     const changed = leavings.flatMap((l) => [...l.movedTaskIds, ...l.unfiledTaskIds]);
-    return { contact, before, changed };
+    return { contact, removed, before, changed };
   });
 };
 
 /**
- * Undoes remove for the user who removed the contact: both rows come back with their ids, and
- * so does sharing for each list that still exists, with what leaving it took out. Rows that came
- * back meanwhile through a new invite are kept. Returns who reached it all before.
+ * Undoes remove for the user who removed the contact, within an hour: both rows come back with
+ * their ids, and so does sharing for each list that still exists, with what leaving it took out.
+ * Rows that came back meanwhile through a new invite are kept. Returns the rows it put back, and
+ * who reached it all before. A replay after a lost response finds the contact already back and
+ * changes nothing.
  */
 const restore = async (id: string, userId: string) =>
   inTransaction(async (tx) => {
-    const record = await tx.query.removedContacts.findFirst({ where: { id, userId } });
-    if (!record) throw new NotFoundError("removed contact", id);
+    const record = await tx.query.removedContacts.findFirst({
+      where: { id, userId, removedAt: { gte: undoableSince() } },
+    });
+    if (!record) {
+      const contact = await tx.query.contacts.findFirst({ where: { id, userId } });
+      if (!contact) throw new NotFoundError("removed contact", id);
+      return { contact, restored: [], before: await reachRepo.read({}, tx), changed: [] };
+    }
     const contact = record.contacts.find((c) => c.id === id);
     if (!contact) throw new NotFoundError("contact", id);
 
-    if (record.contacts.length > 0)
-      await tx.insert(contacts).values(record.contacts).onConflictDoNothing();
+    const restored =
+      record.contacts.length > 0
+        ? await tx.insert(contacts).values(record.contacts).onConflictDoNothing().returning()
+        : [];
     const liveCategoryIds = new Set(
       (
         await tx.query.categories.findMany({
@@ -133,7 +150,7 @@ const restore = async (id: string, userId: string) =>
         .onConflictDoNothing();
     const changed = await categoryCollaboratorRepo.rejoin(tx, leavings);
     await tx.delete(removedContacts).where(eq(removedContacts.id, id));
-    return { contact, before, changed };
+    return { contact, restored, before, changed };
   });
 
-export default { list, insert, exists, remove, restore };
+export default { list, listByIds, insert, exists, remove, restore };

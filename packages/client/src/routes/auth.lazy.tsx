@@ -2,16 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { createLazyFileRoute, useRouter } from "@tanstack/react-router";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod/mini";
-import { setAuthToken } from "~/lib/auth/token";
-import { setCurrentUser } from "~/lib/auth/current-user";
+import { signIn } from "~/lib/auth/session";
 import { authenticate } from "~/lib/actions";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/field";
 import { Input } from "~/components/ui/field";
 import { getBuildTarget } from "~/lib/build-target";
 import { useInviterName } from "~/lib/hooks/use-inviter-name";
-import { ext, requestSyncDataConsent } from "~/lib/ext";
-import { TOKEN_KEY, MSG_TOKEN_CHANGED } from "~/lib/constants";
+import { requestSyncDataConsent } from "~/lib/ext";
 import { getServerUrl, setServerUrl } from "~/lib/server-url";
 import { fetchServerConfig, normalizeServerUrl, type ServerConfig } from "~/lib/server-config";
 
@@ -25,16 +23,6 @@ const signupSchema = z.object({
   password: z.string().check(z.minLength(8, "Use at least 8 characters")),
   name: z.string().check(z.minLength(1, "Enter your name")),
 });
-
-const persistToken = (token: string) => {
-  setAuthToken(token);
-  if (getBuildTarget() === "extension") {
-    ext.storage.local
-      .set({ [TOKEN_KEY]: token })
-      .then(() => ext.runtime.sendMessage({ type: MSG_TOKEN_CHANGED }).catch(() => {}))
-      .catch(console.error);
-  }
-};
 
 const serverSchema = z.string().check(z.minLength(1, "Enter your sync server's address"));
 
@@ -99,8 +87,7 @@ const AuthView = () => {
         setServerError(err instanceof Error ? err.message : "Couldn't sign in. Try again.");
         return;
       }
-      persistToken(result.token);
-      setCurrentUser({ id: result.userId, name: result.name, username: result.username });
+      signIn(result.token, { id: result.userId, name: result.name, username: result.username });
       try {
         sessionStorage.removeItem("pending-invite");
       } catch {

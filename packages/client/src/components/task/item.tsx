@@ -129,7 +129,21 @@ function TaskRow({
   const [completing, setCompleting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const completeTimer = useRef<number | undefined>(undefined);
+  // The row stays completing while it leaves after the tick is saved, so this says it was
+  const tickSaved = useRef(false);
   useEffect(() => () => window.clearTimeout(completeTimer.current), []);
+  // A page being closed or put away gets no more timers, so a tick still lingering saves now
+  useEffect(() => {
+    if (!completing) return;
+    const saveIfHidden = () => {
+      if (document.visibilityState !== "hidden" || tickSaved.current) return;
+      window.clearTimeout(completeTimer.current);
+      tickSaved.current = true;
+      onToggle(task);
+    };
+    document.addEventListener("visibilitychange", saveIfHidden);
+    return () => document.removeEventListener("visibilitychange", saveIfHidden);
+  }, [completing, onToggle, task]);
   const looksDone = isDone || completing;
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState("");
@@ -159,9 +173,13 @@ function TaskRow({
       return;
     }
     setCompleting(true);
+    tickSaved.current = false;
     completeTimer.current = window.setTimeout(() => {
       setLeaving(true);
-      completeTimer.current = window.setTimeout(() => onToggle(task), COMPLETE_LEAVE_MS);
+      completeTimer.current = window.setTimeout(() => {
+        tickSaved.current = true;
+        onToggle(task);
+      }, COMPLETE_LEAVE_MS);
     }, COMPLETE_LINGER_MS);
   };
 
@@ -216,7 +234,8 @@ function TaskRow({
         className={cn(
           "-mx-2",
           entering && "animate-task-enter motion-reduce:animate-none",
-          swipeEnabled && "group/swipe relative overflow-hidden rounded-lg",
+          // Its clip starts 12px further out than the row, so the checkbox's tap target can reach left
+          swipeEnabled && "group/swipe relative -ml-5 overflow-hidden rounded-lg pl-3",
           // A long press drags the row, so iOS mustn't select its text or show the callout first
           dragHandleRef && "touch:select-none touch:touch-callout-none",
         )}
@@ -278,8 +297,8 @@ function TaskRow({
             completing && "opacity-60",
             isSubtask && "py-1.5",
             // Opaque only while swiping, so the row and its tray read as one surface.
-            // rounded-none: the container owns the corners.
-            swipeEnabled && "rounded-none group-data-[swiping]/swipe:bg-card",
+            // rounded-r-none: the container owns the corners at the tray's end.
+            swipeEnabled && "rounded-r-none group-data-[swiping]/swipe:bg-card",
           )}
         >
           <Checkbox
@@ -292,14 +311,14 @@ function TaskRow({
             }}
             aria-label={task.title}
             tabIndex={tabIndex}
-            // Pinned to the first line of the title, which can wrap. On touch a task's target fills
-            // its 44px row; the list's clip stops it at the row's start, so it reaches right instead.
-            // Subtask rows sit closer than 44px, so theirs stays smaller.
+            // Pinned to the first line of the title, which can wrap. Its target ends where the
+            // row's gap does, so the title's first letter opens the task; it reaches left instead.
+            // On touch a task's fills its 44px row; subtask rows sit closer, so theirs stays smaller.
             className={cn(
-              "mt-1 touch:mt-0.75 touch:size-4.5",
+              "mt-1 after:-right-2 after:-left-4 touch:mt-0.75 touch:size-4.5",
               isSubtask
-                ? "mt-0.5 touch:mt-px touch:after:-inset-3"
-                : "touch:after:-inset-3.5 touch:after:-right-4.75",
+                ? "mt-0.5 touch:mt-px touch:after:-inset-y-3 touch:after:-right-2.5 touch:after:-left-3.75"
+                : "touch:after:-inset-y-3.5 touch:after:-right-2.5 touch:after:-left-5",
               isDone && checkboxDoneClass,
               readyToTick && "border-primary",
             )}
@@ -311,16 +330,24 @@ function TaskRow({
               onClick={() => onOpen(task.id)}
               tabIndex={tabIndex}
             >
-              <span className={titleClass}>{task.title}</span>
+              <span dir="auto" className={titleClass}>
+                {task.title}
+              </span>
               {task.description && (
-                <span className="truncate text-xs text-hint">{task.description}</span>
+                <span dir="auto" className="truncate text-xs text-hint">
+                  {task.description}
+                </span>
               )}
             </button>
           ) : (
             <div className={titleColumnClass}>
-              <span className={titleClass}>{task.title}</span>
+              <span dir="auto" className={titleClass}>
+                {task.title}
+              </span>
               {task.description && (
-                <span className="truncate text-xs text-hint">{task.description}</span>
+                <span dir="auto" className="truncate text-xs text-hint">
+                  {task.description}
+                </span>
               )}
             </div>
           )}

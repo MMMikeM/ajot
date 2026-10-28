@@ -74,7 +74,7 @@ describe("signing out", () => {
       await sessionRepo.findValid(token);
     }
 
-    await sessionRepo.removeAllForUser("me");
+    sessionRepo.forgetUser("me");
     findFirst.mockResolvedValue(undefined);
     expect(await sessionRepo.findValid(mine)).toBeUndefined();
     expect(await sessionRepo.findValid(myOther)).toBeUndefined();
@@ -87,12 +87,25 @@ describe("signing out", () => {
     findFirst.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
     const lookup = sessionRepo.findValid(token);
 
-    await sessionRepo.removeAllForUser("me");
+    sessionRepo.forgetUser("me");
     answer(sessionFor(token, "me"));
     await lookup;
 
     findFirst.mockResolvedValueOnce(undefined);
     expect(await sessionRepo.findValid(token)).toBeUndefined();
+  });
+
+  test("in another process stops the user's cached sessions passing once this one is told", async () => {
+    const [mine, theirs] = [newToken(), newToken()];
+    findFirst.mockResolvedValueOnce(sessionFor(mine, "me"));
+    findFirst.mockResolvedValueOnce(sessionFor(theirs, "them"));
+    await sessionRepo.findValid(mine);
+    await sessionRepo.findValid(theirs);
+
+    sessionRepo.forgetUser("me");
+    findFirst.mockResolvedValue(undefined);
+    expect(await sessionRepo.findValid(mine)).toBeUndefined();
+    expect((await sessionRepo.findValid(theirs))?.userId).toBe("them");
   });
 
   test("one session drops just that token", async () => {

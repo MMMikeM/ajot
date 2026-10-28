@@ -1,7 +1,8 @@
-import { useState, type Ref } from "react";
+import { useRef, useState, type Ref } from "react";
 import { StickyNote } from "lucide-react";
+import { compareSortOrder } from "@newtab-todo/shared/sort-order";
 import type { Task, Note } from "~/lib/types";
-import { addNote, updateNote, deleteNote, deleteTask } from "~/lib/db/hooks";
+import { addNote, updateNote, deleteNote, deleteTask, updateTask } from "~/lib/db/hooks";
 import { addTask } from "~/lib/db/add-task";
 import { getCurrentUserId, useOptimisticUserId } from "~/lib/auth/current-user";
 import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
@@ -9,7 +10,7 @@ import { Input, Textarea } from "~/components/ui/field";
 import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { cn } from "~/lib/utils";
-import { canDeleteTask } from "@newtab-todo/shared/task-access";
+import { canDeleteTask, canEditTask } from "@newtab-todo/shared/task-access";
 import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
 import { holders } from "~/lib/task-holders";
 import { DetailRow } from "~/components/task/detail-row";
@@ -49,6 +50,75 @@ const AddLine = ({
   );
 };
 
+/**
+ * A subtask's title, edited in place by a tap or click on it. Being a control of its own also keeps
+ * a touch on its first letters from being moved to the checkbox beside it.
+ */
+const SubtaskTitle = ({ sub, done, canEdit }: { sub: Task; done: boolean; canEdit: boolean }) => {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(sub.title);
+  const cancelled = useRef(false);
+  // The same size and padding while editing, so the row doesn't move
+  const textClass = "min-w-0 flex-1 py-1 text-sm touch:py-1.5 touch:text-base";
+  const doneClass = done && "text-muted-foreground line-through";
+
+  if (editing) {
+    return (
+      <Input
+        aria-label="Subtask"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") {
+            // Leaves the sheet open: only the edit is cancelled
+            e.stopPropagation();
+            cancelled.current = true;
+            e.currentTarget.blur();
+          }
+        }}
+        onBlur={() => {
+          const value = title.trim();
+          if (!cancelled.current && value && value !== sub.title)
+            updateTask(sub.id, { title: value });
+          setEditing(false);
+        }}
+        // eslint-disable-next-line jsx-a11y/no-autofocus -- inline edit, user just tapped the title
+        autoFocus
+        enterKeyHint="done"
+        className={cn(textClass, "border-hint")}
+      />
+    );
+  }
+
+  if (!canEdit)
+    return (
+      <span dir="auto" className={cn(textClass, "wrap-anywhere", doneClass)}>
+        {sub.title}
+      </span>
+    );
+
+  return (
+    <button
+      type="button"
+      dir="auto"
+      aria-label={`Edit ${sub.title}`}
+      onClick={() => {
+        cancelled.current = false;
+        setTitle(sub.title);
+        setEditing(true);
+      }}
+      className={cn(
+        textClass,
+        "cursor-text rounded-sm text-left wrap-anywhere outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        doneClass,
+      )}
+    >
+      {sub.title}
+    </button>
+  );
+};
+
 export const Subtasks = ({
   task,
   subtasks: rawSubtasks,
@@ -67,9 +137,7 @@ export const Subtasks = ({
 
   if (rawSubtasks.length === 0 && !adding) return null;
 
-  const subtasks = [...rawSubtasks].sort((a, b) =>
-    (a.sortOrder ?? "").localeCompare(b.sortOrder ?? ""),
-  );
+  const subtasks = [...rawSubtasks].sort((a, b) => compareSortOrder(a.sortOrder, b.sortOrder));
 
   return (
     <DetailRow label="Subtasks">
@@ -77,24 +145,22 @@ export const Subtasks = ({
         const done = sub.status === "done";
         return (
           <ListRow key={sub.id} size="sm" className="-mx-2 min-h-9 items-start touch:min-h-11">
-            {/* Checkbox, title and Delete centre on the title's first line */}
+            {/* Checkbox, title and Delete centre on the title's first line. The target ends
+                where the gap does and reaches left into the gutter, off the title. */}
             <Checkbox
               checked={done}
               aria-label={sub.title}
               onCheckedChange={() => onToggle(sub)}
               className={cn(
-                "mt-1.75 size-3.5 touch:mt-2.5 touch:size-4 touch:after:-inset-3.75",
+                "mt-1.75 size-3.5 after:-right-2 after:-left-4 touch:mt-2.5 touch:size-4 touch:after:-inset-y-3.75 touch:after:-right-2 touch:after:-left-6",
                 done && checkboxDoneClass,
               )}
             />
-            <span
-              className={cn(
-                "min-w-0 flex-1 py-1 text-sm wrap-anywhere touch:py-1.5 touch:text-base",
-                done && "text-muted-foreground line-through",
-              )}
-            >
-              {sub.title}
-            </span>
+            <SubtaskTitle
+              sub={sub}
+              done={done}
+              canEdit={canEditTask(holders(sub, lists, task), userId)}
+            />
             {canDeleteTask(holders(sub, lists, task), userId) && (
               <RevealGroup className="items-start pt-1.5 touch:pt-0">
                 <RevealButton onClick={() => pushUndoToast("Subtask deleted", deleteTask(sub.id))}>
@@ -142,7 +208,10 @@ const NoteItem = ({ note }: { note: Note }) => {
   return (
     <ListRow size="sm" className="-mx-2 min-h-9 items-start touch:min-h-11">
       {/* touch:py-1.5 centres the first line on the h-9 touch buttons */}
-      <span className="min-w-0 flex-1 py-1 text-sm wrap-anywhere whitespace-pre-wrap touch:py-1.5 touch:text-base">
+      <span
+        dir="auto"
+        className="min-w-0 flex-1 py-1 text-sm wrap-anywhere whitespace-pre-wrap touch:py-1.5 touch:text-base"
+      >
         {note.content || note.title}
       </span>
       <RevealGroup className="items-start pt-0.5 touch:pt-0">

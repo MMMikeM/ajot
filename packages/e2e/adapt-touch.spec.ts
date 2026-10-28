@@ -1,4 +1,4 @@
-import { test, expect, type Locator, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { mockApi, mockData } from "./helpers/mock-api";
 
 // Touch layout of the task list: swipe tray, drag, and the input bar's list chip.
@@ -140,6 +140,27 @@ const expectTapTarget = async (target: Locator) => {
   expect(height).toBeGreaterThanOrEqual(44);
 };
 
+const openSheet = async (page: Page, title: string) => {
+  await titleOf(page, title).click();
+  const sheet = page.locator('[data-slot="drawer-content"]');
+  await expect(sheet).toBeVisible();
+  // Measured once the sheet has slid in
+  await expect
+    .poll(async () => sheet.evaluate((el) => getComputedStyle(el).transform))
+    .toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/);
+  return sheet;
+};
+
+const search = async (page: Page, query: string) => {
+  await page.goto("/search", { waitUntil: "domcontentloaded" });
+  const field = page.getByRole("searchbox", { name: "Search every list" });
+  await field.fill(query);
+  await field.blur();
+  const results = page.locator("main [data-task-id]");
+  await expect(results.first()).toBeVisible();
+  return results;
+};
+
 test("a task's checkbox and date, and the detail sheet's checkboxes, take a 44px tap", async ({
   page,
 }, testInfo) => {
@@ -149,16 +170,136 @@ test("a task's checkbox and date, and the detail sheet's checkboxes, take a 44px
   await expectTapTarget(passport.getByRole("checkbox"));
   await expectTapTarget(passport.getByRole("button", { name: "3d ago" }));
 
-  await titleOf(page, "Book flights").tap();
-  const sheet = page.locator('[data-slot="drawer-content"]');
-  await expect(sheet).toBeVisible();
-  // Measured once the sheet has slid in
-  await expect
-    .poll(async () => sheet.evaluate((el) => getComputedStyle(el).transform))
-    .toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/);
+  const sheet = await openSheet(page, "Book flights");
   const checkboxes = sheet.getByRole("checkbox");
   await expect(checkboxes).toHaveCount(3);
   for (const checkbox of await checkboxes.all()) await expectTapTarget(checkbox);
+});
+
+test("a search result's checkbox takes a 44px tap, a subtask's too", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "the touch targets");
+  await mockApi(page);
+  // A subtask and its parent, then tasks from two lists
+  for (const query of ["fares", "passport"]) {
+    const checkboxes = (await search(page, query)).getByRole("checkbox");
+    for (const checkbox of await checkboxes.all()) await expectTapTarget(checkbox);
+  }
+});
+
+// Where a tap or click on the first letter of `text` lands: its first line, half a pixel in
+const firstLetterOf = (text: Locator) =>
+  text.evaluate((el) => {
+    if (el instanceof HTMLTextAreaElement) {
+      const box = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      return {
+        x: box.left + parseFloat(style.paddingLeft) + 0.5,
+        y: box.top + parseFloat(style.paddingTop) + parseFloat(style.lineHeight) / 2,
+      };
+    }
+    const first = document.createTreeWalker(el, NodeFilter.SHOW_TEXT).nextNode()!;
+    const range = document.createRange();
+    range.setStart(first, 0);
+    range.setEnd(first, 1);
+    const box = range.getBoundingClientRect();
+    return { x: box.left + 0.5, y: box.top + box.height / 2 };
+  });
+
+// Where the checkbox's target is drawn over the text, it takes a press on the text
+const firstLetterBeside = async (checkbox: Locator, text: Locator) => {
+  await text.scrollIntoViewIfNeeded();
+  const at = await firstLetterOf(text);
+  expect(
+    await checkbox.evaluate((el, { x, y }) => el.contains(document.elementFromPoint(x, y)), at),
+  ).toBe(false);
+  return at;
+};
+
+const press = (page: Page, testInfo: TestInfo, { x, y }: Point) =>
+  testInfo.project.name === "mobile" ? page.touchscreen.tap(x, y) : page.mouse.click(x, y);
+
+const pressFirstLetter = async (page: Page, testInfo: TestInfo, text: Locator, checkbox: Locator) =>
+  press(page, testInfo, await firstLetterBeside(checkbox, text));
+
+test.describe("a press on the first letter of text beside a checkbox", () => {
+  test("a task's or a subtask's title opens it rather than ticking it", async ({
+    page,
+  }, testInfo) => {
+    await openList(page);
+    for (const title of ["Renew passport", "Compare Tuesday and Wednesday fares"]) {
+      const checkbox = page.getByRole("checkbox", { name: title, exact: true });
+      await pressFirstLetter(
+        page,
+        testInfo,
+        titleOf(page, title).locator("span").first(),
+        checkbox,
+      );
+      await expect(page.locator('[data-slot="drawer-content"]')).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.locator('[data-slot="drawer-content"]')).toHaveCount(0);
+      await expect(checkbox).not.toBeChecked();
+    }
+  });
+
+  test("a search result's title opens it rather than ticking it", async ({ page }, testInfo) => {
+    await mockApi(page);
+    for (const [query, title] of [
+      ["fares", "Compare Tuesday and Wednesday fares"],
+      ["passport", "Renew passport"],
+    ] as const) {
+      const result = (await search(page, query)).filter({ hasText: title }).first();
+      const checkbox = result.getByRole("checkbox", { name: title, exact: true });
+      await pressFirstLetter(
+        page,
+        testInfo,
+        result.locator("[data-search-result] span").first(),
+        checkbox,
+      );
+      await expect(page.locator('[data-slot="drawer-content"]')).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.locator('[data-slot="drawer-content"]')).toHaveCount(0);
+      await expect(checkbox).not.toBeChecked();
+    }
+  });
+
+  test("the detail sheet's title takes the focus rather than ticking the task", async ({
+    page,
+  }, testInfo) => {
+    await openList(page);
+    const sheet = await openSheet(page, "Book flights");
+    const title = sheet.getByRole("textbox", { name: "Title" });
+    const done = sheet.getByRole("checkbox", { name: "Mark done" });
+    await pressFirstLetter(page, testInfo, title, done);
+    await expect(title).toBeFocused();
+    await expect(done).not.toBeChecked();
+  });
+
+  test("the detail sheet's subtask title edits it rather than ticking it", async ({
+    page,
+  }, testInfo) => {
+    await openList(page);
+    const sheet = await openSheet(page, "Book flights");
+    const subtask = "Compare Tuesday and Wednesday fares";
+    const checkbox = sheet.getByRole("checkbox", { name: subtask, exact: true });
+    await pressFirstLetter(page, testInfo, sheet.getByText(subtask, { exact: true }), checkbox);
+    await expect(sheet.getByRole("textbox", { name: "Subtask" })).toBeFocused();
+    await expect(checkbox).not.toBeChecked();
+  });
+});
+
+test("People's empty state isn't clipped", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "the touch layout scrolls the page itself");
+  const data = mockData();
+  data.contacts = [];
+  await mockApi(page, { data });
+  await page.goto("/people", { waitUntil: "domcontentloaded" });
+  const empty = page.getByText(/^No contacts yet/);
+  await expect(empty).toBeVisible();
+  const invite = (await page.getByRole("button", { name: "Invite someone" }).boundingBox())!;
+  const text = (await empty.boundingBox())!;
+  expect(text.x).toBe(invite.x);
+  const scroller = empty.locator("..");
+  expect(await scroller.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 });
 
 type Point = { x: number; y: number };
