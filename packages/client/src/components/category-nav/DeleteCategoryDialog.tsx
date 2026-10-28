@@ -41,7 +41,9 @@ export function DeleteCategoryDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent data-testid="delete-category-dialog">
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete “{request.category.name}”?</AlertDialogTitle>
+          <AlertDialogTitle>
+            Delete “<span dir="auto">{request.category.name}</span>”?
+          </AlertDialogTitle>
           <AlertDialogDescription>
             It has {countOf(request.tasks.length, "task")}
             {othersCount > 0 && `, including ${othersCount} added by others`}. Move them to Inbox,

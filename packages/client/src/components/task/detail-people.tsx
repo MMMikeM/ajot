@@ -54,7 +54,7 @@ export const ListField = ({ filing, choosing }: { filing: Filing; choosing: bool
   if (choices.length === 0)
     return (
       <DetailRow icon={icon} label="List">
-        <span className="truncate text-sm leading-9 touch:text-base touch:leading-11">
+        <span dir="auto" className="truncate text-sm leading-9 touch:text-base touch:leading-11">
           {category?.name}
         </span>
       </DetailRow>
@@ -145,7 +145,7 @@ export const SharingField = ({
     return (
       <DetailRow icon={<Users />} label="Sharing">
         <p className="py-2 text-sm text-hint touch:py-3">
-          Everyone in {sharedList.name} can see this
+          Everyone in <span dir="auto">{sharedList.name}</span> can see this
         </p>
       </DetailRow>
     );
@@ -157,7 +157,7 @@ export const SharingField = ({
       {shares.map((share) => (
         <ListRow key={share.id} size="sm" className="-mx-2 min-h-9 touch:min-h-11">
           <InitialsAvatar name={share.sharedWithUser?.name ?? "?"} size="sm" />
-          <span className="min-w-0 flex-1 truncate text-sm">
+          <span dir="auto" className="min-w-0 flex-1 truncate text-sm">
             {share.sharedWithUser?.name ?? share.sharedWithUserId}
           </span>
           {isOwner && (
@@ -213,7 +213,7 @@ const AddShare = ({ taskId, sharing }: { taskId: string; sharing: Sharing }) => 
         <SelectContent>
           {sharing.addableContacts.map((c) => (
             <SelectItem key={c.contactUserId} value={c.contactUser!.username}>
-              {c.contactUser!.name}
+              <span dir="auto">{c.contactUser!.name}</span>
             </SelectItem>
           ))}
         </SelectContent>
@@ -239,9 +239,9 @@ export const AssigneeField = ({
     if (!name) return null;
     return (
       <DetailRow icon={<UserRound />} label="Assignee">
-        <span className="flex h-9 items-center text-sm touch:h-11 touch:text-base">
-          Assigned to {name}
-        </span>
+        <p className="text-sm leading-9 touch:text-base touch:leading-11">
+          Assigned to <span dir="auto">{name}</span>
+        </p>
       </DetailRow>
     );
   }
@@ -267,7 +267,7 @@ export const AssigneeField = ({
             selected={task.assigneeId === c.id}
             onClick={() => updateTask(task.id, { assigneeId: c.id })}
           >
-            {c.name}
+            <span dir="auto">{c.name}</span>
           </TogglePill>
         ))}
       </div>

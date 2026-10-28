@@ -190,7 +190,9 @@ test("in someone else's list you're in, neither the sheet nor a drag moves it, s
   for (const title of titles) {
     await page.getByRole("button", { name: startsWith(title) }).click();
     const sheet = page.getByRole("dialog", { name: title });
-    await expect(sheet.getByText(`Ours ${id}`, { exact: true })).toBeVisible();
+    await expect(
+      sheet.getByRole("group", { name: "List" }).getByText(`Ours ${id}`, { exact: true }),
+    ).toBeVisible();
     await expect(sheet.getByRole("combobox", { name: "List" })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(sheet).toHaveCount(0);
@@ -231,6 +233,8 @@ test("a task in your own list stays there, even when it's also shared with you",
   await pill(page, `Ours ${id}`).click();
   await page.getByRole("button", { name: startsWith(title) }).click();
   const sheet = page.getByRole("dialog", { name: title });
-  await expect(sheet.getByText(`Ours ${id}`, { exact: true })).toBeVisible();
+  await expect(
+    sheet.getByRole("group", { name: "List" }).getByText(`Ours ${id}`, { exact: true }),
+  ).toBeVisible();
   await expect(sheet.getByRole("combobox", { name: "List" })).toHaveCount(0);
 });

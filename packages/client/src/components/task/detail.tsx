@@ -244,7 +244,9 @@ const TaskDetailContent = ({
             )}
           />
           {!sharing.isOwner && task.user && (
-            <p className="text-sm text-hint">{task.user.name}’s task</p>
+            <p className="text-sm text-hint">
+              <span dir="auto">{task.user.name}</span>’s task
+            </p>
           )}
         </div>
       </div>

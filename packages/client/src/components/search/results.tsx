@@ -54,6 +54,7 @@ function ResultRow({
         className="-my-2.5 flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5 py-2.5 text-left focus-visible:outline-none"
       >
         <span
+          dir="auto"
           className={cn(
             "line-clamp-2 font-medium break-words",
             isSubtask && "text-sm",
@@ -70,7 +71,7 @@ function ResultRow({
                 <span className="sr-only">Note: </span>
               </>
             )}
-            <span className="min-w-0 truncate">
+            <span dir="auto" className="min-w-0 truncate">
               <Highlight {...hit.snippet} />
             </span>
           </span>
@@ -78,7 +79,9 @@ function ResultRow({
         {hit.parent && (
           <span className="flex min-w-0 items-center gap-1.5 text-xs text-hint">
             <CornerDownRight size={12} className="shrink-0" aria-hidden="true" />
-            <span className="truncate">in {hit.parent.title}</span>
+            <span className="truncate">
+              in <span dir="auto">{hit.parent.title}</span>
+            </span>
           </span>
         )}
       </button>
@@ -91,7 +94,7 @@ function ResultRow({
       )}
       {done && (
         <span className="mt-0.5 shrink-0 text-xs whitespace-nowrap text-hint">
-          {list.name} · {doneDate(task)}
+          <span dir="auto">{list.name}</span> · {doneDate(task)}
         </span>
       )}
     </li>
@@ -124,7 +127,7 @@ export function SearchResults({
           <section key={listId ?? "inbox"} aria-label={list.name}>
             <h2 className="flex items-center gap-2 text-xs font-medium tracking-wider text-hint uppercase">
               <ColorDot size="sm" color={list.color} />
-              {list.name}
+              <span dir="auto">{list.name}</span>
             </h2>
             <ul className="flex flex-col">
               {hits.map((hit) => (

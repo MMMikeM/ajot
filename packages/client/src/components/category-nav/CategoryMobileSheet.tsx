@@ -126,9 +126,11 @@ function CategoryMobileSheet() {
           {/* Long names wrap: touch has no hover to reveal a truncated one */}
           <ColorDot color={cat.color ?? undefined} className="mt-1.5 self-start" />
           <span className="min-w-0 flex-1 wrap-anywhere">
-            {cat.name}
+            <span dir="auto">{cat.name}</span>
             {!isOwned && cat.user?.name && (
-              <span className="ml-1 text-xs font-normal text-hint">· {cat.user.name}</span>
+              <span className="ml-1 text-xs font-normal text-hint">
+                · <span dir="auto">{cat.user.name}</span>
+              </span>
             )}
           </span>
           {/* For someone else's list the suffix already names the owner */}
