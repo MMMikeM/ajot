@@ -4,6 +4,8 @@ export const INVITE_GONE = "This invite link has expired or been used. Ask for a
 
 export const ONLY_CONTACTS = "Only your contacts can be added.";
 
+export const UNAUTHORIZED = "Unauthorized";
+
 const goneMessages = {
   task: "That task no longer exists.",
   category: "That list no longer exists.",

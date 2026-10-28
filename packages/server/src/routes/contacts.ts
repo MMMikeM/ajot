@@ -1,13 +1,13 @@
-import { createRoute, z } from "@hono/zod-openapi";
+import { z } from "@hono/zod-openapi";
 import contactRepo, { contactResponseSchema } from "../db/contact.repo";
 import { sendReachChanges } from "./reach";
 import { sendContactChanges } from "./contact-changes";
-import { authed } from "../middleware";
+import { authed, authedRoute } from "../middleware";
 import { res } from "./crud";
 
 export const contactRoutes = authed()
   .openapi(
-    createRoute({
+    authedRoute({
       method: "get",
       path: "/",
       responses: res({ ok: z.array(contactResponseSchema) }),
@@ -15,7 +15,7 @@ export const contactRoutes = authed()
     async (c) => c.json(await contactRepo.list(c.get("userId")), 200),
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "delete",
       path: "/:id",
       responses: res({ ok: z.object({ id: z.string() }), errors: [404] }),
@@ -28,7 +28,7 @@ export const contactRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/:id/restore",
       responses: res({ ok: z.object({ id: z.string() }), errors: [404] }),

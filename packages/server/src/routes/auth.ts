@@ -3,9 +3,9 @@ import { HTTPException } from "hono/http-exception";
 import { login, signup } from "../auth-service";
 import sessionRepo from "../db/session.repo";
 import inviteTokenRepo from "../db/invite-token.repo";
-import { INVITE_GONE } from "../db/errors";
+import { INVITE_GONE, UNAUTHORIZED } from "../db/errors";
 import { extractToken } from "../auth";
-import { errorSchema } from "./openapi-schemas";
+import { errorSchema, unauthorizedResponse } from "./openapi-schemas";
 import { jsonBody, jsonContent, okBody, res } from "./crud";
 import { MIN_PASSWORD_LENGTH } from "../password";
 import {
@@ -86,7 +86,6 @@ export const authRoutes = new OpenAPIHono()
       responses: res({
         ok: authResponseSchema,
         errors: [429],
-        public: true,
         extra: { 401: jsonContent(errorSchema, "Login failed") },
       }),
     }),
@@ -117,7 +116,6 @@ export const authRoutes = new OpenAPIHono()
       responses: res({
         ok: authResponseSchema,
         errors: [409, 429],
-        public: true,
         extra: { 403: jsonContent(errorSchema, "No invite, or the invite is no longer valid") },
       }),
     }),
@@ -151,7 +149,6 @@ export const authRoutes = new OpenAPIHono()
       path: "/invites/:token",
       responses: res({
         ok: inviterSchema,
-        public: true,
         extra: { 404: jsonContent(errorSchema, "No usable invite") },
       }),
     }),
@@ -164,11 +161,11 @@ export const authRoutes = new OpenAPIHono()
     createRoute({
       method: "post",
       path: "/logout",
-      responses: res({ ok: true }),
+      responses: res({ ok: true, extra: { 401: unauthorizedResponse } }),
     }),
     async (c) => {
       const token = extractToken(c.req.raw);
-      if (!token) throw new HTTPException(401, { message: "Unauthorized" });
+      if (!token) throw new HTTPException(401, { message: UNAUTHORIZED });
       // Only this device's session: the account stays signed in everywhere else
       await sessionRepo.remove(token);
       return c.json(okBody, 200);
@@ -182,7 +179,6 @@ export const authRoutes = new OpenAPIHono()
       request: jsonBody(revocationSchema),
       responses: res({
         ok: true,
-        public: true,
         extra: { 401: jsonContent(errorSchema, "Not signed with this server's database token") },
       }),
     }),
@@ -191,7 +187,7 @@ export const authRoutes = new OpenAPIHono()
     async (c) => {
       const revocation = c.req.valid("json");
       if (!isSignedRevocation(process.env.TURSO_AUTH_TOKEN, revocation))
-        throw new HTTPException(401, { message: "Unauthorized" });
+        throw new HTTPException(401, { message: UNAUTHORIZED });
       sessionRepo.forgetUser(revocation.userId);
       return c.json(okBody, 200);
     },

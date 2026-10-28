@@ -1,4 +1,4 @@
-import { createRoute, z } from "@hono/zod-openapi";
+import { z } from "@hono/zod-openapi";
 import categoryRepo, {
   categoryInsertSchema,
   categoryUpdateSchema,
@@ -12,7 +12,7 @@ import { sendReachChanges } from "./reach";
 import { userPublicSchema } from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
 import { BadRequestError, NotFoundError, ONLY_CONTACTS } from "../db/errors";
-import { authed } from "../middleware";
+import { authed, authedRoute } from "../middleware";
 import { broadcast } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import { jsonBody, res } from "./crud";
@@ -26,7 +26,7 @@ const collaboratorIdSchema = z.object({ userId: z.string() });
 
 export const categoryRoutes = authed()
   .openapi(
-    createRoute({
+    authedRoute({
       method: "get",
       path: "/",
       responses: res({ ok: z.array(categoryResponseSchema) }),
@@ -34,7 +34,7 @@ export const categoryRoutes = authed()
     async (c) => c.json(await categoryRepo.list(c.get("userId")), 200),
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/",
       request: jsonBody(categoryInsertSchema),
@@ -48,7 +48,7 @@ export const categoryRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "put",
       path: "/",
       request: jsonBody(categoryUpdateSchema),
@@ -69,7 +69,7 @@ export const categoryRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "delete",
       path: "/",
       request: jsonBody(categoryDeleteSchema),
@@ -88,7 +88,7 @@ export const categoryRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/:id/restore",
       responses: res({ ok: categoryResponseSchema, errors: [403, 404] }),
@@ -104,7 +104,7 @@ export const categoryRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "get",
       path: "/:id/collaborators",
       responses: res({ ok: z.array(userPublicSchema), errors: [403, 404] }),
@@ -117,24 +117,13 @@ export const categoryRoutes = authed()
       ]);
 
       return c.json(
-        cat.collaborators.flatMap((c) =>
-          c.user
-            ? [
-                {
-                  id: c.user.id,
-                  name: c.user.name,
-                  username: c.user.username,
-                  avatarUrl: c.user.avatarUrl,
-                },
-              ]
-            : [],
-        ),
+        cat.collaborators.map((c) => c.user),
         200,
       );
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/:id/collaborators",
       request: jsonBody(collaboratorSchema),
@@ -169,7 +158,7 @@ export const categoryRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "delete",
       path: "/:id/collaborators/:userId",
       responses: res({ ok: collaboratorIdSchema, errors: [403, 404] }),
@@ -188,7 +177,7 @@ export const categoryRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/:id/collaborators/:userId/restore",
       responses: res({ ok: collaboratorIdSchema, errors: [400, 403, 404] }),

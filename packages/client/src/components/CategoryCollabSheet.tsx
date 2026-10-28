@@ -46,16 +46,16 @@ export function CategoryCollabSheet({
   const { data: allContacts = [] } = useContacts();
 
   const category = allCategories.find((c) => c.id === categoryId);
-  const collabs = (category?.collaborators ?? []).flatMap((c) => (c.user ? [c.user] : []));
+  const collabs = (category?.collaborators ?? []).map((c) => c.user);
 
   const isAuthed = !!useAuthToken();
   const collabIds = new Set(collabs.map((c) => c.id));
   const addableContacts = isAuthed
-    ? allContacts.filter((c) => c.contactUser && !collabIds.has(c.contactUserId))
+    ? allContacts.filter((c) => !collabIds.has(c.contactUserId))
     : [];
 
   const handleAdd = async (username: string) => {
-    const contact = addableContacts.find((c) => c.contactUser?.username === username)?.contactUser;
+    const contact = addableContacts.find((c) => c.contactUser.username === username)?.contactUser;
     setAdding(true);
     setError(null);
     try {
@@ -150,8 +150,8 @@ export function CategoryCollabSheet({
                   </SelectTrigger>
                   <SelectContent>
                     {addableContacts.map((c) => (
-                      <SelectItem key={c.contactUserId} value={c.contactUser!.username}>
-                        {c.contactUser!.name} (@{c.contactUser!.username})
+                      <SelectItem key={c.contactUserId} value={c.contactUser.username}>
+                        {c.contactUser.name} (@{c.contactUser.username})
                       </SelectItem>
                     ))}
                   </SelectContent>

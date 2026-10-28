@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { errorSchema, okSchema, unauthorizedResponse } from "./openapi-schemas";
+import { errorSchema, okSchema } from "./openapi-schemas";
 
 export const jsonBody = <T extends z.ZodType>(schema: T) =>
   ({ body: { content: { "application/json": { schema } } } }) as const;
@@ -17,42 +17,50 @@ const refusals = {
 
 type Refusal = keyof typeof refusals;
 type Ok = z.ZodType | true;
+const noContentResponse = { description: "No content" } as const;
 
-type Responses<O, E extends readonly Refusal[], P, X> = (O extends true
+type OkResponse<O> = [O] extends [true]
   ? { 200: ReturnType<typeof jsonContent<typeof okSchema>> }
-  : O extends z.ZodType
+  : [O] extends [z.ZodType]
     ? { 200: ReturnType<typeof jsonContent<O>> }
-    : unknown) &
-  Pick<typeof refusals, E[number]> &
-  (P extends true ? unknown : { 401: typeof unauthorizedResponse }) &
+    : unknown;
+
+// An extra replaces the response at its status, as its spread does at runtime
+type Responses<O, N, E extends readonly Refusal[], X> = Omit<
+  OkResponse<O> &
+    ([N] extends [true] ? { 204: typeof noContentResponse } : unknown) &
+    Pick<typeof refusals, E[number]>,
+  keyof X
+> &
   X;
 
 /**
- * What a route can answer: `ok`, its 200 body (`true` for `{ ok: true }`); `errors`, the refusals
- * its handler and the repos under it can throw, in errorSchema's shape; the auth middleware's 401
- * unless the route is `public`; and `extra`, responses with a description of their own.
+ * What a route can answer: `ok`, its 200 body (`true` for `{ ok: true }`), or `noContent`, a 204;
+ * `errors`, the refusals its handler and the repos under it can throw, in errorSchema's shape; and
+ * `extra`, responses with a description of their own. A route on an `authed()` router gets the
+ * middleware's 401 from `authedRoute`.
  */
 export const res = <
   const O extends Ok | undefined = undefined,
+  const N extends boolean = false,
   const E extends readonly Refusal[] = [],
-  const P extends boolean = false,
   const X extends Record<number, unknown> = {},
 >(spec: {
   ok?: O;
+  noContent?: N;
   errors?: E;
-  public?: P;
   extra?: X;
 }) => {
   const given: Ok | undefined = spec.ok;
   const ok = given === true ? okSchema : given;
   return {
     ...(ok ? { 200: jsonContent(ok) } : {}),
+    ...(spec.noContent ? { 204: noContentResponse } : {}),
     ...Object.fromEntries((spec.errors ?? []).map((status) => [status, refusals[status]])),
-    ...(spec.public ? {} : { 401: unauthorizedResponse }),
     ...spec.extra,
     // Inferred from the arguments only: inside createRoute, the return type's context is an index
     // signature, which would otherwise widen X and with it every route's statuses
-  } as NoInfer<Responses<O, E, P, X>>;
+  } as NoInfer<Responses<O, N, E, X>>;
 };
 
 export const okBody = { ok: true as const };
