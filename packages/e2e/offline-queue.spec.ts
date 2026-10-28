@@ -160,6 +160,16 @@ test("edits in a second tab closed straight away are sent once, in order, by the
   await expect(row(leader.page, "Renew passport")).toHaveCount(0);
 });
 
+test("a tick whose tab closes while the row still holds it is sent by the first", async ({
+  context,
+}) => {
+  const { leader, other } = await openTwo(context);
+  await checkbox(other.page, "Pick up dry cleaning").click();
+  await expect(checkbox(other.page, "Pick up dry cleaning")).toBeChecked();
+  await other.page.close();
+  await expectSentOnce(() => leader.sent(), ["PUT /api/tasks t-6"]);
+});
+
 test("a second tab's edit shows there at once and stays once the first has sent it", async ({
   context,
 }) => {

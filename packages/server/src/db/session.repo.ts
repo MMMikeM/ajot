@@ -64,15 +64,7 @@ const remove = async (token: string) => {
   }
 };
 
-const removeAllForUser = async (userId: string) => {
-  try {
-    await db.delete(sessions).where(eq(sessions.userId, userId));
-  } finally {
-    forget((session) => session.userId === userId);
-  }
-};
-
 /** For sessions deleted by another process, as reset-password.ts does. */
 const forgetUser = (userId: string) => forget((session) => session.userId === userId);
 
-export default { insert, findValid, remove, removeAllForUser, forgetUser };
+export default { insert, findValid, remove, forgetUser };

@@ -227,7 +227,7 @@ importers:
         specifier: ^1.162.5
         version: 1.162.5
       '@tanstack/offline-transactions':
-        specifier: ^1.1.4
+        specifier: 1.1.4
         version: 1.1.4(typescript@7.0.2)
       '@tanstack/query-db-collection':
         specifier: ^1.4.8

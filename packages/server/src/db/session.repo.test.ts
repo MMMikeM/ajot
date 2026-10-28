@@ -74,7 +74,7 @@ describe("signing out", () => {
       await sessionRepo.findValid(token);
     }
 
-    await sessionRepo.removeAllForUser("me");
+    sessionRepo.forgetUser("me");
     findFirst.mockResolvedValue(undefined);
     expect(await sessionRepo.findValid(mine)).toBeUndefined();
     expect(await sessionRepo.findValid(myOther)).toBeUndefined();
@@ -87,7 +87,7 @@ describe("signing out", () => {
     findFirst.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
     const lookup = sessionRepo.findValid(token);
 
-    await sessionRepo.removeAllForUser("me");
+    sessionRepo.forgetUser("me");
     answer(sessionFor(token, "me"));
     await lookup;
 

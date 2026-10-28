@@ -18,7 +18,7 @@
     "@newtab-todo/shared": "workspace:*",
     "@tanstack/db": "^0.15.2",
     "@tanstack/history": "^1.162.5",
-    "@tanstack/offline-transactions": "^1.1.4",
+    "@tanstack/offline-transactions": "1.1.4",
     "@tanstack/query-db-collection": "^1.4.8",
     "@tanstack/react-db": "^0.5.12",
     "@tanstack/react-form": "^1.33.5",
