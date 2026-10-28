@@ -36,6 +36,10 @@ const swipeOpen = async (page: Page, target: Locator) => {
   for (let i = 0; i < 12; i++) await send("touchMove", (x -= 20), y);
   await send("touchEnd");
   await expect(target.locator("[inert]")).toHaveCount(0);
+  // Measured once the tray has snapped into place, not partway past the row's end
+  await expect
+    .poll(() => target.locator("[data-swipe-tray]").evaluate((el) => el.getAnimations().length))
+    .toBe(0);
 };
 
 // boundingBox() ignores an ancestor's overflow clip, which once hid the tray's right edge
@@ -84,6 +88,77 @@ test.describe("swipe tray", () => {
     for (const name of ["Date", "Subtask"])
       await expectFullyOnScreen(page, target.getByRole("button", { name, exact: true }));
   });
+
+  test("the open tray covers the row's end, leaving the start of the title in view", async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "the swipe tray is touch-only");
+    await openList(page);
+    for (const title of ["Pick up dry cleaning", "Book flights"]) {
+      const target = row(page, title);
+      await swipeOpen(page, target);
+      const titleBox = (await titleOf(page, title).boundingBox())!;
+      const trayBox = (await target.locator("[data-swipe-tray]").boundingBox())!;
+      expect(titleBox.x).toBeGreaterThanOrEqual(0);
+      expect(trayBox.x - titleBox.x).toBeGreaterThanOrEqual(96);
+      // The title's start still takes a tap, and the tray is drawn over the row's end
+      const reaches = (locator: Locator, x: number, y: number) =>
+        locator.evaluate((el, at) => el.contains(document.elementFromPoint(at.x, at.y)), { x, y });
+      const y = titleBox.y + 12;
+      expect(await reaches(titleOf(page, title), (titleBox.x + trayBox.x) / 2, y)).toBe(true);
+      const date = target.getByRole("button", { name: "Date", exact: true });
+      const dateBox = (await date.boundingBox())!;
+      expect(
+        await reaches(date, dateBox.x + dateBox.width / 2, dateBox.y + dateBox.height / 2),
+      ).toBe(true);
+    }
+  });
+});
+
+// boundingBox() leaves out ::after, where these targets grow. Walks out from the centre until a
+// tap would land elsewhere, so a clip or a neighbour drawn on top counts too.
+const tapTarget = (el: Element) => {
+  const box = el.getBoundingClientRect();
+  const cx = box.left + box.width / 2;
+  const cy = box.top + box.height / 2;
+  const reach = (dx: number, dy: number) => {
+    let n = 0;
+    while (n < 60) {
+      const hit = document.elementFromPoint(cx + dx * (n + 1), cy + dy * (n + 1));
+      if (!hit || !el.contains(hit)) break;
+      n++;
+    }
+    return n;
+  };
+  return { width: reach(-1, 0) + reach(1, 0) + 1, height: reach(0, -1) + reach(0, 1) + 1 };
+};
+
+const expectTapTarget = async (target: Locator) => {
+  await target.scrollIntoViewIfNeeded();
+  const { width, height } = await target.evaluate(tapTarget);
+  expect(width).toBeGreaterThanOrEqual(44);
+  expect(height).toBeGreaterThanOrEqual(44);
+};
+
+test("a task's checkbox and date, and the detail sheet's checkboxes, take a 44px tap", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "the touch targets");
+  await openList(page);
+  const passport = row(page, "Renew passport");
+  await expectTapTarget(passport.getByRole("checkbox"));
+  await expectTapTarget(passport.getByRole("button", { name: "3d ago" }));
+
+  await titleOf(page, "Book flights").tap();
+  const sheet = page.locator('[data-slot="drawer-content"]');
+  await expect(sheet).toBeVisible();
+  // Measured once the sheet has slid in
+  await expect
+    .poll(async () => sheet.evaluate((el) => getComputedStyle(el).transform))
+    .toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/);
+  const checkboxes = sheet.getByRole("checkbox");
+  await expect(checkboxes).toHaveCount(3);
+  for (const checkbox of await checkboxes.all()) await expectTapTarget(checkbox);
 });
 
 type Point = { x: number; y: number };
