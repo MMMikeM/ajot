@@ -64,8 +64,9 @@ const PREFERENCES_KEY = ["push-preferences"] as const;
 
 const BLOCKER_TEXT = {
   unsupported:
-    "This browser can't update Ajot in the background. On an iPhone, add Ajot to your Home Screen first.",
-  denied: "Notifications are blocked for Ajot. Allow them in your browser's site settings.",
+    "This browser can't keep your lists up to date while Ajot is closed. On an iPhone, add Ajot to your Home Screen first.",
+  denied:
+    "Notifications are blocked for Ajot, so it can't update your lists while it's closed. Allow them in your browser's site settings.",
 } as const;
 
 export function SettingsPage() {
@@ -98,10 +99,12 @@ export function SettingsPage() {
 
       {!isPwa ? (
         <p className="text-sm text-hint">
-          The extension keeps your lists up to date in the background on its own.
+          Your lists stay up to date while Ajot is closed, with nothing to set up.
         </p>
       ) : !signedIn ? (
-        <p className="text-sm text-hint">Sign in to update this device in the background.</p>
+        <p className="text-sm text-hint">
+          Sign in to keep your lists up to date while Ajot is closed.
+        </p>
       ) : (
         <BackgroundUpdates />
       )}
@@ -175,8 +178,8 @@ const BackgroundUpdates = () => {
       <section className="flex flex-col gap-2">
         <div className="-mx-2 flex flex-col">
           <CheckRow
-            label="Update in the background"
-            detail="Keeps this device's lists current while Ajot is closed, so they're there offline. Browsers show a notification for each update."
+            label="Keep lists up to date while Ajot is closed"
+            detail="Open Ajot offline and your lists include changes made while it was closed. Your browser shows a notification when they update."
             checked={!!enabled}
             disabled={enabled === null || switching || (!enabled && blocker === "unsupported")}
             onCheckedChange={togglePush}
@@ -184,8 +187,8 @@ const BackgroundUpdates = () => {
           {enabled && (
             <div className="flex flex-col pl-7">
               <CheckRow
-                label="Deliver right away"
-                detail="Wakes this device for each update, so its lists are current before you go offline. Turn off to save battery: an idle phone may hold updates until it next wakes."
+                label="Update even while this device sleeps"
+                detail="So your lists are current if you lose signal before you next pick it up. Turning this off saves battery, but changes may wait until you use the device again."
                 checked={!!preferences.data?.urgent}
                 disabled={preferencesDisabled}
                 onCheckedChange={(urgent) => void update((before) => ({ ...before, urgent }))}
@@ -206,9 +209,9 @@ const BackgroundUpdates = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Notifications are blocked</AlertDialogTitle>
             <AlertDialogDescription>
-              Browsers only let Ajot update in the background by showing a notification, and they're
-              blocked for Ajot. Allow notifications in your browser's site settings, then turn this
-              on again.
+              Your browser only lets Ajot update your lists while it's closed if it can show a
+              notification. Allow notifications in your browser's site settings, then turn this on
+              again.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -286,7 +289,8 @@ const NotificationChoices = ({
             </TriggerGroup>
           ))}
           <p className="text-sm text-hint">
-            Turn one off and this device catches up when you next open Ajot instead.
+            You won't be notified about the ones you turn off, and this device may not get those
+            changes until you next open Ajot.
           </p>
         </div>
       )}

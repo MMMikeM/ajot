@@ -89,6 +89,17 @@ test("desktop: People link visible in sidebar", async ({ page, isMobile }) => {
   ).toBeVisible();
 });
 
+test("desktop: Settings link in the sidebar opens Settings", async ({ page, isMobile }) => {
+  test.skip(!!isMobile, "desktop only");
+
+  await page.getByTestId("category-sidebar").getByRole("link", { name: "Settings" }).click();
+
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(
+    page.getByTestId("category-sidebar").getByRole("link", { name: "Settings" }),
+  ).toHaveAttribute("data-status", "active");
+});
+
 const openCategoryOptionsPopover = async (
   page: Parameters<typeof createCategory>[0],
   categoryName: string,
@@ -281,4 +292,14 @@ test("mobile: People link present in the sheet", async ({ page, isMobile }) => {
   await page.getByTestId("category-nav-trigger").tap();
 
   await expect(page.getByRole("link", { name: "People" })).toBeVisible({ timeout: 3000 });
+});
+
+test("mobile: Settings link in the sheet opens Settings", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "mobile only");
+
+  await page.getByTestId("category-nav-trigger").tap();
+  await page.getByRole("link", { name: "Settings" }).tap();
+
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add list" })).toBeHidden({ timeout: 3000 });
 });
