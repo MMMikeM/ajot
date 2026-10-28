@@ -209,7 +209,7 @@ const TaskDetailContent = ({
           onCheckedChange={() => handleToggle(task)}
           aria-label="Mark done"
           className={cn(
-            "mt-3 touch:mt-2.75 touch:size-4.5 touch:after:-inset-3.5",
+            "mt-3 touch:mt-2.75 touch:size-4.5 touch:after:-inset-y-3.5 touch:after:-right-3 touch:after:-left-4",
             isReadyToTick(task, subtasks) && "border-primary",
           )}
         />
@@ -244,7 +244,9 @@ const TaskDetailContent = ({
             )}
           />
           {!sharing.isOwner && task.user && (
-            <p className="text-sm text-hint">{task.user.name}’s task</p>
+            <p className="text-sm text-hint">
+              <span dir="auto">{task.user.name}</span>’s task
+            </p>
           )}
         </div>
       </div>

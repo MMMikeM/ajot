@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Toast } from "@base-ui/react/toast";
+import { compareSortOrder } from "@newtab-todo/shared/sort-order";
 import {
   useTasks,
   useCategories,
@@ -28,7 +29,7 @@ export const useCategoryActions = () => {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const categories = rawCategories
-    ? [...rawCategories].sort((a, b) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? ""))
+    ? [...rawCategories].sort((a, b) => compareSortOrder(a.sortOrder, b.sortOrder))
     : [];
 
   const openCounts = countOpenTasksByCategory(

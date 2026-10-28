@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { createLazyFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { DragDropProvider } from "@dnd-kit/react";
 import { Plus, Search, X } from "lucide-react";
+import { compareSortOrder } from "@newtab-todo/shared/sort-order";
 import { CategorySidebar } from "~/components/category-nav/CategorySidebar";
 import { SearchResults } from "~/components/search/results";
 import { moveRowFocus } from "~/components/task/row-focus";
@@ -20,8 +21,7 @@ export const Route = createLazyFileRoute("/search")({
   component: SearchPage,
 });
 
-const bySortOrder = (a: Category, b: Category) =>
-  (a.sortOrder ?? "").localeCompare(b.sortOrder ?? "");
+const bySortOrder = (a: Category, b: Category) => compareSortOrder(a.sortOrder, b.sortOrder);
 
 const RESULT = "[data-search-result]";
 
@@ -86,7 +86,15 @@ function SearchPage() {
     await addTask(q, fromList?.id ?? null);
     void navigate({ to: "/" });
   };
-  const addLabel = `Add “${q}” to ${fromList?.name ?? "Inbox"}`;
+  const addTo = fromList?.name ?? "Inbox";
+  // Isolated so a right-to-left query or list name doesn't reorder the words around it. Chrome
+  // spaces out isolated text in an accessible name, hence the label.
+  const addLabel = `Add “${q}” to ${addTo}`;
+  const addText = (
+    <>
+      Add “<span dir="auto">{q}</span>” to <span dir="auto">{addTo}</span>
+    </>
+  );
 
   return (
     <>
@@ -101,6 +109,7 @@ function SearchPage() {
         <input
           ref={inputRef}
           type="search"
+          dir="auto"
           aria-label="Search every list"
           placeholder="Search"
           value={query}
@@ -139,7 +148,8 @@ function SearchPage() {
 
       <div
         ref={resultsRef}
-        className="scroll-edge-fade touch:-mx-2 touch:flex touch:min-h-0 touch:flex-1 touch:flex-col touch:overflow-y-auto touch:px-2 touch:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]"
+        // Touch: widened into the gutter, or its clip cuts off a checkbox's tap target at the start
+        className="scroll-edge-fade touch:-mr-2 touch:-ml-5 touch:flex touch:min-h-0 touch:flex-1 touch:flex-col touch:overflow-y-auto touch:pr-2 touch:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] touch:pl-5"
       >
         {!searched && <p className="text-sm text-hint">Every list, done tasks and notes.</p>}
 
@@ -162,10 +172,11 @@ function SearchPage() {
           <Button
             variant="outline"
             onClick={add}
+            aria-label={addLabel}
             className="mt-5 h-11 justify-start gap-2.5 self-start px-4 font-normal text-muted-foreground"
           >
             <Plus />
-            {addLabel}
+            {addText}
           </Button>
         )}
 
@@ -173,12 +184,12 @@ function SearchPage() {
           <div className="flex flex-col items-center py-10 text-center touch:flex-1 touch:justify-center touch:pb-24">
             <p className="font-display text-2xl text-muted-foreground">Nothing matches.</p>
             <p className="mt-1 max-w-64 text-sm text-hint">
-              No task, subtask or note on this device mentions “{q}”.
+              No task, subtask or note on this device mentions “<span dir="auto">{q}</span>”.
             </p>
             {canAdd && (
-              <Button onClick={add} className="mt-6 h-11 gap-2 px-5">
+              <Button onClick={add} aria-label={addLabel} className="mt-6 h-11 gap-2 px-5">
                 <Plus />
-                {addLabel}
+                {addText}
               </Button>
             )}
           </div>

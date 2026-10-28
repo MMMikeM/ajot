@@ -83,6 +83,10 @@ Tasks added before signing in sync up once you do.
 Forgotten passwords are reset on the server:
 
 ```sh
-pnpm reset-password <user-id>          # locally, with the TURSO_* variables set
-node dist/reset-password.js <user-id>  # on the server, e.g. via `fly ssh console`
+SERVER_URL=https://your-server pnpm reset-password <user-id>  # locally, with the TURSO_* variables set
+node dist/reset-password.js <user-id>                         # on the server, e.g. via `fly ssh console`
 ```
+
+It signs the user out everywhere, then tells the running server, which otherwise keeps accepting
+their sessions for up to 30 seconds. That request is signed with `TURSO_AUTH_TOKEN`, so it has to
+match the server's.

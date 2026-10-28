@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { generateKeyBetween } from "fractional-indexing";
+import { keyAfter } from "@newtab-todo/shared/sort-order";
 import { SERVER_URL_KEY, TOKEN_KEY } from "@newtab-todo/shared/constants";
 import { now } from "@newtab-todo/shared/iso";
 import { ext, getStoredSession } from "~/lib/ext";
@@ -82,11 +82,7 @@ const nextSortOrder = async (session: Session) => {
     "GET",
     "/api/tasks",
   );
-  const last = tasks
-    .flatMap((t) => (!t.parentId && t.sortOrder ? [t.sortOrder] : []))
-    .sort()
-    .at(-1);
-  return generateKeyBetween(last ?? null, null);
+  return keyAfter(tasks.flatMap((t) => (t.parentId ? [] : [t.sortOrder])));
 };
 
 const INBOX: Destination = { kind: "inbox", target: "", title: "Inbox", done: "Added to Inbox" };

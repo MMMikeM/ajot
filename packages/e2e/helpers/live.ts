@@ -16,7 +16,8 @@ export const listenLive = (page: Page) => {
   // when its stream opens, and one it started just before stands in for that fetch.
   const inFlight = new Set<Request>();
   const isListFetch = (req: Request) =>
-    req.method() === "GET" && /^\/api\/(tasks|categories|notes)$/.test(new URL(req.url()).pathname);
+    req.method() === "GET" &&
+    /^\/api\/(tasks|categories|notes|contacts)$/.test(new URL(req.url()).pathname);
 
   page.on("console", async (msg) => {
     const text = msg.text();

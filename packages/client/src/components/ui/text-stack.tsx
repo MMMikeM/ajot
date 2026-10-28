@@ -9,7 +9,9 @@ type TextStackProps = {
 
 export const TextStack = ({ title, subtitle, className }: TextStackProps) => (
   <div className={cn("flex min-w-0 flex-1 flex-col", className)}>
-    <span className="truncate text-sm font-medium">{title}</span>
+    <span dir="auto" className="truncate text-sm font-medium">
+      {title}
+    </span>
     {subtitle && <span className="text-xs text-hint">{subtitle}</span>}
   </div>
 );

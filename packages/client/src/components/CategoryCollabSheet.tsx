@@ -107,7 +107,7 @@ export function CategoryCollabSheet({
           {category && (
             <DrawerDescription className="flex items-center gap-2">
               <ColorDot size="sm" color={category.color ?? undefined} />
-              {category.name}
+              <span dir="auto">{category.name}</span>
             </DrawerDescription>
           )}
         </DrawerHeader>

@@ -71,12 +71,13 @@ export const signup = async (
     if (invite) await inviteTokenRepo.release(invite.id);
     throw e;
   }
-  if (invite) await inviteTokenRepo.consume(invite, user.id);
+  const contacts = invite ? await inviteTokenRepo.consume(invite, user.id) : [];
 
   const token = await sessionRepo.insert(user.id);
   return {
     session: { userId: user.id, token, name: user.name, username: user.username },
     invitedBy: invite?.createdByUserId ?? null,
+    contacts,
   };
 };
 

@@ -10,6 +10,7 @@ import {
 import { ChevronRight } from "lucide-react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
+import { compareSortOrder } from "@newtab-todo/shared/sort-order";
 import { useTasks, useCategories } from "~/lib/db/hooks";
 import { useActiveCategoryId } from "~/lib/state/active-category";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
@@ -275,7 +276,7 @@ const RowList = ({
 
 const NO_SUBTASKS: Task[] = [];
 
-const bySortOrder = (a: Task, b: Task) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? "");
+const bySortOrder = (a: Task, b: Task) => compareSortOrder(a.sortOrder, b.sortOrder);
 
 const groupSubtasks = (tasks: Task[]) => {
   const groups = new Map<string, Task[]>();
@@ -313,7 +314,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   };
 
   const categories = rawCategories
-    ? [...rawCategories].sort((a, b) => (a.sortOrder ?? "").localeCompare(b.sortOrder ?? ""))
+    ? [...rawCategories].sort((a, b) => compareSortOrder(a.sortOrder, b.sortOrder))
     : [];
 
   const lists = categoriesById(rawCategories ?? []);

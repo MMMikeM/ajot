@@ -19,7 +19,9 @@ import { sendNotification, getUserName } from "../notify";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
 
-const collaboratorSchema = z.object({ username: z.string().min(1) });
+const collaboratorSchema = z.object({
+  username: z.string().min(1, "Choose someone to share with."),
+});
 const collaboratorIdSchema = z.object({ userId: z.string() });
 
 export const categoryRoutes = authed()

@@ -6,9 +6,10 @@ import {
   contactsCollection,
 } from "~/lib/db/collections";
 import {
-  offline,
+  createOfflineTransaction,
   type CategoryDeleteMetadata,
   type CategoryRestoreMetadata,
+  type ContactRemovalMetadata,
   type ShareFilingMetadata,
   type TaskDeleteMetadata,
 } from "~/lib/db/offline";
@@ -28,7 +29,7 @@ export const updateTask = (id: string, fields: Partial<Task>) => {
   console.log(`[mutation] updateTask id=${id}`, fields);
   const at = now();
   const stamps = taskChangeStamps(fields, at);
-  const tx = offline.createOfflineTransaction({ mutationFnName: "syncTasks" });
+  const tx = createOfflineTransaction({ mutationFnName: "syncTasks" });
   tx.mutate(() =>
     tasksCollection.update(id, (draft) =>
       Object.assign(draft, { ...stamps, ...fields, updatedAt: at }),
@@ -46,7 +47,7 @@ const fileMyShare = (draft: Task, userId: string, categoryId: string | null) => 
 const fileShare = (taskId: string, categoryId: string | null) => {
   console.log(`[mutation] fileShare task=${taskId} list=${categoryId}`);
   const userId = getCurrentUserId();
-  const tx = offline.createOfflineTransaction({
+  const tx = createOfflineTransaction({
     mutationFnName: "fileShare",
     metadata: { taskId, categoryId } satisfies ShareFilingMetadata,
   });
@@ -70,7 +71,7 @@ export const deleteTasks = (ids: string[]) => {
     .filter((t) => roots.has(t.id) || (t.parentId !== null && roots.has(t.parentId)))
     .sort((a, b) => Number(roots.has(b.id)) - Number(roots.has(a.id)));
   const deletedIds = new Set(deleted.map((t) => t.id));
-  const tx = offline.createOfflineTransaction({
+  const tx = createOfflineTransaction({
     mutationFnName: "deleteTask",
     metadata: { taskIds: ids } satisfies TaskDeleteMetadata,
   });
@@ -93,11 +94,12 @@ const noteRow = ({ id, userId, title, content, taskId, createdAt }: Note): Note 
 });
 
 // The server kept the tasks with their shares and notes, so this only puts them back on screen
-// until the restore lands
+// until the restore lands. Each keeps its own updatedAt: a restore isn't an edit, and the server
+// keeps the later of the two, so stamping it now would turn away edits made after the delete.
 const restoreTasks = (tasks: Task[]) => {
-  const tx = offline.createOfflineTransaction({ mutationFnName: "restoreTasks" });
+  const tx = createOfflineTransaction({ mutationFnName: "restoreTasks" });
   tx.mutate(() => {
-    for (const task of tasks) tasksCollection.insert({ ...task, updatedAt: now() });
+    for (const task of tasks) tasksCollection.insert(task);
   });
 };
 
@@ -106,7 +108,7 @@ export const addCategory = (
 ) => {
   const id = crypto.randomUUID();
   console.log(`[mutation] addCategory id=${id}`, fields);
-  const tx = offline.createOfflineTransaction({ mutationFnName: "syncCategories" });
+  const tx = createOfflineTransaction({ mutationFnName: "syncCategories" });
   tx.mutate(() =>
     categoriesCollection.insert({
       ...fields,
@@ -122,7 +124,7 @@ export const addCategory = (
 
 export const updateCategory = (id: string, fields: Partial<Category>) => {
   console.log(`[mutation] updateCategory id=${id}`, fields);
-  const tx = offline.createOfflineTransaction({ mutationFnName: "syncCategories" });
+  const tx = createOfflineTransaction({ mutationFnName: "syncCategories" });
   tx.mutate(() =>
     categoriesCollection.update(id, (draft) =>
       Object.assign(draft, { ...fields, updatedAt: now() }),
@@ -147,7 +149,7 @@ export const deleteCategory = (id: string, tasks: CategoryTaskAction) => {
   const deleted: Task[] = [];
   const movedIds: string[] = [];
   const unfiledIds: string[] = [];
-  const tx = offline.createOfflineTransaction({
+  const tx = createOfflineTransaction({
     mutationFnName: "deleteCategory",
     metadata: { categoryId: id, tasks, taskIds: [...topLevelIds] } satisfies CategoryDeleteMetadata,
   });
@@ -190,7 +192,7 @@ const restoreCategory = (
 ) => {
   console.log(`[mutation] restoreCategory id=${category.id}`);
   const userId = getCurrentUserId();
-  const tx = offline.createOfflineTransaction({
+  const tx = createOfflineTransaction({
     mutationFnName: "restoreCategory",
     metadata: { categoryId: category.id } satisfies CategoryRestoreMetadata,
   });
@@ -213,7 +215,7 @@ const restoreCategory = (
 export const addNote = (fields: Omit<Note, "id" | "createdAt" | "updatedAt">) => {
   const id = crypto.randomUUID();
   console.log(`[mutation] addNote id=${id}`, fields);
-  const tx = offline.createOfflineTransaction({ mutationFnName: "syncNotes" });
+  const tx = createOfflineTransaction({ mutationFnName: "syncNotes" });
   tx.mutate(() => notesCollection.insert({ ...fields, id, createdAt: now(), updatedAt: now() }));
   console.log("[mutation] optimistic applied, tx queued");
   return { id };
@@ -221,7 +223,7 @@ export const addNote = (fields: Omit<Note, "id" | "createdAt" | "updatedAt">) =>
 
 export const updateNote = (id: string, fields: Partial<Note>) => {
   console.log(`[mutation] updateNote id=${id}`, fields);
-  const tx = offline.createOfflineTransaction({ mutationFnName: "syncNotes" });
+  const tx = createOfflineTransaction({ mutationFnName: "syncNotes" });
   tx.mutate(() =>
     notesCollection.update(id, (draft) => Object.assign(draft, { ...fields, updatedAt: now() })),
   );
@@ -232,12 +234,35 @@ export const updateNote = (id: string, fields: Partial<Note>) => {
 export const deleteNote = (id: string) => {
   console.log(`[mutation] deleteNote id=${id}`);
   const deleted = notesCollection.get(id);
-  const tx = offline.createOfflineTransaction({ mutationFnName: "syncNotes" });
+  const tx = createOfflineTransaction({ mutationFnName: "syncNotes" });
   tx.mutate(() => notesCollection.delete(id));
   console.log("[mutation] optimistic applied, tx queued");
   return () => {
     if (!deleted) return;
-    const restore = offline.createOfflineTransaction({ mutationFnName: "syncNotes" });
+    const restore = createOfflineTransaction({ mutationFnName: "syncNotes" });
     restore.mutate(() => notesCollection.insert(noteRow(deleted)));
   };
+};
+
+/**
+ * Removes the contact for both people, not only this user, and the lists they shared. Its Undo
+ * queues behind it, so a dropped connection loses neither. Returns the transaction, whose
+ * `isPersisted.promise` rejects if the server refuses, and an undo that resolves once the server
+ * has them back.
+ */
+export const removeContact = (id: string) => {
+  console.log(`[mutation] removeContact id=${id}`);
+  const contact = contactsCollection.get(id);
+  const metadata = { contactId: id } satisfies ContactRemovalMetadata;
+  const tx = createOfflineTransaction({ mutationFnName: "removeContact", metadata });
+  const transaction = tx.mutate(() => contactsCollection.delete(id));
+  const undo = () => {
+    if (!contact) return Promise.reject(new Error(`contact ${id} wasn't loaded`));
+    const restore = createOfflineTransaction({
+      mutationFnName: "restoreContact",
+      metadata,
+    });
+    return restore.mutate(() => contactsCollection.insert(contact)).isPersisted.promise;
+  };
+  return { transaction, undo };
 };

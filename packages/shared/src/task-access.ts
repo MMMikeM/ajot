@@ -75,6 +75,9 @@ export const grants = (task: TaskWithHolders): Grant[] =>
 export const canDeleteTask = (task: TaskWithHolders, userId: string) =>
   grants(task).some((grant) => grant.userId === userId && grant.canDelete);
 
+export const canEditTask = (task: TaskWithHolders, userId: string) =>
+  grants(task).some((grant) => grant.userId === userId && grant.canEdit);
+
 /**
  * Where `userId` may put a task, as its owner or as someone it's shared with: the Inbox (`null`),
  * or any list they're in. The server's `categoryRepo.canUse`.

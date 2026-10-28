@@ -1,5 +1,6 @@
-import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
-import { generateKeyBetween } from "fractional-indexing";
+import { and, eq, getColumns, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { keyAfter } from "@newtab-todo/shared/sort-order";
+import { keptSortOrder } from "./sort-key";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db } from "./client";
@@ -16,7 +17,11 @@ export const taskShareResponseSchema = createSelectSchema(taskShares);
 export type TaskInsert = typeof tasks.$inferInsert;
 
 export const taskSelectSchema = createSelectSchema(tasks).pick({ id: true });
-export const taskResponseSchema = createSelectSchema(tasks);
+export const taskResponseSchema = createSelectSchema(tasks).omit({ live: true });
+
+// live only holds the database's rule about subtasks, so no read or write sends it
+const hidden = { live: false } as const;
+const { live: _live, ...sentColumns } = getColumns(tasks);
 
 const sharedWithUserSchema = createSelectSchema(users).pick({
   id: true,
@@ -74,9 +79,10 @@ const list = async (userId: string) =>
             .where(eq(taskAccess.userId, userId)),
         ),
     },
+    columns: hidden,
     with: {
       user: { columns: { id: true, name: true } },
-      subtasks: { where: { deletedAt: { isNull: true } } },
+      subtasks: { where: { deletedAt: { isNull: true } }, columns: hidden },
       shares: {
         with: {
           sharedWithUser: { columns: { id: true, name: true, username: true } },
@@ -91,6 +97,7 @@ const list = async (userId: string) =>
 const findById = async (id: string, { deleted = false } = {}) => {
   const row = await db.query.tasks.findFirst({
     where: deleted ? { id } : { id, deletedAt: { isNull: true } },
+    columns: hidden,
   });
   if (!row) throw new NotFoundError("task", id);
   return row;
@@ -111,7 +118,7 @@ export type TaskAccessRow = Awaited<ReturnType<typeof accessTo>>[number];
 const findWithAccess = async (id: string, { deleted = false } = {}) => {
   const rows = await db
     .select({
-      task: tasks,
+      task: sentColumns,
       taskId: taskAccess.taskId,
       userId: taskAccess.userId,
       canEdit: taskAccess.canEdit,
@@ -131,13 +138,13 @@ const findWithAccess = async (id: string, { deleted = false } = {}) => {
 const insert = async (data: TaskInsert) => {
   const [row] = await db
     .insert(tasks)
-    .values(data)
+    .values({ ...data, sortOrder: keptSortOrder(data.sortOrder) })
     .onConflictDoUpdate({
       target: tasks.id,
       set: { updatedAt: sql`${tasks.updatedAt}`, deletedAt: sql`null` },
       setWhere: eq(tasks.userId, data.userId),
     })
-    .returning();
+    .returning(sentColumns);
   if (!row) throw new ConflictError("Task id taken");
   return row;
 };
@@ -145,7 +152,7 @@ const insert = async (data: TaskInsert) => {
 // A task sent to someone, which they own. Nothing retries a send with the same id, so any id
 // already taken is a conflict, and the sender never gets back a task of the recipient's.
 const insertSent = async (data: TaskInsert) => {
-  const [row] = await db.insert(tasks).values(data).onConflictDoNothing().returning();
+  const [row] = await db.insert(tasks).values(data).onConflictDoNothing().returning(sentColumns);
   if (!row) throw new ConflictError("Task id taken");
   return row;
 };
@@ -153,9 +160,9 @@ const insertSent = async (data: TaskInsert) => {
 const update = async (id: string, updatedAt: string, fields: Partial<TaskInsert>) => {
   const [row] = await db
     .update(tasks)
-    .set({ ...fields, updatedAt })
+    .set({ ...fields, sortOrder: keptSortOrder(fields.sortOrder), updatedAt })
     .where(and(eq(tasks.id, id), lt(tasks.updatedAt, updatedAt)))
-    .returning();
+    .returning(sentColumns);
   if (!row) throw new StaleUpdateError("task", id);
   return row;
 };
@@ -173,7 +180,7 @@ const markEdited = async (id: string, at: string) => {
         or(isNull(tasks.editedAt), lt(tasks.editedAt, at)),
       ),
     )
-    .returning();
+    .returning(sentColumns);
   return row;
 };
 
@@ -184,7 +191,7 @@ const nextSortOrder = async (userId: string) => {
     columns: { sortOrder: true },
     orderBy: { sortOrder: "desc" },
   });
-  return generateKeyBetween(last?.sortOrder ?? null, null);
+  return keyAfter([last?.sortOrder]);
 };
 
 /**
@@ -197,7 +204,7 @@ const remove = async (id: string) => {
     .update(tasks)
     .set({ deletedAt: at, updatedAt: at })
     .where(and(or(eq(tasks.id, id), eq(tasks.parentId, id)), isNull(tasks.deletedAt)))
-    .returning();
+    .returning(sentColumns);
   const task = rows.find((row) => row.id === id);
   if (!task) throw new NotFoundError("task", id);
   return { task, subtaskIds: rows.filter((row) => row.id !== id).map((row) => row.id) };
@@ -220,14 +227,14 @@ const restore = async (id: string, updatedAt: string) => {
       updatedAt: sql`max(${tasks.updatedAt}, ${updatedAt})`,
     })
     .where(eq(tasks.id, id))
-    .returning();
+    .returning(sentColumns);
   if (!row) throw new NotFoundError("task", id);
   return row;
 };
 
 const listItemWith = {
   user: { columns: { id: true, name: true } },
-  subtasks: { where: { deletedAt: { isNull: true } } },
+  subtasks: { where: { deletedAt: { isNull: true } }, columns: hidden },
   shares: {
     with: {
       sharedWithUser: { columns: { id: true, name: true, username: true } },
@@ -240,6 +247,7 @@ const listItemWith = {
 const findListItem = async (id: string) => {
   const row = await db.query.tasks.findFirst({
     where: { id, deletedAt: { isNull: true } },
+    columns: hidden,
     with: listItemWith,
   });
   if (!row) throw new NotFoundError("task", id);
@@ -250,6 +258,7 @@ const findListItem = async (id: string) => {
 const findListItemWithSubtasks = async (id: string) =>
   db.query.tasks.findMany({
     where: { OR: [{ id }, { parentId: id }], deletedAt: { isNull: true } },
+    columns: hidden,
     with: listItemWith,
   });
 
@@ -257,6 +266,7 @@ const findListItems = async (ids: string[]) => {
   if (ids.length === 0) return [];
   return db.query.tasks.findMany({
     where: { id: { in: ids }, deletedAt: { isNull: true } },
+    columns: hidden,
     with: listItemWith,
   });
 };
