@@ -3,8 +3,10 @@ name: Deploy
 on:
   push:
     branches: [main]
-  # A pull request runs the tests and builds the server image; deploying stays with pushes to main
+  # A pull request runs the unit tests and the builds; the e2e suites wait for main, which still
+  # deploys only once they pass. Run this by hand to put a branch through them before merging.
   pull_request:
+  workflow_dispatch:
 
 # Actions are pinned to commits, so a moved tag can't run new code next to the secrets, and the
 # token only reads the repo
@@ -62,6 +64,7 @@ jobs:
 
   e2e:
     needs: build
+    if: github.event_name != 'pull_request'
     # This image ships Google Chrome, so Chromium's libraries are already there; the suite starts
     # its own database in the runner's Docker
     runs-on: ubuntu-24.04
