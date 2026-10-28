@@ -147,3 +147,28 @@ describe("a subtask's restore", () => {
     ).rejects.toHaveProperty(...refusedByAForeignKey);
   });
 });
+
+describe("sharing again with the same person", () => {
+  beforeEach(async () => {
+    await db.insert(users).values({ id: "bob", name: "Bob", username: "bob", passwordHash: "x" });
+    await addTask("t", "a0");
+  });
+  const shareWithBob = (id: string, permission: "view" | "edit") =>
+    taskRepo.insertShare({ id, taskId: "t", sharedWithUserId: "bob", permission });
+
+  test("with another permission changes it on the one share", async () => {
+    await shareWithBob("first", "view");
+    const again = await shareWithBob("second", "edit");
+    expect(again).toMatchObject({
+      added: false,
+      changed: true,
+      share: { id: "first", permission: "edit" },
+    });
+  });
+
+  test("with the same permission changes nothing", async () => {
+    await shareWithBob("first", "edit");
+    const again = await shareWithBob("second", "edit");
+    expect(again).toMatchObject({ added: false, changed: false, share: { id: "first" } });
+  });
+});

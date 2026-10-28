@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import inviteTokenRepo from "./db/invite-token.repo";
 import userRepo from "./db/user.repo";
 import { login, signup } from "./auth-service";
-import { verifyPassword } from "./password";
+import { hashPassword, verifyPassword } from "./password";
 
 vi.mock("./db/user.repo", () => ({
   default: { exists: vi.fn(), count: vi.fn(), findWithPassword: vi.fn(), insert: vi.fn() },
@@ -25,6 +25,8 @@ const invite = {
   usedByUserId: null,
   createdAt: "now",
 };
+
+const hashesBeforeAnyLogin = vi.mocked(hashPassword).mock.calls.length;
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -75,4 +77,11 @@ test("a username no one has is checked against a password as one that exists is"
   });
   await expect(login("alice", "guess")).rejects.toMatchObject({ status: 401 });
   expect(verifyPassword).toHaveBeenLastCalledWith("alice's hash", "guess");
+});
+
+test("the hash an unknown username is checked against is worked out at startup", async () => {
+  expect(hashesBeforeAnyLogin).toBe(1);
+  vi.mocked(userRepo.findWithPassword).mockResolvedValue(undefined);
+  await expect(login("nobody", "guess")).rejects.toMatchObject({ status: 401 });
+  expect(hashPassword).not.toHaveBeenCalled();
 });

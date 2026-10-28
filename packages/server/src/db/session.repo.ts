@@ -101,7 +101,15 @@ const hashStoredTokens = async () => {
     where: { RAW: (session) => sql`length(${session.id}) = 64` },
   });
   const tokens = stored.map((session) => session.id).filter((id) => RAW_TOKEN.test(id));
-  if (tokens.length === 0) return 0;
+  for (let start = 0; start < tokens.length; start += HASHED_PER_STATEMENT)
+    await hashTokens(tokens.slice(start, start + HASHED_PER_STATEMENT));
+  return tokens.length;
+};
+
+// Each token binds three variables, and SQLite refuses a statement with more than 32,766
+const HASHED_PER_STATEMENT = 500;
+
+const hashTokens = async (tokens: string[]) => {
   const hashed = sql.join(
     tokens.map((token) => sql`WHEN ${token} THEN ${hashToken(token)}`),
     sql` `,
@@ -110,7 +118,6 @@ const hashStoredTokens = async () => {
     .update(sessions)
     .set({ id: sql`CASE ${sessions.id} ${hashed} END` })
     .where(inArray(sessions.id, tokens));
-  return tokens.length;
 };
 
 /** For sessions deleted by another process, as reset-password.ts does. */

@@ -21,8 +21,8 @@ import { LoggedHTTPException } from "./db/errors";
 
 const app = new OpenAPIHono({ defaultHook: rejectInvalidInput });
 
-// Far above the largest request the app makes, a list's delete naming every task it holds, and
-// the longest note (db/field-limits.ts)
+// Above the largest request the app makes, a list's delete naming the most tasks it names and the
+// longest task or note (shared/field-limits.ts), as app.test.ts checks
 export const MAX_BODY_BYTES = 256 * 1024;
 
 app.onError((err, c) => {

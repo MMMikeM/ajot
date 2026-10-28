@@ -78,3 +78,18 @@ test("the purge hashes every session still stored as its token", async () => {
   for (const token of [one, two, hashed])
     expect(await sessionRepo.findValid(token)).toMatchObject({ userId: "alice" });
 });
+
+test("the purge hashes more sessions stored as their token than one statement can bind", async () => {
+  await db.delete(sessions);
+  const tokens = Array.from({ length: 11_000 }, () => randomBytes(32).toString("hex"));
+  const expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+  for (let i = 0; i < tokens.length; i += 1_000)
+    await db
+      .insert(sessions)
+      .values(tokens.slice(i, i + 1_000).map((id) => ({ id, userId: "alice", expiresAt })));
+
+  expect(await sessionRepo.hashStoredTokens()).toBe(tokens.length);
+  const ids = new Set(await storedIds());
+  expect(ids.size).toBe(tokens.length);
+  expect(tokens.filter((token) => ids.has(token))).toEqual([]);
+});

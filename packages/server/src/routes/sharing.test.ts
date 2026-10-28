@@ -84,7 +84,7 @@ describe("sharing a task", () => {
 
   test("with a contact shares it and tells them once", async () => {
     vi.mocked(contactRepo.findContactUser).mockResolvedValueOnce(bob);
-    vi.mocked(taskRepo.insertShare).mockResolvedValueOnce({ share, added: true });
+    vi.mocked(taskRepo.insertShare).mockResolvedValueOnce({ share, added: true, changed: true });
     const res = await shareWith("Bob");
     expect(res.status).toBe(200);
     expect(contactRepo.findContactUser).toHaveBeenCalledWith("alice", "bob");
@@ -98,11 +98,26 @@ describe("sharing a task", () => {
 
   test("with someone it's already shared with changes nothing and tells no one", async () => {
     vi.mocked(contactRepo.findContactUser).mockResolvedValueOnce(bob);
-    vi.mocked(taskRepo.insertShare).mockResolvedValueOnce({ share, added: false });
+    vi.mocked(taskRepo.insertShare).mockResolvedValueOnce({ share, added: false, changed: false });
     const res = await shareWith("bob");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(share);
     expect(sendReachChanges).not.toHaveBeenCalled();
+    expect(sendNotification).not.toHaveBeenCalled();
+  });
+
+  test("again with another permission changes it, and tells no one it's new", async () => {
+    vi.mocked(contactRepo.findContactUser).mockResolvedValueOnce(bob);
+    const upgraded = { ...share, permission: "edit" as const };
+    vi.mocked(taskRepo.insertShare).mockResolvedValueOnce({
+      share: upgraded,
+      added: false,
+      changed: true,
+    });
+    const res = await shareWith("bob");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(upgraded);
+    expect(sendReachChanges).toHaveBeenCalledOnce();
     expect(sendNotification).not.toHaveBeenCalled();
   });
 });
@@ -188,7 +203,7 @@ describe("who sent a task", () => {
 describe("sharing too much at once", () => {
   test("is refused until a few minutes have passed", async () => {
     vi.mocked(contactRepo.findContactUser).mockResolvedValue(bob);
-    vi.mocked(taskRepo.insertShare).mockResolvedValue({ share, added: false });
+    vi.mocked(taskRepo.insertShare).mockResolvedValue({ share, added: false, changed: false });
     const statuses = [];
     for (let i = 0; i < 30; i++) statuses.push((await shareWith("bob")).status);
     expect(statuses.at(-1)).toBe(429);

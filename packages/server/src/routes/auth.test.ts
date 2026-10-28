@@ -144,16 +144,26 @@ describe("too many tries", () => {
     );
   });
 
-  test("at one username, wrong passwords from anywhere stop it being tried", async () => {
+  test("at one username, wrong passwords from one address stop it being tried from there", async () => {
     vi.mocked(login).mockRejectedValue(new HTTPException(401, { message: "Wrong" }));
     for (let i = 0; i < 10; i++)
       expect(
-        (await from(`198.51.100.${i}`, "/login", { username: "Target", password: "x" })).status,
+        (await from("198.51.100.1", "/login", { username: "Target", password: `${i}` })).status,
       ).toBe(401);
 
-    const res = await from("198.51.100.99", "/login", { username: "target", password: "right" });
+    const res = await from("198.51.100.1", "/login", { username: "target", password: "right" });
     expect(res.status).toBe(429);
     expect(login).toHaveBeenCalledTimes(10);
+  });
+
+  test("at one username, wrong passwords from one address don't lock out its owner elsewhere", async () => {
+    vi.mocked(login).mockRejectedValue(new HTTPException(401, { message: "Wrong" }));
+    for (let i = 0; i < 15; i++)
+      await from("198.51.100.66", "/login", { username: "owner", password: `${i}` });
+
+    vi.mocked(login).mockResolvedValueOnce(session);
+    const res = await from("192.0.2.80", "/login", { username: "owner", password: "right" });
+    expect(res.status).toBe(200);
   });
 
   test("at one username, guesses sent at once are counted together", async () => {
@@ -165,7 +175,7 @@ describe("too many tries", () => {
     );
     const statuses = await Promise.all(
       Array.from({ length: 15 }, async (_, i) => {
-        const res = await from(`198.18.0.${i}`, "/login", { username: "burst", password: `${i}` });
+        const res = await from("198.18.0.1", "/login", { username: "burst", password: `${i}` });
         return res.status;
       }),
     );
@@ -181,7 +191,7 @@ describe("too many tries", () => {
     vi.mocked(login).mockResolvedValueOnce(session);
     await from("192.0.2.1", "/login", { username: "typo", password: "right" });
 
-    expect((await from("192.0.2.2", "/login", { username: "typo", password: "x" })).status).toBe(
+    expect((await from("192.0.2.1", "/login", { username: "typo", password: "x" })).status).toBe(
       401,
     );
   });
@@ -194,6 +204,38 @@ describe("too many tries", () => {
 
     expect((await from("203.0.113.9", "/signup", body(10))).status).toBe(429);
     vi.mocked(signup).mockReset();
+  });
+
+  test("tries at a username from one address don't keep it from someone elsewhere", async () => {
+    vi.mocked(signup).mockRejectedValue(new HTTPException(403, { message: "No invite" }));
+    const wanted = { username: "wanted", password: "long enough", name: "W" };
+    for (let i = 0; i < 10; i++) await from("203.0.113.20", "/signup", wanted);
+
+    expect((await from("203.0.113.21", "/signup", wanted)).status).toBe(403);
+    vi.mocked(signup).mockReset();
+  });
+
+  test("behind a proxy on the Docker bridge, one person's wrong passwords lock out no one else", async () => {
+    vi.unstubAllEnvs();
+    const viaProxy = (client: string, body: unknown) =>
+      answering.request(
+        "/login",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Forwarded-For": client },
+          body: JSON.stringify(body),
+        },
+        { incoming: { socket: { remoteAddress: "172.17.0.1" } } },
+      );
+    vi.mocked(login).mockRejectedValue(new HTTPException(401, { message: "Wrong" }));
+    for (let i = 0; i < 20; i++)
+      await viaProxy("203.0.113.50", { username: `w${i}`, password: "x" });
+    expect((await viaProxy("203.0.113.50", { username: "w0", password: "x" })).status).toBe(429);
+
+    vi.mocked(login).mockResolvedValueOnce(session);
+    expect((await viaProxy("203.0.113.51", { username: "w0", password: "right" })).status).toBe(
+      200,
+    );
   });
 
   test("an address someone sent is ignored off Fly, where nothing overwrites it", async () => {

@@ -1,4 +1,5 @@
 import { generateKeyBetween } from "fractional-indexing";
+import { MAX_SORT_KEY } from "@newtab-todo/shared/field-limits";
 
 type SortKey = string | null | undefined;
 
@@ -20,11 +21,12 @@ const integerLength = (head: string) =>
 
 /**
  * A key fractional-indexing makes, as the database's sort_order CHECK has it: a head letter, the
- * integer part it gives the length of, and a fraction not ending in 0, all base-62 digits.
- * fractional-indexing itself takes any character as a digit.
+ * integer part it gives the length of, and a fraction not ending in 0, all base-62 digits, at most
+ * MAX_SORT_KEY long. fractional-indexing itself takes any character as a digit.
  */
 export const isSortKey = (key: SortKey): key is string => {
-  if (!key || !/^[A-Za-z][0-9A-Za-z]*$/.test(key) || key === SMALLEST_INTEGER) return false;
+  if (!key || key.length > MAX_SORT_KEY) return false;
+  if (!/^[A-Za-z][0-9A-Za-z]*$/.test(key) || key === SMALLEST_INTEGER) return false;
   const length = integerLength(key[0]!);
   return key.length === length || (key.length > length && !key.endsWith("0"));
 };

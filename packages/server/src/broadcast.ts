@@ -10,19 +10,17 @@ type SSEWriter = { write: (event: string, data: string) => void; close: () => vo
 
 const sseClients = new Map<string, Set<SSEWriter>>();
 
-// Far more tabs than anyone keeps open, so a reconnecting tab never pushes out one in use; enough
-// to stop one account holding the server's connections open
+// Far more tabs than anyone keeps open; enough to stop one account holding the server's connections
+// open. One past it is refused rather than closing an older one, whose EventSource would reconnect
+// and close the next, round and round.
 const MAX_STREAMS_PER_USER = 100;
+
+export const hasRoomForStream = (userId: string) =>
+  (sseClients.get(userId)?.size ?? 0) < MAX_STREAMS_PER_USER;
 
 export const registerClient = (userId: string, writer: SSEWriter) => {
   if (!sseClients.has(userId)) sseClients.set(userId, new Set());
-  const writers = sseClients.get(userId)!;
-  if (writers.size >= MAX_STREAMS_PER_USER) {
-    const [oldest] = writers;
-    writers.delete(oldest!);
-    oldest!.close();
-  }
-  writers.add(writer);
+  sseClients.get(userId)!.add(writer);
 };
 
 export const unregisterClient = (userId: string, writer: SSEWriter) => {

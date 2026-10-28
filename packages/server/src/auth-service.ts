@@ -79,14 +79,24 @@ export const signup = async (
 
 const wrongPassword = () => new HTTPException(401, { message: "Wrong username or password." });
 
-// Checked against when there's no such user, so a wrong username takes as long as a wrong password
+// Checked against when there's no such user, so a wrong username takes as long as a wrong password.
+// Worked out at startup, as a first login working it out would take two hashes' time.
 let unknownUserHash: Promise<string> | undefined;
+
+const hashForUnknownUsers = () =>
+  (unknownUserHash ??= hashPassword(randomBytes(32).toString("hex")).catch((err: unknown) => {
+    unknownUserHash = undefined;
+    throw err;
+  }));
+
+hashForUnknownUsers().catch((err: unknown) =>
+  console.error("[login] couldn't hash for unknown usernames; trying again at the next:", err),
+);
 
 export const login = async (username: string, password: string) => {
   const user = await userRepo.findWithPassword(username.toLowerCase());
   if (!user) {
-    unknownUserHash ??= hashPassword(randomBytes(32).toString("hex"));
-    await verifyPassword(await unknownUserHash, password);
+    await verifyPassword(await hashForUnknownUsers(), password);
     throw wrongPassword();
   }
   if (!(await verifyPassword(user.passwordHash, password))) throw wrongPassword();

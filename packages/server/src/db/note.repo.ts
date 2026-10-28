@@ -4,7 +4,8 @@ import { db } from "./client";
 import { notes } from "./schema";
 import { ConflictError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
-import { MAX_TEXT, MAX_TITLE, limited, limitedId } from "./field-limits";
+import { MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
+import { limited, limitedId } from "./field-limits";
 import { notAfterNow, stampsNotAfterNow } from "./stamps";
 
 export type NoteInsert = typeof notes.$inferInsert;

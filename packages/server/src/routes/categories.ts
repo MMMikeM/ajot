@@ -18,7 +18,7 @@ import { broadcast } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
-import { MAX_USERNAME } from "../db/field-limits";
+import { MAX_USERNAME } from "@newtab-todo/shared/field-limits";
 import { limitSharing } from "../rate-limit";
 
 const collaboratorSchema = z.object({

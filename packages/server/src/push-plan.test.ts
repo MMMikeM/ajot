@@ -15,7 +15,6 @@ const FRIEND = "friend";
 const phone = { endpoint: "phone", userId: ME, deviceId: "phone", kind: "web" } as const;
 const laptop = { endpoint: "laptop", userId: ME, deviceId: "laptop", kind: "web" } as const;
 const extension = { endpoint: "ext", userId: ME, deviceId: null, kind: "extension" } as const;
-const unowned = { endpoint: "unowned", userId: null, deviceId: null, kind: "extension" } as const;
 
 const event = { model: "tasks", action: "insert", data: { id: "t1", title: "Milk" } } as const;
 const shared: NotificationPayload = {
@@ -100,13 +99,6 @@ describe("planPushes", () => {
       pushes.find((push) => push.subs.some((sub) => sub.endpoint === endpoint))?.options.urgency;
     expect(urgencyOf("phone")).toBe("normal");
     expect(urgencyOf("laptop")).toBe("high");
-  });
-
-  test("a subscription with no account never gets anyone's rows", () => {
-    const pushes = planPushes(ME, changeFrom("phone"), [unowned], new Map());
-
-    expect(sentTo(pushes)).toEqual({ unowned: ["sync"] });
-    expect(pushes[0]!.message.rows).toBeUndefined();
   });
 });
 

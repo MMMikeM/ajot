@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { extractToken, validateSession } from "../auth";
-import { registerClient, unregisterClient } from "../broadcast";
+import { hasRoomForStream, registerClient, unregisterClient } from "../broadcast";
 
 export const eventsRoute = new Hono().get("/", async (c) => {
   // EventSource can't set headers, so the stream alone takes the token in its URL; anywhere else
@@ -15,6 +15,12 @@ export const eventsRoute = new Hono().get("/", async (c) => {
   } catch {
     return c.json({ error: "Unauthorized" }, 401);
   }
+
+  // The tabs' and Firefox background's EventSource closes on it and backs off to a minute.
+  // Nothing may await between this and registerClient, which streamSSE's callback runs in this
+  // same tick, or two streams could both take the last room.
+  if (!hasRoomForStream(userId))
+    return c.json({ error: "Too many open connections. Close some tabs." }, 429);
 
   return streamSSE(c, async (stream) => {
     const writer = {

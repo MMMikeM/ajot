@@ -8,6 +8,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "~/components/ui/popover
 import { CategoryCollabSheet } from "~/components/CategoryCollabSheet";
 import { CollabBadge } from "./CollabBadge";
 import { Input } from "~/components/ui/field";
+import { MAX_NAME } from "@newtab-todo/shared/field-limits";
 import { ColorDot } from "~/components/ui/color-dot";
 import { setActiveCategoryId } from "~/lib/state/active-category";
 import { useCurrentUserId } from "~/lib/auth/current-user";
@@ -161,6 +162,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
             type="text"
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
+            maxLength={MAX_NAME}
             className="h-7 text-xs"
             onBlur={submitRename}
           />
@@ -285,6 +287,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
+              maxLength={MAX_NAME}
               placeholder="Name..."
               className="h-7 text-xs"
               // eslint-disable-next-line jsx-a11y/no-autofocus -- inline add form, user just clicked Add
