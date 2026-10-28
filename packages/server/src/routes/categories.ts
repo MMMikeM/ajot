@@ -1,5 +1,4 @@
-import { createRoute, z } from "@hono/zod-openapi";
-import { HTTPException } from "hono/http-exception";
+import { z } from "@hono/zod-openapi";
 import categoryRepo, {
   categoryInsertSchema,
   categoryUpdateSchema,
@@ -12,38 +11,34 @@ import { requireList } from "./task-users";
 import { sendReachChanges } from "./reach";
 import { userPublicSchema } from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
-import { BadRequestError, NotFoundError } from "../db/errors";
-import { authed } from "../middleware";
+import { BadRequestError, NotFoundError, ONLY_CONTACTS } from "../db/errors";
+import { authed, authedRoute } from "../middleware";
 import { broadcast } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
-import { errorSchema } from "./openapi-schemas";
-import { jsonBody, jsonContent, withAuth } from "./crud";
+import { jsonBody } from "./crud";
 import { MAX_USERNAME } from "@newtab-todo/shared/field-limits";
 import { limitSharing } from "../rate-limit";
 
 const collaboratorSchema = z.object({
-  username: z
-    .string()
-    .min(1, "Choose someone to share with.")
-    .max(MAX_USERNAME, "Only your contacts can be added."),
+  username: z.string().min(1, "Choose someone to share with.").max(MAX_USERNAME, ONLY_CONTACTS),
 });
 const collaboratorIdSchema = z.object({ userId: z.string() });
 
 export const categoryRoutes = authed()
   .openapi(
-    createRoute({
+    authedRoute({
       method: "get",
       path: "/",
-      responses: withAuth({ 200: jsonContent(z.array(categoryResponseSchema)) }),
+      responses: { 200: z.array(categoryResponseSchema) },
     }),
     async (c) => c.json(await categoryRepo.list(c.get("userId")), 200),
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/",
       request: jsonBody(categoryInsertSchema),
-      responses: withAuth({ 200: jsonContent(categoryResponseSchema) }),
+      responses: { 200: categoryResponseSchema, 409: true },
     }),
     async (c) => {
       const userId = c.get("userId");
@@ -53,15 +48,11 @@ export const categoryRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "put",
       path: "/",
       request: jsonBody(categoryUpdateSchema),
-      responses: withAuth({
-        200: jsonContent(categoryResponseSchema),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: { 200: categoryResponseSchema, 403: true, 404: true, 409: true },
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
@@ -78,16 +69,11 @@ export const categoryRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "delete",
       path: "/",
       request: jsonBody(categoryDeleteSchema),
-      responses: withAuth({
-        200: jsonContent(categoryResponseSchema),
-        400: jsonContent(errorSchema, "Bad request"),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: { 200: categoryResponseSchema, 400: true, 403: true, 404: true },
     }),
     async (c) => {
       const { id, tasks: taskAction, taskIds } = c.req.valid("json");
@@ -102,14 +88,10 @@ export const categoryRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/:id/restore",
-      responses: withAuth({
-        200: jsonContent(categoryResponseSchema),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: { 200: categoryResponseSchema, 403: true, 404: true },
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -122,14 +104,10 @@ export const categoryRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "get",
       path: "/:id/collaborators",
-      responses: withAuth({
-        200: jsonContent(z.array(userPublicSchema)),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: { 200: z.array(userPublicSchema), 403: true, 404: true },
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -139,33 +117,17 @@ export const categoryRoutes = authed()
       ]);
 
       return c.json(
-        cat.collaborators.flatMap((c) =>
-          c.user
-            ? [
-                {
-                  id: c.user.id,
-                  name: c.user.name,
-                  username: c.user.username,
-                  avatarUrl: c.user.avatarUrl,
-                },
-              ]
-            : [],
-        ),
+        cat.collaborators.map((c) => c.user),
         200,
       );
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/:id/collaborators",
       request: jsonBody(collaboratorSchema),
-      responses: withAuth({
-        200: jsonContent(userPublicSchema),
-        400: jsonContent(errorSchema, "Bad request"),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: { 200: userPublicSchema, 400: true, 403: true, 404: true, 429: true },
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -177,7 +139,7 @@ export const categoryRoutes = authed()
         requireList(id, userId, "manage"),
         contactRepo.findContactUser(userId, username.toLowerCase()),
       ]);
-      if (!targetUser) throw new BadRequestError("Only your contacts can be added.");
+      if (!targetUser) throw new BadRequestError(ONLY_CONTACTS);
 
       const before = await reachRepo.read({ listIds: [id] });
       const added = await categoryCollaboratorRepo.add(id, targetUser.id);
@@ -190,20 +152,16 @@ export const categoryRoutes = authed()
         categoryId: id,
         categoryName: cat.name,
         fromUser: actorName,
-      }).catch(() => {});
+      });
 
       return c.json(targetUser, 200);
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "delete",
       path: "/:id/collaborators/:userId",
-      responses: withAuth({
-        200: jsonContent(collaboratorIdSchema),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: { 200: collaboratorIdSchema, 403: true, 404: true },
     }),
     async (c) => {
       const { id, userId: targetUserId } = c.req.param();
@@ -219,24 +177,19 @@ export const categoryRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/:id/collaborators/:userId/restore",
-      responses: withAuth({
-        200: jsonContent(collaboratorIdSchema),
-        400: jsonContent(errorSchema, "Bad request"),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: { 200: collaboratorIdSchema, 400: true, 403: true, 404: true },
     }),
     async (c) => {
       const { id, userId: targetUserId } = c.req.param();
       const userId = c.get("userId");
       await requireList(id, userId, "manage");
       if (!(await contactRepo.exists(userId, targetUserId)))
-        throw new HTTPException(400, {
-          message: "You can only share lists with your contacts. Invite them first.",
-        });
+        throw new BadRequestError(
+          "You can only share lists with your contacts. Invite them first.",
+        );
 
       const { before, changed } = await categoryCollaboratorRepo.restore(id, targetUserId);
       await sendReachChanges(c, before, changed);

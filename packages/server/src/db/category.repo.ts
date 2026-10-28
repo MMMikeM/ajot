@@ -4,7 +4,7 @@ import { z } from "@hono/zod-openapi";
 import { db, inTransaction } from "./client";
 import reachRepo from "./reach.repo";
 import { categories, listMembers, tasks, taskShares, type CategoryDeletion } from "./schema";
-import { BadRequestError, ConflictError, NotFoundError, StaleUpdateError } from "./errors";
+import { BadRequestError, IdTakenError, NotFoundError, StaleUpdateError } from "./errors";
 import { now } from "@newtab-todo/shared/iso";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { keptSortOrder } from "./sort-key";
@@ -39,7 +39,7 @@ export const categoryResponseSchema = createSelectSchema(categories)
   .omit({ deletedAt: true, deletion: true })
   .extend({
     user: z.object({ name: z.string() }).nullish(),
-    collaborators: z.array(z.object({ user: collaboratorUserSchema.nullable() })).nullish(),
+    collaborators: z.array(z.object({ user: collaboratorUserSchema })).nullish(),
   });
 const limitedFields = {
   id: limitedId,
@@ -164,7 +164,7 @@ const insert = async (data: CategoryInsert) => {
       setWhere: eq(categories.userId, data.userId),
     })
     .returning(sentColumns);
-  if (!row) throw new ConflictError("List id taken");
+  if (!row) throw new IdTakenError("category", data.id);
   return row;
 };
 

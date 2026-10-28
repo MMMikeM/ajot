@@ -1,12 +1,12 @@
-import { createRoute, z } from "@hono/zod-openapi";
+import { z } from "@hono/zod-openapi";
 import { isPushServiceEndpoint } from "@mmmike/web-push/send";
 import pushPreferenceRepo, { pushPreferencesSchema } from "../db/push-preference.repo";
 import pushSubscriptionRepo from "../db/push-subscription.repo";
 import { pushSubscriptionKinds } from "../db/schema";
-import { authed } from "../middleware";
-import { okSchema } from "./openapi-schemas";
-import { jsonBody, jsonContent, withAuth } from "./crud";
+import { authed, authedRoute } from "../middleware";
+import { jsonBody, okBody } from "./crud";
 import { MAX_ID } from "@newtab-todo/shared/field-limits";
+import { okSchema } from "./openapi-schemas";
 
 // Push services' endpoints run to a few hundred characters
 const MAX_ENDPOINT = 2_000;
@@ -25,7 +25,7 @@ const deviceHeaders = z.object({ "x-device-id": z.string().min(1).max(MAX_ID) })
 
 export const pushRoutes = authed()
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/subscribe",
       request: {
@@ -33,7 +33,7 @@ export const pushRoutes = authed()
         headers: z.object({ "x-device-id": z.string().max(MAX_ID).optional() }),
         ...jsonBody(subscriptionSchema),
       },
-      responses: withAuth({ 200: jsonContent(okSchema) }),
+      responses: { 200: okSchema },
     }),
     async (c) => {
       const { endpoint, keys } = c.req.valid("json");
@@ -45,27 +45,27 @@ export const pushRoutes = authed()
         userId: c.get("userId"),
         deviceId: c.req.valid("header")["x-device-id"] ?? null,
       });
-      return c.json({ ok: true as const }, 200);
+      return c.json(okBody, 200);
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/unsubscribe",
       request: jsonBody(z.object({ endpoint: z.string().max(MAX_ENDPOINT) })),
-      responses: withAuth({ 200: jsonContent(okSchema) }),
+      responses: { 200: okSchema },
     }),
     async (c) => {
       await pushSubscriptionRepo.remove(c.req.valid("json").endpoint, c.get("userId"));
-      return c.json({ ok: true as const }, 200);
+      return c.json(okBody, 200);
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "get",
       path: "/preferences",
       request: { headers: deviceHeaders },
-      responses: withAuth({ 200: jsonContent(pushPreferencesSchema) }),
+      responses: { 200: pushPreferencesSchema },
     }),
     async (c) =>
       c.json(
@@ -74,11 +74,11 @@ export const pushRoutes = authed()
       ),
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "put",
       path: "/preferences",
       request: { headers: deviceHeaders, ...jsonBody(pushPreferencesSchema) },
-      responses: withAuth({ 200: jsonContent(okSchema) }),
+      responses: { 200: okSchema },
     }),
     async (c) => {
       await pushPreferenceRepo.save(
@@ -86,6 +86,6 @@ export const pushRoutes = authed()
         c.req.valid("header")["x-device-id"],
         c.req.valid("json"),
       );
-      return c.json({ ok: true as const }, 200);
+      return c.json(okBody, 200);
     },
   );

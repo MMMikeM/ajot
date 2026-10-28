@@ -2,6 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import inviteTokenRepo from "../db/invite-token.repo";
+import { NotFoundError } from "../db/errors";
 import sessionRepo from "../db/session.repo";
 import { login, signup } from "../auth-service";
 import { signRevocation } from "../session-revocation";
@@ -13,7 +14,7 @@ vi.mock("../db/invite-token.repo", () => ({ default: { findInviterName: vi.fn() 
 vi.mock("../db/session.repo", () => ({ default: { forgetUser: vi.fn() } }));
 vi.mock("../auth-service", () => ({ login: vi.fn(), signup: vi.fn() }));
 vi.mock("../auth", () => ({ extractToken: vi.fn(), validateSession: vi.fn() }));
-vi.mock("../notify", () => ({ sendNotification: vi.fn(async () => {}) }));
+vi.mock("../notify", () => ({ sendNotification: vi.fn() }));
 vi.mock("./contact-changes", () => ({ sendContactChanges: vi.fn() }));
 
 describe("GET /invites/:token", () => {
@@ -26,7 +27,7 @@ describe("GET /invites/:token", () => {
   });
 
   test("an unknown, used or expired invite says nothing about anyone", async () => {
-    vi.mocked(inviteTokenRepo.findInviterName).mockResolvedValueOnce(null);
+    vi.mocked(inviteTokenRepo.findInviterName).mockRejectedValueOnce(new NotFoundError("invite"));
     const res = await authRoutes.request("/invites/nope");
     expect(res.status).toBe(404);
     expect(await res.text()).not.toMatch(/Mike/);

@@ -1,28 +1,23 @@
-import { createRoute, z } from "@hono/zod-openapi";
+import { z } from "@hono/zod-openapi";
 import contactRepo, { contactResponseSchema } from "../db/contact.repo";
 import { sendReachChanges } from "./reach";
 import { sendContactChanges } from "./contact-changes";
-import { authed } from "../middleware";
-import { errorSchema } from "./openapi-schemas";
-import { jsonContent, withAuth } from "./crud";
+import { authed, authedRoute } from "../middleware";
 
 export const contactRoutes = authed()
   .openapi(
-    createRoute({
+    authedRoute({
       method: "get",
       path: "/",
-      responses: withAuth({ 200: jsonContent(z.array(contactResponseSchema)) }),
+      responses: { 200: z.array(contactResponseSchema) },
     }),
     async (c) => c.json(await contactRepo.list(c.get("userId")), 200),
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "delete",
       path: "/:id",
-      responses: withAuth({
-        200: jsonContent(z.object({ id: z.string() })),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: { 200: z.object({ id: z.string() }), 404: true },
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -32,13 +27,10 @@ export const contactRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/:id/restore",
-      responses: withAuth({
-        200: jsonContent(z.object({ id: z.string() })),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: { 200: z.object({ id: z.string() }), 404: true },
     }),
     async (c) => {
       const { id } = c.req.param();

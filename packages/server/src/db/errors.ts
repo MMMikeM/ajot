@@ -1,5 +1,11 @@
 import { HTTPException } from "hono/http-exception";
 
+export const INVITE_GONE = "This invite link has expired or been used. Ask for a new one.";
+
+export const ONLY_CONTACTS = "Only your contacts can be added.";
+
+export const UNAUTHORIZED = "Unauthorized";
+
 const goneMessages = {
   task: "That task no longer exists.",
   category: "That list no longer exists.",
@@ -11,6 +17,8 @@ const goneMessages = {
   "category collaborator": "They're no longer in this list.",
   "removed collaborator": "That can no longer be undone.",
   "task share": "That task is no longer shared with them.",
+  "task shared with you": "That task is no longer shared with you.",
+  invite: INVITE_GONE,
 } as const;
 
 /** An HTTPException whose ids stay in the server's log: `message` is what a person is shown. */
@@ -44,6 +52,18 @@ export class ForbiddenError extends HTTPException {
 export class ConflictError extends HTTPException {
   constructor(message: string) {
     super(409, { message });
+  }
+}
+
+export class GoneError extends HTTPException {
+  constructor(message: string) {
+    super(410, { message });
+  }
+}
+
+export class IdTakenError extends LoggedHTTPException {
+  constructor(entity: string, id: string) {
+    super(409, "That couldn't be saved. Try adding it again.", `${entity} id taken: ${id}`);
   }
 }
 

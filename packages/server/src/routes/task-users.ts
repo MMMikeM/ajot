@@ -23,8 +23,10 @@ export const requireTask = async (
   const { task, access } = await taskRepo.findWithAccess(id, { deleted });
   const mine = widest(access).find((grant) => grant.userId === userId);
   if (!task || !mine) throw new NotFoundError("task", id);
-  if ((action === "edit" && !mine.canEdit) || (action === "manage" && !mine.canDelete))
-    throw new ForbiddenError("Not authorized");
+  if (action === "edit" && !mine.canEdit)
+    throw new ForbiddenError("This task is shared with you to view only.");
+  if (action === "manage" && !mine.canDelete)
+    throw new ForbiddenError("Only the task's owner can do that.");
   return { task, mine, access, audience: audienceFrom(access) };
 };
 

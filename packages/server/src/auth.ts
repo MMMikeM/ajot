@@ -1,5 +1,6 @@
 import { HTTPException } from "hono/http-exception";
 import sessionRepo from "./db/session.repo";
+import { UNAUTHORIZED } from "./db/errors";
 
 /** A Bearer header. Never a cookie: the browser would attach one to a request another site starts. */
 export const extractToken = (request: Request): string | null =>
@@ -7,6 +8,6 @@ export const extractToken = (request: Request): string | null =>
 
 export const validateSession = async (token: string): Promise<string> => {
   const session = await sessionRepo.findValid(token);
-  if (!session) throw new HTTPException(401, { message: "Unauthorized" });
+  if (!session) throw new HTTPException(401, { message: UNAUTHORIZED });
   return session.userId;
 };
