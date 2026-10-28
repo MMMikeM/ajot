@@ -3,7 +3,11 @@
  * call these functions instead of reaching for the API client. Infrastructure files
  * (collections.ts, offline.ts, push.ts) are exempt.
  */
-import { client } from "~/lib/api";
+import { apiHeaders, client } from "~/lib/api";
+import { getAuthToken } from "~/lib/auth/token";
+import { clearSession } from "~/lib/auth/session";
+import { getServerUrl } from "~/lib/server-url";
+import { unregisterPushSubscription } from "~/lib/sync/push";
 import { categoriesCollection, contactsCollection, tasksCollection } from "~/lib/db/collections";
 
 const UNREACHABLE = "Couldn't reach the server. Check your connection and try again.";
@@ -130,10 +134,28 @@ export const authenticate = async (
   }
 };
 
-export const logout = async () => {
+// Not through `client`, which signs each request with whoever is signed in when it's sent
+const endServerSession = async (token: string) => {
   try {
-    await client.api.auth.logout.$post();
+    await fetch(`${getServerUrl()}/api/auth/logout`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      keepalive: true,
+    });
   } catch {
-    // best-effort; caller clears local state regardless
+    // Unreachable: the session stays valid on the server, but nothing here holds its token
   }
+};
+
+/**
+ * Signs out on this device at once. Resolves once the server has heard, or couldn't be reached:
+ * the push subscription goes first, since the server drops it only for a live session.
+ */
+export const signOut = () => {
+  const token = getAuthToken();
+  const signedOutOnServer = unregisterPushSubscription(apiHeaders()).then(() =>
+    token ? endServerSession(token) : undefined,
+  );
+  clearSession();
+  return signedOutOnServer;
 };

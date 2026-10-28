@@ -1,11 +1,8 @@
 import { useSyncExternalStore } from "react";
 import { DeleteOperationItemNotFoundError } from "@tanstack/query-db-collection";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
-import {
-  getSignedInUserId,
-  shareUserWithBackground,
-  subscribeCurrentUser,
-} from "~/lib/auth/current-user";
+import { getSignedInUserId } from "~/lib/auth/current-user";
+import { shareSessionWithBackground } from "~/lib/auth/session";
 import {
   tasksCollection,
   categoriesCollection,
@@ -40,6 +37,8 @@ const syncStateStore = createExternalStore<SyncState>("disconnected");
 export const useSyncState = syncStateStore.useStore;
 const ownSyncState = trackSyncState(syncStateStore.set);
 
+const countPending = () => offline.getPendingCount() + offline.getRunningCount();
+
 let pendingSnapshot = 0;
 const pendingListeners = new Set<() => void>();
 let pendingInterval: ReturnType<typeof setInterval> | null = null;
@@ -48,7 +47,7 @@ const subscribePending = (cb: () => void) => {
   pendingListeners.add(cb);
   if (pendingListeners.size === 1) {
     pendingInterval = setInterval(() => {
-      const next = offline.getPendingCount() + offline.getRunningCount();
+      const next = countPending();
       if (next !== pendingSnapshot) {
         pendingSnapshot = next;
         pendingListeners.forEach((fn) => fn());
@@ -224,8 +223,26 @@ const listenSwMessages = () => {
   });
 };
 
+/**
+ * Edits the last account queued stay on screen until the page starts again without them (they
+ * wait in the outbox for that account), so a tab signed in as someone else, here or in another
+ * tab, starts again rather than show them in the new account's lists.
+ */
+const reloadOnAccountSwitch = () => {
+  let account = getSignedInUserId();
+  subscribeAuthToken(() => {
+    const next = getSignedInUserId();
+    if (next === null) return;
+    const switched = account !== null && next !== account;
+    account = next;
+    // After the sign-in page has moved on, or it would start again on the sign-in form
+    if (switched && countPending() > 0) setTimeout(() => location.reload());
+  });
+};
+
 export const initSync = () => {
   const target = getBuildTarget();
+  reloadOnAccountSwitch();
   if (target === "browser" || (target === "extension" && !backgroundHoldsSse())) {
     if (!es && getAuthToken()) connectSSE();
     subscribeAuthToken(reconnect);
@@ -237,12 +254,10 @@ export const initSync = () => {
     shareSession();
     if (getAuthToken()) refreshPushSubscription().catch(console.error);
     subscribeAuthToken(shareSession);
-    subscribeCurrentUser(shareSession);
   }
   if (target === "extension") {
     listenExtensionMessages();
-    // Installs signed in before the background needed the account
-    shareUserWithBackground();
+    shareSessionWithBackground();
     if (!backgroundHoldsSse()) return;
     // Probe the background page for its current SSE connection state so the
     // indicator isn't stuck at "Offline" on fresh tab load. It broadcasts later changes.
