@@ -274,18 +274,15 @@ test.describe("a press on the first letter of text beside a checkbox", () => {
     await expect(done).not.toBeChecked();
   });
 
-  test("the detail sheet's subtask checkbox ends before the subtask's text", async ({
+  test("the detail sheet's subtask title edits it rather than ticking it", async ({
     page,
   }, testInfo) => {
     await openList(page);
     const sheet = await openSheet(page, "Book flights");
     const subtask = "Compare Tuesday and Wednesday fares";
     const checkbox = sheet.getByRole("checkbox", { name: subtask, exact: true });
-    const at = await firstLetterBeside(checkbox, sheet.getByText(subtask, { exact: true }));
-    // On touch, Chromium moves a tap on text with no action of its own to the nearest control,
-    // so a tap this close to the checkbox still ticks it
-    if (testInfo.project.name === "mobile") return;
-    await press(page, testInfo, at);
+    await pressFirstLetter(page, testInfo, sheet.getByText(subtask, { exact: true }), checkbox);
+    await expect(sheet.getByRole("textbox", { name: "Subtask" })).toBeFocused();
     await expect(checkbox).not.toBeChecked();
   });
 });

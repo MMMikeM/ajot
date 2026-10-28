@@ -264,6 +264,7 @@ Flat at rest. Depth comes from tonal layering (background, then surface, surface
 
 - Shows only what the task has: the title and checkbox, then the description, date, list, sharing and assignee rows, subtasks and notes. Icons hang in a gutter under the checkbox, so values start at the title's left edge. Anything missing is offered by one `+ Add` control that opens a row of chips (Date, Description, Subtask, Note, List, Share, Assignee); a field added this way stays until the sheet closes. The footer holds Add and Delete.
 - Ticking, deleting the task, and deleting a subtask or note all offer Undo, as in the list.
+- A subtask's title edits in place on a tap or click, at the same size, so the row doesn't move; Enter or leaving the field saves, Escape keeps the old title and the sheet open. On a view-only share it's plain text. Being a control of its own, it also keeps a tap on its first letters from landing on the checkbox beside it.
 - Someone a task was shared with sees the owner's name ("Sarah Murray’s task"), never assignee pills, and is never listed under "Shared with".
 
 ### Toasts
