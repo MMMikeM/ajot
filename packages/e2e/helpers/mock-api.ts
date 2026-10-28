@@ -271,3 +271,10 @@ export const mockApi = async (
 
   return data;
 };
+
+/** The list, signed in against the mocked API, once its rows show. */
+export const openList = async (page: Page, options?: MockApiOptions) => {
+  await mockApi(page, options);
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("[data-task-id]", { timeout: 15000 });
+};
