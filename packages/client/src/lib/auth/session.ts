@@ -2,12 +2,17 @@ import { setAuthToken } from "~/lib/auth/token";
 import { clearCurrentUser } from "~/lib/auth/current-user";
 import { getBuildTarget } from "~/lib/build-target";
 import { ext } from "~/lib/ext";
+import { clearSavedLists } from "~/lib/snapshot-store";
 import { TOKEN_KEY, MSG_TOKEN_CHANGED } from "~/lib/constants";
 
-/** Signs out on this device. Queued offline edits stay in the outbox until the next sign-in. */
+/**
+ * Signs out on this device. Edits still queued wait, out of sight, for the account to sign back
+ * in (lib/db/offline.ts).
+ */
 export const clearSession = () => {
   setAuthToken(null);
   clearCurrentUser();
+  clearSavedLists().catch(console.error);
   if (getBuildTarget() === "extension") {
     ext.storage.local
       .remove(TOKEN_KEY)

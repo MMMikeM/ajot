@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { createLazyFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { DragDropProvider } from "@dnd-kit/react";
 import { Plus, Search, X } from "lucide-react";
+import { compareSortOrder } from "@newtab-todo/shared/sort-order";
 import { CategorySidebar } from "~/components/category-nav/CategorySidebar";
 import { SearchResults } from "~/components/search/results";
 import { moveRowFocus } from "~/components/task/row-focus";
@@ -20,8 +21,7 @@ export const Route = createLazyFileRoute("/search")({
   component: SearchPage,
 });
 
-const bySortOrder = (a: Category, b: Category) =>
-  (a.sortOrder ?? "").localeCompare(b.sortOrder ?? "");
+const bySortOrder = (a: Category, b: Category) => compareSortOrder(a.sortOrder, b.sortOrder);
 
 const RESULT = "[data-search-result]";
 
