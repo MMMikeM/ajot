@@ -3,17 +3,15 @@ import { createId } from "@paralleldrive/cuid2";
 import { db, inTransaction, type Transaction } from "./client";
 import { categoryCollaborators, removedCollaborators, tasks, taskShares } from "./schema";
 import { NotFoundError } from "./errors";
-import { hoursFromNow, now } from "@newtab-todo/shared/iso";
+import { now } from "@newtab-todo/shared/iso";
 import reachRepo from "./reach.repo";
+import { undoableSince } from "./undo-window";
 
 /** Someone in a list, as a collaborator row names them. */
 type Membership = { categoryId: string; userId: string };
 
 /** What someone leaving a list took out of it, so an Undo can put it back. */
 type Leaving = Membership & { movedTaskIds: string[]; unfiledTaskIds: string[] };
-
-/** Outlasts an Undo toast paused while the page is hidden, but not a later change of mind. */
-const undoableSince = () => hoursFromNow(-1);
 
 /** Adding someone afresh drops the Undo of their removal, which would move their tasks again. */
 const add = async (categoryId: string, userId: string) => {

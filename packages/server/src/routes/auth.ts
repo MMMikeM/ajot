@@ -8,6 +8,7 @@ import { errorSchema, okSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent } from "./crud";
 import { MIN_PASSWORD_LENGTH } from "../password";
 import { sendNotification } from "../notify";
+import { isSignedRevocation } from "../session-revocation";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -31,6 +32,8 @@ const authResponseSchema = z.object({
 });
 
 const inviterSchema = z.object({ inviterName: z.string() });
+
+const revocationSchema = z.object({ userId: z.string(), at: z.number(), signature: z.string() });
 
 export const authRoutes = new OpenAPIHono()
   .openapi(
@@ -116,6 +119,27 @@ export const authRoutes = new OpenAPIHono()
       if (!token) throw new HTTPException(401, { message: "Unauthorized" });
       const userId = await validateSession(token);
       await sessionRepo.removeAllForUser(userId);
+      return c.json({ ok: true as const }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "post",
+      path: "/sessions-revoked",
+      hide: true,
+      request: jsonBody(revocationSchema),
+      responses: {
+        200: jsonContent(okSchema),
+        401: jsonContent(errorSchema, "Not signed with this server's database token"),
+      },
+    }),
+    // reset-password.ts deletes the sessions itself; this only stops this process's cache
+    // vouching for them
+    async (c) => {
+      const revocation = c.req.valid("json");
+      if (!isSignedRevocation(process.env.TURSO_AUTH_TOKEN, revocation))
+        throw new HTTPException(401, { message: "Unauthorized" });
+      sessionRepo.forgetUser(revocation.userId);
       return c.json({ ok: true as const }, 200);
     },
   );

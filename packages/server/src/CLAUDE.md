@@ -10,13 +10,15 @@ Hono API server with Drizzle ORM (Turso/libSQL). Package boundaries prevent serv
 
 Routes are in `src/routes/`. Each file exports Hono route handlers.
 
+- **What a client is told is what a person reads.** The app shows a route's `{ error }` as it is. Input a schema refuses is answered in that shape with its first issue's message (`rejectInvalidInput`, the root app's `defaultHook`), so a field a person can get wrong needs a message worded for them. `NotFoundError` and the other `LoggedHTTPException`s (`db/errors.ts`) say what happened by kind, and `onError` logs the ids they carry.
+
 ## Database
 
 One Turso database, reached over HTTP by `@tursodatabase/serverless` (`db/client.ts`): every statement is one round trip, so a query in a loop costs one each.
 
 - **A connection runs one statement at a time.** `db` sends SELECTs to three reader connections in turn and everything else to one, in order (`PooledConnection` in `db/connection.ts`), so concurrent requests and a `Promise.all` of reads don't queue behind each other. Transactions get a connection of their own (`inTransaction`).
 - **libSQL server ends a session idle for 10 s** and refuses the next request on it. Reads are retried once on a transport failure, and any statement once on an expired session, which never ran, on a new one (`db/connection.ts`).
-- **Session lookups are cached for 30 s** (`db/session.repo.ts`); its deletes drop them. `reset-password.ts` runs in a process of its own, so the sessions it deletes keep working on the running server for up to 30 s, or until it restarts.
+- **Session lookups are cached for 30 s** (`db/session.repo.ts`); its deletes drop them. `reset-password.ts` runs in a process of its own, so after deleting the user's sessions it tells the running server, at `SERVER_URL` (default `localhost:$PORT`), through `POST /api/auth/sessions-revoked`, signed with the database token (`session-revocation.ts`). If that can't reach it, they keep working there for up to 30 s. It reaches the one machine that answers, as SSE and the push queue assume there is.
 
 ## Who can reach what
 
@@ -30,5 +32,5 @@ One Turso database, reached over HTTP by `@tursodatabase/serverless` (`db/client
 - **Drizzle v1 `where` uses object syntax**, not `eq()` operators: `where: { id: someId }`.
 - **`db.insert()` / `db.update()` / `db.delete()`** (classic API) are fine for writes.
 - Check existing repos in `src/db/` for the canonical patterns before writing new queries.
-- **Tasks are never removed, only hidden** (`deletedAt`), so Undo restores a task with its shares, notes and reminders for everyone. Every read of tasks filters `deletedAt: { isNull: true }`, a `subtasks` relation included; only a restore reads a deleted one. Notes of a deleted task drop out of the notes list with it.
-- **Lists are hidden too** (`categories.deletedAt`), with what the delete changed beyond the list in `deletion`, so Undo puts back their collaborators, everyone's tasks and the shares filed there. Every read of categories filters `deletedAt: { isNull: true }` and leaves both columns out of what it sends. Removing a contact deletes both rows, but keeps them and the lists the two shared in `removed_contacts` for its Undo. A list's owner removing someone keeps their row and what leaving moved in `removed_collaborators` for its Undo, for an hour (the next removal drops older ones); adding them afresh drops it, and someone who leaves gets no record.
+- **Deleting a task only hides it** (`deletedAt`), so Undo restores it with its shares, notes and reminders for everyone. `db/purge.repo.ts` removes it 30 days later, at startup and then daily (`purge.ts`), with what cascades from it, unless a subtask under it is live or deleted more recently. Every read of tasks filters `deletedAt: { isNull: true }`, a `subtasks` relation included; only a restore reads a deleted one. Notes of a deleted task drop out of the notes list with it.
+- **Lists are hidden too** (`categories.deletedAt`), with what the delete changed beyond the list in `deletion`, so Undo puts back their collaborators, everyone's tasks and the shares filed there. Every read of categories filters `deletedAt: { isNull: true }` and leaves both columns out of what it sends. The purge removes a list 30 days after it was deleted, with its collaborators, unless a live task or share is still filed in it. Removing a contact deletes both rows, but keeps them and the lists the two shared in `removed_contacts` for its Undo, for an hour (the next removal drops older ones). A list's owner removing someone keeps their row and what leaving moved in `removed_collaborators` for its Undo, for an hour (the next removal drops older ones); adding them afresh drops it, and someone who leaves gets no record. The purge drops both kinds of record once their hour is up.
