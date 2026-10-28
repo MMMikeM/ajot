@@ -25,6 +25,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Textarea } from "~/components/ui/field";
+import { MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { cn } from "~/lib/utils";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 import { dockedSheet } from "~/components/docked-sheet";
@@ -221,6 +222,7 @@ const TaskDetailContent = ({
             data-slot={TITLE_SLOT}
             aria-label="Title"
             rows={1}
+            maxLength={MAX_TITLE}
             enterKeyHint="done"
             value={title}
             onChange={(e) => {
@@ -265,6 +267,7 @@ const TaskDetailContent = ({
             }}
             aria-label="Description"
             value={description}
+            maxLength={MAX_TEXT}
             onChange={(e) => {
               setDescription(e.target.value);
               autoGrow(e.target);

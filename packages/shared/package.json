@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./constants": "./src/constants.ts",
+    "./field-limits": "./src/field-limits.ts",
     "./iso": "./src/iso.ts",
     "./iso-schema": "./src/iso-schema.ts",
     "./push-payload": "./src/push-payload.ts",

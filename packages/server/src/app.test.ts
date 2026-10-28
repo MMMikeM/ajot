@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from "vite-plus/test";
 import app, { MAX_BODY_BYTES } from "./app";
-import { MAX_TEXT, MAX_TITLE } from "./db/field-limits";
+import { MAX_ID, MAX_TASK_IDS, MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { signup } from "./auth-service";
 
 vi.mock("./db/client", () => ({ db: {}, inTransaction: vi.fn() }));
@@ -53,9 +53,18 @@ test("a body over the limit is refused in words, with CORS headers an extension 
   expect(signup).not.toHaveBeenCalled();
 });
 
-test("the longest note a person can write fits in a request", () => {
-  const longest = JSON.stringify({ title: "说".repeat(MAX_TITLE), content: "说".repeat(MAX_TEXT) });
-  expect(new TextEncoder().encode(longest).length).toBeLessThan(MAX_BODY_BYTES);
+const bytes = (body: object) => new TextEncoder().encode(JSON.stringify(body)).length;
+
+test("the longest task or note the API takes fits in a request, at four bytes a character", () => {
+  const title = "😀".repeat(MAX_TITLE);
+  const text = "😀".repeat(MAX_TEXT);
+  expect(bytes({ title, content: text })).toBeLessThan(MAX_BODY_BYTES);
+  expect(bytes({ title, description: text })).toBeLessThan(MAX_BODY_BYTES);
+});
+
+test("a list's delete naming the most tasks it can fits in a request", () => {
+  const taskIds = Array.from({ length: MAX_TASK_IDS }, () => "i".repeat(MAX_ID));
+  expect(bytes({ id: "i".repeat(MAX_ID), tasks: "delete", taskIds })).toBeLessThan(MAX_BODY_BYTES);
 });
 
 test("a field past its length is refused with a message saying how long it may be", async () => {

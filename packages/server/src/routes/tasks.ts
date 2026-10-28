@@ -23,7 +23,7 @@ import reachRepo from "../db/reach.repo";
 import { audienceOf, markTaskEdited, requireTask } from "./task-users";
 import { sendReachChanges } from "./reach";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
-import { MAX_ID, MAX_USERNAME } from "../db/field-limits";
+import { MAX_ID, MAX_USERNAME } from "@newtab-todo/shared/field-limits";
 import { limitSharing } from "../rate-limit";
 
 const shareSchema = z.object({
@@ -303,14 +303,20 @@ export const taskRoutes = authed()
       if (!targetUser) throw onlyContacts();
 
       const before = await reachRepo.read({ taskIds: [task.id] });
-      const { share: result, added } = await taskRepo.insertShare({
+      const {
+        share: result,
+        added,
+        changed,
+      } = await taskRepo.insertShare({
         id: createId(),
         taskId: task.id,
         sharedWithUserId: targetUser.id,
         permission: data.permission,
       });
-      if (!added) return c.json(result, 200);
+      if (!changed) return c.json(result, 200);
       await sendReachChanges(c, before, [task.id]);
+      // A new permission on a share they already had isn't news to them
+      if (!added) return c.json(result, 200);
 
       const actorName = await getUserName(userId);
       sendNotification(targetUser.id, {

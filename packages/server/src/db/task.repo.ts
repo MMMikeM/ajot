@@ -1,4 +1,4 @@
-import { and, eq, getColumns, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, getColumns, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { keyAfter } from "@newtab-todo/shared/sort-order";
 import { keptSortOrder } from "./sort-key";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
@@ -8,7 +8,8 @@ import { categories, taskAccess, tasks, taskShares, users } from "./schema";
 import { ConflictError, InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { now } from "@newtab-todo/shared/iso";
-import { MAX_SHORT, MAX_TEXT, MAX_TITLE, limited, limitedId } from "./field-limits";
+import { MAX_SHORT, MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
+import { limited, limitedId } from "./field-limits";
 import { notAfterNow, stampsNotAfterNow } from "./stamps";
 
 export type TaskShareInsert = typeof taskShares.$inferInsert;
@@ -154,12 +155,12 @@ const findWithAccess = async (id: string, { deleted = false } = {}) => {
   return { task: rows[0]?.task, access: rows.map(({ task: _task, ...access }) => access) };
 };
 
-// A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
-// Re-inserting a deleted task, as Undo did before restores went through update, restores it.
-// An id someone else's task already has updates nothing, so it returns nothing and restores nothing.
 // The stamps a client sends that later writes compare against
 const STAMPS = ["updatedAt", "editedAt", "completedAt"] as const;
 
+// A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
+// Re-inserting a deleted task, as Undo did before restores went through update, restores it.
+// An id someone else's task already has updates nothing, so it returns nothing and restores nothing.
 const insert = async (data: TaskInsert) => {
   const [row] = await db
     .insert(tasks)
@@ -310,14 +311,28 @@ const findListItems = async (ids: string[]) => {
 export type TaskWithRelations = Awaited<ReturnType<typeof list>>[number];
 
 /** The share, and whether it's new: sharing a task with someone again changes nothing. */
+/** Sharing again with someone it's already shared with changes only its permission. */
 const insertShare = async (data: TaskShareInsert) => {
   const [row] = await db.insert(taskShares).values(data).onConflictDoNothing().returning();
-  if (row) return { share: row, added: true };
+  if (row) return { share: row, added: true, changed: true };
+  const permission = data.permission ?? "edit";
+  const [updated] = await db
+    .update(taskShares)
+    .set({ permission })
+    .where(
+      and(
+        eq(taskShares.taskId, data.taskId),
+        eq(taskShares.sharedWithUserId, data.sharedWithUserId),
+        ne(taskShares.permission, permission),
+      ),
+    )
+    .returning();
+  if (updated) return { share: updated, added: false, changed: true };
   const existing = await db.query.taskShares.findFirst({
     where: { taskId: data.taskId, sharedWithUserId: data.sharedWithUserId },
   });
   if (!existing) throw new InsertFailedError("task share");
-  return { share: existing, added: false };
+  return { share: existing, added: false, changed: false };
 };
 
 const findShare = async (id: string) => {

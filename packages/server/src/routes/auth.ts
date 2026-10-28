@@ -7,7 +7,13 @@ import { extractToken } from "../auth";
 import { errorSchema, okSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent } from "./crud";
 import { MIN_PASSWORD_LENGTH } from "../password";
-import { MAX_ID, MAX_NAME, MAX_PASSWORD, MAX_USERNAME } from "../db/field-limits";
+import {
+  MAX_ID,
+  MAX_NAME,
+  MAX_NEW_USERNAME,
+  MAX_PASSWORD,
+  MAX_USERNAME,
+} from "@newtab-todo/shared/field-limits";
 import { sendNotification } from "../notify";
 import { isSignedRevocation } from "../session-revocation";
 import { sendContactChanges } from "./contact-changes";
@@ -15,7 +21,6 @@ import { createLimiter, limitableIp, limitsFor, refuseIfLimited } from "../rate-
 
 // Plain ASCII, so no one can sign up as a lookalike of someone else's name in another script
 const USERNAME = /^[A-Za-z0-9._-]+$/;
-const MAX_NEW_USERNAME = 32;
 
 const loginSchema = z.object({
   username: z
@@ -64,14 +69,15 @@ const revocationSchema = z.object({
 });
 
 // Each try costs an argon2 hash, 19 MiB and most of the one CPU, so a flood from one address is cut
-// off whatever the usernames, and guessing one account's password is slowed whatever the addresses
+// off whatever the usernames, and guessing one account's password from it is slowed further. Not
+// from every address at once: then anyone could lock an account's owner out with wrong passwords.
 const FIFTEEN_MINUTES = 15 * 60_000;
 const HOUR = 60 * 60_000;
 const loginsByIp = createLimiter({ limit: 20, windowMs: FIFTEEN_MINUTES });
 // Cleared by signing in, so it counts the tries since the last one that worked
-const loginsByUsername = createLimiter({ limit: 10, windowMs: FIFTEEN_MINUTES });
+const loginsByIpAndUsername = createLimiter({ limit: 10, windowMs: FIFTEEN_MINUTES });
 const signupsByIp = createLimiter({ limit: 10, windowMs: HOUR });
-const signupsByUsername = createLimiter({ limit: 10, windowMs: HOUR });
+const signupsByIpAndUsername = createLimiter({ limit: 10, windowMs: HOUR });
 
 export const authRoutes = new OpenAPIHono()
   .openapi(
@@ -88,13 +94,18 @@ export const authRoutes = new OpenAPIHono()
     async (c) => {
       const data = c.req.valid("json");
       const ip = limitableIp(c);
-      const username = data.username.toLowerCase();
-      refuseIfLimited(c, limitsFor(loginsByIp, ip, [[loginsByUsername, username]]), "signing in");
+      // No address holds a space, so no username can make one key read as another's
+      const attempt = `${ip ?? ""} ${data.username.toLowerCase()}`;
+      refuseIfLimited(
+        c,
+        limitsFor(loginsByIp, ip, [[loginsByIpAndUsername, attempt]]),
+        "signing in",
+      );
       // Counted before the password is checked, so tries sent at once are counted together
       if (ip) loginsByIp.count(ip);
-      loginsByUsername.count(username);
+      loginsByIpAndUsername.count(attempt);
       const result = await login(data.username, data.password);
-      loginsByUsername.clear(username);
+      loginsByIpAndUsername.clear(attempt);
       console.log(`[login] userId=${result.userId}`);
       return c.json(result, 200);
     },
@@ -114,10 +125,14 @@ export const authRoutes = new OpenAPIHono()
     async (c) => {
       const data = c.req.valid("json");
       const ip = limitableIp(c);
-      const username = data.username.toLowerCase();
-      refuseIfLimited(c, limitsFor(signupsByIp, ip, [[signupsByUsername, username]]), "signing up");
+      const attempt = `${ip ?? ""} ${data.username.toLowerCase()}`;
+      refuseIfLimited(
+        c,
+        limitsFor(signupsByIp, ip, [[signupsByIpAndUsername, attempt]]),
+        "signing up",
+      );
       if (ip) signupsByIp.count(ip);
-      signupsByUsername.count(username);
+      signupsByIpAndUsername.count(attempt);
       const { session, invitedBy, contacts } = await signup(
         data.username,
         data.password,
