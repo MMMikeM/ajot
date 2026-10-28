@@ -20,14 +20,9 @@ const list = async (_userId: string) =>
     columns: { passwordHash: false },
   });
 
-const findById = async (id: string) => {
-  const row = await db.query.users.findFirst({
-    where: { id },
-    columns: { passwordHash: false },
-  });
-  if (!row) throw new NotFoundError("user", id);
-  return row;
-};
+/** Undefined for an account that's gone: what reads a name falls back, rather than refusing. */
+const findName = async (id: string) =>
+  (await db.query.users.findFirst({ where: { id }, columns: { name: true } }))?.name;
 
 const findByUsername = async (username: string) => {
   const row = await db.query.users.findFirst({
@@ -71,7 +66,7 @@ const remove = async (id: string) => {
 
 export default {
   list,
-  findById,
+  findName,
   findByUsername,
   findWithPassword,
   exists,

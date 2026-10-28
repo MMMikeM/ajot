@@ -1,6 +1,5 @@
 import { and, eq, inArray, lt, or } from "drizzle-orm";
 import { createSelectSchema } from "drizzle-orm/zod";
-import { createId } from "@paralleldrive/cuid2";
 import { db, inTransaction } from "./client";
 import { categoryCollaborators, contacts, removedContacts } from "./schema";
 import { now } from "@newtab-todo/shared/iso";
@@ -11,7 +10,7 @@ import { undoableSince } from "./undo-window";
 import reachRepo from "./reach.repo";
 
 export const contactResponseSchema = createSelectSchema(contacts).extend({
-  contactUser: userPublicSchema.nullable(),
+  contactUser: userPublicSchema,
 });
 
 const withContactUser = {
@@ -29,15 +28,6 @@ const listByIds = async (ids: string[]): Promise<ContactWithUser[]> => {
   return db.query.contacts.findMany({ where: { id: { in: ids } }, with: withContactUser });
 };
 
-const insert = async (userId: string, contactUserId: string) => {
-  const [row] = await db
-    .insert(contacts)
-    .values({ id: createId(), userId, contactUserId })
-    .onConflictDoNothing()
-    .returning();
-  return row ?? null;
-};
-
 const exists = async (userId: string, contactUserId: string): Promise<boolean> => {
   const row = await db.query.contacts.findFirst({
     where: { userId, contactUserId },
@@ -46,13 +36,13 @@ const exists = async (userId: string, contactUserId: string): Promise<boolean> =
   return !!row;
 };
 
-/** userId's contact with this username; null alike for a stranger and a username no one has. */
+/** userId's contact with this username: undefined for a stranger and a username no one has. */
 const findContactUser = async (userId: string, username: string) => {
   const row = await db.query.contacts.findFirst({
     where: { userId, contactUser: { username } },
     with: withContactUser,
   });
-  return row?.contactUser ?? null;
+  return row?.contactUser;
 };
 
 // One transaction: deleting only one direction would leave one user still seeing the other.
@@ -162,4 +152,4 @@ const restore = async (id: string, userId: string) =>
     return { contact, restored, before, changed };
   });
 
-export default { list, listByIds, insert, exists, findContactUser, remove, restore };
+export default { list, listByIds, exists, findContactUser, remove, restore };

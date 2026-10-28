@@ -28,7 +28,7 @@ export function PeoplePage() {
   const { data: contacts = [], isLoading } = useContacts();
 
   const remove = (contact: Contact) => {
-    const name = contact.contactUser?.name ?? "this contact";
+    const name = contact.contactUser.name;
     const { transaction, undo } = removeContact(contact.id);
     const undoToastId = pushUndoToast({ before: "Removed ", name }, () => {
       undo().catch((err) => {
@@ -78,16 +78,14 @@ export function PeoplePage() {
         {contacts.map((contact) => (
           <ListRow key={contact.id}>
             <InitialsAvatar
-              name={contact.contactUser?.name ?? "?"}
+              name={contact.contactUser.name}
               userId={contact.contactUserId}
               size="md"
               className="size-8 text-sm"
             />
             <TextStack
-              title={contact.contactUser?.name ?? "Unknown"}
-              subtitle={
-                contact.contactUser?.username ? `@${contact.contactUser.username}` : undefined
-              }
+              title={contact.contactUser.name}
+              subtitle={`@${contact.contactUser.username}`}
             />
             <RevealGroup>
               <RevealButton onClick={() => remove(contact)}>Remove</RevealButton>

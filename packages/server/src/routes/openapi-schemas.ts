@@ -4,11 +4,6 @@ import type { Env } from "hono";
 export const errorSchema = z.object({ error: z.string() });
 export const okSchema = z.object({ ok: z.literal(true) });
 
-export const unauthorizedResponse = {
-  description: "Unauthorized",
-  content: { "application/json": { schema: errorSchema } },
-} as const;
-
 /**
  * Input a route's schema refuses, answered in errorSchema's shape like any other refusal, so the
  * client can show it: the first issue's message, which schemas a person can trip word for them.

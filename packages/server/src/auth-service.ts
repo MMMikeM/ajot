@@ -6,15 +6,14 @@ import userRepo from "./db/user.repo";
 import sessionRepo from "./db/session.repo";
 import categoryRepo from "./db/category.repo";
 import inviteTokenRepo from "./db/invite-token.repo";
-import { ConflictError, ForbiddenError } from "./db/errors";
+import { ConflictError, ForbiddenError, INVITE_GONE } from "./db/errors";
 import { hashPassword, verifyPassword } from "./password";
 
 /** A server's first account signs up freely; everyone after needs an invite from someone on it. */
 const admit = async (inviteToken: string | undefined) => {
   if (inviteToken) {
     const invite = await inviteTokenRepo.claim(inviteToken);
-    if (!invite)
-      throw new ForbiddenError("This invite link has expired or been used. Ask for a new one.");
+    if (!invite) throw new ForbiddenError(INVITE_GONE);
     return invite;
   }
   if ((await userRepo.count()) > 0) {
@@ -77,7 +76,7 @@ export const signup = async (
   };
 };
 
-const wrongPassword = () => new HTTPException(401, { message: "Wrong username or password." });
+const WRONG_PASSWORD = "Wrong username or password.";
 
 // Checked against when there's no such user, so a wrong username takes as long as a wrong password.
 // Worked out at startup, as a first login working it out would take two hashes' time.
@@ -97,9 +96,10 @@ export const login = async (username: string, password: string) => {
   const user = await userRepo.findWithPassword(username.toLowerCase());
   if (!user) {
     await verifyPassword(await hashForUnknownUsers(), password);
-    throw wrongPassword();
+    throw new HTTPException(401, { message: WRONG_PASSWORD });
   }
-  if (!(await verifyPassword(user.passwordHash, password))) throw wrongPassword();
+  if (!(await verifyPassword(user.passwordHash, password)))
+    throw new HTTPException(401, { message: WRONG_PASSWORD });
 
   const token = await sessionRepo.insert(user.id);
   return { userId: user.id, token, name: user.name, username: user.username };

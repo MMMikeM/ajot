@@ -1,32 +1,32 @@
-import { createRoute, z } from "@hono/zod-openapi";
+import { z } from "@hono/zod-openapi";
 import noteRepo, {
   noteInsertSchema,
   noteUpdateSchema,
   noteSelectSchema,
   noteResponseSchema,
 } from "../db/note.repo";
-import { authed } from "../middleware";
+import { authed, authedRoute } from "../middleware";
 import { broadcast } from "../broadcast";
-import { jsonBody, jsonContent, withAuth } from "./crud";
+import { jsonBody } from "./crud";
 import { markTaskEdited, requireTask } from "./task-users";
 import taskRepo from "../db/task.repo";
 import { NotFoundError } from "../db/errors";
 
 export const noteRoutes = authed()
   .openapi(
-    createRoute({
+    authedRoute({
       method: "get",
       path: "/",
-      responses: withAuth({ 200: jsonContent(z.array(noteResponseSchema)) }),
+      responses: { 200: z.array(noteResponseSchema) },
     }),
     async (c) => c.json(await noteRepo.list(c.get("userId")), 200),
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/",
       request: jsonBody(noteInsertSchema),
-      responses: withAuth({ 200: jsonContent(noteResponseSchema) }),
+      responses: { 200: noteResponseSchema, 404: true, 409: true },
     }),
     async (c) => {
       const data = c.req.valid("json");
@@ -43,11 +43,11 @@ export const noteRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "put",
       path: "/",
       request: jsonBody(noteUpdateSchema),
-      responses: withAuth({ 200: jsonContent(noteResponseSchema) }),
+      responses: { 200: noteResponseSchema, 404: true, 409: true },
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
@@ -65,11 +65,11 @@ export const noteRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "delete",
       path: "/",
       request: jsonBody(noteSelectSchema),
-      responses: withAuth({ 200: jsonContent(noteResponseSchema) }),
+      responses: { 200: noteResponseSchema, 404: true },
     }),
     async (c) => {
       const userId = c.get("userId");

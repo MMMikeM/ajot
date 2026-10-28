@@ -277,7 +277,11 @@ export const mockApi = async (
     // Every invite is Sarah's, except one called "expired"
     if (path.startsWith("/api/auth/invites/"))
       return path.endsWith("/expired")
-        ? route.fulfill({ status: 404, headers: cors, json: { error: "Invite not found" } })
+        ? route.fulfill({
+            status: 404,
+            headers: cors,
+            json: { error: "This invite link has expired or been used. Ask for a new one." },
+          })
         : route.fulfill({ status: 200, headers: cors, json: { inviterName: MOCK_SARAH.name } });
 
     let body: unknown = {};
