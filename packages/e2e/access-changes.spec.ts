@@ -222,6 +222,73 @@ test.describe("a change to who reaches a task reaches an open page live", () => 
     }
   });
 
+  test("removing a contact, its Undo and an accepted invite reach both People pages live", async ({
+    user1Auth: alice,
+    user2Auth: bob,
+    user1Page: alicePage,
+    user2Page: bobPage,
+  }) => {
+    const contactRow = async (token: string, otherUserId: string) =>
+      (
+        await apiRequest<{ id: string; contactUserId: string }[]>(
+          "GET",
+          "/api/contacts",
+          undefined,
+          token,
+        )
+      ).find((c) => c.contactUserId === otherUserId)!;
+    const person = (page: Page, username: string) =>
+      page.getByText(`@${username}`, { exact: true });
+    const alicesRow = await contactRow(alice.token, bob.userId);
+    const bobsRow = await contactRow(bob.token, alice.userId);
+    const aliceLive = listenLive(alicePage);
+    const bobLive = listenLive(bobPage);
+    await Promise.all([aliceLive.open("/people"), bobLive.open("/people")]);
+    await expect(person(bobPage, alice.username)).toBeVisible();
+
+    let contacts = true;
+    try {
+      await apiRequest("DELETE", `/api/contacts/${alicesRow.id}`, undefined, alice.token);
+      contacts = false;
+      await bobLive.expectHeard("contacts.delete", bobsRow.id);
+      await aliceLive.expectHeard("contacts.delete", alicesRow.id);
+      await expect(person(bobPage, alice.username)).toHaveCount(0);
+      await expect(person(alicePage, bob.username)).toHaveCount(0);
+
+      await apiRequest("POST", `/api/contacts/${alicesRow.id}/restore`, undefined, alice.token);
+      contacts = true;
+      await bobLive.expectHeard("contacts.insert", bobsRow.id);
+      await aliceLive.expectHeard("contacts.insert", alicesRow.id);
+      await expect(person(bobPage, alice.username)).toBeVisible();
+      await expect(person(alicePage, bob.username)).toBeVisible();
+
+      await apiRequest("DELETE", `/api/contacts/${alicesRow.id}`, undefined, alice.token);
+      contacts = false;
+      await expect(person(bobPage, alice.username)).toHaveCount(0);
+      const invite = await apiRequest<{ token: string }>(
+        "POST",
+        "/api/invites",
+        undefined,
+        bob.token,
+      );
+      await apiRequest("POST", `/api/invites/${invite.token}/accept`, undefined, alice.token);
+      contacts = true;
+      const [alicesNewRow, bobsNewRow] = await Promise.all([
+        contactRow(alice.token, bob.userId),
+        contactRow(bob.token, alice.userId),
+      ]);
+      await bobLive.expectHeard("contacts.insert", bobsNewRow.id);
+      await aliceLive.expectHeard("contacts.insert", alicesNewRow.id);
+      await expect(person(bobPage, alice.username)).toBeVisible();
+      await expect(person(alicePage, bob.username)).toBeVisible();
+      aliceLive.assertAllApplied();
+      bobLive.assertAllApplied();
+    } finally {
+      // The next test in this worker needs them to be contacts
+      if (!contacts) await ensureMutualContacts(alice.token, bob.token);
+    }
+  });
+
   test("deleting a list takes its owner's tasks off a collaborator's page", async ({
     user1Auth: alice,
     user2Auth: bob,

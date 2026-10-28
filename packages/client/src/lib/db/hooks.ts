@@ -9,6 +9,7 @@ import {
   createOfflineTransaction,
   type CategoryDeleteMetadata,
   type CategoryRestoreMetadata,
+  type ContactRemovalMetadata,
   type ShareFilingMetadata,
   type TaskDeleteMetadata,
 } from "~/lib/db/offline";
@@ -241,4 +242,27 @@ export const deleteNote = (id: string) => {
     const restore = createOfflineTransaction({ mutationFnName: "syncNotes" });
     restore.mutate(() => notesCollection.insert(noteRow(deleted)));
   };
+};
+
+/**
+ * Removes the contact for both people, not only this user, and the lists they shared. Its Undo
+ * queues behind it, so a dropped connection loses neither. Returns the transaction, whose
+ * `isPersisted.promise` rejects if the server refuses, and an undo that resolves once the server
+ * has them back.
+ */
+export const removeContact = (id: string) => {
+  console.log(`[mutation] removeContact id=${id}`);
+  const contact = contactsCollection.get(id);
+  const metadata = { contactId: id } satisfies ContactRemovalMetadata;
+  const tx = createOfflineTransaction({ mutationFnName: "removeContact", metadata });
+  const transaction = tx.mutate(() => contactsCollection.delete(id));
+  const undo = () => {
+    if (!contact) return Promise.reject(new Error(`contact ${id} wasn't loaded`));
+    const restore = createOfflineTransaction({
+      mutationFnName: "restoreContact",
+      metadata,
+    });
+    return restore.mutate(() => contactsCollection.insert(contact)).isPersisted.promise;
+  };
+  return { transaction, undo };
 };

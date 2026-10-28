@@ -3,8 +3,8 @@ import { DragDropProvider } from "@dnd-kit/react";
 import { Toast } from "@base-ui/react/toast";
 import { createLazyFileRoute, useRouter } from "@tanstack/react-router";
 import { ChevronLeft, UserPlus } from "lucide-react";
-import { useContacts } from "~/lib/db/hooks";
-import { createInvite, removeContact, restoreContact } from "~/lib/actions";
+import { removeContact, useContacts } from "~/lib/db/hooks";
+import { createInvite } from "~/lib/actions";
 import { pushUndoToast } from "~/lib/undo-toast";
 import type { Contact } from "~/lib/types";
 import { getBuildTarget } from "~/lib/build-target";
@@ -59,20 +59,19 @@ export function PeoplePage() {
     }
   };
 
-  const remove = async (contact: Contact) => {
+  const remove = (contact: Contact) => {
     const name = contact.contactUser?.name ?? "this contact";
-    try {
-      await removeContact(contact.id);
-    } catch (err) {
-      console.error("[contacts] remove failed:", err);
-      toastManager.add({ title: `Couldn't remove ${name}. Check your connection and try again.` });
-      return;
-    }
-    pushUndoToast(`Removed ${name}`, () => {
-      restoreContact(contact.id).catch((err) => {
+    const { transaction, undo } = removeContact(contact.id);
+    const undoToastId = pushUndoToast(`Removed ${name}`, () => {
+      undo().catch((err) => {
         console.error("[contacts] restore failed:", err);
         toastManager.add({ title: `Couldn't bring back ${name}` });
       });
+    });
+    transaction.isPersisted.promise.catch((err) => {
+      console.error("[contacts] remove failed:", err);
+      toastManager.close(undoToastId);
+      toastManager.add({ title: `Couldn't remove ${name}. Try again.` });
     });
   };
 

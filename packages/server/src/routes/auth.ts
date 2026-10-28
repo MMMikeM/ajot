@@ -9,6 +9,7 @@ import { jsonBody, jsonContent } from "./crud";
 import { MIN_PASSWORD_LENGTH } from "../password";
 import { sendNotification } from "../notify";
 import { isSignedRevocation } from "../session-revocation";
+import { sendContactChanges } from "./contact-changes";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -74,12 +75,13 @@ export const authRoutes = new OpenAPIHono()
     }),
     async (c) => {
       const data = c.req.valid("json");
-      const { session, invitedBy } = await signup(
+      const { session, invitedBy, contacts } = await signup(
         data.username,
         data.password,
         data.name,
         data.invite,
       );
+      await sendContactChanges(c, { addedIds: contacts.map((row) => row.id) });
       if (invitedBy) {
         sendNotification(invitedBy, { type: "contact-accepted", contactName: session.name }).catch(
           () => {},

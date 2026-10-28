@@ -1,6 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import contactRepo, { contactResponseSchema } from "../db/contact.repo";
 import { sendReachChanges } from "./reach";
+import { sendContactChanges } from "./contact-changes";
 import { authed } from "../middleware";
 import { errorSchema } from "./openapi-schemas";
 import { jsonContent, withAuth } from "./crud";
@@ -25,8 +26,8 @@ export const contactRoutes = authed()
     }),
     async (c) => {
       const { id } = c.req.param();
-      const { contact, before, changed } = await contactRepo.remove(id, c.get("userId"));
-      await sendReachChanges(c, before, changed);
+      const { contact, removed, before, changed } = await contactRepo.remove(id, c.get("userId"));
+      await Promise.all([sendContactChanges(c, { removed }), sendReachChanges(c, before, changed)]);
       return c.json({ id: contact.id }, 200);
     },
   )
@@ -41,8 +42,11 @@ export const contactRoutes = authed()
     }),
     async (c) => {
       const { id } = c.req.param();
-      const { contact, before, changed } = await contactRepo.restore(id, c.get("userId"));
-      await sendReachChanges(c, before, changed);
+      const { contact, restored, before, changed } = await contactRepo.restore(id, c.get("userId"));
+      await Promise.all([
+        sendContactChanges(c, { addedIds: restored.map((row) => row.id) }),
+        sendReachChanges(c, before, changed),
+      ]);
       return c.json({ id: contact.id }, 200);
     },
   );

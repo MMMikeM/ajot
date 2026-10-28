@@ -250,12 +250,56 @@ const restoreCategoryWithTasks = async ({
   ]);
 };
 
+export type ContactRemovalMetadata = { contactId: string };
+
+// Removing a contact takes each out of the lists the other shared. Not awaited: a refetch that
+// overlaps a dropped connection can stay unsettled after reconnecting, which held up every queued
+// edit, this removal's Undo included, until a reload. Writing the row directly doesn't wait on it.
+const refetchSharedLists = () => {
+  categoriesCollection.utils.refetch().catch(console.error);
+  tasksCollection.utils.refetch().catch(console.error);
+};
+
+const removeContact = async ({
+  transaction,
+}: {
+  transaction: { metadata: Record<string, unknown> };
+}) => {
+  assertSignedIn(transaction.metadata);
+  const { contactId } = transaction.metadata as ContactRemovalMetadata;
+  console.log(`[sync:contacts] DELETE → id=${contactId}`);
+  await assertDeleted(await client.api.contacts[":id"].$delete({ param: { id: contactId } }));
+  await writeDeleted(contactsCollection, contactId);
+  refetchSharedLists();
+};
+
+const restoreContact = async ({
+  transaction,
+}: {
+  transaction: { metadata: Record<string, unknown>; mutations: PendingWrite[] };
+}) => {
+  assertSignedIn(transaction.metadata);
+  const { contactId } = transaction.metadata as ContactRemovalMetadata;
+  console.log(`[sync:contacts] restore → id=${contactId}`);
+  await assertOk(await client.api.contacts[":id"].restore.$post({ param: { id: contactId } }));
+  const [restored] = transaction.mutations;
+  if (restored) await contactsCollection.utils.writeUpsert(restored.modified as never);
+  // An invite accepted meanwhile made the pair a new row, which the server kept instead
+  contactsCollection.utils.refetch().catch(console.error);
+  refetchSharedLists();
+};
+
 export const offline = startOfflineExecutor({
   storage: createOutboxStorage((value) => {
     const account = accountOf(value.metadata);
     return !account || account === getSignedInUserId();
   }),
-  collections: { tasks: tasksCollection, categories: categoriesCollection, notes: notesCollection },
+  collections: {
+    tasks: tasksCollection,
+    categories: categoriesCollection,
+    notes: notesCollection,
+    contacts: contactsCollection,
+  },
   mutationFns: {
     syncTasks: syncEach(syncTask),
     syncCategories: syncEach(syncCategory),
@@ -265,6 +309,8 @@ export const offline = startOfflineExecutor({
     fileShare,
     deleteCategory: deleteCategoryWithTasks,
     restoreCategory: restoreCategoryWithTasks,
+    removeContact,
+    restoreContact,
   },
   // The default policy drops any error whose message contains "401" or "403", so decide by type.
   shouldRetry: (error) =>
