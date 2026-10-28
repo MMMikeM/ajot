@@ -6,15 +6,22 @@ import { pushSubscriptionKinds } from "../db/schema";
 import { authed } from "../middleware";
 import { okSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
+import { MAX_ID } from "../db/field-limits";
+
+// Push services' endpoints run to a few hundred characters
+const MAX_ENDPOINT = 2_000;
 
 const subscriptionSchema = z.object({
   // The server posts to whatever endpoint is stored, so only accept browser push services.
-  endpoint: z.url().refine(isPushServiceEndpoint, "Not a browser push service endpoint"),
-  keys: z.object({ p256dh: z.string(), auth: z.string() }),
+  endpoint: z
+    .url()
+    .max(MAX_ENDPOINT)
+    .refine(isPushServiceEndpoint, "Not a browser push service endpoint"),
+  keys: z.object({ p256dh: z.string().max(MAX_ID), auth: z.string().max(MAX_ID) }),
 });
 
 // Preferences are per device, since each device has its own subscription
-const deviceHeaders = z.object({ "x-device-id": z.string().min(1) });
+const deviceHeaders = z.object({ "x-device-id": z.string().min(1).max(MAX_ID) });
 
 export const pushRoutes = authed()
   .openapi(
@@ -23,6 +30,7 @@ export const pushRoutes = authed()
       path: "/subscribe",
       request: {
         query: z.object({ kind: z.enum(pushSubscriptionKinds).default("web") }),
+        headers: z.object({ "x-device-id": z.string().max(MAX_ID).optional() }),
         ...jsonBody(subscriptionSchema),
       },
       responses: withAuth({ 200: jsonContent(okSchema) }),
@@ -35,7 +43,7 @@ export const pushRoutes = authed()
         ...keys,
         kind,
         userId: c.get("userId"),
-        deviceId: c.req.header("x-device-id") ?? null,
+        deviceId: c.req.valid("header")["x-device-id"] ?? null,
       });
       return c.json({ ok: true as const }, 200);
     },
@@ -44,7 +52,7 @@ export const pushRoutes = authed()
     createRoute({
       method: "post",
       path: "/unsubscribe",
-      request: jsonBody(z.object({ endpoint: z.string() })),
+      request: jsonBody(z.object({ endpoint: z.string().max(MAX_ENDPOINT) })),
       responses: withAuth({ 200: jsonContent(okSchema) }),
     }),
     async (c) => {

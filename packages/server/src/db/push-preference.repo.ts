@@ -6,7 +6,7 @@ import { pushPreferences } from "./schema";
 import { DEFAULT_PUSH_PREFERENCES, deviceKey, type DevicePreferences } from "../push-plan";
 
 export const pushPreferencesSchema = createInsertSchema(pushPreferences, {
-  muted: z.array(z.enum(PUSH_TRIGGERS)),
+  muted: z.array(z.enum(PUSH_TRIGGERS)).max(100),
   urgent: z.boolean(),
 }).pick({ muted: true, urgent: true });
 

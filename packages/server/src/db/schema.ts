@@ -162,7 +162,7 @@ export const pushSubscriptionKinds = ["web", "extension"] as const;
 
 export const pushSubscriptions = sqliteTable("push_subscriptions", {
   id: pk(),
-  userId: nullableFk("user_id", () => users.id, { onDelete: "set null" }),
+  userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
   endpoint: string("endpoint").unique(),
   p256dh: string("p256dh"),
   auth: string("auth"),

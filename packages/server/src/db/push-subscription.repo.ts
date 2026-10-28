@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { createInsertSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
@@ -18,16 +18,11 @@ const upsert = async (data: PushSubscriptionInsert) => {
     .onConflictDoUpdate({ target: pushSubscriptions.endpoint, set: data });
 };
 
-// Only the user's own, or one from before subscriptions had a user, which gets everyone's pushes
+// Only the user's own
 const remove = async (endpoint: string, userId: string) => {
   await db
     .delete(pushSubscriptions)
-    .where(
-      and(
-        eq(pushSubscriptions.endpoint, endpoint),
-        or(eq(pushSubscriptions.userId, userId), isNull(pushSubscriptions.userId)),
-      ),
-    );
+    .where(and(eq(pushSubscriptions.endpoint, endpoint), eq(pushSubscriptions.userId, userId)));
 };
 
 const removeMany = async (endpoints: string[]) => {
@@ -37,12 +32,10 @@ const removeMany = async (endpoints: string[]) => {
 
 type PushSubscriptionKind = (typeof pushSubscriptions.$inferSelect)["kind"];
 
-// Rows with a null userId predate per-user subscriptions; they get every push until they
-// re-register
-const findForUsers = async (userIds: string[], kind?: PushSubscriptionKind) =>
-  db.query.pushSubscriptions.findMany({
-    where: { kind, OR: [{ userId: { in: userIds } }, { userId: { isNull: true } }] },
-  });
+const findForUsers = async (userIds: string[], kind?: PushSubscriptionKind) => {
+  if (userIds.length === 0) return [];
+  return db.query.pushSubscriptions.findMany({ where: { kind, userId: { in: userIds } } });
+};
 
 const findByKind = async (kind: PushSubscriptionKind) =>
   db.query.pushSubscriptions.findMany({ where: { kind } });

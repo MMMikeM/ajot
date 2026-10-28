@@ -18,9 +18,13 @@ import { broadcast } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import { errorSchema } from "./openapi-schemas";
 import { jsonBody, jsonContent, withAuth } from "./crud";
+import { MAX_USERNAME } from "../db/field-limits";
 
 const collaboratorSchema = z.object({
-  username: z.string().min(1, "Choose someone to share with."),
+  username: z
+    .string()
+    .min(1, "Choose someone to share with.")
+    .max(MAX_USERNAME, "No one here has that username."),
 });
 const collaboratorIdSchema = z.object({ userId: z.string() });
 

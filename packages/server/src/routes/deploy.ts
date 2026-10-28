@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import pushSubscriptionRepo from "../db/push-subscription.repo";
 import { sendPush } from "../push";
+import { isSecret } from "../secret";
 
 export const deployRoutes = new Hono();
 
 deployRoutes.post("/notify", async (c) => {
-  const secret = c.req.header("X-Deploy-Secret");
-  if (!secret || secret !== process.env.DEPLOY_PUSH_SECRET) {
+  if (!isSecret(c.req.header("X-Deploy-Secret"), process.env.DEPLOY_PUSH_SECRET)) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 

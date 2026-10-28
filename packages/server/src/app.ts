@@ -2,6 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 import { compress } from "hono/compress";
 import { secureHeaders } from "hono/secure-headers";
+import { bodyLimit } from "hono/body-limit";
 import { authRoutes } from "./routes/auth";
 import { taskRoutes } from "./routes/tasks";
 import { categoryRoutes } from "./routes/categories";
@@ -19,6 +20,10 @@ import { rejectInvalidInput } from "./routes/openapi-schemas";
 import { LoggedHTTPException } from "./db/errors";
 
 const app = new OpenAPIHono({ defaultHook: rejectInvalidInput });
+
+// Far above the largest request the app makes, a list's delete naming every task it holds, and
+// the longest note (db/field-limits.ts)
+export const MAX_BODY_BYTES = 256 * 1024;
 
 app.onError((err, c) => {
   if (err instanceof LoggedHTTPException) console.warn(`[${err.status}] ${err.detail}`);
@@ -82,6 +87,15 @@ app.use("*", (c, next) => {
 });
 
 app.options("*", (c) => c.body(null, 204));
+
+// After CORS, so an extension is shown this answer rather than a CORS failure
+app.use(
+  "*",
+  bodyLimit({
+    maxSize: MAX_BODY_BYTES,
+    onError: (c) => c.json({ error: "That's too much to save in one go." }, 413),
+  }),
+);
 
 app.get("/health", (c) => c.json({ ok: true }));
 

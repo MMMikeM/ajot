@@ -8,15 +8,19 @@ import { categories, taskAccess, tasks, taskShares, users } from "./schema";
 import { ConflictError, InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { now } from "@newtab-todo/shared/iso";
+import { MAX_SHORT, MAX_TEXT, MAX_TITLE, limited, limitedId } from "./field-limits";
+import { notAfterNow, stampsNotAfterNow } from "./stamps";
 
 export type TaskShareInsert = typeof taskShares.$inferInsert;
 
-export const taskShareSelectSchema = createSelectSchema(taskShares).pick({ id: true });
+export const taskShareSelectSchema = createSelectSchema(taskShares, { id: limitedId }).pick({
+  id: true,
+});
 export const taskShareResponseSchema = createSelectSchema(taskShares);
 
 export type TaskInsert = typeof tasks.$inferInsert;
 
-export const taskSelectSchema = createSelectSchema(tasks).pick({ id: true });
+export const taskSelectSchema = createSelectSchema(tasks, { id: limitedId }).pick({ id: true });
 export const taskResponseSchema = createSelectSchema(tasks).omit({ live: true });
 
 // live only holds the database's rule about subtasks, so no read or write sends it
@@ -39,7 +43,20 @@ export const taskListItemSchema = taskResponseSchema.extend({
   ),
   assignee: sharedWithUserSchema.nullable(),
 });
+const limitedFields = {
+  id: limitedId,
+  userId: limitedId,
+  categoryId: limitedId,
+  assigneeId: limitedId,
+  parentId: limitedId,
+  title: limited("A task's title", MAX_TITLE),
+  description: limited("A task's description", MAX_TEXT),
+  dueDate: limited("A due date", MAX_SHORT),
+  editedAt: limited("An edit's time", MAX_SHORT),
+  completedAt: limited("A completion's time", MAX_SHORT),
+};
 export const taskInsertSchema = createInsertSchema(tasks, {
+  ...limitedFields,
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
 })
@@ -48,7 +65,10 @@ export const taskInsertSchema = createInsertSchema(tasks, {
 // The fields a client may change, so a column added later isn't editable until it's listed. Its
 // owner and parent are fixed: a task taken, planted in someone's Inbox or hung under theirs
 // would be theirs. Deleting goes through DELETE; an update can only bring a deleted task back.
-export const taskUpdateSchema = createUpdateSchema(tasks, { updatedAt: isoDatetime })
+export const taskUpdateSchema = createUpdateSchema(tasks, {
+  ...limitedFields,
+  updatedAt: isoDatetime,
+})
   .pick({
     id: true,
     updatedAt: true,
@@ -135,10 +155,13 @@ const findWithAccess = async (id: string, { deleted = false } = {}) => {
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
 // Re-inserting a deleted task, as Undo did before restores went through update, restores it.
 // An id someone else's task already has updates nothing, so it returns nothing and restores nothing.
+// The stamps a client sends that later writes compare against
+const STAMPS = ["updatedAt", "editedAt", "completedAt"] as const;
+
 const insert = async (data: TaskInsert) => {
   const [row] = await db
     .insert(tasks)
-    .values({ ...data, sortOrder: keptSortOrder(data.sortOrder) })
+    .values({ ...stampsNotAfterNow(data, [...STAMPS]), sortOrder: keptSortOrder(data.sortOrder) })
     .onConflictDoUpdate({
       target: tasks.id,
       set: { updatedAt: sql`${tasks.updatedAt}`, deletedAt: sql`null` },
@@ -152,16 +175,25 @@ const insert = async (data: TaskInsert) => {
 // A task sent to someone, which they own. Nothing retries a send with the same id, so any id
 // already taken is a conflict, and the sender never gets back a task of the recipient's.
 const insertSent = async (data: TaskInsert) => {
-  const [row] = await db.insert(tasks).values(data).onConflictDoNothing().returning(sentColumns);
+  const [row] = await db
+    .insert(tasks)
+    .values(stampsNotAfterNow(data, [...STAMPS]))
+    .onConflictDoNothing()
+    .returning(sentColumns);
   if (!row) throw new ConflictError("Task id taken");
   return row;
 };
 
 const update = async (id: string, updatedAt: string, fields: Partial<TaskInsert>) => {
+  const at = notAfterNow(updatedAt);
   const [row] = await db
     .update(tasks)
-    .set({ ...fields, sortOrder: keptSortOrder(fields.sortOrder), updatedAt })
-    .where(and(eq(tasks.id, id), lt(tasks.updatedAt, updatedAt)))
+    .set({
+      ...stampsNotAfterNow(fields, [...STAMPS]),
+      sortOrder: keptSortOrder(fields.sortOrder),
+      updatedAt: at,
+    })
+    .where(and(eq(tasks.id, id), lt(tasks.updatedAt, at)))
     .returning(sentColumns);
   if (!row) throw new StaleUpdateError("task", id);
   return row;
@@ -169,7 +201,8 @@ const update = async (id: string, updatedAt: string, fields: Partial<TaskInsert>
 
 // Leaves updatedAt, the sync clock, alone: a note or subtask changing must not beat a pending
 // edit to the task itself. Undefined when the task was already edited later than `at`.
-const markEdited = async (id: string, at: string) => {
+const markEdited = async (id: string, editedAt: string) => {
+  const at = notAfterNow(editedAt);
   const [row] = await db
     .update(tasks)
     .set({ editedAt: at })
@@ -224,7 +257,7 @@ const restore = async (id: string, updatedAt: string) => {
     .set({
       deletedAt: null,
       categoryId: liveCategoryId,
-      updatedAt: sql`max(${tasks.updatedAt}, ${updatedAt})`,
+      updatedAt: sql`max(${tasks.updatedAt}, ${notAfterNow(updatedAt)})`,
     })
     .where(eq(tasks.id, id))
     .returning(sentColumns);
