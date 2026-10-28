@@ -34,7 +34,7 @@ const seeded = async (seed: (sqlite: DatabaseSync) => void) => {
   });
   const was = read();
   await migrate(db, migrations);
-  return { was, now: read() };
+  return { was, now: read(), sqlite };
 };
 
 const task = (id: string, sortOrder: string | null, more = "") =>
@@ -116,5 +116,49 @@ describe("a live subtask under a deleted parent", async () => {
   test("is hidden with its parent's deletedAt, and a live parent's subtask is left alone", () => {
     expect(deletedAt("orphan")).toBe("2026-03-01T00:00:00.000Z");
     expect(deletedAt("sub")).toBeNull();
+  });
+});
+
+describe("push subscriptions with no user, which got everyone's pushes", async () => {
+  const { sqlite } = await seeded((sqlite) => {
+    sqlite.exec(`INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth) VALUES
+      ('alices', 'alice', 'https://push.example/alice', 'key', 'secret'),
+      ('orphan', NULL, 'https://push.example/orphan', 'key', 'secret')`);
+  });
+
+  test("are deleted, and the rest kept", () => {
+    const rows = sqlite.prepare("SELECT id FROM push_subscriptions").all();
+    expect(rows).toEqual([{ id: "alices" }]);
+  });
+});
+
+describe("rows stamped ahead of the server's clock, which no edit could beat", async () => {
+  const { was, now, sqlite } = await seeded((sqlite) => {
+    sqlite.exec(`INSERT INTO categories (id, user_id, name, updated_at) VALUES
+      ('ahead', 'alice', 'Ahead', '9999-01-01T00:00:00.000Z'),
+      ('kept', 'alice', 'Kept', '2026-02-01T00:00:00.000Z')`);
+    sqlite.exec(`INSERT INTO tasks (id, user_id, title, sort_order, created_at, updated_at) VALUES
+      ${task("ahead", null)}, ${task("kept", null)}`);
+    sqlite.exec(`UPDATE tasks SET updated_at = '9999-01-01T00:00:00.000Z',
+      edited_at = '9999-01-01T00:00:00.000Z' WHERE id = 'ahead'`);
+    sqlite.exec(`INSERT INTO notes (id, user_id, task_id, title, updated_at)
+      VALUES ('ahead', 'alice', 'kept', 'n', '9999-01-01T00:00:00.000Z')`);
+  });
+  const migratedAt = new Date().toISOString();
+  const row = (rows: Row[], id: string) => rows.find((r) => r.id === id)!;
+
+  test("are stamped no later than when the migration ran", () => {
+    expect(row(now.tasks, "ahead").updated_at! <= migratedAt).toBe(true);
+    expect(row(now.tasks, "ahead").edited_at! <= migratedAt).toBe(true);
+    expect(row(now.categories, "ahead").updated_at! <= migratedAt).toBe(true);
+    const note = sqlite.prepare("SELECT updated_at FROM notes WHERE id = 'ahead'").get();
+    expect(String(note?.updated_at) <= migratedAt).toBe(true);
+  });
+
+  test("and the rest keep theirs", () => {
+    expect(without([row(now.tasks, "kept")], "live")).toEqual(
+      without([row(was.tasks, "kept")], "live"),
+    );
+    expect(row(now.categories, "kept")).toEqual(row(was.categories, "kept"));
   });
 });

@@ -9,8 +9,9 @@ vi.mock("./client", () => ({
   },
 }));
 
-const sessionFor = (id: string, userId: string, expiresInMs = 3_600_000) => ({
-  id,
+// The row holds the token's hash, never the token
+const sessionFor = (token: string, userId: string, expiresInMs = 3_600_000) => ({
+  id: `hash of ${token}`,
   userId,
   expiresAt: new Date(Date.now() + expiresInMs).toISOString(),
   createdAt: new Date().toISOString(),

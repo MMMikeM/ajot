@@ -8,15 +8,22 @@ import { BadRequestError, ConflictError, NotFoundError, StaleUpdateError } from 
 import { now } from "@newtab-todo/shared/iso";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { keptSortOrder } from "./sort-key";
+import { MAX_ID, MAX_NAME, MAX_SHORT, MAX_TASK_IDS, limited, limitedId } from "./field-limits";
+import { notAfterNow, stampsNotAfterNow } from "./stamps";
 import { CATEGORY_TASK_ACTIONS, type CategoryTaskAction } from "@newtab-todo/shared/constants";
 
 export type CategoryInsert = typeof categories.$inferInsert;
 
-export const categorySelectSchema = createSelectSchema(categories).pick({ id: true });
+export const categorySelectSchema = createSelectSchema(categories, { id: limitedId }).pick({
+  id: true,
+});
 export const categoryDeleteSchema = categorySelectSchema.extend({
   tasks: z.enum(CATEGORY_TASK_ACTIONS).optional(),
   /** The top-level tasks the user was shown; only these can be deleted */
-  taskIds: z.array(z.string()).optional(),
+  taskIds: z
+    .array(z.string().max(MAX_ID))
+    .max(MAX_TASK_IDS, `A list can be deleted with at most ${MAX_TASK_IDS} tasks at once.`)
+    .optional(),
 });
 const collaboratorUserSchema = z.object({
   id: z.string(),
@@ -33,7 +40,14 @@ export const categoryResponseSchema = createSelectSchema(categories)
     user: z.object({ name: z.string() }).nullish(),
     collaborators: z.array(z.object({ user: collaboratorUserSchema.nullable() })).nullish(),
   });
+const limitedFields = {
+  id: limitedId,
+  userId: limitedId,
+  name: limited("A list's name", MAX_NAME),
+  color: limited("A list's colour", MAX_SHORT),
+};
 export const categoryInsertSchema = createInsertSchema(categories, {
+  ...limitedFields,
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
 })
@@ -41,7 +55,10 @@ export const categoryInsertSchema = createInsertSchema(categories, {
   .omit({ deletedAt: true, deletion: true })
   .strict();
 // The fields a client may change, so a column added later isn't editable until it's listed
-export const categoryUpdateSchema = createUpdateSchema(categories, { updatedAt: isoDatetime })
+export const categoryUpdateSchema = createUpdateSchema(categories, {
+  ...limitedFields,
+  updatedAt: isoDatetime,
+})
   .pick({ id: true, updatedAt: true, name: true, color: true, sortOrder: true })
   .required({ id: true, updatedAt: true })
   .strict();
@@ -139,7 +156,7 @@ const canUse = async (id: string, userId: string) => {
 const insert = async (data: CategoryInsert) => {
   const [row] = await db
     .insert(categories)
-    .values({ ...data, sortOrder: keptSortOrder(data.sortOrder) })
+    .values({ ...stampsNotAfterNow(data, ["updatedAt"]), sortOrder: keptSortOrder(data.sortOrder) })
     .onConflictDoUpdate({
       target: categories.id,
       set: { updatedAt: sql`${categories.updatedAt}` },
@@ -151,10 +168,11 @@ const insert = async (data: CategoryInsert) => {
 };
 
 const update = async (id: string, updatedAt: string, fields: Partial<CategoryInsert>) => {
+  const at = notAfterNow(updatedAt);
   const [row] = await db
     .update(categories)
-    .set({ ...fields, sortOrder: keptSortOrder(fields.sortOrder), updatedAt })
-    .where(and(eq(categories.id, id), lt(categories.updatedAt, updatedAt)))
+    .set({ ...fields, sortOrder: keptSortOrder(fields.sortOrder), updatedAt: at })
+    .where(and(eq(categories.id, id), lt(categories.updatedAt, at)))
     .returning(sentColumns);
   if (!row) throw new StaleUpdateError("category", id);
   return row;

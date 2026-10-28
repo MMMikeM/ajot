@@ -24,16 +24,20 @@ import reachRepo from "../db/reach.repo";
 import { audienceOf, markTaskEdited, requireTask } from "./task-users";
 import { sendReachChanges } from "./reach";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
+import { MAX_ID, MAX_USERNAME } from "../db/field-limits";
 
 const shareSchema = z.object({
-  taskId: z.string(),
-  username: z.string().min(1, "Choose someone to share with."),
+  taskId: z.string().max(MAX_ID),
+  username: z
+    .string()
+    .min(1, "Choose someone to share with.")
+    .max(MAX_USERNAME, "No one here has that username."),
   permission: z.enum(["view", "edit"]).default("edit"),
 });
 
 const sendSchema = taskInsertSchema
   .pick({ id: true, title: true, description: true, createdAt: true, updatedAt: true })
-  .extend({ recipientId: z.string() });
+  .extend({ recipientId: z.string().max(MAX_ID) });
 
 // A due date is a calendar day, so read in UTC it stays that day wherever the reader is
 const dueDateFormat = new Intl.DateTimeFormat("en-GB", {
@@ -56,8 +60,8 @@ const notAContact = () => new BadRequestError("You can only assign tasks to your
 const subtaskGoesWithParent = () => new BadRequestError("A subtask goes wherever its parent is.");
 
 const shareCategorySchema = z.object({
-  taskId: z.string(),
-  categoryId: z.string().nullable(),
+  taskId: z.string().max(MAX_ID),
+  categoryId: z.string().max(MAX_ID).nullable(),
 });
 
 export const taskRoutes = authed()

@@ -69,7 +69,7 @@ test("a client that sends no stamps still gets them from the server", async ({ u
   expect(created.editedAt).toBeNull();
   expect(created.completedAt).toBeNull();
 
-  const later = new Date(Date.now() + 1000).toISOString();
+  const later = new Date().toISOString();
   const renamed = await apiRequest<Task>(
     "PUT",
     "/api/tasks",
@@ -95,7 +95,7 @@ test("adding a note or a subtask marks the task edited", async ({ user1Auth }) =
     user1Auth.token,
   );
 
-  const noteAt = new Date(Date.now() + 1000).toISOString();
+  const noteAt = new Date().toISOString();
   await apiRequest(
     "POST",
     "/api/notes",
@@ -112,7 +112,7 @@ test("adding a note or a subtask marks the task edited", async ({ user1Auth }) =
   );
   expect((await serverTask(user1Auth.token, "Plan the trip"))?.editedAt).toBe(noteAt);
 
-  const subtaskAt = new Date(Date.now() + 2000).toISOString();
+  const subtaskAt = new Date().toISOString();
   await apiRequest(
     "POST",
     "/api/tasks",
