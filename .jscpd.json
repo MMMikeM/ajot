@@ -1,8 +1,14 @@
 {
   "path": ["packages/client/src", "packages/server/src", "packages/shared/src", "packages/e2e"],
   "format": ["typescript", "tsx", "javascript", "css"],
-  "ignore": ["**/node_modules/**", "**/dist/**", "**/drizzle/**", "**/.evidence/**"],
-  "minTokens": 50,
-  "minLines": 5,
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/drizzle/**",
+    "**/.evidence/**",
+    "**/routeTree.gen.ts"
+  ],
+  "minTokens": 40,
+  "minLines": 3,
   "reporters": ["console"]
 }
