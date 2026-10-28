@@ -1,6 +1,5 @@
 import { and, eq, inArray, lt, or } from "drizzle-orm";
 import { createSelectSchema } from "drizzle-orm/zod";
-import { createId } from "@paralleldrive/cuid2";
 import { db, inTransaction } from "./client";
 import { categoryCollaborators, contacts, removedContacts } from "./schema";
 import { now } from "@newtab-todo/shared/iso";
@@ -27,15 +26,6 @@ export type ContactWithUser = Awaited<ReturnType<typeof list>>[number];
 const listByIds = async (ids: string[]): Promise<ContactWithUser[]> => {
   if (ids.length === 0) return [];
   return db.query.contacts.findMany({ where: { id: { in: ids } }, with: withContactUser });
-};
-
-const insert = async (userId: string, contactUserId: string) => {
-  const [row] = await db
-    .insert(contacts)
-    .values({ id: createId(), userId, contactUserId })
-    .onConflictDoNothing()
-    .returning();
-  return row ?? null;
 };
 
 const exists = async (userId: string, contactUserId: string): Promise<boolean> => {
@@ -162,4 +152,4 @@ const restore = async (id: string, userId: string) =>
     return { contact, restored, before, changed };
   });
 
-export default { list, listByIds, insert, exists, findContactUser, remove, restore };
+export default { list, listByIds, exists, findContactUser, remove, restore };

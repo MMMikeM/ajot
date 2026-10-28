@@ -2,6 +2,8 @@ import { HTTPException } from "hono/http-exception";
 
 export const INVITE_GONE = "This invite link has expired or been used. Ask for a new one.";
 
+export const ONLY_CONTACTS = "Only your contacts can be added.";
+
 const goneMessages = {
   task: "That task no longer exists.",
   category: "That list no longer exists.",
@@ -38,6 +40,8 @@ export class BadRequestError extends HTTPException {
     super(400, { message });
   }
 }
+
+export const onlyContacts = () => new BadRequestError(ONLY_CONTACTS);
 
 export class ForbiddenError extends HTTPException {
   constructor(message: string) {

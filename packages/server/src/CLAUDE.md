@@ -11,7 +11,7 @@ Hono API server with Drizzle ORM (Turso/libSQL). Package boundaries prevent serv
 Routes are in `src/routes/`. Each file exports Hono route handlers.
 
 - **What a client is told is what a person reads.** The app shows a route's `{ error }` as it is. Input a schema refuses is answered in that shape with its first issue's message (`rejectInvalidInput`, the root app's `defaultHook`), so a field a person can get wrong needs a message worded for them. `NotFoundError` and the other `LoggedHTTPException`s (`db/errors.ts`) say what happened by kind, and `onError` logs the ids they carry. When repos throw and when they return `undefined` is in `db/CLAUDE.md`.
-- **A route declares every status its handler and the repos under it can throw**, with `...errors(403, 404)` (`routes/crud.ts`), so the OpenAPI document and the client's `hc` response types match what it answers. A description written for the route stays a `jsonContent(errorSchema, "…")`. 413, 422 and 500 are app-wide (`onError`), and so is the 400 a schema refuses, declared only where the handler throws one too.
+- **A route declares every status its handler and the repos under it can throw**, with `...errors(403, 404)` (`routes/crud.ts`), so the OpenAPI document and the client's `hc` response types match what it answers. A description written for the route stays a `jsonContent(errorSchema, "…")`. 413 (`bodyLimit`'s own `onError` in `app.ts`), 422 and 500 (`app.onError`) are app-wide, and so is the 400 a schema refuses, declared only where the handler throws one too.
 
 ## Database
 
