@@ -19,6 +19,7 @@
     "test": "vp test run",
     "db:migrate": "node --env-file-if-exists=../../.env.dev src/db/migrate.ts",
     "db:generate": "drizzle-kit generate",
+    "db:rehearse": "node src/db/rehearse.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

@@ -45,4 +45,6 @@ export default {
     "lightningcss", // Vite CSS pipeline peer dep, version-pinned here
     "@swc/core", // dependency-cruiser's TypeScript parser (options.parser), loaded at runtime
   ],
+  // db:rehearse drives the turso CLI, which whoever rehearses installs and signs in to
+  ignoreBinaries: ["turso"],
 } satisfies KnipConfig;
