@@ -11,7 +11,7 @@ const TOUCH_SPECS = [
   "harden-edges.spec.ts",
   "harden-trust.spec.ts",
   "search.spec.ts",
-  "ui.spec.ts",
+  "touch.spec.ts",
 ];
 
 export default defineConfig({
