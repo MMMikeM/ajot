@@ -4,8 +4,9 @@ import pushPreferenceRepo, { pushPreferencesSchema } from "../db/push-preference
 import pushSubscriptionRepo from "../db/push-subscription.repo";
 import { pushSubscriptionKinds } from "../db/schema";
 import { authed, authedRoute } from "../middleware";
-import { jsonBody, okBody, res } from "./crud";
+import { jsonBody, okBody } from "./crud";
 import { MAX_ID } from "@newtab-todo/shared/field-limits";
+import { okSchema } from "./openapi-schemas";
 
 // Push services' endpoints run to a few hundred characters
 const MAX_ENDPOINT = 2_000;
@@ -32,7 +33,7 @@ export const pushRoutes = authed()
         headers: z.object({ "x-device-id": z.string().max(MAX_ID).optional() }),
         ...jsonBody(subscriptionSchema),
       },
-      responses: res({ ok: true }),
+      responses: { 200: okSchema },
     }),
     async (c) => {
       const { endpoint, keys } = c.req.valid("json");
@@ -52,7 +53,7 @@ export const pushRoutes = authed()
       method: "post",
       path: "/unsubscribe",
       request: jsonBody(z.object({ endpoint: z.string().max(MAX_ENDPOINT) })),
-      responses: res({ ok: true }),
+      responses: { 200: okSchema },
     }),
     async (c) => {
       await pushSubscriptionRepo.remove(c.req.valid("json").endpoint, c.get("userId"));
@@ -64,7 +65,7 @@ export const pushRoutes = authed()
       method: "get",
       path: "/preferences",
       request: { headers: deviceHeaders },
-      responses: res({ ok: pushPreferencesSchema }),
+      responses: { 200: pushPreferencesSchema },
     }),
     async (c) =>
       c.json(
@@ -77,7 +78,7 @@ export const pushRoutes = authed()
       method: "put",
       path: "/preferences",
       request: { headers: deviceHeaders, ...jsonBody(pushPreferencesSchema) },
-      responses: res({ ok: true }),
+      responses: { 200: okSchema },
     }),
     async (c) => {
       await pushPreferenceRepo.save(

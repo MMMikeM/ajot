@@ -15,7 +15,7 @@ import { BadRequestError, NotFoundError, ONLY_CONTACTS } from "../db/errors";
 import { authed, authedRoute } from "../middleware";
 import { broadcast } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
-import { jsonBody, res } from "./crud";
+import { jsonBody } from "./crud";
 import { MAX_USERNAME } from "@newtab-todo/shared/field-limits";
 import { limitSharing } from "../rate-limit";
 
@@ -29,7 +29,7 @@ export const categoryRoutes = authed()
     authedRoute({
       method: "get",
       path: "/",
-      responses: res({ ok: z.array(categoryResponseSchema) }),
+      responses: { 200: z.array(categoryResponseSchema) },
     }),
     async (c) => c.json(await categoryRepo.list(c.get("userId")), 200),
   )
@@ -38,7 +38,7 @@ export const categoryRoutes = authed()
       method: "post",
       path: "/",
       request: jsonBody(categoryInsertSchema),
-      responses: res({ ok: categoryResponseSchema, errors: [409] }),
+      responses: { 200: categoryResponseSchema, 409: true },
     }),
     async (c) => {
       const userId = c.get("userId");
@@ -52,7 +52,7 @@ export const categoryRoutes = authed()
       method: "put",
       path: "/",
       request: jsonBody(categoryUpdateSchema),
-      responses: res({ ok: categoryResponseSchema, errors: [403, 404, 409] }),
+      responses: { 200: categoryResponseSchema, 403: true, 404: true, 409: true },
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
@@ -73,7 +73,7 @@ export const categoryRoutes = authed()
       method: "delete",
       path: "/",
       request: jsonBody(categoryDeleteSchema),
-      responses: res({ ok: categoryResponseSchema, errors: [400, 403, 404] }),
+      responses: { 200: categoryResponseSchema, 400: true, 403: true, 404: true },
     }),
     async (c) => {
       const { id, tasks: taskAction, taskIds } = c.req.valid("json");
@@ -91,7 +91,7 @@ export const categoryRoutes = authed()
     authedRoute({
       method: "post",
       path: "/:id/restore",
-      responses: res({ ok: categoryResponseSchema, errors: [403, 404] }),
+      responses: { 200: categoryResponseSchema, 403: true, 404: true },
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -107,7 +107,7 @@ export const categoryRoutes = authed()
     authedRoute({
       method: "get",
       path: "/:id/collaborators",
-      responses: res({ ok: z.array(userPublicSchema), errors: [403, 404] }),
+      responses: { 200: z.array(userPublicSchema), 403: true, 404: true },
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -127,7 +127,7 @@ export const categoryRoutes = authed()
       method: "post",
       path: "/:id/collaborators",
       request: jsonBody(collaboratorSchema),
-      responses: res({ ok: userPublicSchema, errors: [400, 403, 404, 429] }),
+      responses: { 200: userPublicSchema, 400: true, 403: true, 404: true, 429: true },
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -161,7 +161,7 @@ export const categoryRoutes = authed()
     authedRoute({
       method: "delete",
       path: "/:id/collaborators/:userId",
-      responses: res({ ok: collaboratorIdSchema, errors: [403, 404] }),
+      responses: { 200: collaboratorIdSchema, 403: true, 404: true },
     }),
     async (c) => {
       const { id, userId: targetUserId } = c.req.param();
@@ -180,7 +180,7 @@ export const categoryRoutes = authed()
     authedRoute({
       method: "post",
       path: "/:id/collaborators/:userId/restore",
-      responses: res({ ok: collaboratorIdSchema, errors: [400, 403, 404] }),
+      responses: { 200: collaboratorIdSchema, 400: true, 403: true, 404: true },
     }),
     async (c) => {
       const { id, userId: targetUserId } = c.req.param();

@@ -7,7 +7,7 @@ import noteRepo, {
 } from "../db/note.repo";
 import { authed, authedRoute } from "../middleware";
 import { broadcast } from "../broadcast";
-import { jsonBody, res } from "./crud";
+import { jsonBody } from "./crud";
 import { markTaskEdited, requireTask } from "./task-users";
 import taskRepo from "../db/task.repo";
 import { NotFoundError } from "../db/errors";
@@ -17,7 +17,7 @@ export const noteRoutes = authed()
     authedRoute({
       method: "get",
       path: "/",
-      responses: res({ ok: z.array(noteResponseSchema) }),
+      responses: { 200: z.array(noteResponseSchema) },
     }),
     async (c) => c.json(await noteRepo.list(c.get("userId")), 200),
   )
@@ -26,7 +26,7 @@ export const noteRoutes = authed()
       method: "post",
       path: "/",
       request: jsonBody(noteInsertSchema),
-      responses: res({ ok: noteResponseSchema, errors: [404, 409] }),
+      responses: { 200: noteResponseSchema, 404: true, 409: true },
     }),
     async (c) => {
       const data = c.req.valid("json");
@@ -47,7 +47,7 @@ export const noteRoutes = authed()
       method: "put",
       path: "/",
       request: jsonBody(noteUpdateSchema),
-      responses: res({ ok: noteResponseSchema, errors: [404, 409] }),
+      responses: { 200: noteResponseSchema, 404: true, 409: true },
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
@@ -69,7 +69,7 @@ export const noteRoutes = authed()
       method: "delete",
       path: "/",
       request: jsonBody(noteSelectSchema),
-      responses: res({ ok: noteResponseSchema, errors: [404] }),
+      responses: { 200: noteResponseSchema, 404: true },
     }),
     async (c) => {
       const userId = c.get("userId");
