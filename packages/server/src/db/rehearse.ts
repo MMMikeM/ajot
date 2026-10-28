@@ -67,8 +67,62 @@ const makeCopy = (database: string): Copy => {
   }
 };
 
+// Rows a migration's constraint refuses, counted as it finds them: the table the repair deletes
+// them from, or none for those it changes in place
+const refusedRows: { name: string; deletedFrom?: string; count: string }[] = [
+  {
+    name: "contacts with yourself",
+    deletedFrom: "contacts",
+    count: "SELECT count(*) AS n FROM contacts WHERE user_id = contact_user_id",
+  },
+  {
+    name: "Undo records of a contact with yourself",
+    deletedFrom: "removed_contacts",
+    count: `SELECT count(*) AS n FROM removed_contacts r WHERE EXISTS (SELECT 1 FROM json_each(r.contacts)
+      WHERE json_extract(value, '$.userId') = json_extract(value, '$.contactUserId'))`,
+  },
+  {
+    name: "unsent reminders for a task with no due date",
+    deletedFrom: "notification_queue",
+    count: `SELECT count(*) AS n FROM notification_queue
+      WHERE type = 'reminder-due' AND sent_at IS NULL
+        AND task_id IN (SELECT id FROM tasks WHERE due_date IS NULL)`,
+  },
+  {
+    name: "unsent reminders past one a task",
+    deletedFrom: "notification_queue",
+    count: `SELECT count(*) - count(DISTINCT task_id) AS n FROM notification_queue
+      WHERE type = 'reminder-due' AND sent_at IS NULL
+        AND task_id IN (SELECT id FROM tasks WHERE due_date IS NOT NULL)`,
+  },
+  {
+    name: "digests past one a user a day",
+    deletedFrom: "notification_queue",
+    count: `SELECT count(*) - (SELECT count(*) FROM (SELECT 1 FROM notification_queue
+        WHERE type = 'overdue-digest' GROUP BY user_id, substr(scheduled_for, 1, 10))) AS n
+      FROM notification_queue WHERE type = 'overdue-digest'`,
+  },
+  {
+    name: "reminders without a task",
+    deletedFrom: "notification_queue",
+    count:
+      "SELECT count(*) AS n FROM notification_queue WHERE type = 'reminder-due' AND task_id IS NULL",
+  },
+  {
+    name: "digests with a task",
+    count:
+      "SELECT count(*) AS n FROM notification_queue WHERE type <> 'reminder-due' AND task_id IS NOT NULL",
+  },
+  {
+    name: "subtasks under a subtask",
+    count: `SELECT count(*) AS n FROM tasks s JOIN tasks p ON p.id = s.parent_id
+      WHERE p.parent_id IS NOT NULL`,
+  },
+];
+
 type Stock = {
   tables: Map<string, number>;
+  refused: number[];
   malformedKeys: { tasks: number; categories: number };
   liveUnderDeleted: number;
   liveTasks: number;
@@ -101,8 +155,11 @@ const takeStock = async (url: string, token: string): Promise<Stock> => {
     const [{ n: liveTasks }] = await all<{ n: number }>(
       "SELECT count(*) AS n FROM tasks WHERE deleted_at IS NULL",
     );
+    const refused: number[] = [];
+    for (const { count } of refusedRows) refused.push((await all<{ n: number }>(count))[0]!.n);
     return {
       tables,
+      refused,
       malformedKeys: { tasks: await malformed("tasks"), categories: await malformed("categories") },
       liveUnderDeleted,
       liveTasks,
@@ -138,10 +195,22 @@ const sameList = (a: string[], b: string[]) =>
 
 const report = (before: Stock, after: Stock) => {
   const checks: [string, boolean, string][] = [];
+  const deleted = new Map<string, number>();
+  refusedRows.forEach(({ deletedFrom }, i) => {
+    if (deletedFrom) deleted.set(deletedFrom, (deleted.get(deletedFrom) ?? 0) + before.refused[i]!);
+  });
   for (const [table, count] of before.tables) {
     const now = after.tables.get(table);
-    checks.push([`${table} rows`, now === count, `${count} → ${now ?? "gone"}`]);
+    const refused = deleted.get(table) ?? 0;
+    checks.push([
+      `${table} rows`,
+      now === count - refused,
+      `${count} → ${now ?? "gone"}${refused ? `, ${refused} refused` : ""}`,
+    ]);
   }
+  refusedRows.forEach(({ name }, i) =>
+    checks.push([name, after.refused[i] === 0, `${before.refused[i]} → ${after.refused[i]}`]),
+  );
   for (const table of after.tables.keys())
     if (!before.tables.has(table)) console.log(`[rehearse] new table ${table}`);
   checks.push(

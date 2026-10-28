@@ -54,6 +54,11 @@ const NOT_YOUR_LIST = "That list isn't yours.";
 const NOT_A_CONTACT = "You can only assign tasks to your contacts.";
 const SUBTASK_GOES_WITH_PARENT = "A subtask goes wherever its parent is.";
 
+const syncReminder = (taskId: string, dueDate: string | null) =>
+  dueDate
+    ? notificationQueueRepo.scheduleReminder(taskId)
+    : notificationQueueRepo.cancelReminder(taskId);
+
 const shareCategorySchema = z.object({
   taskId: z.string().max(MAX_ID),
   categoryId: z.string().max(MAX_ID).nullable(),
@@ -95,6 +100,7 @@ export const taskRoutes = authed()
         ...data,
         userId,
       });
+      if (result.dueDate) await notificationQueueRepo.scheduleFirstReminder(result.id);
       const added = { ...result, subtasks: [], shares: [] };
       broadcast(c, "tasks", "insert", added, await audienceOf(result.id));
       if (parent) await markTaskEdited(c, parent.task.id, userId, data.createdAt, parent.access);
@@ -190,17 +196,8 @@ export const taskRoutes = authed()
         }
       }
 
-      if ("dueDate" in fields) {
-        await notificationQueueRepo.deleteByTask(id);
-        if (fields.dueDate) {
-          await notificationQueueRepo.insert({
-            userId: task.userId,
-            type: "reminder-due",
-            taskId: id,
-            scheduledFor: fields.dueDate,
-          });
-        }
-      }
+      // Re-picking the date a reminder already went out for would send it again
+      if (result.dueDate !== task.dueDate) await syncReminder(id, result.dueDate);
 
       return c.json(result, 200);
     },

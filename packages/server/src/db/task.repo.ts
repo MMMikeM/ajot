@@ -22,11 +22,20 @@ export const taskShareResponseSchema = createSelectSchema(taskShares);
 export type TaskInsert = typeof tasks.$inferInsert;
 
 export const taskSelectSchema = createSelectSchema(tasks, { id: limitedId }).pick({ id: true });
-export const taskResponseSchema = createSelectSchema(tasks).omit({ live: true });
+export const taskResponseSchema = createSelectSchema(tasks).omit({
+  live: true,
+  topLevel: true,
+  hasParent: true,
+});
 
-// live only holds the database's rule about subtasks, so no read or write sends it
-const hidden = { live: false } as const;
-const { live: _live, ...sentColumns } = getColumns(tasks);
+// These only hold the database's rules about subtasks, so no read or write sends them
+const hidden = { live: false, topLevel: false, hasParent: false } as const;
+const {
+  live: _live,
+  topLevel: _topLevel,
+  hasParent: _hasParent,
+  ...sentColumns
+} = getColumns(tasks);
 
 const sharedWithUserSchema = createSelectSchema(users).pick({
   id: true,
