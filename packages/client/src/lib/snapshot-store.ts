@@ -57,6 +57,31 @@ export const writeSnapshot = (db: IDBDatabase, entries: Iterable<readonly [strin
   });
 
 /**
+ * Saves one list, and the account it's for. The other lists, if they were saved for another
+ * account, go with it: a page opened as this one would otherwise show them as its own.
+ */
+export const writeListFor = (
+  db: IDBDatabase,
+  key: string,
+  data: unknown,
+  owner: string | undefined,
+) =>
+  new Promise<void>((resolve, reject) => {
+    const store = db.transaction(STORE, "readwrite").objectStore(STORE);
+    const saved = store.get(OWNER_KEY);
+    saved.onsuccess = () => {
+      if (saved.result !== owner)
+        for (const other of SNAPSHOT_KEYS) if (other !== key) store.delete(other);
+      if (data === undefined) store.delete(key);
+      else store.put(data, key);
+      if (owner === undefined) store.delete(OWNER_KEY);
+      else store.put(owner, OWNER_KEY);
+    };
+    store.transaction.oncomplete = () => resolve();
+    store.transaction.onerror = () => reject(store.transaction.error);
+  });
+
+/**
  * Writes and closes again: a connection left open would block a newer deploy's upgrade until
  * this one closed it.
  */

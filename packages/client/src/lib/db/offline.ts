@@ -103,6 +103,11 @@ export const createOfflineTransaction = (options: CreateOfflineTransactionOption
 
 const accountOf = (metadata: unknown) => (metadata as AccountMetadata | undefined)?.accountId;
 
+const canSend = (metadata: unknown) => {
+  const account = accountOf(metadata);
+  return !account || account === getSignedInUserId();
+};
+
 // No auth token — defer sync until login. A retriable error (not NonRetriableError)
 // keeps the transaction in the IDB outbox and holds the optimistic mutation visible. One queued
 // by another account waits the same way, for that account.
@@ -272,10 +277,8 @@ const restoreContact = async ({
 
 export const offline = new SharedOutboxExecutor({
   leaderElection: tabLeader(),
-  storage: createOutboxStorage((value) => {
-    const account = accountOf(value.metadata);
-    return !account || account === getSignedInUserId();
-  }),
+  storage: createOutboxStorage((value) => canSend(value.metadata)),
+  canSend,
   collections: {
     tasks: tasksCollection,
     categories: categoriesCollection,
@@ -302,8 +305,14 @@ export const offline = new SharedOutboxExecutor({
 // Kick off storage probe + leader election + outbox replay as early as possible.
 offline.waitForInit().catch(console.error);
 
+let account = getSignedInUserId();
+
 // Signed out, the refetches empty the lists, and drop an answer still on its way for the account
 subscribeAuthToken(() => {
+  if (getSignedInUserId() !== account) {
+    account = getSignedInUserId();
+    offline.accountChanged();
+  }
   // Replays queued edits now instead of after their retry backoff, ahead of the refetches.
   if (getAuthToken()) offline.getOnlineDetector().notifyOnline();
   tasksCollection.utils.refetch().catch(console.error);
