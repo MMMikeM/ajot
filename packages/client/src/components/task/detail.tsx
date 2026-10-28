@@ -27,6 +27,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Textarea } from "~/components/ui/field";
 import { cn } from "~/lib/utils";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
+import { dockedSheet } from "~/components/docked-sheet";
 import { canDeleteTask } from "@newtab-todo/shared/task-access";
 import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
 import { holders } from "~/lib/task-holders";
@@ -92,15 +93,9 @@ function TaskDetail({
         if (!next) onClose();
       })}
     >
-      {/* Over AppShell's column. On desktop it docks inside the sheet's inset, so the
-          detail reads as a page of the notepad rather than a drawer from the window edge.
-          Its top leaves room for the toast viewport, which moves above an open sheet. */}
+      {/* On touch its top leaves room for the toast viewport, which moves above an open sheet */}
       <DrawerContent
-        className={cn(
-          "max-h-[calc(100dvh-env(safe-area-inset-top,0px)-4.5rem)] max-w-(--column-w) border-x touch:max-w-none touch:border-x-0",
-          "desk:mb-(--sheet-inset) desk:max-h-[calc(100dvh-2*var(--sheet-inset)-4rem)] desk:translate-x-(--column-shift) desk:rounded-2xl desk:border-b",
-          "desk:data-[ending-style]:[transform:translateY(calc(100%+var(--sheet-inset)+2px))] desk:data-[starting-style]:[transform:translateY(calc(100%+var(--sheet-inset)+2px))]",
-        )}
+        className={cn("max-h-[calc(100dvh-env(safe-area-inset-top,0px)-4.5rem)]", dockedSheet)}
       >
         <DrawerHeader className="sr-only">
           <DrawerTitle>{task.title}</DrawerTitle>

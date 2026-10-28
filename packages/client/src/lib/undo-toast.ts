@@ -3,9 +3,12 @@ import { Toast } from "@base-ui/react/toast";
 
 export const toastManager = Toast.createToastManager();
 
+// A thumb has further to travel to the toast than a pointer, and nothing to hover it with
+const undoWindowMs = () => (matchMedia("(pointer: coarse)").matches ? 8000 : 5000);
+
 /** Pushes a toast whose Undo runs `onUndo`; returns the toast's id. */
 export const pushUndoToast = (title: string, onUndo: () => void) =>
-  toastManager.add({ title, timeout: 5000, data: { onUndo } });
+  toastManager.add({ title, timeout: undoWindowMs(), data: { onUndo } });
 
 export const UNDO_KEYS = "Control+Z Meta+Z";
 
