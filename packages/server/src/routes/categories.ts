@@ -1,5 +1,4 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { HTTPException } from "hono/http-exception";
 import categoryRepo, {
   categoryInsertSchema,
   categoryUpdateSchema,
@@ -16,8 +15,7 @@ import { BadRequestError, NotFoundError } from "../db/errors";
 import { authed } from "../middleware";
 import { broadcast } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
-import { errorSchema } from "./openapi-schemas";
-import { jsonBody, jsonContent, withAuth } from "./crud";
+import { errors, jsonBody, jsonContent, withAuth } from "./crud";
 import { MAX_USERNAME } from "@newtab-todo/shared/field-limits";
 import { limitSharing } from "../rate-limit";
 
@@ -43,7 +41,7 @@ export const categoryRoutes = authed()
       method: "post",
       path: "/",
       request: jsonBody(categoryInsertSchema),
-      responses: withAuth({ 200: jsonContent(categoryResponseSchema) }),
+      responses: withAuth({ 200: jsonContent(categoryResponseSchema), ...errors(409) }),
     }),
     async (c) => {
       const userId = c.get("userId");
@@ -57,11 +55,7 @@ export const categoryRoutes = authed()
       method: "put",
       path: "/",
       request: jsonBody(categoryUpdateSchema),
-      responses: withAuth({
-        200: jsonContent(categoryResponseSchema),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: withAuth({ 200: jsonContent(categoryResponseSchema), ...errors(403, 404, 409) }),
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
@@ -82,12 +76,7 @@ export const categoryRoutes = authed()
       method: "delete",
       path: "/",
       request: jsonBody(categoryDeleteSchema),
-      responses: withAuth({
-        200: jsonContent(categoryResponseSchema),
-        400: jsonContent(errorSchema, "Bad request"),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: withAuth({ 200: jsonContent(categoryResponseSchema), ...errors(400, 403, 404) }),
     }),
     async (c) => {
       const { id, tasks: taskAction, taskIds } = c.req.valid("json");
@@ -105,11 +94,7 @@ export const categoryRoutes = authed()
     createRoute({
       method: "post",
       path: "/:id/restore",
-      responses: withAuth({
-        200: jsonContent(categoryResponseSchema),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: withAuth({ 200: jsonContent(categoryResponseSchema), ...errors(403, 404) }),
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -125,11 +110,7 @@ export const categoryRoutes = authed()
     createRoute({
       method: "get",
       path: "/:id/collaborators",
-      responses: withAuth({
-        200: jsonContent(z.array(userPublicSchema)),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: withAuth({ 200: jsonContent(z.array(userPublicSchema)), ...errors(403, 404) }),
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -160,12 +141,7 @@ export const categoryRoutes = authed()
       method: "post",
       path: "/:id/collaborators",
       request: jsonBody(collaboratorSchema),
-      responses: withAuth({
-        200: jsonContent(userPublicSchema),
-        400: jsonContent(errorSchema, "Bad request"),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: withAuth({ 200: jsonContent(userPublicSchema), ...errors(400, 403, 404, 429) }),
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -190,7 +166,7 @@ export const categoryRoutes = authed()
         categoryId: id,
         categoryName: cat.name,
         fromUser: actorName,
-      }).catch(() => {});
+      });
 
       return c.json(targetUser, 200);
     },
@@ -199,11 +175,7 @@ export const categoryRoutes = authed()
     createRoute({
       method: "delete",
       path: "/:id/collaborators/:userId",
-      responses: withAuth({
-        200: jsonContent(collaboratorIdSchema),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: withAuth({ 200: jsonContent(collaboratorIdSchema), ...errors(403, 404) }),
     }),
     async (c) => {
       const { id, userId: targetUserId } = c.req.param();
@@ -222,21 +194,16 @@ export const categoryRoutes = authed()
     createRoute({
       method: "post",
       path: "/:id/collaborators/:userId/restore",
-      responses: withAuth({
-        200: jsonContent(collaboratorIdSchema),
-        400: jsonContent(errorSchema, "Bad request"),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: withAuth({ 200: jsonContent(collaboratorIdSchema), ...errors(400, 403, 404) }),
     }),
     async (c) => {
       const { id, userId: targetUserId } = c.req.param();
       const userId = c.get("userId");
       await requireList(id, userId, "manage");
       if (!(await contactRepo.exists(userId, targetUserId)))
-        throw new HTTPException(400, {
-          message: "You can only share lists with your contacts. Invite them first.",
-        });
+        throw new BadRequestError(
+          "You can only share lists with your contacts. Invite them first.",
+        );
 
       const { before, changed } = await categoryCollaboratorRepo.restore(id, targetUserId);
       await sendReachChanges(c, before, changed);

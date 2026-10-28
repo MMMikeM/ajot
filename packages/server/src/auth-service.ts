@@ -6,15 +6,14 @@ import userRepo from "./db/user.repo";
 import sessionRepo from "./db/session.repo";
 import categoryRepo from "./db/category.repo";
 import inviteTokenRepo from "./db/invite-token.repo";
-import { ConflictError, ForbiddenError } from "./db/errors";
+import { ConflictError, ForbiddenError, INVITE_GONE } from "./db/errors";
 import { hashPassword, verifyPassword } from "./password";
 
 /** A server's first account signs up freely; everyone after needs an invite from someone on it. */
 const admit = async (inviteToken: string | undefined) => {
   if (inviteToken) {
     const invite = await inviteTokenRepo.claim(inviteToken);
-    if (!invite)
-      throw new ForbiddenError("This invite link has expired or been used. Ask for a new one.");
+    if (!invite) throw new ForbiddenError(INVITE_GONE);
     return invite;
   }
   if ((await userRepo.count()) > 0) {

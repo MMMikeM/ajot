@@ -10,8 +10,7 @@ vi.mock("../db/client", () => ({ db: {}, inTransaction: vi.fn() }));
 vi.mock("../db/invite-token.repo", () => ({
   default: { claim: vi.fn(), release: vi.fn(), consume: vi.fn() },
 }));
-vi.mock("../db/user.repo", () => ({ default: { findById: vi.fn(async () => ({ name: "A" })) } }));
-vi.mock("../notify", () => ({ sendNotification: vi.fn(async () => {}) }));
+vi.mock("../notify", () => ({ sendNotification: vi.fn(), getUserName: vi.fn(async () => "A") }));
 vi.mock("./contact-changes", () => ({ sendContactChanges: vi.fn() }));
 
 const invite = (createdByUserId: string) => ({

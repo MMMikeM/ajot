@@ -46,13 +46,13 @@ const exists = async (userId: string, contactUserId: string): Promise<boolean> =
   return !!row;
 };
 
-/** userId's contact with this username; null alike for a stranger and a username no one has. */
+/** userId's contact with this username: undefined for a stranger and a username no one has. */
 const findContactUser = async (userId: string, username: string) => {
   const row = await db.query.contacts.findFirst({
     where: { userId, contactUser: { username } },
     with: withContactUser,
   });
-  return row?.contactUser ?? null;
+  return row?.contactUser ?? undefined;
 };
 
 // One transaction: deleting only one direction would leave one user still seeing the other.

@@ -69,3 +69,27 @@ describe("accepting an invite from someone removed as a contact", () => {
     expect(alices).toHaveLength(1);
   });
 });
+
+describe("the inviter's name, before signing up", () => {
+  const LATER = "9999-01-01T00:00:00.000Z";
+
+  test("is read from a usable invite", async () => {
+    const invite = await inviteTokenRepo.create("alice", LATER);
+    expect(await inviteTokenRepo.findInviterName(invite.id)).toBe("alice");
+  });
+
+  test("is the same NotFoundError for an unknown, used or expired invite, without the token", async () => {
+    const used = await inviteTokenRepo.create("alice", LATER);
+    await inviteTokenRepo.claim(used.id);
+    const expired = await inviteTokenRepo.create("alice", "2000-01-01T00:00:00.000Z");
+
+    for (const token of ["unknown-token", used.id, expired.id]) {
+      const refusal = inviteTokenRepo.findInviterName(token);
+      await expect(refusal).rejects.toThrow(NotFoundError);
+      await refusal.catch((err: NotFoundError) => {
+        expect(err.status).toBe(404);
+        expect(`${err.message} ${err.detail}`).not.toContain(token);
+      });
+    }
+  });
+});

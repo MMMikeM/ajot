@@ -1,5 +1,4 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { HTTPException } from "hono/http-exception";
 import { createId } from "@paralleldrive/cuid2";
 import { BadRequestError, ForbiddenError } from "../db/errors";
 import taskRepo, {
@@ -17,8 +16,7 @@ import { authed } from "../middleware";
 import { broadcast, broadcastAll } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import notificationQueueRepo from "../db/notification-queue.repo";
-import { errorSchema } from "./openapi-schemas";
-import { jsonBody, jsonContent, withAuth } from "./crud";
+import { errors, jsonBody, jsonContent, withAuth } from "./crud";
 import reachRepo from "../db/reach.repo";
 import { audienceOf, markTaskEdited, requireTask } from "./task-users";
 import { sendReachChanges } from "./reach";
@@ -79,10 +77,7 @@ export const taskRoutes = authed()
       method: "post",
       path: "/",
       request: jsonBody(taskInsertSchema),
-      responses: withAuth({
-        200: jsonContent(taskResponseSchema),
-        400: jsonContent(errorSchema, "Bad request"),
-      }),
+      responses: withAuth({ 200: jsonContent(taskResponseSchema), ...errors(400, 403, 404, 409) }),
     }),
     async (c) => {
       const data = c.req.valid("json");
@@ -94,8 +89,7 @@ export const taskRoutes = authed()
         data.categoryId ? categoryRepo.canUse(data.categoryId, userId) : true,
         canAssign(userId, data.assigneeId),
       ]);
-      if (parent?.task.parentId)
-        throw new HTTPException(400, { message: "Subtasks can't have subtasks." });
+      if (parent?.task.parentId) throw new BadRequestError("Subtasks can't have subtasks.");
       if (!canUseList) throw notYourList();
       if (!mayAssign) throw notAContact();
 
@@ -116,7 +110,7 @@ export const taskRoutes = authed()
       method: "put",
       path: "/",
       request: jsonBody(taskUpdateSchema),
-      responses: withAuth({ 200: jsonContent(taskResponseSchema) }),
+      responses: withAuth({ 200: jsonContent(taskResponseSchema), ...errors(400, 403, 404, 409) }),
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
@@ -172,7 +166,7 @@ export const taskRoutes = authed()
               taskId: id,
               taskTitle: result.title,
               byUser: actorName,
-            }).catch(() => {});
+            });
           }
         } else if (assigneeChanged) {
           sendNotification(fields.assigneeId!, {
@@ -180,7 +174,7 @@ export const taskRoutes = authed()
             taskId: id,
             taskTitle: result.title,
             fromUser: actorName,
-          }).catch(() => {});
+          });
         } else if (changedNotifiable.length > 0 && allRecipients.length > 0) {
           const changeDescriptions = changedNotifiable.map((f) => {
             if (f === "title") return "renamed";
@@ -195,7 +189,7 @@ export const taskRoutes = authed()
               taskTitle: result.title,
               fromUser: actorName,
               changes: changeDescriptions.join(", "),
-            }).catch(() => {});
+            });
           }
         }
       }
@@ -220,7 +214,7 @@ export const taskRoutes = authed()
       method: "delete",
       path: "/",
       request: jsonBody(taskSelectSchema),
-      responses: withAuth({ 200: jsonContent(taskResponseSchema) }),
+      responses: withAuth({ 200: jsonContent(taskResponseSchema), ...errors(403, 404) }),
     }),
     async (c) => {
       const { id } = c.req.valid("json");
@@ -246,17 +240,14 @@ export const taskRoutes = authed()
       method: "post",
       path: "/send",
       request: jsonBody(sendSchema),
-      responses: withAuth({
-        200: jsonContent(taskResponseSchema),
-        403: jsonContent(errorSchema, "Forbidden"),
-      }),
+      responses: withAuth({ 200: jsonContent(taskResponseSchema), ...errors(403, 404, 409, 429) }),
     }),
     async (c) => {
       const { recipientId, ...data } = c.req.valid("json");
       const userId = c.get("userId");
       limitSharing(userId);
       if (!(await contactRepo.exists(userId, recipientId)))
-        throw new HTTPException(403, { message: "You can only send tasks to your contacts." });
+        throw new ForbiddenError("You can only send tasks to your contacts.");
 
       // The recipient owns it, as if they'd added it, so it lands in their Inbox and not the sender's
       const result = await taskRepo.insertSent({
@@ -274,7 +265,7 @@ export const taskRoutes = authed()
         taskId: result.id,
         taskTitle: result.title,
         fromUser: actorName,
-      }).catch(() => {});
+      });
 
       return c.json(result, 200);
     },
@@ -286,9 +277,7 @@ export const taskRoutes = authed()
       request: jsonBody(shareSchema),
       responses: withAuth({
         200: jsonContent(taskShareResponseSchema),
-        400: jsonContent(errorSchema, "Bad request"),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
+        ...errors(400, 403, 404, 429),
       }),
     }),
     async (c) => {
@@ -324,7 +313,7 @@ export const taskRoutes = authed()
         taskId: data.taskId,
         taskTitle: task.title,
         fromUser: actorName,
-      }).catch(() => {});
+      });
 
       return c.json(result, 200);
     },
@@ -334,11 +323,7 @@ export const taskRoutes = authed()
       method: "delete",
       path: "/share",
       request: jsonBody(taskShareSelectSchema),
-      responses: withAuth({
-        200: jsonContent(taskShareResponseSchema),
-        403: jsonContent(errorSchema, "Forbidden"),
-        404: jsonContent(errorSchema, "Not found"),
-      }),
+      responses: withAuth({ 200: jsonContent(taskShareResponseSchema), ...errors(403, 404) }),
     }),
     async (c) => {
       const share = await taskRepo.findShare(c.req.valid("json").id);
@@ -355,7 +340,7 @@ export const taskRoutes = authed()
       method: "put",
       path: "/share",
       request: jsonBody(shareCategorySchema),
-      responses: withAuth({ 200: jsonContent(taskShareResponseSchema) }),
+      responses: withAuth({ 200: jsonContent(taskShareResponseSchema), ...errors(403, 404) }),
     }),
     async (c) => {
       const { taskId, categoryId } = c.req.valid("json");

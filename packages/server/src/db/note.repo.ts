@@ -2,7 +2,7 @@ import { and, eq, lt, sql } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { db } from "./client";
 import { notes } from "./schema";
-import { ConflictError, NotFoundError, StaleUpdateError } from "./errors";
+import { IdTakenError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { limited, limitedId } from "./field-limits";
@@ -56,7 +56,7 @@ const insert = async (data: NoteInsert) => {
       setWhere: eq(notes.userId, data.userId),
     })
     .returning();
-  if (!row) throw new ConflictError("Note id taken");
+  if (!row) throw new IdTakenError("note", data.id);
   return row;
 };
 
