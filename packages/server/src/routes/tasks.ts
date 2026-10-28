@@ -1,6 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
-import { BadRequestError, ForbiddenError, ONLY_CONTACTS, onlyContacts } from "../db/errors";
+import { BadRequestError, ForbiddenError, ONLY_CONTACTS } from "../db/errors";
 import taskRepo, {
   taskInsertSchema,
   taskUpdateSchema,
@@ -16,7 +16,7 @@ import { authed } from "../middleware";
 import { broadcast, broadcastAll } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import notificationQueueRepo from "../db/notification-queue.repo";
-import { errors, jsonBody, jsonContent, withAuth } from "./crud";
+import { jsonBody, res } from "./crud";
 import reachRepo from "../db/reach.repo";
 import { audienceOf, markTaskEdited, requireTask } from "./task-users";
 import { sendReachChanges } from "./reach";
@@ -50,9 +50,9 @@ const formatDueDate = (dueDate: string) => {
 const canAssign = async (userId: string, assigneeId: string | null | undefined) =>
   !assigneeId || assigneeId === userId || contactRepo.exists(userId, assigneeId);
 
-const notYourList = () => new ForbiddenError("That list isn't yours.");
-const notAContact = () => new BadRequestError("You can only assign tasks to your contacts.");
-const subtaskGoesWithParent = () => new BadRequestError("A subtask goes wherever its parent is.");
+const NOT_YOUR_LIST = "That list isn't yours.";
+const NOT_A_CONTACT = "You can only assign tasks to your contacts.";
+const SUBTASK_GOES_WITH_PARENT = "A subtask goes wherever its parent is.";
 
 const shareCategorySchema = z.object({
   taskId: z.string().max(MAX_ID),
@@ -64,7 +64,7 @@ export const taskRoutes = authed()
     createRoute({
       method: "get",
       path: "/",
-      responses: withAuth({ 200: jsonContent(z.array(taskListItemSchema)) }),
+      responses: res({ ok: z.array(taskListItemSchema) }),
     }),
     async (c) => c.json(await taskRepo.list(c.get("userId")), 200),
   )
@@ -73,12 +73,12 @@ export const taskRoutes = authed()
       method: "post",
       path: "/",
       request: jsonBody(taskInsertSchema),
-      responses: withAuth({ 200: jsonContent(taskResponseSchema), ...errors(400, 403, 404, 409) }),
+      responses: res({ ok: taskResponseSchema, errors: [400, 403, 404, 409] }),
     }),
     async (c) => {
       const data = c.req.valid("json");
       const userId = c.get("userId");
-      if (data.parentId && data.categoryId) throw subtaskGoesWithParent();
+      if (data.parentId && data.categoryId) throw new BadRequestError(SUBTASK_GOES_WITH_PARENT);
 
       const [parent, canUseList, mayAssign] = await Promise.all([
         data.parentId ? requireTask(data.parentId, userId, "edit") : null,
@@ -86,8 +86,8 @@ export const taskRoutes = authed()
         canAssign(userId, data.assigneeId),
       ]);
       if (parent?.task.parentId) throw new BadRequestError("Subtasks can't have subtasks.");
-      if (!canUseList) throw notYourList();
-      if (!mayAssign) throw notAContact();
+      if (!canUseList) throw new ForbiddenError(NOT_YOUR_LIST);
+      if (!mayAssign) throw new BadRequestError(NOT_A_CONTACT);
 
       // A client from before completedAt existed doesn't send it
       const result = await taskRepo.insert({
@@ -106,7 +106,7 @@ export const taskRoutes = authed()
       method: "put",
       path: "/",
       request: jsonBody(taskUpdateSchema),
-      responses: withAuth({ 200: jsonContent(taskResponseSchema), ...errors(400, 403, 404, 409) }),
+      responses: res({ ok: taskResponseSchema, errors: [400, 403, 404, 409] }),
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
@@ -119,14 +119,14 @@ export const taskRoutes = authed()
         fields.categoryId ? categoryRepo.canUse(fields.categoryId, userId) : true,
         canAssign(userId, fields.assigneeId),
       ]);
-      if (!mayAssign) throw notAContact();
+      if (!mayAssign) throw new BadRequestError(NOT_A_CONTACT);
       // Someone it's shared with files their share instead (PUT /share); anyone else moving it
       // could take it away from its owner or its list's people
       if ("categoryId" in fields && !mine.canDelete)
         throw new ForbiddenError("Only its owner can move it to another list.");
       if (fields.categoryId) {
-        if (task.parentId) throw subtaskGoesWithParent();
-        if (!canUseList) throw notYourList();
+        if (task.parentId) throw new BadRequestError(SUBTASK_GOES_WITH_PARENT);
+        if (!canUseList) throw new ForbiddenError(NOT_YOUR_LIST);
       }
 
       if (restoring) {
@@ -210,7 +210,7 @@ export const taskRoutes = authed()
       method: "delete",
       path: "/",
       request: jsonBody(taskSelectSchema),
-      responses: withAuth({ 200: jsonContent(taskResponseSchema), ...errors(403, 404) }),
+      responses: res({ ok: taskResponseSchema, errors: [403, 404] }),
     }),
     async (c) => {
       const { id } = c.req.valid("json");
@@ -236,7 +236,7 @@ export const taskRoutes = authed()
       method: "post",
       path: "/send",
       request: jsonBody(sendSchema),
-      responses: withAuth({ 200: jsonContent(taskResponseSchema), ...errors(400, 404, 409, 429) }),
+      responses: res({ ok: taskResponseSchema, errors: [400, 404, 409, 429] }),
     }),
     async (c) => {
       const { recipientId, ...data } = c.req.valid("json");
@@ -271,10 +271,7 @@ export const taskRoutes = authed()
       method: "post",
       path: "/share",
       request: jsonBody(shareSchema),
-      responses: withAuth({
-        200: jsonContent(taskShareResponseSchema),
-        ...errors(400, 403, 404, 429),
-      }),
+      responses: res({ ok: taskShareResponseSchema, errors: [400, 403, 404, 429] }),
     }),
     async (c) => {
       const data = c.req.valid("json");
@@ -284,8 +281,8 @@ export const taskRoutes = authed()
         requireTask(data.taskId, userId, "manage"),
         contactRepo.findContactUser(userId, data.username.toLowerCase()),
       ]);
-      if (task.parentId) throw subtaskGoesWithParent();
-      if (!targetUser) throw onlyContacts();
+      if (task.parentId) throw new BadRequestError(SUBTASK_GOES_WITH_PARENT);
+      if (!targetUser) throw new BadRequestError(ONLY_CONTACTS);
 
       const before = await reachRepo.read({ taskIds: [task.id] });
       const {
@@ -319,7 +316,7 @@ export const taskRoutes = authed()
       method: "delete",
       path: "/share",
       request: jsonBody(taskShareSelectSchema),
-      responses: withAuth({ 200: jsonContent(taskShareResponseSchema), ...errors(403, 404) }),
+      responses: res({ ok: taskShareResponseSchema, errors: [403, 404] }),
     }),
     async (c) => {
       const share = await taskRepo.findShare(c.req.valid("json").id);
@@ -336,12 +333,13 @@ export const taskRoutes = authed()
       method: "put",
       path: "/share",
       request: jsonBody(shareCategorySchema),
-      responses: withAuth({ 200: jsonContent(taskShareResponseSchema), ...errors(403, 404) }),
+      responses: res({ ok: taskShareResponseSchema, errors: [403, 404] }),
     }),
     async (c) => {
       const { taskId, categoryId } = c.req.valid("json");
       const userId = c.get("userId");
-      if (categoryId && !(await categoryRepo.canUse(categoryId, userId))) throw notYourList();
+      if (categoryId && !(await categoryRepo.canUse(categoryId, userId)))
+        throw new ForbiddenError(NOT_YOUR_LIST);
       const result = await taskRepo.updateShareCategory(taskId, userId, categoryId);
       // The user's other devices file it too
       const [{ shares } = { shares: [] }] = await taskRepo.listSharesForTasks([taskId]);

@@ -3,14 +3,14 @@ import contactRepo, { contactResponseSchema } from "../db/contact.repo";
 import { sendReachChanges } from "./reach";
 import { sendContactChanges } from "./contact-changes";
 import { authed } from "../middleware";
-import { errors, jsonContent, withAuth } from "./crud";
+import { res } from "./crud";
 
 export const contactRoutes = authed()
   .openapi(
     createRoute({
       method: "get",
       path: "/",
-      responses: withAuth({ 200: jsonContent(z.array(contactResponseSchema)) }),
+      responses: res({ ok: z.array(contactResponseSchema) }),
     }),
     async (c) => c.json(await contactRepo.list(c.get("userId")), 200),
   )
@@ -18,7 +18,7 @@ export const contactRoutes = authed()
     createRoute({
       method: "delete",
       path: "/:id",
-      responses: withAuth({ 200: jsonContent(z.object({ id: z.string() })), ...errors(404) }),
+      responses: res({ ok: z.object({ id: z.string() }), errors: [404] }),
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -31,7 +31,7 @@ export const contactRoutes = authed()
     createRoute({
       method: "post",
       path: "/:id/restore",
-      responses: withAuth({ 200: jsonContent(z.object({ id: z.string() })), ...errors(404) }),
+      responses: res({ ok: z.object({ id: z.string() }), errors: [404] }),
     }),
     async (c) => {
       const { id } = c.req.param();

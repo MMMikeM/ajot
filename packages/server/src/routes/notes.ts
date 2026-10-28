@@ -7,7 +7,7 @@ import noteRepo, {
 } from "../db/note.repo";
 import { authed } from "../middleware";
 import { broadcast } from "../broadcast";
-import { errors, jsonBody, jsonContent, withAuth } from "./crud";
+import { jsonBody, res } from "./crud";
 import { markTaskEdited, requireTask } from "./task-users";
 import taskRepo from "../db/task.repo";
 import { NotFoundError } from "../db/errors";
@@ -17,7 +17,7 @@ export const noteRoutes = authed()
     createRoute({
       method: "get",
       path: "/",
-      responses: withAuth({ 200: jsonContent(z.array(noteResponseSchema)) }),
+      responses: res({ ok: z.array(noteResponseSchema) }),
     }),
     async (c) => c.json(await noteRepo.list(c.get("userId")), 200),
   )
@@ -26,7 +26,7 @@ export const noteRoutes = authed()
       method: "post",
       path: "/",
       request: jsonBody(noteInsertSchema),
-      responses: withAuth({ 200: jsonContent(noteResponseSchema), ...errors(404, 409) }),
+      responses: res({ ok: noteResponseSchema, errors: [404, 409] }),
     }),
     async (c) => {
       const data = c.req.valid("json");
@@ -47,7 +47,7 @@ export const noteRoutes = authed()
       method: "put",
       path: "/",
       request: jsonBody(noteUpdateSchema),
-      responses: withAuth({ 200: jsonContent(noteResponseSchema), ...errors(404, 409) }),
+      responses: res({ ok: noteResponseSchema, errors: [404, 409] }),
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
@@ -69,7 +69,7 @@ export const noteRoutes = authed()
       method: "delete",
       path: "/",
       request: jsonBody(noteSelectSchema),
-      responses: withAuth({ 200: jsonContent(noteResponseSchema), ...errors(404) }),
+      responses: res({ ok: noteResponseSchema, errors: [404] }),
     }),
     async (c) => {
       const userId = c.get("userId");

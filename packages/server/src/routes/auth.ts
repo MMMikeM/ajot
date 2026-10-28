@@ -6,7 +6,7 @@ import inviteTokenRepo from "../db/invite-token.repo";
 import { INVITE_GONE } from "../db/errors";
 import { extractToken } from "../auth";
 import { errorSchema } from "./openapi-schemas";
-import { errors, jsonBody, jsonContent, okBody, okResponse } from "./crud";
+import { jsonBody, jsonContent, okBody, res } from "./crud";
 import { MIN_PASSWORD_LENGTH } from "../password";
 import {
   MAX_ID,
@@ -83,11 +83,12 @@ export const authRoutes = new OpenAPIHono()
       method: "post",
       path: "/login",
       request: jsonBody(loginSchema),
-      responses: {
-        200: jsonContent(authResponseSchema),
-        401: jsonContent(errorSchema, "Login failed"),
-        ...errors(429),
-      },
+      responses: res({
+        ok: authResponseSchema,
+        errors: [429],
+        public: true,
+        extra: { 401: jsonContent(errorSchema, "Login failed") },
+      }),
     }),
     async (c) => {
       const data = c.req.valid("json");
@@ -113,11 +114,12 @@ export const authRoutes = new OpenAPIHono()
       method: "post",
       path: "/signup",
       request: jsonBody(signupSchema),
-      responses: {
-        200: jsonContent(authResponseSchema),
-        403: jsonContent(errorSchema, "No invite, or the invite is no longer valid"),
-        ...errors(409, 429),
-      },
+      responses: res({
+        ok: authResponseSchema,
+        errors: [409, 429],
+        public: true,
+        extra: { 403: jsonContent(errorSchema, "No invite, or the invite is no longer valid") },
+      }),
     }),
     async (c) => {
       const data = c.req.valid("json");
@@ -147,10 +149,11 @@ export const authRoutes = new OpenAPIHono()
     createRoute({
       method: "get",
       path: "/invites/:token",
-      responses: {
-        200: jsonContent(inviterSchema),
-        404: jsonContent(errorSchema, "No usable invite"),
-      },
+      responses: res({
+        ok: inviterSchema,
+        public: true,
+        extra: { 404: jsonContent(errorSchema, "No usable invite") },
+      }),
     }),
     // Before signing up, so it can't ask for a session. It names only the inviter, and an
     // invite that's unknown, used or expired answers the same way.
@@ -161,10 +164,7 @@ export const authRoutes = new OpenAPIHono()
     createRoute({
       method: "post",
       path: "/logout",
-      responses: {
-        ...okResponse,
-        401: jsonContent(errorSchema, "Unauthorized"),
-      },
+      responses: res({ ok: true }),
     }),
     async (c) => {
       const token = extractToken(c.req.raw);
@@ -180,10 +180,11 @@ export const authRoutes = new OpenAPIHono()
       path: "/sessions-revoked",
       hide: true,
       request: jsonBody(revocationSchema),
-      responses: {
-        ...okResponse,
-        401: jsonContent(errorSchema, "Not signed with this server's database token"),
-      },
+      responses: res({
+        ok: true,
+        public: true,
+        extra: { 401: jsonContent(errorSchema, "Not signed with this server's database token") },
+      }),
     }),
     // reset-password.ts deletes the sessions itself; this only stops this process's cache
     // vouching for them

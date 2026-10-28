@@ -11,11 +11,11 @@ import { requireList } from "./task-users";
 import { sendReachChanges } from "./reach";
 import { userPublicSchema } from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
-import { BadRequestError, NotFoundError, ONLY_CONTACTS, onlyContacts } from "../db/errors";
+import { BadRequestError, NotFoundError, ONLY_CONTACTS } from "../db/errors";
 import { authed } from "../middleware";
 import { broadcast } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
-import { errors, jsonBody, jsonContent, withAuth } from "./crud";
+import { jsonBody, res } from "./crud";
 import { MAX_USERNAME } from "@newtab-todo/shared/field-limits";
 import { limitSharing } from "../rate-limit";
 
@@ -29,7 +29,7 @@ export const categoryRoutes = authed()
     createRoute({
       method: "get",
       path: "/",
-      responses: withAuth({ 200: jsonContent(z.array(categoryResponseSchema)) }),
+      responses: res({ ok: z.array(categoryResponseSchema) }),
     }),
     async (c) => c.json(await categoryRepo.list(c.get("userId")), 200),
   )
@@ -38,7 +38,7 @@ export const categoryRoutes = authed()
       method: "post",
       path: "/",
       request: jsonBody(categoryInsertSchema),
-      responses: withAuth({ 200: jsonContent(categoryResponseSchema), ...errors(409) }),
+      responses: res({ ok: categoryResponseSchema, errors: [409] }),
     }),
     async (c) => {
       const userId = c.get("userId");
@@ -52,7 +52,7 @@ export const categoryRoutes = authed()
       method: "put",
       path: "/",
       request: jsonBody(categoryUpdateSchema),
-      responses: withAuth({ 200: jsonContent(categoryResponseSchema), ...errors(403, 404, 409) }),
+      responses: res({ ok: categoryResponseSchema, errors: [403, 404, 409] }),
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
@@ -73,7 +73,7 @@ export const categoryRoutes = authed()
       method: "delete",
       path: "/",
       request: jsonBody(categoryDeleteSchema),
-      responses: withAuth({ 200: jsonContent(categoryResponseSchema), ...errors(400, 403, 404) }),
+      responses: res({ ok: categoryResponseSchema, errors: [400, 403, 404] }),
     }),
     async (c) => {
       const { id, tasks: taskAction, taskIds } = c.req.valid("json");
@@ -91,7 +91,7 @@ export const categoryRoutes = authed()
     createRoute({
       method: "post",
       path: "/:id/restore",
-      responses: withAuth({ 200: jsonContent(categoryResponseSchema), ...errors(403, 404) }),
+      responses: res({ ok: categoryResponseSchema, errors: [403, 404] }),
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -107,7 +107,7 @@ export const categoryRoutes = authed()
     createRoute({
       method: "get",
       path: "/:id/collaborators",
-      responses: withAuth({ 200: jsonContent(z.array(userPublicSchema)), ...errors(403, 404) }),
+      responses: res({ ok: z.array(userPublicSchema), errors: [403, 404] }),
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -138,7 +138,7 @@ export const categoryRoutes = authed()
       method: "post",
       path: "/:id/collaborators",
       request: jsonBody(collaboratorSchema),
-      responses: withAuth({ 200: jsonContent(userPublicSchema), ...errors(400, 403, 404, 429) }),
+      responses: res({ ok: userPublicSchema, errors: [400, 403, 404, 429] }),
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -150,7 +150,7 @@ export const categoryRoutes = authed()
         requireList(id, userId, "manage"),
         contactRepo.findContactUser(userId, username.toLowerCase()),
       ]);
-      if (!targetUser) throw onlyContacts();
+      if (!targetUser) throw new BadRequestError(ONLY_CONTACTS);
 
       const before = await reachRepo.read({ listIds: [id] });
       const added = await categoryCollaboratorRepo.add(id, targetUser.id);
@@ -172,7 +172,7 @@ export const categoryRoutes = authed()
     createRoute({
       method: "delete",
       path: "/:id/collaborators/:userId",
-      responses: withAuth({ 200: jsonContent(collaboratorIdSchema), ...errors(403, 404) }),
+      responses: res({ ok: collaboratorIdSchema, errors: [403, 404] }),
     }),
     async (c) => {
       const { id, userId: targetUserId } = c.req.param();
@@ -191,7 +191,7 @@ export const categoryRoutes = authed()
     createRoute({
       method: "post",
       path: "/:id/collaborators/:userId/restore",
-      responses: withAuth({ 200: jsonContent(collaboratorIdSchema), ...errors(400, 403, 404) }),
+      responses: res({ ok: collaboratorIdSchema, errors: [400, 403, 404] }),
     }),
     async (c) => {
       const { id, userId: targetUserId } = c.req.param();
