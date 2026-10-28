@@ -86,7 +86,7 @@ const releaseReminders = async (ids: string[], at: string) => {
 };
 
 // Two bound values a user, well under SQLite's limit on them in one statement
-const DIGEST_CLAIM_CHUNK = 200;
+export const DIGEST_CLAIM_CHUNK = 200;
 
 /**
  * Records a digest for `day` sent at `at` for each of these users who has none that day, and
