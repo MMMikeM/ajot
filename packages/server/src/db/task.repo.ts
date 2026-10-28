@@ -35,11 +35,11 @@ const sharedWithUserSchema = createSelectSchema(users).pick({
 });
 
 export const taskListItemSchema = taskResponseSchema.extend({
-  user: z.object({ id: z.string(), name: z.string() }).nullable(),
+  user: z.object({ id: z.string(), name: z.string() }),
   subtasks: z.array(taskResponseSchema),
   shares: z.array(
     taskShareResponseSchema.extend({
-      sharedWithUser: sharedWithUserSchema.nullable(),
+      sharedWithUser: sharedWithUserSchema,
     }),
   ),
   assignee: sharedWithUserSchema.nullable(),

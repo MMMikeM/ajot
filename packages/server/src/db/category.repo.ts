@@ -39,7 +39,7 @@ export const categoryResponseSchema = createSelectSchema(categories)
   .omit({ deletedAt: true, deletion: true })
   .extend({
     user: z.object({ name: z.string() }).nullish(),
-    collaborators: z.array(z.object({ user: collaboratorUserSchema.nullable() })).nullish(),
+    collaborators: z.array(z.object({ user: collaboratorUserSchema })).nullish(),
   });
 const limitedFields = {
   id: limitedId,
