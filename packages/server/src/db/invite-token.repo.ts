@@ -61,22 +61,23 @@ const release = async (token: string) => {
 };
 
 // One transaction, so a failed contact insert leaves the token unused for a retry. The caller
-// passes an invite already validated by findValid; this doesn't check it again.
-const consume = async (invite: InviteToken, usedByUserId: string) => {
-  await inTransaction(async (tx) => {
+// passes an invite already validated by findValid; this doesn't check it again. Returns the
+// contact rows it added, none if the two were contacts already.
+const consume = async (invite: InviteToken, usedByUserId: string) =>
+  inTransaction(async (tx) => {
     await tx
       .update(inviteTokens)
       .set({ usedAt: now(), usedByUserId })
       .where(eq(inviteTokens.id, invite.id));
 
-    await tx
+    return tx
       .insert(contacts)
       .values([
         { id: createId(), userId: invite.createdByUserId, contactUserId: usedByUserId },
         { id: createId(), userId: usedByUserId, contactUserId: invite.createdByUserId },
       ])
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning();
   });
-};
 
 export default { create, findById, findValid, findInviterName, claim, release, consume };

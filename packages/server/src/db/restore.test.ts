@@ -182,6 +182,20 @@ describe("restoring a removed contact", () => {
     await expect(contactRepo.restore("mine", owner)).rejects.toMatchObject({ status: 404 });
     expect(writes).toEqual([]);
   });
+
+  test("replayed after it landed changes nothing, so a lost response doesn't undo the Undo", async () => {
+    tables.contacts = [record.contacts[0]];
+    await expect(contactRepo.restore("mine", owner)).resolves.toMatchObject({
+      contact: record.contacts[0],
+      restored: [],
+    });
+    expect(writes).toEqual([]);
+  });
+
+  test("replayed by someone else is still not found", async () => {
+    tables.contacts = [record.contacts[1]];
+    await expect(contactRepo.restore("theirs", owner)).rejects.toMatchObject({ status: 404 });
+  });
 });
 
 describe("removing a contact", () => {

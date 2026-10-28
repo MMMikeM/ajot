@@ -48,24 +48,6 @@ export const acceptInvite = async (token: string) => {
   contactsCollection.utils.refetch().catch(console.error);
 };
 
-/** Removes the contact for both people, not only this user, and the lists they shared. */
-export const removeContact = async (id: string) => {
-  const res = await client.api.contacts[":id"].$delete({ param: { id } });
-  if (!res.ok) throw new Error("Failed to remove contact");
-  await Promise.all([contactsCollection.utils.refetch(), categoriesCollection.utils.refetch()]);
-};
-
-/** Undoes removeContact: both people are contacts again, sharing the same lists. */
-export const restoreContact = async (id: string) => {
-  const res = await client.api.contacts[":id"].restore.$post({ param: { id } });
-  if (!res.ok) throw new Error("Failed to restore contact");
-  await Promise.all([
-    contactsCollection.utils.refetch(),
-    categoriesCollection.utils.refetch(),
-    tasksCollection.utils.refetch(),
-  ]);
-};
-
 export const addCollaborator = async (categoryId: string, username: string) => {
   const res = await reach(
     client.api.categories[":id"].collaborators.$post({

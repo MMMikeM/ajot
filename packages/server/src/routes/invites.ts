@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { hoursFromNow } from "@newtab-todo/shared/iso";
 import inviteTokenRepo from "../db/invite-token.repo";
 import { sendNotification } from "../notify";
+import { sendContactChanges } from "./contact-changes";
 import userRepo from "../db/user.repo";
 import { authed } from "../middleware";
 import { errorSchema, okSchema } from "./openapi-schemas";
@@ -63,7 +64,8 @@ export const inviteRoutes = authed()
         });
       }
 
-      await inviteTokenRepo.consume(invite, userId);
+      const added = await inviteTokenRepo.consume(invite, userId);
+      await sendContactChanges(c, { addedIds: added.map((row) => row.id) });
 
       const accepterName = await userRepo
         .findById(userId)

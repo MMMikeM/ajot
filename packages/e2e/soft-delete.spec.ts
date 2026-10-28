@@ -359,8 +359,13 @@ test("Undo of removing a contact puts back both sides and the lists they shared"
     (await contactsOf(user2Auth.token)).some((c) => c.contactUserId === user1Auth.userId),
   ).toBe(true);
   expect((await listsOf(user2Auth.token)).some((l) => l.id === list.id)).toBe(true);
+  // A replay after a lost response changes nothing, and is still no one else's to make
+  const contactIds = async () => (await contactsOf(user1Auth.token)).map((c) => c.id).sort();
+  const before = await contactIds();
+  await apiRequest("POST", `/api/contacts/${contact.id}/restore`, undefined, user1Auth.token);
+  expect(await contactIds()).toEqual(before);
   await expect(
-    apiRequest("POST", `/api/contacts/${contact.id}/restore`, undefined, user1Auth.token),
+    apiRequest("POST", `/api/contacts/${contact.id}/restore`, undefined, user2Auth.token),
   ).rejects.toThrow(/404/);
 });
 

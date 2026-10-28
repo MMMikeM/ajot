@@ -2,15 +2,18 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import inviteTokenRepo from "../db/invite-token.repo";
 import sessionRepo from "../db/session.repo";
+import { signup } from "../auth-service";
 import { signRevocation } from "../session-revocation";
 import { authRoutes } from "./auth";
+import { sendContactChanges } from "./contact-changes";
 import { rejectInvalidInput } from "./openapi-schemas";
 
 vi.mock("../db/invite-token.repo", () => ({ default: { findInviterName: vi.fn() } }));
 vi.mock("../db/session.repo", () => ({ default: { forgetUser: vi.fn() } }));
 vi.mock("../auth-service", () => ({ login: vi.fn(), signup: vi.fn() }));
 vi.mock("../auth", () => ({ extractToken: vi.fn(), validateSession: vi.fn() }));
-vi.mock("../notify", () => ({ sendNotification: vi.fn() }));
+vi.mock("../notify", () => ({ sendNotification: vi.fn(async () => {}) }));
+vi.mock("./contact-changes", () => ({ sendContactChanges: vi.fn() }));
 
 describe("GET /invites/:token", () => {
   test("names whoever made a usable invite, without a session", async () => {
@@ -76,5 +79,27 @@ describe("POST /sessions-revoked", () => {
     const res = await post("/sessions-revoked", signRevocation("", "me"));
     expect(res.status).toBe(401);
     expect(sessionRepo.forgetUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /signup", () => {
+  test("with an invite, sends both new contact rows to their pages live", async () => {
+    vi.mocked(signup).mockResolvedValueOnce({
+      session: { userId: "bob", token: "t", name: "Bob", username: "bob" },
+      invitedBy: "alice",
+      contacts: [
+        { id: "alices-row", userId: "alice", contactUserId: "bob", createdAt: "now" },
+        { id: "bobs-row", userId: "bob", contactUserId: "alice", createdAt: "now" },
+      ],
+    });
+    const res = await authRoutes.request("/signup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "bob", password: "long enough pw", name: "Bob" }),
+    });
+    expect(res.status).toBe(200);
+    expect(sendContactChanges).toHaveBeenCalledWith(expect.anything(), {
+      addedIds: ["alices-row", "bobs-row"],
+    });
   });
 });
