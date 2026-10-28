@@ -5,8 +5,8 @@ import { BadRequestError, GoneError, INVITE_GONE } from "../db/errors";
 import { getUserName, sendNotification } from "../notify";
 import { sendContactChanges } from "./contact-changes";
 import { authed, authedRoute } from "../middleware";
-import { errorSchema } from "./openapi-schemas";
-import { jsonContent, okBody, res } from "./crud";
+import { okSchema } from "./openapi-schemas";
+import { okBody } from "./crud";
 
 const inviteResponseSchema = z.object({
   token: z.string(),
@@ -18,7 +18,7 @@ export const inviteRoutes = authed()
     authedRoute({
       method: "post",
       path: "/",
-      responses: res({ ok: inviteResponseSchema }),
+      responses: { 200: inviteResponseSchema },
     }),
     async (c) => {
       const userId = c.get("userId");
@@ -31,11 +31,7 @@ export const inviteRoutes = authed()
     authedRoute({
       method: "post",
       path: "/:token/accept",
-      responses: res({
-        ok: true,
-        errors: [400],
-        extra: { 410: jsonContent(errorSchema, "Token expired or already used") },
-      }),
+      responses: { 200: okSchema, 400: true, 410: "Token expired or already used" },
     }),
     async (c) => {
       const { token } = c.req.param();

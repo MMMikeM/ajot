@@ -16,7 +16,7 @@ import { authed, authedRoute } from "../middleware";
 import { broadcast, broadcastAll } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import notificationQueueRepo from "../db/notification-queue.repo";
-import { jsonBody, res } from "./crud";
+import { jsonBody } from "./crud";
 import reachRepo from "../db/reach.repo";
 import { audienceOf, markTaskEdited, requireTask } from "./task-users";
 import { sendReachChanges } from "./reach";
@@ -64,7 +64,7 @@ export const taskRoutes = authed()
     authedRoute({
       method: "get",
       path: "/",
-      responses: res({ ok: z.array(taskListItemSchema) }),
+      responses: { 200: z.array(taskListItemSchema) },
     }),
     async (c) => c.json(await taskRepo.list(c.get("userId")), 200),
   )
@@ -73,7 +73,7 @@ export const taskRoutes = authed()
       method: "post",
       path: "/",
       request: jsonBody(taskInsertSchema),
-      responses: res({ ok: taskResponseSchema, errors: [400, 403, 404, 409] }),
+      responses: { 200: taskResponseSchema, 400: true, 403: true, 404: true, 409: true },
     }),
     async (c) => {
       const data = c.req.valid("json");
@@ -106,7 +106,7 @@ export const taskRoutes = authed()
       method: "put",
       path: "/",
       request: jsonBody(taskUpdateSchema),
-      responses: res({ ok: taskResponseSchema, errors: [400, 403, 404, 409] }),
+      responses: { 200: taskResponseSchema, 400: true, 403: true, 404: true, 409: true },
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
@@ -210,7 +210,7 @@ export const taskRoutes = authed()
       method: "delete",
       path: "/",
       request: jsonBody(taskSelectSchema),
-      responses: res({ ok: taskResponseSchema, errors: [403, 404] }),
+      responses: { 200: taskResponseSchema, 403: true, 404: true },
     }),
     async (c) => {
       const { id } = c.req.valid("json");
@@ -236,7 +236,7 @@ export const taskRoutes = authed()
       method: "post",
       path: "/send",
       request: jsonBody(sendSchema),
-      responses: res({ ok: taskResponseSchema, errors: [400, 404, 409, 429] }),
+      responses: { 200: taskResponseSchema, 400: true, 404: true, 409: true, 429: true },
     }),
     async (c) => {
       const { recipientId, ...data } = c.req.valid("json");
@@ -271,7 +271,7 @@ export const taskRoutes = authed()
       method: "post",
       path: "/share",
       request: jsonBody(shareSchema),
-      responses: res({ ok: taskShareResponseSchema, errors: [400, 403, 404, 429] }),
+      responses: { 200: taskShareResponseSchema, 400: true, 403: true, 404: true, 429: true },
     }),
     async (c) => {
       const data = c.req.valid("json");
@@ -316,7 +316,7 @@ export const taskRoutes = authed()
       method: "delete",
       path: "/share",
       request: jsonBody(taskShareSelectSchema),
-      responses: res({ ok: taskShareResponseSchema, errors: [403, 404] }),
+      responses: { 200: taskShareResponseSchema, 403: true, 404: true },
     }),
     async (c) => {
       const share = await taskRepo.findShare(c.req.valid("json").id);
@@ -333,7 +333,7 @@ export const taskRoutes = authed()
       method: "put",
       path: "/share",
       request: jsonBody(shareCategorySchema),
-      responses: res({ ok: taskShareResponseSchema, errors: [403, 404] }),
+      responses: { 200: taskShareResponseSchema, 403: true, 404: true },
     }),
     async (c) => {
       const { taskId, categoryId } = c.req.valid("json");

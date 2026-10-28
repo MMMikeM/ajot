@@ -1,6 +1,6 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { OpenAPIHono, z } from "@hono/zod-openapi";
 import userRepo from "../db/user.repo";
-import { res } from "./crud";
+import { route } from "./crud";
 
 const configSchema = z.object({
   vapidPublicKey: z.string(),
@@ -10,10 +10,10 @@ const configSchema = z.object({
 
 /** What a client needs to know about the server it was pointed at, before signing in. */
 export const configRoutes = new OpenAPIHono().openapi(
-  createRoute({
+  route({
     method: "get",
     path: "/",
-    responses: res({ ok: configSchema }),
+    responses: { 200: configSchema },
   }),
   async (c) =>
     c.json(
