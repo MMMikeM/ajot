@@ -6,13 +6,23 @@ on:
   # A pull request runs the tests and builds the server image; deploying stays with pushes to main
   pull_request:
 
+# Actions are pinned to commits, so a moved tag can't run new code next to the secrets, and the
+# token only reads the repo
+permissions:
+  contents: read
+
+# A new push to a pull request stops its last run. On main a run waits for the one before it
+# instead, so a deploy or migration is never stopped halfway.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  e2e:
-    # This image ships Google Chrome, so Chromium's libraries are already there; the suite starts
-    # its own database in the runner's Docker
+  # The client and extensions, built once: every e2e job tests this build and the deploy ships it
+  build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
@@ -27,9 +37,9 @@ jobs:
             exit 1
           fi
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: pnpm
@@ -38,30 +48,10 @@ jobs:
 
       - run: pnpm test
 
-      # Without --with-deps: the runner already has Chromium's libraries, and the fonts and virtual
-      # display it adds took 7 minutes when Ubuntu's mirror was slow
-      - run: pnpm --filter @newtab-todo/e2e exec playwright install chromium
+      # Builds the client first
+      - run: pnpm build:ext
 
-      - run: pnpm test:e2e
-
-      # The specs that need a production build: the prerendered skeleton, a stale chunk, load timing
-      - run: pnpm test:e2e:prerender
-
-      # The extension's background and the PWA's worker, saving the lists for flight mode
-      - run: pnpm test:e2e:background
-
-      # Once the suites pass, and only for a deploy, with the dependencies installed above. A
-      # migration that fails rolls back and stops the deploy.
-      - name: Migrate the database
-        if: github.event_name == 'push'
-        run: pnpm --filter @newtab-todo/server db:migrate
-        env:
-          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-
-      # The deploy ships the build these tests ran against rather than building it again
-      - uses: actions/upload-artifact@v7
-        if: github.event_name == 'push'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: client-build
           path: |
@@ -70,10 +60,54 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - uses: actions/upload-artifact@v7
+  e2e:
+    needs: build
+    # This image ships Google Chrome, so Chromium's libraries are already there; the suite starts
+    # its own database in the runner's Docker
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - { name: shard-1, run: pnpm exec playwright test --shard=1/6 }
+          - { name: shard-2, run: pnpm exec playwright test --shard=2/6 }
+          - { name: shard-3, run: pnpm exec playwright test --shard=3/6 }
+          - { name: shard-4, run: pnpm exec playwright test --shard=4/6 }
+          - { name: shard-5, run: pnpm exec playwright test --shard=5/6 }
+          - { name: shard-6, run: pnpm exec playwright test --shard=6/6 }
+          # The specs that need a production build (the prerendered skeleton, a stale chunk, load
+          # timing), then the extension's background and the PWA's worker saving the lists
+          - name: builds
+            run: pnpm exec playwright test -c playwright.prerender.config.ts && pnpm exec playwright test -c playwright.background.config.ts
+    name: e2e (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: client-build
+          path: packages/client
+
+      # Without --with-deps: the runner already has Chromium's libraries, and the fonts and virtual
+      # display it adds took 7 minutes when Ubuntu's mirror was slow
+      - run: pnpm --filter @newtab-todo/e2e exec playwright install chromium
+
+      # Playwright itself rather than `pnpm test:e2e`, whose task would build the client again
+      - run: ${{ matrix.run }}
+        working-directory: packages/e2e
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.name }}
           path: packages/e2e/.report
           # Dot folders are skipped by default, which left the upload empty
           include-hidden-files: true
@@ -83,9 +117,10 @@ jobs:
   server-image:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # master as of 2026-04-08: the last release, 1.5 from 2024, still runs on Node 20
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
 
       - run: flyctl auth docker
         env:
@@ -102,12 +137,29 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Once every suite has passed. A migration that fails rolls back and stops the deploy.
+      - name: Migrate the database
+        run: pnpm --filter @newtab-todo/server db:migrate
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+
+      # master as of 2026-04-08: the last release, 1.5 from 2024, still runs on Node 20
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
 
       # The image copies the client from here; the zips below are the extensions
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: client-build
           path: packages/client
@@ -137,17 +189,17 @@ jobs:
           (cd packages/client/dist-extension/chrome && zip -r -X -q "$OLDPWD/ajot-$version-chrome.zip" .)
           git archive --format=zip -o "ajot-$version-source.zip" HEAD
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           path: ajot-*-firefox.zip
           archive: false
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           path: ajot-*-chrome.zip
           archive: false
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           path: ajot-*-source.zip
           archive: false
