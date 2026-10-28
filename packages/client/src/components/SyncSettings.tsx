@@ -30,9 +30,6 @@ const useDeviceOnline = () =>
     () => true,
   );
 
-const SERVER_SIGN_OUT_WAIT_MS = 2000;
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 const SYNC_LABELS = {
   connecting: "Syncing…",
   disconnected: "Offline · saved here",
@@ -93,15 +90,8 @@ export const SyncSettings = () => {
   );
 
   const handleLogout = () => {
-    const signedOutOnServer = signOut();
+    void signOut();
     setOpen(false);
-    // Edits still queued stay on screen until the page starts again without them; they wait for
-    // this account to sign back in. Starting again cancels what the server hasn't heard yet, so
-    // give it a moment first.
-    if (hasPending)
-      void Promise.race([signedOutOnServer, delay(SERVER_SIGN_OUT_WAIT_MS)]).then(() =>
-        location.reload(),
-      );
   };
 
   const isAuthPage = useRouterState({ select: (s) => s.location.pathname === "/auth" });

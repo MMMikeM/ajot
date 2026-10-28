@@ -1,5 +1,4 @@
 import { useSyncExternalStore } from "react";
-import { DeleteOperationItemNotFoundError } from "@tanstack/query-db-collection";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
 import { getSignedInUserId } from "~/lib/auth/current-user";
 import { shareSessionWithBackground } from "~/lib/auth/session";
@@ -24,6 +23,7 @@ import {
 import type { MutationEvent } from "~/lib/constants";
 import { createExternalStore } from "~/lib/external-store";
 import { offline } from "~/lib/db/offline";
+import { writeDeleted } from "~/lib/db/synced-writes";
 import { trackSyncState, type SyncState } from "~/lib/sync/sync-state";
 import { shareSessionWithWorker } from "~/lib/sync/worker-session";
 
@@ -81,15 +81,6 @@ const refetchAll = () => {
 
 type SyncedCollection = (typeof collectionMap)[keyof typeof collectionMap];
 
-// Already gone, as on the device that made the change once its own response has landed
-const deleteIfPresent = async (collection: SyncedCollection, id: string) => {
-  try {
-    await collection.utils.writeDelete(id);
-  } catch (err) {
-    if (!(err instanceof DeleteOperationItemNotFoundError)) throw err;
-  }
-};
-
 const writeMutation = (collection: SyncedCollection, event: MutationEvent) => {
   switch (event.action) {
     case "insert":
@@ -100,7 +91,8 @@ const writeMutation = (collection: SyncedCollection, event: MutationEvent) => {
       return collection.utils.writeUpdate(event.data as never);
     case "delete":
       console.log(`[sse] writeDelete → ${event.model}`);
-      return deleteIfPresent(collection, (event.data as { id: string }).id);
+      // Already gone, as on the device that made the change once its own response has landed
+      return writeDeleted(collection, (event.data as { id: string }).id);
     default:
       console.log(`[sse] unknown action ${String(event.action)}, refetching all`);
       refetchAll();
@@ -223,26 +215,8 @@ const listenSwMessages = () => {
   });
 };
 
-/**
- * Edits the last account queued stay on screen until the page starts again without them (they
- * wait in the outbox for that account), so a tab signed in as someone else, here or in another
- * tab, starts again rather than show them in the new account's lists.
- */
-const reloadOnAccountSwitch = () => {
-  let account = getSignedInUserId();
-  subscribeAuthToken(() => {
-    const next = getSignedInUserId();
-    if (next === null) return;
-    const switched = account !== null && next !== account;
-    account = next;
-    // After the sign-in page has moved on, or it would start again on the sign-in form
-    if (switched && countPending() > 0) setTimeout(() => location.reload());
-  });
-};
-
 export const initSync = () => {
   const target = getBuildTarget();
-  reloadOnAccountSwitch();
   if (target === "browser" || (target === "extension" && !backgroundHoldsSse())) {
     if (!es && getAuthToken()) connectSSE();
     subscribeAuthToken(reconnect);

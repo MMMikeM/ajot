@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { markStartup } from "~/lib/startup-timing";
 import { getAuthToken } from "~/lib/auth/token";
 import { getSignedInUserId } from "~/lib/auth/current-user";
-import { OWNER_KEY, openSnapshotDb, readSnapshot, writeSnapshot } from "~/lib/snapshot-store";
+import { OWNER_KEY, openSnapshotDb, readSnapshot, writeListFor } from "~/lib/snapshot-store";
 
 const SAVE_DELAY_MS = 200;
 
@@ -32,10 +32,12 @@ export const restoreSnapshot = async (queryClient: QueryClient, keys: readonly s
     if (closed) return;
     // Signed out, there's nothing of the server's to keep
     const signedIn = !!getAuthToken();
-    writeSnapshot(db, [
-      [key, signedIn ? entry.data : undefined],
-      [OWNER_KEY, (signedIn && getSignedInUserId()) || undefined],
-    ]).catch(console.error);
+    writeListFor(
+      db,
+      key,
+      signedIn ? entry.data : undefined,
+      (signedIn && getSignedInUserId()) || undefined,
+    ).catch(console.error);
   };
 
   queryClient.getQueryCache().subscribe((event) => {
