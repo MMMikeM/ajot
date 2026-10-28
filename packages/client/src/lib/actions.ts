@@ -95,7 +95,7 @@ export const restoreCollaborator = async (categoryId: string, userId: string) =>
       param: { id: categoryId, userId },
     }),
   );
-  const failed = "Couldn't bring them back. Try again.";
+  const failed = "Couldn't bring them back.";
   // A 400 says why (they're no longer a contact); a 404 only names a missing record
   if (!res.ok) throw res.status === 400 ? await errorFrom(res, failed) : new Error(failed);
   await Promise.all([categoriesCollection.utils.refetch(), tasksCollection.utils.refetch()]);

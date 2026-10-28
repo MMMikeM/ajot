@@ -78,8 +78,12 @@ const moveRowFocus = (list: HTMLElement, e: KeyboardEvent) => {
   if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
   const target = e.target as HTMLElement;
   if (target.closest(TEXT_ENTRY)) return;
-  const rows = [...list.querySelectorAll<HTMLElement>(ROW)];
-  const from = rows.indexOf(target.closest<HTMLElement>(ROW)!);
+  const current = target.closest<HTMLElement>(ROW);
+  // A row on its way out unmounts under the focus it's given
+  const rows = [...list.querySelectorAll<HTMLElement>(ROW)].filter(
+    (row) => row === current || !row.hasAttribute("data-leaving"),
+  );
+  const from = rows.indexOf(current!);
   if (from === -1) return;
 
   const step = STEPS.get(e.key);

@@ -115,11 +115,12 @@ function SearchPage() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Escape") close();
+            if (e.nativeEvent.isComposing) return;
             if (e.key === "ArrowDown" && searched && found) {
               e.preventDefault();
               resultButtons(resultsRef.current)[0]?.focus();
             }
-            if (e.key === "Enter" && searched && !e.nativeEvent.isComposing) {
+            if (e.key === "Enter" && searched) {
               if (firstHit) open(firstHit.task.id);
               else if (canAdd) void add();
             }

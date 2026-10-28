@@ -125,7 +125,7 @@ export const SyncSettings = () => {
             variant="ghost"
             size="xs"
             className="gap-1.5 text-hint hover:text-muted-foreground desk:-mr-2.5"
-            aria-label={`Sync settings: ${syncLabel}`}
+            aria-label={`Sync settings: ${syncLabel}${isOffline ? ", changes saved on this device" : ""}`}
           />
         }
       >

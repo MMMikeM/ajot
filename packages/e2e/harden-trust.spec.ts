@@ -49,7 +49,9 @@ test.describe("sync status", () => {
     await page.evaluate(() => window.dispatchEvent(new Event("offline")));
     await expect(syncButton(page)).toHaveText("Offline · saved here");
     await expect(syncStatus(page)).toHaveText("Offline, changes saved on this device");
-    await expect(syncButton(page)).toHaveAccessibleName("Sync settings: Offline · saved here");
+    await expect(syncButton(page)).toHaveAccessibleName(
+      "Sync settings: Offline · saved here, changes saved on this device",
+    );
     await expect(syncButton(page).locator(".animate-pulse")).toHaveCount(0);
 
     await syncButton(page).click();

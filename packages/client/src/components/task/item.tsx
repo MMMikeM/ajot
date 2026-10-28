@@ -196,6 +196,7 @@ function TaskRow({
   return (
     <div
       data-task-id={task.id}
+      data-leaving={completing || undefined}
       // Lifted while dragged, so it doesn't read as text floating over the rows below. Only the
       // dragged row's own: a parent's subtasks ride along inside its lift.
       className={cn(
