@@ -17,6 +17,7 @@
     "typecheck": "vp check --no-fmt --no-lint",
     "check": "vp check && knip && pnpm deps:check",
     "deps:check": "depcruise packages/client/src packages/server/src packages/shared/src --config .dependency-cruiser.cjs",
+    "dup": "jscpd",
     "screenshot": "pnpm --dir packages/e2e run screenshot",
     "test": "pnpm --filter @newtab-todo/server test",
     "test:e2e": "vp run @newtab-todo/e2e#test",
@@ -30,6 +31,7 @@
     "@types/node": "^26.6.5",
     "dependency-cruiser": "^18.7.0",
     "eslint-plugin-better-tailwindcss": "^4.10.0",
+    "jscpd": "^5.4.2",
     "knip": "^6.43.0",
     "vite-plus": "catalog:"
   },
