@@ -23,6 +23,7 @@ import { isReadyToTick } from "~/lib/ready-to-tick";
 import { rowDragSensors } from "./row-drag";
 import { formatDueDate } from "~/lib/due-date";
 import { FlipList } from "./flip-list";
+import { useIsTabStop } from "./row-focus";
 
 // Read once: pointer type doesn't change during a session
 const IS_TOUCH = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -123,6 +124,7 @@ function TaskRow({
   const canDelete = canDeleteTask(holders(task, lists, parent), currentUserId);
   const hoverActionCount = Number(canSetDate) + Number(canAddSubtask) + Number(canDelete);
   const dateRef = useRef<HTMLInputElement>(null);
+  const tabIndex = useIsTabStop(task.id) ? 0 : -1;
   const [entering] = useState(() => isJustCreated(task));
   const [completing, setCompleting] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -282,7 +284,13 @@ function TaskRow({
           <Checkbox
             checked={looksDone}
             onCheckedChange={handleCheck}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || !onOpen) return;
+              e.preventDefault();
+              onOpen(task.id);
+            }}
             aria-label={task.title}
+            tabIndex={tabIndex}
             // Pinned to the first line of the title, which can wrap. On touch a task's target fills
             // its 44px row; the list's clip stops it at the row's start, so it reaches right instead.
             // Subtask rows sit closer than 44px, so theirs stays smaller.
@@ -300,6 +308,7 @@ function TaskRow({
               type="button"
               className={cn(titleColumnClass, "cursor-pointer focus-visible:outline-none")}
               onClick={() => onOpen(task.id)}
+              tabIndex={tabIndex}
             >
               <span className={titleClass}>{task.title}</span>
               {task.description && (
@@ -334,6 +343,7 @@ function TaskRow({
                 <button
                   type="button"
                   onClick={openPicker}
+                  tabIndex={tabIndex}
                   className={cn(
                     "relative cursor-pointer text-xs whitespace-nowrap after:absolute after:-inset-x-1.5 after:-inset-y-2.5 hover:underline",
                     // A task's fills its 44px row, as its checkbox's does; subtask rows sit closer
@@ -373,6 +383,7 @@ function TaskRow({
                 onClick={openPicker}
                 aria-label="Set due date"
                 title="Set due date"
+                tabIndex={tabIndex}
               >
                 <Calendar size={14} />
               </Button>
@@ -385,6 +396,7 @@ function TaskRow({
                 onClick={() => setAddingSubtask(true)}
                 aria-label="Add subtask"
                 title="Add subtask"
+                tabIndex={tabIndex}
               >
                 <Plus size={14} />
               </Button>
@@ -398,6 +410,7 @@ function TaskRow({
                 onClick={() => onDelete(task)}
                 aria-label="Delete task"
                 title="Delete task"
+                tabIndex={tabIndex}
               >
                 <X size={14} />
               </Button>
@@ -435,6 +448,7 @@ function TaskRow({
                 data-flip-key="done-count"
                 onClick={() => onOpen?.(task.id)}
                 disabled={!onOpen}
+                tabIndex={tabIndex}
                 className="relative rounded-sm py-1 text-xs text-hint transition-colors after:absolute after:-inset-x-2 after:-inset-y-1.5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring touch:py-1.5"
               >
                 {doneSubtaskCount} done

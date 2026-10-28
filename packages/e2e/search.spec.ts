@@ -151,6 +151,83 @@ test("Escape in the field goes back to the list", async ({ page }, testInfo) => 
   await page.waitForURL((url) => url.pathname === "/");
 });
 
+test.describe("the keyboard in the results", () => {
+  test.skip(({ isMobile }) => isMobile, "a hardware keyboard");
+
+  const opener = (page: Page, index: number) => page.locator("[data-search-result]").nth(index);
+
+  test("Up and Down move from the field through the results and back", async ({
+    page,
+  }, testInfo) => {
+    const field = await openSearch(page, testInfo);
+    await field.fill("passport");
+    await expect(page.getByRole("status").filter({ hasText: /results$/ })).toHaveText(
+      /^\d+ results$/,
+    );
+
+    await field.press("ArrowDown");
+    await expect(opener(page, 0)).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(opener(page, 1)).toBeFocused();
+    // A done result is reached too, past the open ones
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+    await expect(
+      page.getByRole("region", { name: "Done" }).locator("[data-search-result]"),
+    ).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(
+      page.getByRole("region", { name: "Done" }).locator("[data-search-result]"),
+    ).toBeFocused();
+
+    for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowUp");
+    await expect(opener(page, 0)).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(field).toBeFocused();
+    await expect(field).toHaveValue("passport");
+  });
+
+  test("Escape on a result goes back to the field and stays in search", async ({
+    page,
+  }, testInfo) => {
+    const field = await openSearch(page, testInfo);
+    await field.fill("passport");
+    await field.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Escape");
+    await expect(field).toBeFocused();
+    await expect(page).toHaveURL(/\/search$/);
+  });
+
+  test("Enter in the field opens the first result", async ({ page }, testInfo) => {
+    const field = await openSearch(page, testInfo);
+    await field.fill("photos");
+    await expect(result(page, "Find the old passport photos")).toBeVisible();
+    await field.press("Enter");
+    await expect(page).toHaveURL(/\/search\/task\/s-photos$/);
+    await expect(page.locator('[data-slot="drawer-content"]')).toBeVisible();
+  });
+
+  test("Enter on a result opens it, and closing it returns there", async ({ page }, testInfo) => {
+    const field = await openSearch(page, testInfo);
+    await field.fill("passport");
+    await field.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+    const second = opener(page, 1);
+    const taskId = await second.evaluate((el) =>
+      el.closest("[data-task-id]")!.getAttribute("data-task-id"),
+    );
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(new RegExp(`/search/task/${taskId}$`));
+    await expect(page.locator('[data-slot="drawer-content"]')).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(page.locator('[data-slot="drawer-content"]')).toHaveCount(0);
+    await expect(second).toBeFocused();
+  });
+});
+
 test("a slash typed into the capture input stays there", async ({ page }, testInfo) => {
   test.skip(!isDesk(testInfo), "the shortcut is for a keyboard");
   const capture = page.locator("#add-task-input");
