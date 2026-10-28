@@ -9,6 +9,7 @@
     "start": "pnpm --filter @newtab-todo/server start",
     "db:generate": "pnpm --filter @newtab-todo/server db:generate",
     "db:migrate": "pnpm --filter @newtab-todo/server db:migrate",
+    "db:rehearse": "pnpm --filter @newtab-todo/server db:rehearse",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
     "fmt": "vp fmt",
