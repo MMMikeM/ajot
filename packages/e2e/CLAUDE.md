@@ -11,7 +11,8 @@ Playwright test suite. Two projects: `desktop` (Chrome) runs every spec, and `mo
 - `*.spec.ts` — Playwright test files, picked up automatically
 - `screenshot.ts` — standalone script (`pnpm screenshot`), captures viewport screenshots + axe contrast audit
 - `screenshot-mock.ts` — the same against mocked `/api` data (`pnpm --dir packages/e2e screenshot:mock`); needs only the Vite dev server
-- `ui.spec.ts` — UI behaviour and axe checks against mocked `/api` data; runs without the API server or database
+- `task-rows`, `navigation`, `delete-list`, `delete-others-task`, `sign-up`, `startup`, `list-sharing`, `undo-window`, `accessibility`, `remove-contact` (`.spec.ts`) — UI behaviour and axe checks against mocked `/api` data (`openList` in `helpers/mock-api.ts`); they run without the API server or database, on desktop only
+- `touch.spec.ts` — the same against the phone layout, only where touch gets there another way: the lists sheet for the sidebar, swipe actions for hover buttons, the install offer, the longer Undo window, and axe on the phone layout. It skips itself on desktop
 - `skeleton.spec.ts` — the prerendered loading skeleton against the loaded list. It needs no API or accounts, so `pnpm test:e2e:prerender` runs it on its own: `playwright.prerender.config.ts` serves the same build with `vp preview` on another port, with the service worker allowed. Plain `pnpm test:e2e` skips it
 - `stale-chunk.spec.ts` — a lazy chunk removed by a deploy reloads the page once. Vite only fires `vite:preloadError` in a production build, so it runs with the prerender suite too
 - `perf.spec.ts` — a DOMContentLoaded budget, also in the prerender suite, so the main suite's workers don't slow its loads. It keeps the fastest of three cold loads

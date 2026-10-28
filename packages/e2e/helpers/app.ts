@@ -60,3 +60,6 @@ export const addField = async (sheet: Locator, field: string) => {
     .getByRole("button", { name: field })
     .click();
 };
+
+export const taskRow = (page: Page, title: string) =>
+  page.locator("[data-task-id]", { hasText: title }).first();
