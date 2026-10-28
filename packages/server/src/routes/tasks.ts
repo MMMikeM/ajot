@@ -1,6 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
-import { BadRequestError, ForbiddenError } from "../db/errors";
+import { BadRequestError, ForbiddenError, ONLY_CONTACTS, onlyContacts } from "../db/errors";
 import taskRepo, {
   taskInsertSchema,
   taskUpdateSchema,
@@ -26,10 +26,7 @@ import { limitSharing } from "../rate-limit";
 
 const shareSchema = z.object({
   taskId: z.string().max(MAX_ID),
-  username: z
-    .string()
-    .min(1, "Choose someone to share with.")
-    .max(MAX_USERNAME, "Only your contacts can be added."),
+  username: z.string().min(1, "Choose someone to share with.").max(MAX_USERNAME, ONLY_CONTACTS),
   permission: z.enum(["view", "edit"]).default("edit"),
 });
 
@@ -55,7 +52,6 @@ const canAssign = async (userId: string, assigneeId: string | null | undefined) 
 
 const notYourList = () => new ForbiddenError("That list isn't yours.");
 const notAContact = () => new BadRequestError("You can only assign tasks to your contacts.");
-const onlyContacts = () => new BadRequestError("Only your contacts can be added.");
 const subtaskGoesWithParent = () => new BadRequestError("A subtask goes wherever its parent is.");
 
 const shareCategorySchema = z.object({
@@ -240,14 +236,14 @@ export const taskRoutes = authed()
       method: "post",
       path: "/send",
       request: jsonBody(sendSchema),
-      responses: withAuth({ 200: jsonContent(taskResponseSchema), ...errors(403, 404, 409, 429) }),
+      responses: withAuth({ 200: jsonContent(taskResponseSchema), ...errors(400, 404, 409, 429) }),
     }),
     async (c) => {
       const { recipientId, ...data } = c.req.valid("json");
       const userId = c.get("userId");
       limitSharing(userId);
       if (!(await contactRepo.exists(userId, recipientId)))
-        throw new ForbiddenError("You can only send tasks to your contacts.");
+        throw new BadRequestError("You can only send tasks to your contacts.");
 
       // The recipient owns it, as if they'd added it, so it lands in their Inbox and not the sender's
       const result = await taskRepo.insertSent({

@@ -11,7 +11,7 @@ import { requireList } from "./task-users";
 import { sendReachChanges } from "./reach";
 import { userPublicSchema } from "../db/user.repo";
 import contactRepo from "../db/contact.repo";
-import { BadRequestError, NotFoundError } from "../db/errors";
+import { BadRequestError, NotFoundError, ONLY_CONTACTS, onlyContacts } from "../db/errors";
 import { authed } from "../middleware";
 import { broadcast } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
@@ -20,10 +20,7 @@ import { MAX_USERNAME } from "@newtab-todo/shared/field-limits";
 import { limitSharing } from "../rate-limit";
 
 const collaboratorSchema = z.object({
-  username: z
-    .string()
-    .min(1, "Choose someone to share with.")
-    .max(MAX_USERNAME, "Only your contacts can be added."),
+  username: z.string().min(1, "Choose someone to share with.").max(MAX_USERNAME, ONLY_CONTACTS),
 });
 const collaboratorIdSchema = z.object({ userId: z.string() });
 
@@ -153,7 +150,7 @@ export const categoryRoutes = authed()
         requireList(id, userId, "manage"),
         contactRepo.findContactUser(userId, username.toLowerCase()),
       ]);
-      if (!targetUser) throw new BadRequestError("Only your contacts can be added.");
+      if (!targetUser) throw onlyContacts();
 
       const before = await reachRepo.read({ listIds: [id] });
       const added = await categoryCollaboratorRepo.add(id, targetUser.id);

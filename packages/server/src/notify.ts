@@ -9,18 +9,20 @@ import { writeNotification } from "./broadcast";
  * logged.
  */
 export const sendNotification = (userId: string, payload: NotificationPayload) => {
-  try {
-    writeNotification(userId, payload);
-    queueNotification(userId, payload);
-  } catch (err) {
-    console.error(`[notify] couldn't send ${payload.type} to ${userId}`, err);
+  // Apart, so a stream that fails to write doesn't cost the user's devices their push
+  for (const send of [queueNotification, writeNotification]) {
+    try {
+      send(userId, payload);
+    } catch (err) {
+      console.error(`[notify] couldn't send ${payload.type} to ${userId}`, err);
+    }
   }
 };
 
 export const getUserName = async (userId: string): Promise<string> => {
   try {
-    const user = await userRepo.findById(userId);
-    if (user) return user.name;
+    const name = await userRepo.findName(userId);
+    if (name !== undefined) return name;
   } catch (err) {
     console.error(`[notify] couldn't read ${userId}'s name`, err);
   }

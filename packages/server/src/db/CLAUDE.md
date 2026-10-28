@@ -2,7 +2,7 @@
 
 ## When a row isn't there
 
-- **Throw when every caller would refuse the same way; return `undefined` when a caller decides.** `categoryRepo.findById`, a stale `update`, `remove` and `inviteTokenRepo.findInviterName` throw, so no route can forget the refusal. `noteRepo.findOwn`, `inviteTokenRepo.claim` (a 410 to accept, a 403 to sign up), `taskRepo.markEdited`, `userRepo.findById` (a name falls back to "Someone"), `sessionRepo.findValid` and `userRepo.findWithPassword` (a 401 that mustn't say which part was wrong) return `undefined`, as `findFirst` and `rows.at(0)` do. Never `null` for "not there"; a yes-or-no question returns a boolean (`exists`, `canUse`).
+- **Throw when every caller would refuse the same way; return `undefined` when a caller decides.** `categoryRepo.findById`, a stale `update`, `remove` and `inviteTokenRepo.findInviterName` throw, so no route can forget the refusal. `noteRepo.findOwn`, `inviteTokenRepo.claim` (a 410 to accept, a 403 to sign up), `taskRepo.markEdited`, `userRepo.findName` (a name falls back to "Someone"), `sessionRepo.findValid` and `userRepo.findWithPassword` (a 401 that mustn't say which part was wrong) return `undefined`, as `findFirst` and `rows.at(0)` do. Never `null` for "not there"; a yes-or-no question returns a boolean (`exists`, `canUse`).
 - **A lookup a route runs in a `Promise.all` beside `requireTask` or `requireList` returns `undefined` when its refusal could differ from theirs**, even when every caller refuses alike: thrown, it races the access check's 404 or 403, and whichever settles first answers (`contactRepo.findContactUser`'s 400). One that refuses with the same 404 may throw (`findByIdWithCollaborators`).
 
 ## Errors
