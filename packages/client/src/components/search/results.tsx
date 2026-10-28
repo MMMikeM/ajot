@@ -41,9 +41,10 @@ function ResultRow({
         checked={done}
         onCheckedChange={() => onToggle(task)}
         aria-label={task.title}
+        // Its target ends where the row's gap does and reaches left instead, as a task row's does
         className={cn(
-          "mt-1 touch:mt-0.75 touch:size-4.5 touch:after:-inset-3",
-          isSubtask && "size-3.5 touch:size-4",
+          "mt-1 after:-right-2 after:-left-4 touch:mt-0.75 touch:size-4.5 touch:after:-inset-y-3.5 touch:after:-right-2.5 touch:after:-left-5",
+          isSubtask && "size-3.5 touch:size-4 touch:after:-inset-y-4",
           done && checkboxDoneClass,
         )}
       />

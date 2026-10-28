@@ -148,7 +148,8 @@ function SearchPage() {
 
       <div
         ref={resultsRef}
-        className="scroll-edge-fade touch:-mx-2 touch:flex touch:min-h-0 touch:flex-1 touch:flex-col touch:overflow-y-auto touch:px-2 touch:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]"
+        // Touch: widened into the gutter, or its clip cuts off a checkbox's tap target at the start
+        className="scroll-edge-fade touch:-mr-2 touch:-ml-5 touch:flex touch:min-h-0 touch:flex-1 touch:flex-col touch:overflow-y-auto touch:pr-2 touch:pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] touch:pl-5"
       >
         {!searched && <p className="text-sm text-hint">Every list, done tasks and notes.</p>}
 
