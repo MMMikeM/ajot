@@ -1,15 +1,15 @@
-import { createRoute, z } from "@hono/zod-openapi";
+import { z } from "@hono/zod-openapi";
 import metricRepo, { metricCountSchema, metricNameSchema } from "../db/metric.repo";
-import { authed } from "../middleware";
+import { authed, authedRoute } from "../middleware";
 import { jsonBody, res } from "./crud";
 
 export const metricRoutes = authed()
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/",
       request: jsonBody(z.object({ name: metricNameSchema })),
-      responses: res({ extra: { 204: { description: "Counted" } } }),
+      responses: res({ noContent: true }),
     }),
     async (c) => {
       await metricRepo.increment(c.req.valid("json").name);
@@ -17,7 +17,7 @@ export const metricRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "get",
       path: "/",
       request: { query: z.object({ days: z.coerce.number().int().min(1).max(366).default(30) }) },

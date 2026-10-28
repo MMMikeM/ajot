@@ -13,7 +13,7 @@ export const configRoutes = new OpenAPIHono().openapi(
   createRoute({
     method: "get",
     path: "/",
-    responses: res({ ok: configSchema, public: true }),
+    responses: res({ ok: configSchema }),
   }),
   async (c) =>
     c.json(

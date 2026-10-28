@@ -1,11 +1,11 @@
-import { createRoute, z } from "@hono/zod-openapi";
+import { z } from "@hono/zod-openapi";
 import noteRepo, {
   noteInsertSchema,
   noteUpdateSchema,
   noteSelectSchema,
   noteResponseSchema,
 } from "../db/note.repo";
-import { authed } from "../middleware";
+import { authed, authedRoute } from "../middleware";
 import { broadcast } from "../broadcast";
 import { jsonBody, res } from "./crud";
 import { markTaskEdited, requireTask } from "./task-users";
@@ -14,7 +14,7 @@ import { NotFoundError } from "../db/errors";
 
 export const noteRoutes = authed()
   .openapi(
-    createRoute({
+    authedRoute({
       method: "get",
       path: "/",
       responses: res({ ok: z.array(noteResponseSchema) }),
@@ -22,7 +22,7 @@ export const noteRoutes = authed()
     async (c) => c.json(await noteRepo.list(c.get("userId")), 200),
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/",
       request: jsonBody(noteInsertSchema),
@@ -43,7 +43,7 @@ export const noteRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "put",
       path: "/",
       request: jsonBody(noteUpdateSchema),
@@ -65,7 +65,7 @@ export const noteRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "delete",
       path: "/",
       request: jsonBody(noteSelectSchema),

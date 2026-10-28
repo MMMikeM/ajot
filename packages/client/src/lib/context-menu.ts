@@ -4,6 +4,7 @@ import { SERVER_URL_KEY, TOKEN_KEY } from "@newtab-todo/shared/constants";
 import { now } from "@newtab-todo/shared/iso";
 import { MAX_TEXT, MAX_TITLE, cutTo } from "@newtab-todo/shared/field-limits";
 import { ext, getStoredSession } from "~/lib/ext";
+import type { Category, Contact } from "~/lib/types";
 
 type Session = NonNullable<Awaited<ReturnType<typeof getStoredSession>>>;
 type ClickData = browser.contextMenus.OnClickData;
@@ -98,18 +99,10 @@ const INBOX: Destination = { kind: "inbox", target: "", title: "Inbox", done: "A
 /** In groups, a separator between each: the Inbox, shared lists, then sharing and sending. */
 const fetchDestinations = async (session: Session): Promise<Group[]> => {
   const [categories, contacts] = await Promise.all([
-    request<{ id: string; name: string; collaborators?: unknown[] }[]>(
-      session,
-      "GET",
-      "/api/categories",
-    ),
-    request<{ contactUser: { id: string; name: string; username: string } | null }[]>(
-      session,
-      "GET",
-      "/api/contacts",
-    ),
+    request<Category[]>(session, "GET", "/api/categories"),
+    request<Contact[]>(session, "GET", "/api/contacts"),
   ]);
-  const people = contacts.flatMap((c) => (c.contactUser ? [c.contactUser] : []));
+  const people = contacts.map((c) => c.contactUser);
   return [
     { destinations: [INBOX] },
     {

@@ -1,4 +1,4 @@
-import { createRoute, z } from "@hono/zod-openapi";
+import { z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
 import { BadRequestError, ForbiddenError, ONLY_CONTACTS } from "../db/errors";
 import taskRepo, {
@@ -12,7 +12,7 @@ import taskRepo, {
 } from "../db/task.repo";
 import contactRepo from "../db/contact.repo";
 import categoryRepo from "../db/category.repo";
-import { authed } from "../middleware";
+import { authed, authedRoute } from "../middleware";
 import { broadcast, broadcastAll } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import notificationQueueRepo from "../db/notification-queue.repo";
@@ -61,7 +61,7 @@ const shareCategorySchema = z.object({
 
 export const taskRoutes = authed()
   .openapi(
-    createRoute({
+    authedRoute({
       method: "get",
       path: "/",
       responses: res({ ok: z.array(taskListItemSchema) }),
@@ -69,7 +69,7 @@ export const taskRoutes = authed()
     async (c) => c.json(await taskRepo.list(c.get("userId")), 200),
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/",
       request: jsonBody(taskInsertSchema),
@@ -102,7 +102,7 @@ export const taskRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "put",
       path: "/",
       request: jsonBody(taskUpdateSchema),
@@ -206,7 +206,7 @@ export const taskRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "delete",
       path: "/",
       request: jsonBody(taskSelectSchema),
@@ -232,7 +232,7 @@ export const taskRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/send",
       request: jsonBody(sendSchema),
@@ -267,7 +267,7 @@ export const taskRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/share",
       request: jsonBody(shareSchema),
@@ -312,7 +312,7 @@ export const taskRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "delete",
       path: "/share",
       request: jsonBody(taskShareSelectSchema),
@@ -329,7 +329,7 @@ export const taskRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "put",
       path: "/share",
       request: jsonBody(shareCategorySchema),

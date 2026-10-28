@@ -1,9 +1,9 @@
-import { createRoute, z } from "@hono/zod-openapi";
+import { z } from "@hono/zod-openapi";
 import { isPushServiceEndpoint } from "@mmmike/web-push/send";
 import pushPreferenceRepo, { pushPreferencesSchema } from "../db/push-preference.repo";
 import pushSubscriptionRepo from "../db/push-subscription.repo";
 import { pushSubscriptionKinds } from "../db/schema";
-import { authed } from "../middleware";
+import { authed, authedRoute } from "../middleware";
 import { jsonBody, okBody, res } from "./crud";
 import { MAX_ID } from "@newtab-todo/shared/field-limits";
 
@@ -24,7 +24,7 @@ const deviceHeaders = z.object({ "x-device-id": z.string().min(1).max(MAX_ID) })
 
 export const pushRoutes = authed()
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/subscribe",
       request: {
@@ -48,7 +48,7 @@ export const pushRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/unsubscribe",
       request: jsonBody(z.object({ endpoint: z.string().max(MAX_ENDPOINT) })),
@@ -60,7 +60,7 @@ export const pushRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "get",
       path: "/preferences",
       request: { headers: deviceHeaders },
@@ -73,7 +73,7 @@ export const pushRoutes = authed()
       ),
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "put",
       path: "/preferences",
       request: { headers: deviceHeaders, ...jsonBody(pushPreferencesSchema) },

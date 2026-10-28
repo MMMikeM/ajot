@@ -1,10 +1,10 @@
-import { createRoute, z } from "@hono/zod-openapi";
+import { z } from "@hono/zod-openapi";
 import { hoursFromNow } from "@newtab-todo/shared/iso";
 import inviteTokenRepo from "../db/invite-token.repo";
 import { BadRequestError, GoneError, INVITE_GONE } from "../db/errors";
 import { getUserName, sendNotification } from "../notify";
 import { sendContactChanges } from "./contact-changes";
-import { authed } from "../middleware";
+import { authed, authedRoute } from "../middleware";
 import { errorSchema } from "./openapi-schemas";
 import { jsonContent, okBody, res } from "./crud";
 
@@ -15,7 +15,7 @@ const inviteResponseSchema = z.object({
 
 export const inviteRoutes = authed()
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/",
       responses: res({ ok: inviteResponseSchema }),
@@ -28,7 +28,7 @@ export const inviteRoutes = authed()
     },
   )
   .openapi(
-    createRoute({
+    authedRoute({
       method: "post",
       path: "/:token/accept",
       responses: res({

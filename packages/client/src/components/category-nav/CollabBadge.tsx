@@ -24,10 +24,9 @@ export function CollabBadge({
     );
   }
 
-  const sharedWith =
-    category.collaborators?.flatMap((c) =>
-      c.user && c.user.id !== currentUserId ? [c.user.name] : [],
-    ) ?? [];
+  const sharedWith = (category.collaborators ?? [])
+    .filter((c) => c.user.id !== currentUserId)
+    .map((c) => c.user.name);
   if (sharedWith.length === 0) return null;
 
   const label = `Shared with ${listNames.format(sharedWith)}`;

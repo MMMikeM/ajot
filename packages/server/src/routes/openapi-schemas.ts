@@ -1,11 +1,12 @@
 import { z, type Hook } from "@hono/zod-openapi";
 import type { Env } from "hono";
+import { UNAUTHORIZED } from "../db/errors";
 
 export const errorSchema = z.object({ error: z.string() });
 export const okSchema = z.object({ ok: z.literal(true) });
 
 export const unauthorizedResponse = {
-  description: "Unauthorized",
+  description: UNAUTHORIZED,
   content: { "application/json": { schema: errorSchema } },
 } as const;
 

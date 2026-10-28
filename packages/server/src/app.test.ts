@@ -82,3 +82,22 @@ test("a new username in another script is refused", async () => {
     error: "Username can have only letters, numbers, dots, dashes and underscores",
   });
 });
+
+test("every route behind the auth middleware declares its 401, and a public one only when it throws one", async () => {
+  const doc = await (await app.request("/api/openapi.json")).json();
+  const declaring = Object.entries<Record<string, { responses: Record<string, unknown> }>>(
+    doc.paths,
+  ).flatMap(([path, operations]) =>
+    Object.entries(operations).map(([method, { responses }]) => ({
+      route: `${method.toUpperCase()} ${path}`,
+      public: path.startsWith("/api/auth/") || path === "/api/config",
+      declares401: "401" in responses,
+    })),
+  );
+
+  expect(declaring.filter((r) => !r.public && !r.declares401)).toEqual([]);
+  expect(declaring.filter((r) => r.public && r.declares401).map((r) => r.route)).toEqual([
+    "POST /api/auth/login",
+    "POST /api/auth/logout",
+  ]);
+});

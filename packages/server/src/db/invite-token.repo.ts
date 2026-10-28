@@ -25,7 +25,7 @@ const findInviterName = async (token: string) => {
     where: { id: token, usedAt: { isNull: true }, expiresAt: { gt: now() } },
     with: { createdByUser: { columns: { name: true } } },
   });
-  if (!invite?.createdByUser) throw new NotFoundError("invite");
+  if (!invite) throw new NotFoundError("invite");
   return invite.createdByUser.name;
 };
 

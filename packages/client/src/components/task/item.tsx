@@ -130,7 +130,7 @@ function TaskRow({
   const sharedWith =
     reachesOthers && !isInSharedCategory && isOwned
       ? task.shares.flatMap((s) =>
-          s.sharedWithUser && s.sharedWithUser.id !== currentUserId ? [s.sharedWithUser.name] : [],
+          s.sharedWithUser.id !== currentUserId ? [s.sharedWithUser.name] : [],
         )
       : [];
   const hasShareChip = !!owner || sharedWith.length > 0;

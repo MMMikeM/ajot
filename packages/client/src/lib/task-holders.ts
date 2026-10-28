@@ -43,5 +43,5 @@ export const ownerNameOf = (task: Task, lists: CategoriesById) => {
   const list = task.categoryId ? lists.get(task.categoryId) : undefined;
   if (!list) return undefined;
   if (list.userId === task.userId) return list.user?.name;
-  return list.collaborators?.find((c) => c.userId === task.userId)?.user?.name;
+  return list.collaborators?.find((c) => c.userId === task.userId)?.user.name;
 };

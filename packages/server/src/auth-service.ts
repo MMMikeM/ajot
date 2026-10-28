@@ -76,7 +76,7 @@ export const signup = async (
   };
 };
 
-const wrongPassword = () => new HTTPException(401, { message: "Wrong username or password." });
+const WRONG_PASSWORD = "Wrong username or password.";
 
 // Checked against when there's no such user, so a wrong username takes as long as a wrong password.
 // Worked out at startup, as a first login working it out would take two hashes' time.
@@ -96,9 +96,10 @@ export const login = async (username: string, password: string) => {
   const user = await userRepo.findWithPassword(username.toLowerCase());
   if (!user) {
     await verifyPassword(await hashForUnknownUsers(), password);
-    throw wrongPassword();
+    throw new HTTPException(401, { message: WRONG_PASSWORD });
   }
-  if (!(await verifyPassword(user.passwordHash, password))) throw wrongPassword();
+  if (!(await verifyPassword(user.passwordHash, password)))
+    throw new HTTPException(401, { message: WRONG_PASSWORD });
 
   const token = await sessionRepo.insert(user.id);
   return { userId: user.id, token, name: user.name, username: user.username };

@@ -2,18 +2,19 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { extractToken, validateSession } from "../auth";
 import { hasRoomForStream, registerClient, unregisterClient } from "../broadcast";
+import { UNAUTHORIZED } from "../db/errors";
 
 export const eventsRoute = new Hono().get("/", async (c) => {
   // EventSource can't set headers, so the stream alone takes the token in its URL; anywhere else
   // it would end up in logs and history
   const token = extractToken(c.req.raw) ?? c.req.query("token");
-  if (!token) return c.json({ error: "Unauthorized" }, 401);
+  if (!token) return c.json({ error: UNAUTHORIZED }, 401);
 
   let userId: string;
   try {
     userId = await validateSession(token);
   } catch {
-    return c.json({ error: "Unauthorized" }, 401);
+    return c.json({ error: UNAUTHORIZED }, 401);
   }
 
   // The tabs' and Firefox background's EventSource closes on it and backs off to a minute.

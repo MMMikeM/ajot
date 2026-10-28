@@ -101,11 +101,11 @@ export const ListField = ({ filing, choosing }: { filing: Filing; choosing: bool
 const peopleOnTask = (task: Task, lists: CategoriesById): Person[] => {
   const category = task.categoryId ? lists.get(task.categoryId) : undefined;
   const names = new Map<string, string | undefined>(
-    task.shares.map((s) => [s.sharedWithUserId, s.sharedWithUser?.name]),
+    task.shares.map((s) => [s.sharedWithUserId, s.sharedWithUser.name]),
   );
   if (category) {
     names.set(category.userId, category.user?.name);
-    for (const c of category.collaborators ?? []) names.set(c.userId, c.user?.name);
+    for (const c of category.collaborators ?? []) names.set(c.userId, c.user.name);
   }
   return grants(holders(task, lists)).flatMap(({ userId: id }) => {
     const name = names.get(id);
@@ -127,7 +127,7 @@ export const useSharing = (task: Task) => {
     isOwner,
     sharedList,
     hasContacts: contacts.length > 0,
-    addableContacts: contacts.filter((c) => c.contactUser && !sharedWithIds.has(c.contactUserId)),
+    addableContacts: contacts.filter((c) => !sharedWithIds.has(c.contactUserId)),
     others,
   };
 };
@@ -163,12 +163,12 @@ export const SharingField = ({
       {shares.map((share) => (
         <ListRow key={share.id} size="sm" className="-mx-2 min-h-9 touch:min-h-11">
           <InitialsAvatar
-            name={share.sharedWithUser?.name ?? "?"}
+            name={share.sharedWithUser.name}
             userId={share.sharedWithUserId}
             size="sm"
           />
           <span dir="auto" className="min-w-0 flex-1 truncate text-sm">
-            {share.sharedWithUser?.name ?? share.sharedWithUserId}
+            {share.sharedWithUser.name}
           </span>
           {isOwner && (
             <RevealGroup>
@@ -226,8 +226,8 @@ const AddShare = ({ taskId, sharing }: { taskId: string; sharing: Sharing }) => 
         </SelectTrigger>
         <SelectContent>
           {sharing.addableContacts.map((c) => (
-            <SelectItem key={c.contactUserId} value={c.contactUser!.username}>
-              <span dir="auto">{c.contactUser!.name}</span>
+            <SelectItem key={c.contactUserId} value={c.contactUser.username}>
+              <span dir="auto">{c.contactUser.name}</span>
             </SelectItem>
           ))}
         </SelectContent>
