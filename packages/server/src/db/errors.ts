@@ -41,8 +41,6 @@ export class BadRequestError extends HTTPException {
   }
 }
 
-export const onlyContacts = () => new BadRequestError(ONLY_CONTACTS);
-
 export class ForbiddenError extends HTTPException {
   constructor(message: string) {
     super(403, { message });

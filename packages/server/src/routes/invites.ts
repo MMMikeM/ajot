@@ -6,7 +6,7 @@ import { getUserName, sendNotification } from "../notify";
 import { sendContactChanges } from "./contact-changes";
 import { authed } from "../middleware";
 import { errorSchema } from "./openapi-schemas";
-import { errors, jsonContent, okBody, okResponse, withAuth } from "./crud";
+import { jsonContent, okBody, res } from "./crud";
 
 const inviteResponseSchema = z.object({
   token: z.string(),
@@ -18,7 +18,7 @@ export const inviteRoutes = authed()
     createRoute({
       method: "post",
       path: "/",
-      responses: withAuth({ 200: jsonContent(inviteResponseSchema) }),
+      responses: res({ ok: inviteResponseSchema }),
     }),
     async (c) => {
       const userId = c.get("userId");
@@ -31,10 +31,10 @@ export const inviteRoutes = authed()
     createRoute({
       method: "post",
       path: "/:token/accept",
-      responses: withAuth({
-        ...okResponse,
-        ...errors(400),
-        410: jsonContent(errorSchema, "Token expired or already used"),
+      responses: res({
+        ok: true,
+        errors: [400],
+        extra: { 410: jsonContent(errorSchema, "Token expired or already used") },
       }),
     }),
     async (c) => {
