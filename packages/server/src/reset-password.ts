@@ -1,6 +1,7 @@
 import { connect } from "@tursodatabase/serverless";
 import { now } from "@newtab-todo/shared/iso";
 import { MIN_PASSWORD_LENGTH, hashPassword } from "./password";
+import { signRevocation } from "./session-revocation";
 
 const promptHidden = (question: string) =>
   new Promise<string>((resolve) => {
@@ -76,3 +77,21 @@ if (updated!.rowsAffected === 0) {
 }
 
 console.log(`Password reset for ${userId}; signed out of ${revoked!.rowsAffected} session(s).`);
+
+// The running server caches sessions for 30 s, so it's told they're gone
+const serverUrl = process.env.SERVER_URL ?? `http://localhost:${process.env.PORT || 3000}`;
+try {
+  const res = await fetch(new URL("/api/auth/sessions-revoked", serverUrl), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(signRevocation(process.env.TURSO_AUTH_TOKEN ?? "", userId)),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error(`it answered ${res.status}`);
+  console.log(`The server at ${serverUrl} has stopped accepting them.`);
+} catch (err) {
+  console.warn(
+    `Couldn't tell the server at ${serverUrl} (${err instanceof Error ? err.message : String(err)}); ` +
+      "it may accept those sessions for up to 30 s more. Set SERVER_URL to reach it.",
+  );
+}

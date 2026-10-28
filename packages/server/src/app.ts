@@ -15,10 +15,13 @@ import { deployRoutes } from "./routes/deploy";
 import { configRoutes } from "./routes/config";
 import { metricRoutes } from "./routes/metrics";
 import { isAllowedOrigin, parseAllowedOrigins } from "./origins";
+import { rejectInvalidInput } from "./routes/openapi-schemas";
+import { LoggedHTTPException } from "./db/errors";
 
-const app = new OpenAPIHono();
+const app = new OpenAPIHono({ defaultHook: rejectInvalidInput });
 
 app.onError((err, c) => {
+  if (err instanceof LoggedHTTPException) console.warn(`[${err.status}] ${err.detail}`);
   if (err instanceof HTTPException) {
     return c.json({ error: err.message }, err.status);
   }

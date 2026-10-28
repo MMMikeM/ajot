@@ -27,7 +27,7 @@ import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 
 const shareSchema = z.object({
   taskId: z.string(),
-  username: z.string().min(1),
+  username: z.string().min(1, "Choose someone to share with."),
   permission: z.enum(["view", "edit"]).default("edit"),
 });
 

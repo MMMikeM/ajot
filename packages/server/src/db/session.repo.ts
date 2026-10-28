@@ -72,4 +72,7 @@ const removeAllForUser = async (userId: string) => {
   }
 };
 
-export default { insert, findValid, remove, removeAllForUser };
+/** For sessions deleted by another process, as reset-password.ts does. */
+const forgetUser = (userId: string) => forget((session) => session.userId === userId);
+
+export default { insert, findValid, remove, removeAllForUser, forgetUser };

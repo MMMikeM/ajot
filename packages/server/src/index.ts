@@ -4,6 +4,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import app from "./app";
 import { closeAllClients } from "./broadcast";
 import { flushPushes } from "./push-queue";
+import { startPurging } from "./purge";
 
 // Prevent silent crashes from async errors (e.g. a dead socket surfacing on a
 // just-restored network after Fly suspend/resume).
@@ -33,6 +34,7 @@ app.get("*", serveStatic({ root: clientDist, path: "index.html" }));
 const port = Number(process.env.PORT || 3000);
 console.log(`Server listening on http://0.0.0.0:${port}`);
 const server = serve({ fetch: app.fetch, port, hostname: "0.0.0.0" });
+startPurging();
 
 const shutdown = (signal: string) => {
   console.log(`[${signal}] shutting down`);
