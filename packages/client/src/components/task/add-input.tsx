@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowUp, CornerDownLeft } from "lucide-react";
 import { Input } from "~/components/ui/field";
+import { MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
@@ -29,6 +30,7 @@ export function AddTaskInput({ onAdd }: { onAdd: (title: string) => void }) {
       <Input
         id="add-task-input"
         type="text"
+        maxLength={MAX_TITLE}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="What needs doing?"

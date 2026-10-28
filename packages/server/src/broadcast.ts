@@ -1,13 +1,22 @@
 import type { Context } from "hono";
 import { queueChanges } from "./push-queue";
 import type { ChangeSource } from "./push-plan";
-import type { MutationEvent, ModelName } from "@newtab-todo/shared";
+import { SSE_NOTIFICATION, type MutationEvent, type ModelName } from "@newtab-todo/shared";
+import type { NotificationPayload } from "./push-plan";
 
 export type { MutationEvent };
 
 type SSEWriter = { write: (event: string, data: string) => void; close: () => void };
 
 const sseClients = new Map<string, Set<SSEWriter>>();
+
+// Far more tabs than anyone keeps open; enough to stop one account holding the server's connections
+// open. One past it is refused rather than closing an older one, whose EventSource would reconnect
+// and close the next, round and round.
+const MAX_STREAMS_PER_USER = 100;
+
+export const hasRoomForStream = (userId: string) =>
+  (sseClients.get(userId)?.size ?? 0) < MAX_STREAMS_PER_USER;
 
 export const registerClient = (userId: string, writer: SSEWriter) => {
   if (!sseClients.has(userId)) sseClients.set(userId, new Set());
@@ -28,6 +37,11 @@ const writeEvents = (events: MutationEvent[], userIds: string[]) => {
       for (const payload of payloads) client.write("data-changed", payload);
     }
   }
+};
+
+export const writeNotification = (userId: string, payload: NotificationPayload) => {
+  const data = JSON.stringify(payload);
+  for (const client of sseClients.get(userId) ?? []) client.write(SSE_NOTIFICATION, data);
 };
 
 export const notifyMutation = (

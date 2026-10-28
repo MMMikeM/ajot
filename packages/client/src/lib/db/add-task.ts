@@ -28,6 +28,7 @@ export const addTask = async (
       userId,
       categoryId: parentId ? null : (categoryId ?? null),
       assigneeId: null,
+      sentById: null,
       parentId: parentId ?? null,
       title,
       status: "todo",
@@ -42,6 +43,7 @@ export const addTask = async (
       subtasks: [],
       shares: [],
       assignee: null,
+      sentBy: null,
       user: null,
     }),
   );

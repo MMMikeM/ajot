@@ -14,7 +14,9 @@ vi.mock("../db/contact.repo", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   default: { remove: vi.fn(), restore: vi.fn(), listByIds: vi.fn() },
 }));
-vi.mock("../db/invite-token.repo", () => ({ default: { findValid: vi.fn(), consume: vi.fn() } }));
+vi.mock("../db/invite-token.repo", () => ({
+  default: { claim: vi.fn(), release: vi.fn(), consume: vi.fn() },
+}));
 vi.mock("../notify", () => ({ sendNotification: vi.fn(async () => {}) }));
 vi.mock("./reach", () => ({ sendReachChanges: vi.fn() }));
 vi.mock("../broadcast", () => ({ broadcastPerUser: vi.fn() }));
@@ -85,11 +87,11 @@ describe("a change to who's a contact reaches both people live", () => {
   });
 
   test("accepting an invite sends each person their new row", async () => {
-    vi.mocked(inviteTokenRepo.findValid).mockResolvedValueOnce({
+    vi.mocked(inviteTokenRepo.claim).mockResolvedValueOnce({
       id: "invite",
       createdByUserId: "bob",
       expiresAt: "later",
-      usedAt: null,
+      usedAt: "now",
       usedByUserId: null,
       createdAt: "then",
     });

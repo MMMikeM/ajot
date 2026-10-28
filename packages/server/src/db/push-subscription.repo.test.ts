@@ -1,3 +1,4 @@
+import { eq, sql } from "drizzle-orm";
 import { beforeEach, expect, test, vi } from "vite-plus/test";
 import { db } from "./client";
 import pushSubscriptionRepo from "./push-subscription.repo";
@@ -15,7 +16,7 @@ vi.mock("./client", async () => {
   return { db: memory, inTransaction: (run: (tx: typeof memory) => unknown) => run(memory) };
 });
 
-const subscription = (endpoint: string, userId: string | null) => ({
+const subscription = (endpoint: string, userId: string) => ({
   endpoint,
   userId,
   p256dh: "key",
@@ -37,22 +38,31 @@ beforeEach(async () => {
   for (const [endpoint, userId] of [
     ["alices", "alice"],
     ["bobs", "bob"],
-    ["from-before-users", null],
   ] as const)
     await pushSubscriptionRepo.upsert(subscription(endpoint, userId));
 });
 
 test("unsubscribing removes the user's own subscription", async () => {
   await pushSubscriptionRepo.remove("alices", "alice");
-  expect(await endpoints()).toEqual(["bobs", "from-before-users"]);
+  expect(await endpoints()).toEqual(["bobs"]);
 });
 
 test("unsubscribing someone else's endpoint leaves it subscribed", async () => {
   await pushSubscriptionRepo.remove("bobs", "alice");
-  expect(await endpoints()).toEqual(["alices", "bobs", "from-before-users"]);
+  expect(await endpoints()).toEqual(["alices", "bobs"]);
 });
 
-test("a subscription from before they had a user, which gets everyone's pushes, can go", async () => {
-  await pushSubscriptionRepo.remove("from-before-users", "alice");
-  expect(await endpoints()).toEqual(["alices", "bobs"]);
+test("a user's pushes go to their subscriptions only", async () => {
+  const found = await pushSubscriptionRepo.findForUsers(["alice"]);
+  expect(found.map((row) => row.endpoint)).toEqual(["alices"]);
+  expect(await pushSubscriptionRepo.findForUsers([])).toEqual([]);
+});
+
+test("a subscription needs a user, and goes with them", async () => {
+  await expect(async () =>
+    db.run(sql`INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth)
+      VALUES ('x', NULL, 'nobodys', 'key', 'secret')`),
+  ).rejects.toMatchObject({ cause: { message: expect.stringMatching(/NOT NULL/) } });
+  await db.delete(users).where(eq(users.id, "bob"));
+  expect(await endpoints()).toEqual(["alices"]);
 });

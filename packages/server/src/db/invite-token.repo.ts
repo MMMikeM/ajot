@@ -15,19 +15,6 @@ const create = async (createdByUserId: string, expiresAt: string) => {
   return row;
 };
 
-const findById = async (token: string) => db.query.inviteTokens.findFirst({ where: { id: token } });
-
-const findValid = async (token: string) =>
-  db.query.inviteTokens.findFirst({
-    where: {
-      id: token,
-      usedAt: { isNull: true },
-      expiresAt: { gt: now() },
-    },
-  });
-
-type InviteToken = NonNullable<Awaited<ReturnType<typeof findValid>>>;
-
 /** The display name of whoever made a still-usable invite, or null. */
 const findInviterName = async (token: string) => {
   const invite = await db.query.inviteTokens.findFirst({
@@ -38,10 +25,10 @@ const findInviterName = async (token: string) => {
   return invite?.createdByUser?.name ?? null;
 };
 
-// Marks the invite used in one statement, so two signups racing on the same link can't both
-// pass. consume() records who used it once their account exists.
+// Marks the invite used in one statement, so two signups or accepts racing on the same link can't
+// both pass. consume() records who used it once their account exists.
 const claim = async (token: string) => {
-  const [row] = await db
+  const rows = await db
     .update(inviteTokens)
     .set({ usedAt: now() })
     .where(
@@ -52,10 +39,12 @@ const claim = async (token: string) => {
       ),
     )
     .returning();
-  return row;
+  return rows.at(0);
 };
 
-/** Undoes claim() when the account it was for couldn't be created. */
+type InviteToken = NonNullable<Awaited<ReturnType<typeof claim>>>;
+
+/** Undoes claim() when what it was claimed for, an account or a contact, didn't happen. */
 const release = async (token: string) => {
   await db.update(inviteTokens).set({ usedAt: null }).where(eq(inviteTokens.id, token));
 };
@@ -68,7 +57,7 @@ const removedBy = (userId: string, otherId: string) =>
   );
 
 // One transaction, so a failed contact insert leaves the token unused for a retry. The caller
-// passes an invite already validated by findValid; this doesn't check it again. Returns the
+// passes an invite it claimed; this doesn't check it again. Returns the
 // contact rows it added, none if the two were contacts already. Being contacts again drops the
 // Undo of either one's removal of the other, which would put back lists they shared then.
 const consume = async (invite: InviteToken, usedByUserId: string) =>
@@ -92,4 +81,4 @@ const consume = async (invite: InviteToken, usedByUserId: string) =>
       .returning();
   });
 
-export default { create, findById, findValid, findInviterName, claim, release, consume };
+export default { create, findInviterName, claim, release, consume };

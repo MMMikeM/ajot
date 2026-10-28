@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { keyAfter } from "@newtab-todo/shared/sort-order";
 import { SERVER_URL_KEY, TOKEN_KEY } from "@newtab-todo/shared/constants";
 import { now } from "@newtab-todo/shared/iso";
+import { MAX_TEXT, MAX_TITLE, cutTo } from "@newtab-todo/shared/field-limits";
 import { ext, getStoredSession } from "~/lib/ext";
 
 type Session = NonNullable<Awaited<ReturnType<typeof getStoredSession>>>;
@@ -34,6 +35,13 @@ const toTitle = (text: string) => {
   const line = text.replace(/\s+/g, " ").trim();
   return line.length > MAX_TITLE_LENGTH ? `${line.slice(0, MAX_TITLE_LENGTH - 1)}…` : line;
 };
+
+// A page's text or address can run past what the server takes, which would refuse the whole task
+const withinLimits = ({ title, description, note }: Draft): Draft => ({
+  title: cutTo(title, MAX_TITLE),
+  description: description && cutTo(description, MAX_TEXT),
+  ...(note && { note: cutTo(note, MAX_TEXT) }),
+});
 
 const draftFor = (id: DraftId, info: ClickData, tab?: browser.tabs.Tab): Draft => {
   const pageUrl = tab?.url ?? info.pageUrl ?? null;
@@ -137,6 +145,8 @@ const notify = (title: string, message: string) =>
 
 const failureMessage = (err: unknown) => {
   if (err instanceof RequestError && err.status === 401) return "Sign in to Ajot again.";
+  if (err instanceof RequestError && err.status === 429)
+    return "That's a lot of sharing at once. Try again in a few minutes.";
   if (err instanceof RequestError) return "The server couldn't save it. Try again.";
   return "Couldn't reach the server. Check your connection and try again.";
 };
@@ -148,7 +158,8 @@ const addDraft = async (session: Session, draft: Draft, kind: DestinationKind, t
 
   // A note belongs to whoever wrote it, so a recipient would never see one: it goes inline
   if (kind === "send") {
-    const description = [draft.note, draft.description].filter(Boolean).join("\n\n") || null;
+    const joined = [draft.note, draft.description].filter(Boolean).join("\n\n");
+    const description = joined ? cutTo(joined, MAX_TEXT) : null;
     await request(session, "POST", "/api/tasks/send", {
       ...base,
       description,
@@ -179,7 +190,7 @@ const addDraft = async (session: Session, draft: Draft, kind: DestinationKind, t
         id: crypto.randomUUID(),
         userId: "",
         taskId: task.id,
-        title: draft.note,
+        title: cutTo(draft.note, MAX_TITLE),
         content: draft.note,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -199,7 +210,7 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
   const menuId = String(info.menuItemId);
   const [draftId, kind, target = ""] = menuId.split("|");
   if (!(draftId in DRAFTS) || !kind) return;
-  const draft = draftFor(draftId as DraftId, info, tab);
+  const draft = withinLimits(draftFor(draftId as DraftId, info, tab));
   const session = await getStoredSession();
   if (!session) return notify("Not added", "Sign in to Ajot to add tasks from the menu.");
   try {

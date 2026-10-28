@@ -67,6 +67,29 @@ fly deploy
 Elsewhere, build the `server` target of the `Dockerfile` and run it with those variables. It
 listens on `PORT`.
 
+### Behind a reverse proxy
+
+Signing in and signing up are limited per address, so one script can't guess passwords or flood the
+server. When a request comes from this machine or a private network (`10.*`, `172.16–31.*`,
+`192.168.*`, `fc00::/7`, link-local), such as nginx, Caddy or Docker's bridge (`172.17.0.1`), the
+server takes the **last** address in `X-Forwarded-For` as the client's. Without that header, it
+can't tell people apart and doesn't limit by address at all. On Fly, it uses `Fly-Client-IP`
+instead.
+
+- **Caddy** sets `X-Forwarded-For` itself and ignores one a client sent. Nothing to do.
+- **nginx** passes on whatever the client sent unless told otherwise, so every client could pick
+  their own address. Add this to the `location` that proxies to the server:
+
+  ```nginx
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  ```
+
+- **Two proxies in a row** (a CDN, then nginx): the last address is the first proxy's, so everyone
+  coming through it shares a limit. Have the proxy nearest the server put the client's address last.
+
+Don't publish the server's port where a client could reach it from a private network without the
+proxy: one sending its own `X-Forwarded-For` would be limited as whatever it chose.
+
 ## 5. Create the first account
 
 Open your server's address in a browser. The first account on a new server needs no invite, so do

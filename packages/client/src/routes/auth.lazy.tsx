@@ -7,6 +7,12 @@ import { authenticate } from "~/lib/actions";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/field";
 import { Input } from "~/components/ui/field";
+import {
+  MAX_NAME,
+  MAX_NEW_USERNAME,
+  MAX_PASSWORD,
+  MAX_USERNAME,
+} from "@newtab-todo/shared/field-limits";
 import { getBuildTarget } from "~/lib/build-target";
 import { useInviterName } from "~/lib/hooks/use-inviter-name";
 import { requestSyncDataConsent } from "~/lib/ext";
@@ -180,6 +186,7 @@ const AuthView = () => {
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
+                    maxLength={MAX_NAME}
                     autoComplete="name"
                     // eslint-disable-next-line jsx-a11y/no-autofocus
                     autoFocus
@@ -196,6 +203,7 @@ const AuthView = () => {
                   value={field.state.value}
                   onChange={(e) => field.handleChange(e.target.value)}
                   onBlur={field.handleBlur}
+                  maxLength={mode === "login" ? MAX_USERNAME : MAX_NEW_USERNAME}
                   // eslint-disable-next-line jsx-a11y/no-autofocus
                   autoFocus={mode === "login"}
                   autoCapitalize="none"
@@ -214,6 +222,7 @@ const AuthView = () => {
                   value={field.state.value}
                   onChange={(e) => field.handleChange(e.target.value)}
                   onBlur={field.handleBlur}
+                  maxLength={MAX_PASSWORD}
                   autoComplete={mode === "login" ? "current-password" : "new-password"}
                 />
               </FormField>

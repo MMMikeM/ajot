@@ -34,15 +34,16 @@ const findByUsername = async (username: string) => {
     where: { username },
     columns: { passwordHash: false },
   });
-  if (!row) throw new NotFoundError("username", username);
+  if (!row) throw new NotFoundError("username");
   return row;
 };
 
-const findByUsernameWithPassword = async (username: string) => {
-  const row = await db.query.users.findFirst({ where: { username } });
-  if (!row) throw new NotFoundError("username", username);
-  return row;
-};
+/** For signing in; undefined when no one has the username, which isn't logged. */
+const findWithPassword = async (username: string) =>
+  db.query.users.findFirst({ where: { username } });
+
+const exists = async (username: string) =>
+  (await db.query.users.findFirst({ where: { username }, columns: { id: true } })) !== undefined;
 
 const count = () => db.$count(users);
 
@@ -72,7 +73,8 @@ export default {
   list,
   findById,
   findByUsername,
-  findByUsernameWithPassword,
+  findWithPassword,
+  exists,
   count,
   insert,
   update,

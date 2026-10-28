@@ -4,6 +4,7 @@ import { now, today } from "@newtab-todo/shared/iso";
 import notificationQueueRepo from "../db/notification-queue.repo";
 import taskRepo from "../db/task.repo";
 import { sendNotification } from "../notify";
+import { isSecret } from "../secret";
 
 const DIGEST_TASKS = 10;
 const DIGEST_TITLE_LENGTH = 100;
@@ -14,8 +15,7 @@ app.post("/process", async (c) => {
   const secret = process.env.CRON_SECRET;
   if (!secret) throw new HTTPException(500, { message: "CRON_SECRET not configured" });
 
-  const auth = c.req.header("authorization");
-  if (auth !== `Bearer ${secret}`) {
+  if (!isSecret(c.req.header("authorization"), `Bearer ${secret}`)) {
     throw new HTTPException(401, { message: "Invalid cron secret" });
   }
 

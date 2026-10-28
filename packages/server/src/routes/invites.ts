@@ -41,30 +41,27 @@ export const inviteRoutes = authed()
     async (c) => {
       const { token } = c.req.param();
       const userId = c.get("userId");
-      console.log(`[invite:accept] token=${token} userId=${userId}`);
 
-      const invite = await inviteTokenRepo.findValid(token);
-      if (!invite) {
-        const raw = await inviteTokenRepo.findById(token);
-        if (!raw) {
-          console.log(`[invite:accept] token not found in DB`);
-        } else if (raw.usedAt) {
-          console.log(`[invite:accept] token already used at=${raw.usedAt} by=${raw.usedByUserId}`);
-        } else {
-          console.log(`[invite:accept] token expired at=${raw.expiresAt}`);
-        }
+      // Claimed in one statement, so two accepts racing on the same link can't both pass
+      const invite = await inviteTokenRepo.claim(token);
+      if (!invite)
         throw new HTTPException(410, {
           message: "This invite link has expired or been used. Ask for a new one.",
         });
-      }
       if (invite.createdByUserId === userId) {
-        console.log(`[invite:accept] self-accept rejected`);
+        await inviteTokenRepo.release(invite.id);
         throw new HTTPException(400, {
           message: "That's your own invite. Send it to someone else.",
         });
       }
 
-      const added = await inviteTokenRepo.consume(invite, userId);
+      let added;
+      try {
+        added = await inviteTokenRepo.consume(invite, userId);
+      } catch (e) {
+        await inviteTokenRepo.release(invite.id);
+        throw e;
+      }
       await sendContactChanges(c, { addedIds: added.map((row) => row.id) });
 
       const accepterName = await userRepo
@@ -76,9 +73,6 @@ export const inviteRoutes = authed()
         contactName: accepterName,
       }).catch(() => {});
 
-      console.log(
-        `[invite:accept] success createdBy=${invite.createdByUserId} acceptedBy=${userId}`,
-      );
       return c.json({ ok: true as const }, 200);
     },
   );

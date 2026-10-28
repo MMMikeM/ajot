@@ -67,8 +67,8 @@ const purgeSessions = (database: Database) =>
     WHERE ${sessions.expiresAt} < ${now()} RETURNING ${sessions.id}`);
 
 /**
- * Invites used or expired over KEEP_DELETED_DAYS ago. Kept until then, so accepting a dead link
- * still logs which it was, and a signup that fails can still release the invite it claimed.
+ * Invites used or expired over KEEP_DELETED_DAYS ago. Kept until then, so a signup that fails can
+ * still release the invite it claimed.
  */
 const purgeInvites = (database: Database, cutoff: string) =>
   database.all<{ id: string }>(sql`DELETE FROM ${inviteTokens}
