@@ -6,6 +6,8 @@ import { mockApi, mockData } from "./helpers/mock-api";
 
 // A production build registers sw.js, which would answer /api before the mocks see it
 test.use({ serviceWorkers: "block" });
+// The longest file by far: a shard takes a file whole, so this one alone set CI's floor
+test.describe.configure({ mode: "parallel" });
 
 const openList = async (page: Page) => {
   await mockApi(page);
