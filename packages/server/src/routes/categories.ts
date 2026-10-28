@@ -217,8 +217,35 @@ export const categoryRoutes = authed()
       // A collaborator may leave; only the owner removes someone else
       await requireList(id, userId, targetUserId === userId ? "use" : "manage");
 
-      const { before, left } = await categoryCollaboratorRepo.remove(id, targetUserId);
+      const { before, left } = await categoryCollaboratorRepo.remove(id, targetUserId, {
+        keepForUndo: targetUserId !== userId,
+      });
       await sendReachChanges(c, before, [...left.movedTaskIds, ...left.unfiledTaskIds]);
+      return c.json({ userId: targetUserId }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "post",
+      path: "/:id/collaborators/:userId/restore",
+      responses: withAuth({
+        200: jsonContent(collaboratorIdSchema),
+        400: jsonContent(errorSchema, "Bad request"),
+        403: jsonContent(errorSchema, "Forbidden"),
+        404: jsonContent(errorSchema, "Not found"),
+      }),
+    }),
+    async (c) => {
+      const { id, userId: targetUserId } = c.req.param();
+      const userId = c.get("userId");
+      await requireList(id, userId, "manage");
+      if (!(await contactRepo.exists(userId, targetUserId)))
+        throw new HTTPException(400, {
+          message: "You can only share lists with your contacts. Invite them first.",
+        });
+
+      const { before, changed } = await categoryCollaboratorRepo.restore(id, targetUserId);
+      await sendReachChanges(c, before, changed);
       return c.json({ userId: targetUserId }, 200);
     },
   );

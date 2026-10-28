@@ -1,4 +1,4 @@
-import { type CSSProperties } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import { Toast } from "@base-ui/react/toast";
 import { X } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -7,8 +7,45 @@ import { cn } from "~/lib/utils";
 
 const DURATION = 5000;
 
+/**
+ * Base UI pauses toast timers while the window is blurred, but a phone switching apps may only
+ * hide the page, so hiding it sends the window the blur Base UI listens for. Returns whether the
+ * window is away, for the countdown bar, whose animation would otherwise run on without the timer.
+ */
+const useWindowAway = () => {
+  const [away, setAway] = useState(false);
+  useEffect(() => {
+    let blurredForHiding = false;
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        blurredForHiding = true;
+        window.dispatchEvent(new FocusEvent("blur"));
+      } else if (blurredForHiding) {
+        blurredForHiding = false;
+        window.dispatchEvent(new FocusEvent("focus"));
+      }
+    };
+    const onBlur = (e: FocusEvent) => {
+      if (e.target === window) setAway(true);
+    };
+    const onFocus = (e: FocusEvent) => {
+      if (e.target === window) setAway(false);
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("blur", onBlur, true);
+    window.addEventListener("focus", onFocus, true);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("blur", onBlur, true);
+      window.removeEventListener("focus", onFocus, true);
+    };
+  }, []);
+  return away;
+};
+
 export const Toasts = () => {
   const { toasts } = Toast.useToastManager();
+  const away = useWindowAway();
   return toasts.map((toast) => {
     const duration = toast.timeout ?? DURATION;
     return (
@@ -63,10 +100,11 @@ export const Toasts = () => {
               <X className="size-3.5" />
             </Toast.Close>
           </div>
-          {/* Pauses with the toast (data-expanded); persistent toasts get no bar */}
+          {/* Pauses with the toast (data-expanded, or the window away); persistent toasts get no bar */}
           {duration > 0 && (
             <div
-              className="absolute bottom-0 left-0 h-0.5 w-full origin-left animate-[toast-progress_var(--toast-duration)_linear_forwards] bg-primary/40 group-data-[expanded]/toast:[animation-play-state:paused] motion-reduce:hidden"
+              data-away={away || undefined}
+              className="absolute bottom-0 left-0 h-0.5 w-full origin-left animate-[toast-progress_var(--toast-duration)_linear_forwards] bg-primary/40 group-data-[expanded]/toast:[animation-play-state:paused] data-[away]:[animation-play-state:paused] motion-reduce:hidden"
               style={{ "--toast-duration": `${duration}ms` } as CSSProperties}
             />
           )}

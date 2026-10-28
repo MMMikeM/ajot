@@ -470,6 +470,75 @@ test.describe("list sharing", () => {
     await toast.getByRole("button", { name: "Undo" }).click();
     await removed;
     await expect(sheet).toBeVisible();
+    // Undoing the share is itself the undo: it offers no Undo of its own
+    await expect(page.locator("[data-toast-undo]", { hasText: "Removed" })).toHaveCount(0);
+  });
+
+  test("removing someone offers Undo, which puts them back", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "opens the list's options from the sidebar");
+    await openList(page);
+    const pill = page
+      .getByTestId("category-sidebar")
+      .locator(".group\\/pill")
+      .filter({ hasText: "Home" });
+    await pill.hover();
+    await pill.getByRole("button", { name: "List options" }).click();
+    await page.getByTestId("category-share-btn").click();
+
+    const sheet = page.getByRole("dialog", { name: "Share list" });
+    const sam = sheet.getByText("Sam Okafor", { exact: true });
+    await sam.hover();
+    await sheet.getByRole("button", { name: "Remove" }).click();
+    await expect(sam).toHaveCount(0);
+
+    const toast = page.locator("[data-toast-undo]", { hasText: "Removed Sam Okafor" });
+    const restored = page.waitForRequest(
+      (req) =>
+        req.url().endsWith("/api/categories/c-home/collaborators/u-sam/restore") &&
+        req.method() === "POST",
+    );
+    await toast.getByRole("button", { name: "Undo" }).click();
+    await restored;
+    await expect(sam).toBeVisible();
+    await expect(sheet).toBeVisible();
+  });
+});
+
+test.describe("the Undo window", () => {
+  const hide = (page: Page, hidden: boolean) =>
+    page.evaluate(`(() => {
+      if (${hidden}) {
+        Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+      } else {
+        delete document.hidden;
+        delete document.visibilityState;
+      }
+      document.dispatchEvent(new Event("visibilitychange"));
+    })()`);
+
+  test("waits while the page is hidden, as when switching apps", async ({ page }) => {
+    test.slow();
+    await openList(page);
+    await row(page, "Pick up dry cleaning").getByRole("checkbox").click();
+    const toast = page.locator("[data-toast-undo]", { hasText: "Marked done" });
+    await expect(toast).toBeVisible();
+
+    await hide(page, true);
+    await page.waitForTimeout(9000);
+    await hide(page, false);
+    await expect(toast).toBeVisible();
+    await expect(toast).toHaveCount(0, { timeout: 10_000 });
+  });
+
+  test("lasts longer on touch", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "a phone's window is longer than a pointer's");
+    await openList(page);
+    await row(page, "Pick up dry cleaning").getByRole("checkbox").click();
+    const toast = page.locator("[data-toast-undo]", { hasText: "Marked done" });
+    await expect(toast).toBeVisible();
+    await page.waitForTimeout(6500);
+    await expect(toast).toBeVisible();
   });
 });
 

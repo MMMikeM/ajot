@@ -192,19 +192,20 @@ export const mockApi = async (
     "/api/config": { vapidPublicKey: "", awaitingFirstUser: false },
   };
 
-  // Lists and contacts go and come back, so a refetch after a delete or an Undo shows it
+  // Lists, contacts and list members go and come back, so a refetch after a delete or an Undo
+  // shows it
   const removed = new Map<string, { from: { id: string }[]; row: { id: string } }>();
-  const take = (from: { id: string }[], id: string) => {
+  const take = (from: { id: string }[], id: string, key = id) => {
     const index = from.findIndex((row) => row.id === id);
     if (index < 0) return null;
     const [row] = from.splice(index, 1);
-    removed.set(id, { from, row });
+    removed.set(key, { from, row });
     return row;
   };
-  const putBack = (id: string) => {
-    const entry = removed.get(id);
+  const putBack = (key: string) => {
+    const entry = removed.get(key);
     if (!entry) return null;
-    removed.delete(id);
+    removed.delete(key);
     entry.from.push(entry.row);
     return entry.row;
   };
@@ -215,6 +216,17 @@ export const mockApi = async (
     if (method === "DELETE" && contact) return take(data.contacts, contact[1]) ?? {};
     const restore = path.match(/^\/api\/(?:categories|contacts)\/([^/]+)\/restore$/);
     if (method === "POST" && restore) return putBack(restore[1]) ?? {};
+    const member = path.match(/^\/api\/categories\/([^/]+)\/collaborators\/([^/]+)(\/restore)?$/);
+    const list = member && data.categories.find((c) => c.id === member[1]);
+    if (!member || !list) return null;
+    const collaborators = list.collaborators as { id: string; userId: string }[];
+    const key = `${member[1]}/${member[2]}`;
+    if (method === "DELETE" && !member[3]) {
+      const row = collaborators.find((c) => c.userId === member[2]);
+      if (row) take(collaborators, row.id, key);
+      return { userId: member[2] };
+    }
+    if (method === "POST" && member[3]) return putBack(key) ?? {};
     return null;
   };
 

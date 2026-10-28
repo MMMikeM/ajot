@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import categoryRepo from "./category.repo";
+import categoryCollaboratorRepo from "./category-collaborator.repo";
 import contactRepo from "./contact.repo";
 import {
   categories,
   categoryCollaborators,
   contacts,
+  removedCollaborators,
   removedContacts,
   tasks,
   taskShares,
@@ -169,5 +171,49 @@ describe("restoring a removed contact", () => {
 
   test("with nothing left to restore is not found", async () => {
     await expect(contactRepo.restore("mine", owner)).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+// Only the list's owner may restore someone they removed: requireList checks that in the route
+describe("restoring someone removed from a list", () => {
+  const record = {
+    id: "c1",
+    categoryId: "list",
+    userId: collaborator,
+    addedAt: "then",
+    movedTaskIds: ["their-task"],
+    unfiledTaskIds: ["shared-with-them"],
+  };
+
+  test("with nothing recorded is not found", async () => {
+    await expect(categoryCollaboratorRepo.restore("list", collaborator)).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(writes).toEqual([]);
+  });
+
+  test("puts back their row, what leaving took out of the list, then drops the record", async () => {
+    tables.removedCollaborators = [record];
+    await categoryCollaboratorRepo.restore("list", collaborator);
+    expect(writes.map(({ op, table }) => ({ op, table }))).toEqual([
+      { op: "insert", table: categoryCollaborators },
+      { op: "update", table: tasks },
+      { op: "update", table: taskShares },
+      { op: "delete", table: removedCollaborators },
+    ]);
+    expect(writes[0]!.data).toEqual({
+      id: "c1",
+      categoryId: "list",
+      userId: collaborator,
+      addedAt: "then",
+    });
+  });
+
+  test("of someone else's removal is not found", async () => {
+    tables.removedCollaborators = [record];
+    await expect(categoryCollaboratorRepo.restore("list", stranger)).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(writes).toEqual([]);
   });
 });

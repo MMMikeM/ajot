@@ -10,6 +10,7 @@ import {
   now,
   send,
   shareTask,
+  tasksOf,
 } from "./helpers/api";
 import { listenLive } from "./helpers/live";
 import type { AuthResult } from "./helpers/auth";
@@ -111,6 +112,62 @@ test.describe("a change to who reaches a task reaches an open page live", () => 
     await bobLive.expectHeard("tasks.delete", alicesTask.id);
     await expect(row(alicePage, bobsTask.title)).toHaveCount(0);
     await expect(row(alicePage, alicesTask.title)).toBeVisible();
+    aliceLive.assertAllApplied();
+    bobLive.assertAllApplied();
+  });
+
+  test("removing someone in the share sheet and pressing Undo puts it all back", async ({
+    user1Auth: alice,
+    user2Auth: bob,
+    user1Page: alicePage,
+    user2Page: bobPage,
+  }) => {
+    const { list, name, alicesTask, bobsTask } = await sharedList(alice, bob);
+    const filed = await addTask(alice.token, { title: unique("Filed by Bob") });
+    await shareTask(alice.token, filed.id, bob.username);
+    await apiRequest(
+      "PUT",
+      "/api/tasks/share",
+      { taskId: filed.id, categoryId: list.id },
+      bob.token,
+    );
+    const aliceLive = listenLive(alicePage);
+    const bobLive = listenLive(bobPage);
+    await Promise.all([aliceLive.open(`/list/${list.id}`), bobLive.open()]);
+    await expect(row(alicePage, bobsTask.title)).toBeVisible();
+
+    const pill = alicePage
+      .getByTestId("category-sidebar")
+      .locator(".group\\/pill")
+      .filter({ hasText: name });
+    await pill.hover();
+    await pill.getByRole("button", { name: "List options" }).click();
+    await alicePage.getByTestId("category-share-btn").click();
+    const sheet = alicePage.locator('[data-slot="drawer-content"]', { hasText: "Share list" });
+    const member = sheet.locator('[class*="group/row"]', { hasText: bob.name });
+    await member.hover();
+    await member.getByRole("button", { name: "Remove" }).click();
+
+    await expect(member).toHaveCount(0);
+    await expect(sidebarList(bobPage, name)).toHaveCount(0);
+    await expect(row(bobPage, bobsTask.title)).toBeVisible();
+    await expect(row(bobPage, filed.title)).toBeVisible();
+    await expect(row(alicePage, bobsTask.title)).toHaveCount(0);
+
+    await alicePage.getByRole("button", { name: "Undo" }).click();
+
+    await expect(member).toBeVisible();
+    await expect(sheet).toBeVisible();
+    await expect(sidebarList(bobPage, name)).toBeVisible();
+    await bobLive.expectHeard("tasks.insert", alicesTask.id);
+    // Back in the list, so out of Bob's Inbox, and the share he filed there is filed there again
+    await expect(row(bobPage, bobsTask.title)).toHaveCount(0);
+    await expect(row(bobPage, filed.title)).toHaveCount(0);
+    await expect(row(alicePage, bobsTask.title)).toBeVisible();
+    const bobsShare = (await tasksOf(bob.token))
+      .find((t) => t.id === filed.id)
+      ?.shares.find((s) => s.sharedWithUserId === bob.userId);
+    expect(bobsShare?.categoryId).toBe(list.id);
     aliceLive.assertAllApplied();
     bobLive.assertAllApplied();
   });
@@ -222,6 +279,22 @@ test.describe("what a list's members and strangers may do to it", () => {
       expect(await status(method, path, body, bob.token), `${method} ${path}`).toBe(403);
     const leaving = await status("DELETE", collaborator(list.id, bob.userId), undefined, bob.token);
     expect(leaving).toBe(200);
+  });
+
+  test("only its owner undoes removing someone, and never someone who left", async ({
+    user1Auth: alice,
+    user2Auth: bob,
+  }) => {
+    const list = await addList(alice.token, unique("Undone"));
+    const restore = `${collaborator(list.id, bob.userId)}/restore`;
+    await addCollaborator(alice.token, list.id, bob.username);
+    await apiRequest("DELETE", collaborator(list.id, bob.userId), undefined, alice.token);
+    expect(await status("POST", restore, undefined, bob.token)).toBe(404);
+    expect(await status("POST", restore, undefined, alice.token)).toBe(200);
+    expect(await status("POST", restore, undefined, alice.token)).toBe(404);
+
+    await apiRequest("DELETE", collaborator(list.id, bob.userId), undefined, bob.token);
+    expect(await status("POST", restore, undefined, alice.token)).toBe(404);
   });
 
   test("once deleted, it's gone for its collaborators", async ({

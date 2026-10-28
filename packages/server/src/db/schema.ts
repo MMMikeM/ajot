@@ -211,6 +211,22 @@ export const categoryCollaborators = sqliteTable(
   ],
 );
 
+// A list's owner removing someone keeps what that changed, so Undo can put exactly that back
+export const removedCollaborators = sqliteTable(
+  "removed_collaborators",
+  {
+    // The collaborator row's id, which Undo brings back with it
+    id: pk(),
+    categoryId: fk("category_id", () => categories.id, { onDelete: "cascade" }),
+    userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
+    addedAt: string("added_at"),
+    movedTaskIds: json<string[]>("moved_task_ids"),
+    unfiledTaskIds: json<string[]>("unfiled_task_ids"),
+    removedAt: createdAt("removed_at"),
+  },
+  (t) => [uniqueIndex("removed_collaborators_cat_user_idx").on(t.categoryId, t.userId)],
+);
+
 export const notificationQueueTypes = ["reminder-due", "overdue-digest"] as const;
 
 export const notificationQueue = sqliteTable("notification_queue", {
@@ -250,6 +266,7 @@ export const relations = defineRelations(
     removedContacts,
     inviteTokens,
     categoryCollaborators,
+    removedCollaborators,
     notificationQueue,
     metricCounts,
   },
