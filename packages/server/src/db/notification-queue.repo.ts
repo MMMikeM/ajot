@@ -1,35 +1,35 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, sql, type SQL } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "./client";
-import { notificationQueue } from "./schema";
+import { notificationQueue, tasks, users } from "./schema";
 
-const insert = async (data: {
-  userId: string;
-  type: "reminder-due" | "overdue-digest";
-  taskId: string | null;
-  scheduledFor: string;
-}) => {
-  await db.insert(notificationQueue).values({ id: createId(), ...data });
+/**
+ * Sets the task's unsent reminder to the due date the task holds as this runs, so two edits at
+ * once leave it on the date the task ends up with. Does nothing for a task with no due date.
+ */
+const scheduleReminder = (taskId: string) => upsertReminder(taskId, sql``);
+
+/**
+ * A new task's reminder, as scheduleReminder, unless it has had one: a create retried after its
+ * reminder went out would send it again.
+ */
+const scheduleFirstReminder = (taskId: string) =>
+  upsertReminder(
+    taskId,
+    sql`AND NOT EXISTS (SELECT 1 FROM ${notificationQueue}
+      WHERE task_id = ${taskId} AND type = 'reminder-due')`,
+  );
+
+const upsertReminder = async (taskId: string, unless: SQL) => {
+  await db.run(sql`INSERT INTO ${notificationQueue} (id, user_id, type, task_id, scheduled_for)
+    SELECT ${createId()}, user_id, 'reminder-due', id, due_date FROM ${tasks}
+    WHERE id = ${taskId} AND due_date IS NOT NULL ${unless}
+    ON CONFLICT (task_id) WHERE type = 'reminder-due' AND sent_at IS NULL
+    DO UPDATE SET scheduled_for = excluded.scheduled_for`);
 };
 
-const findPending = async (beforeOrAt: string) =>
-  db.query.notificationQueue.findMany({
-    where: {
-      sentAt: { isNull: true },
-      scheduledFor: { lte: beforeOrAt },
-    },
-    with: {
-      task: { columns: { id: true, title: true, dueDate: true, status: true, deletedAt: true } },
-    },
-  });
-
-const markSent = async (ids: string[], sentAt: string) => {
-  if (ids.length === 0) return;
-  await db.update(notificationQueue).set({ sentAt }).where(inArray(notificationQueue.id, ids));
-};
-
-/** Only the task's unsent due-date reminders. */
-const deleteByTask = async (taskId: string) => {
+/** Drops the task's unsent reminder if, as this runs, the task has no due date. */
+const cancelReminder = async (taskId: string) => {
   await db
     .delete(notificationQueue)
     .where(
@@ -37,29 +37,94 @@ const deleteByTask = async (taskId: string) => {
         eq(notificationQueue.taskId, taskId),
         eq(notificationQueue.type, "reminder-due"),
         isNull(notificationQueue.sentAt),
+        sql`(SELECT ${tasks.dueDate} FROM ${tasks} WHERE ${tasks.id} = ${taskId}) IS NULL`,
       ),
     );
 };
 
-const findDigestUserIdsSince = async (since: string) => {
-  const rows = await db.query.notificationQueue.findMany({
-    where: {
-      type: "overdue-digest",
-      sentAt: { gte: since },
-    },
-    columns: { userId: true },
+/**
+ * Marks every reminder due by `at` sent, and returns them with their task if it's still to do:
+ * the ones to send. Runs at the same time each mark a reminder only once, so only one sends it.
+ */
+const claimDueReminders = async (at: string) => {
+  const claimed = await db
+    .update(notificationQueue)
+    .set({ sentAt: at })
+    .where(
+      and(
+        eq(notificationQueue.type, "reminder-due"),
+        isNull(notificationQueue.sentAt),
+        lte(notificationQueue.scheduledFor, at),
+      ),
+    )
+    .returning({
+      id: notificationQueue.id,
+      userId: notificationQueue.userId,
+      taskId: notificationQueue.taskId,
+    });
+  const taskIds = claimed.flatMap((row) => (row.taskId ? [row.taskId] : []));
+  if (taskIds.length === 0) return [];
+  const toDo = await db.query.tasks.findMany({
+    where: { id: { in: taskIds }, status: { ne: "done" }, deletedAt: { isNull: true } },
+    columns: { id: true, title: true, dueDate: true },
   });
-  return rows.map((r) => r.userId);
+  const byId = new Map(toDo.map((task) => [task.id, task]));
+  return claimed.flatMap(({ id, userId, taskId }) => {
+    const task = taskId ? byId.get(taskId) : undefined;
+    return task ? [{ id, userId, task }] : [];
+  });
 };
 
-const insertSent = async (data: {
-  userId: string;
-  type: "reminder-due" | "overdue-digest";
-  taskId: string | null;
-  scheduledFor: string;
-  sentAt: string;
-}) => {
-  await db.insert(notificationQueue).values({ id: createId(), ...data });
+/**
+ * Unmarks reminders claimed at `at`, so the next run sends them. One whose task has a new reminder
+ * since stays marked: the new one is the task's unsent reminder now.
+ */
+const releaseReminders = async (ids: string[], at: string) => {
+  if (ids.length === 0) return;
+  await db.run(sql`UPDATE OR IGNORE ${notificationQueue} SET sent_at = NULL
+    WHERE ${inArray(notificationQueue.id, ids)} AND ${eq(notificationQueue.sentAt, at)}`);
 };
 
-export default { insert, findPending, markSent, deleteByTask, findDigestUserIdsSince, insertSent };
+// Two bound values a user, well under SQLite's limit on them in one statement
+const DIGEST_CLAIM_CHUNK = 200;
+
+/**
+ * Records a digest for `day` sent at `at` for each of these users who has none that day, and
+ * returns those it recorded: the ones to send it to. Runs at the same time record each user's only
+ * once. A user deleted since they were read is passed over.
+ */
+const claimDigests = async (userIds: string[], day: string, at: string) => {
+  const claimed: { id: string; userId: string }[] = [];
+  for (let start = 0; start < userIds.length; start += DIGEST_CLAIM_CHUNK) {
+    const chunk = userIds.slice(start, start + DIGEST_CLAIM_CHUNK);
+    const rows = sql.join(
+      chunk.map((userId) => sql`(${createId()}, ${userId})`),
+      sql`, `,
+    );
+    claimed.push(
+      ...(await db.all<{ id: string; userId: string }>(sql`INSERT INTO ${notificationQueue}
+          (id, user_id, type, scheduled_for, sent_at)
+        SELECT column1, column2, 'overdue-digest', ${day}, ${at} FROM (VALUES ${rows})
+        WHERE column2 IN (SELECT id FROM ${users})
+        ON CONFLICT DO NOTHING
+        RETURNING id, user_id AS "userId"`)),
+    );
+  }
+  return claimed;
+};
+
+/** Drops these digest records, so the next run that day sends those users theirs. */
+const releaseDigests = async (ids: string[]) => {
+  if (ids.length === 0) return;
+  await db.delete(notificationQueue).where(inArray(notificationQueue.id, ids));
+};
+
+export default {
+  scheduleReminder,
+  scheduleFirstReminder,
+  cancelReminder,
+  claimDueReminders,
+  releaseReminders,
+  claimDigests,
+  releaseDigests,
+};

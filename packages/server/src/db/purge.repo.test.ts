@@ -105,11 +105,21 @@ beforeAll(async () => {
     .values([
       { ...reminder, id: "remind-old", taskId: "old" },
       { ...reminder, id: "remind-live", taskId: "live" },
-      { ...reminder, id: "sent-long-ago", sentAt: hoursFromNow(-(KEEP_SENT_DAYS + 1) * 24) },
-      { ...reminder, id: "sent-lately", sentAt: hoursFromNow(-(KEEP_SENT_DAYS - 1) * 24) },
-      { ...reminder, id: "never-sent", scheduledFor: longAgo },
-      { ...reminder, id: "due-lately", scheduledFor: lately },
-      { ...reminder, id: "due-later", scheduledFor: hoursFromNow(24) },
+      {
+        ...reminder,
+        id: "sent-long-ago",
+        taskId: "live",
+        sentAt: hoursFromNow(-(KEEP_SENT_DAYS + 1) * 24),
+      },
+      {
+        ...reminder,
+        id: "sent-lately",
+        taskId: "live",
+        sentAt: hoursFromNow(-(KEEP_SENT_DAYS - 1) * 24),
+      },
+      { ...reminder, id: "never-sent", taskId: "recent", scheduledFor: longAgo },
+      { ...reminder, id: "due-lately", taskId: "in-held-list", scheduledFor: lately },
+      { ...reminder, id: "due-later", taskId: "filed-by-bob", scheduledFor: hoursFromNow(24) },
     ])
     .run();
   db.insert(sessions)
