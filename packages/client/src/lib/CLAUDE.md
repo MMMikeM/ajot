@@ -8,7 +8,7 @@ Any module that accesses `localStorage`, `window`, or browser-only APIs (`Indexe
 
 ## Structure
 
-- **`db/`** — TanStack DB layer: `collections.ts`, `hooks.ts` (useLiveQuery + mutations), `offline.ts` (offline executor), `add-task.ts`
+- **`db/`** — TanStack DB layer: `collections.ts`, `hooks.ts` (useLiveQuery + mutations), `offline.ts` (offline executor and its mutation functions), `shared-outbox.ts` (every tab queues in one outbox, the leader sends it), `tab-leader.ts` (which tab leads, and the next one when it closes), `outbox-storage.ts`, `synced-writes.ts`, `add-task.ts`
 - **`sync/`** — Live sync mechanisms: `sse.ts` (browser tab SSE), `push.ts` (Web Push), `register-sw.ts`, `prewarm.ts` (save every list for the next page opened offline), `prewarm-extension.ts` (the backgrounds' session and 5-minute alarm), `worker-session.ts` (the PWA worker's copy of the token)
 - **`snapshot-store.ts`** — the IndexedDB lists a new tab starts from; outside `db/` so the backgrounds can write them
 - **`auth/`** — Identity: `token.ts` (auth token store), `current-user.ts`, `session.ts` (sign-out, and expiry on a 401 from `api.ts`)

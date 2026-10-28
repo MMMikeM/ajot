@@ -115,9 +115,12 @@ const tx = offline.createOfflineTransaction({ mutationFnName: "syncTasks" });
 tx.mutate(() => tasksCollection.delete(id));
 ```
 
+`offline` is a `SharedOutboxExecutor` (`lib/db/shared-outbox.ts`), not the library's plain executor: every tab, and every edit made before the executor starts, queues in the one outbox, and the leader tab (`lib/db/tab-leader.ts`) sends it. The reference's "non-leader tabs run online-only" doesn't hold here.
+
 **Rules:**
 
 - Always wrap in `offline.createOfflineTransaction()`
+- Never await a `refetch()` in a mutation function in `offline.ts`: write the rows directly and use `refetchLater` (`lib/db/synced-writes.ts`)
 - Always set `updatedAt: now()` on insert and update
 - `mutationFnName` maps to sync function: `"syncTasks"`, `"syncCategories"`, `"syncNotes"`
 - IDs: `nanoid()` for tasks/notes, `crypto.randomUUID()` for categories
