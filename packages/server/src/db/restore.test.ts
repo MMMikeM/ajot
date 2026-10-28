@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { hoursFromNow } from "@newtab-todo/shared/iso";
 import categoryRepo from "./category.repo";
 import categoryCollaboratorRepo from "./category-collaborator.repo";
 import contactRepo from "./contact.repo";
@@ -27,6 +28,8 @@ const { tables, writes, fakeDb } = vi.hoisted(() => {
         return (want.in as unknown[]).includes(row[key]);
       if (want && typeof want === "object" && "isNull" in want)
         return (row[key] == null) === want.isNull;
+      if (want && typeof want === "object" && "gte" in want)
+        return (row[key] as string) >= (want.gte as string);
       return row[key] === want;
     });
 
@@ -183,9 +186,18 @@ describe("restoring someone removed from a list", () => {
     addedAt: "then",
     movedTaskIds: ["their-task"],
     unfiledTaskIds: ["shared-with-them"],
+    removedAt: hoursFromNow(-0.1),
   };
 
   test("with nothing recorded is not found", async () => {
+    await expect(categoryCollaboratorRepo.restore("list", collaborator)).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(writes).toEqual([]);
+  });
+
+  test("more than an hour later is not found", async () => {
+    tables.removedCollaborators = [{ ...record, removedAt: hoursFromNow(-1.1) }];
     await expect(categoryCollaboratorRepo.restore("list", collaborator)).rejects.toMatchObject({
       status: 404,
     });

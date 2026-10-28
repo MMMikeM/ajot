@@ -339,7 +339,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   useLayoutEffect(() => {
     activeRowFocus.setRows(activeRowIds);
     doneRowFocus.setRows(doneRowIds);
-  });
+  }, [activeRowFocus, doneRowFocus, activeRowIds, doneRowIds]);
 
   const { handleDragEnd } = useDndActions({
     categories,

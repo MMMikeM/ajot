@@ -86,7 +86,7 @@ export function CategoryCollabSheet({
       restoreCollaborator(categoryId, id).catch((err) => {
         console.error("[collaborators] restore failed:", err);
         toastManager.add({
-          title: err instanceof Error ? err.message : `Couldn't bring back ${name}. Try again.`,
+          title: err instanceof Error ? err.message : `Couldn't bring back ${name}`,
         });
       });
     });

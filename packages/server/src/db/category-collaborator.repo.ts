@@ -1,9 +1,9 @@
-import { and, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db, inTransaction, type Transaction } from "./client";
 import { categoryCollaborators, removedCollaborators, tasks, taskShares } from "./schema";
 import { NotFoundError } from "./errors";
-import { now } from "@newtab-todo/shared/iso";
+import { hoursFromNow, now } from "@newtab-todo/shared/iso";
 import reachRepo from "./reach.repo";
 
 /** Someone in a list, as a collaborator row names them. */
@@ -11,6 +11,9 @@ type Membership = { categoryId: string; userId: string };
 
 /** What someone leaving a list took out of it, so an Undo can put it back. */
 type Leaving = Membership & { movedTaskIds: string[]; unfiledTaskIds: string[] };
+
+/** Outlasts an Undo toast paused while the page is hidden, but not a later change of mind. */
+const undoableSince = () => hoursFromNow(-1);
 
 /** Adding someone afresh drops the Undo of their removal, which would move their tasks again. */
 const add = async (categoryId: string, userId: string) => {
@@ -148,6 +151,9 @@ const remove = async (categoryId: string, userId: string, { keepForUndo = false 
         removedAt: now(),
       };
       await tx
+        .delete(removedCollaborators)
+        .where(lt(removedCollaborators.removedAt, undoableSince()));
+      await tx
         .insert(removedCollaborators)
         .values({ ...record, categoryId, userId })
         .onConflictDoUpdate({
@@ -166,7 +172,7 @@ const remove = async (categoryId: string, userId: string, { keepForUndo = false 
 const restore = async (categoryId: string, userId: string) =>
   inTransaction(async (tx) => {
     const record = await tx.query.removedCollaborators.findFirst({
-      where: { categoryId, userId },
+      where: { categoryId, userId, removedAt: { gte: undoableSince() } },
     });
     if (!record) throw new NotFoundError("removed collaborator");
     const leaving = {
