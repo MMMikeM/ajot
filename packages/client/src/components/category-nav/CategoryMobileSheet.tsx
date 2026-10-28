@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Ellipsis, Plus, Search, Users } from "lucide-react";
+import { Ellipsis, Plus, Search, Settings, Users } from "lucide-react";
 import { INBOX_COLOR } from "~/lib/constants";
 import { Drawer, DrawerContent, DrawerTitle } from "~/components/ui/drawer";
 import { Popover, PopoverTrigger, PopoverContent } from "~/components/ui/popover";
@@ -11,6 +11,7 @@ import { Input } from "~/components/ui/field";
 import { ColorDot } from "~/components/ui/color-dot";
 import { setActiveCategoryId } from "~/lib/state/active-category";
 import { useCurrentUserId } from "~/lib/auth/current-user";
+import { getBuildTarget } from "~/lib/build-target";
 import { useNavContext } from "~/lib/state/nav-context";
 import { cn } from "~/lib/utils";
 import { navRow } from "./nav-row";
@@ -251,6 +252,17 @@ function CategoryMobileSheet() {
             >
               <Users size={16} />
               People
+            </Link>
+          )}
+          {signedIn && getBuildTarget() === "browser" && (
+            <Link
+              to="/settings"
+              replace
+              onClick={() => setNavOpen(false)}
+              className={navRow({ place: "sheet" })}
+            >
+              <Settings size={16} />
+              Settings
             </Link>
           )}
 

@@ -48,12 +48,14 @@ test.describe("sync status", () => {
     await context.setOffline(true);
     await page.evaluate(() => window.dispatchEvent(new Event("offline")));
     await expect(syncButton(page)).toHaveText("Offline · saved here");
-    await expect(syncStatus(page)).toHaveText("Offline");
-    await expect(syncButton(page)).toHaveAccessibleName(/offline, changes saved on this device/);
+    await expect(syncStatus(page)).toHaveText("Offline, changes saved on this device");
+    await expect(syncButton(page)).toHaveAccessibleName(
+      "Sync settings: Offline · saved here, changes saved on this device",
+    );
     await expect(syncButton(page).locator(".animate-pulse")).toHaveCount(0);
 
     await syncButton(page).click();
-    await expect(page.getByText("Changes stay on this device")).toBeVisible();
+    await expect(page.getByText(/Your changes are saved on this device/)).toBeVisible();
     await page.keyboard.press("Escape");
 
     await context.setOffline(false);
@@ -67,11 +69,11 @@ test.describe("sync status", () => {
     // The device is online, so waiting for a connection wouldn't help.
     await mockApi(page);
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await expect(syncButton(page)).toHaveText("Not syncing", { timeout: 15000 });
+    await expect(syncButton(page)).toHaveText("Not syncing · saved here", { timeout: 15000 });
     // The state the page opens in isn't announced
     await expect(syncStatus(page)).toHaveText("");
     await syncButton(page).click();
-    await expect(page.getByText("Can't reach the sync server.", { exact: false })).toBeVisible();
+    await expect(page.getByText("Can't reach Ajot's server.", { exact: false })).toBeVisible();
   });
 });
 

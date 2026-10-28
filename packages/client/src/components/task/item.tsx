@@ -23,6 +23,7 @@ import { isReadyToTick } from "~/lib/ready-to-tick";
 import { rowDragSensors } from "./row-drag";
 import { formatDueDate } from "~/lib/due-date";
 import { FlipList } from "./flip-list";
+import { useIsTabStop } from "./row-focus";
 
 // Read once: pointer type doesn't change during a session
 const IS_TOUCH = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -123,6 +124,7 @@ function TaskRow({
   const canDelete = canDeleteTask(holders(task, lists, parent), currentUserId);
   const hoverActionCount = Number(canSetDate) + Number(canAddSubtask) + Number(canDelete);
   const dateRef = useRef<HTMLInputElement>(null);
+  const tabIndex = useIsTabStop(task.id) ? 0 : -1;
   const [entering] = useState(() => isJustCreated(task));
   const [completing, setCompleting] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -140,7 +142,6 @@ function TaskRow({
 
   const {
     containerRef,
-    contentRef,
     trayRef,
     isOpen: isSwipeOpen,
     close: closeSwipe,
@@ -195,6 +196,7 @@ function TaskRow({
   return (
     <div
       data-task-id={task.id}
+      data-leaving={completing || undefined}
       // Lifted while dragged, so it doesn't read as text floating over the rows below. Only the
       // dragged row's own: a parent's subtasks ride along inside its lift.
       className={cn(
@@ -220,12 +222,13 @@ function TaskRow({
         )}
       >
         {swipeEnabled && (
-          // inert while closed: the tray sits under the row, so it must not be
-          // focusable or announced until the row is swiped open.
+          // inert while closed: the tray waits past the row's end, so it must not be
+          // focusable or announced until the row is swiped open. Its fade softens the title's
+          // edge where the tray covers it.
           <div
             ref={trayRef}
             data-swipe-tray
-            className="invisible absolute top-0 right-0 grid h-full auto-cols-fr grid-flow-col bg-muted group-data-[swiping]/swipe:visible"
+            className="invisible absolute top-0 right-0 z-1 grid h-full translate-x-full auto-cols-fr grid-flow-col bg-muted group-data-[swiping]/swipe:visible before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-6 before:bg-linear-to-l before:from-card"
             inert={!isSwipeOpen}
           >
             <button
@@ -269,24 +272,34 @@ function TaskRow({
         )}
 
         <div
-          ref={contentRef}
           style={{ "--actions-w": hoverActionsWidth(hoverActionCount) } as CSSProperties}
           className={cn(
             "group/task relative flex items-start gap-2 rounded-lg px-2 py-2.5 transition-[background-color,opacity] duration-300 hover:bg-muted/50 has-[>button:focus-visible]:outline-2 has-[>button:focus-visible]:-outline-offset-2 touch:gap-2.5",
             completing && "opacity-60",
             isSubtask && "py-1.5",
-            // Opaque only while swiping, to cover the tray. rounded-none: the container owns the corners.
+            // Opaque only while swiping, so the row and its tray read as one surface.
+            // rounded-none: the container owns the corners.
             swipeEnabled && "rounded-none group-data-[swiping]/swipe:bg-card",
           )}
         >
           <Checkbox
             checked={looksDone}
             onCheckedChange={handleCheck}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || !onOpen) return;
+              e.preventDefault();
+              onOpen(task.id);
+            }}
             aria-label={task.title}
-            // Pinned to the first line of the title, which can wrap
+            tabIndex={tabIndex}
+            // Pinned to the first line of the title, which can wrap. On touch a task's target fills
+            // its 44px row; the list's clip stops it at the row's start, so it reaches right instead.
+            // Subtask rows sit closer than 44px, so theirs stays smaller.
             className={cn(
-              "mt-1 touch:mt-0.75 touch:size-4.5 touch:after:-inset-3",
-              isSubtask && "mt-0.5 touch:mt-px",
+              "mt-1 touch:mt-0.75 touch:size-4.5",
+              isSubtask
+                ? "mt-0.5 touch:mt-px touch:after:-inset-3"
+                : "touch:after:-inset-3.5 touch:after:-right-4.75",
               isDone && checkboxDoneClass,
               readyToTick && "border-primary",
             )}
@@ -296,6 +309,7 @@ function TaskRow({
               type="button"
               className={cn(titleColumnClass, "cursor-pointer focus-visible:outline-none")}
               onClick={() => onOpen(task.id)}
+              tabIndex={tabIndex}
             >
               <span className={titleClass}>{task.title}</span>
               {task.description && (
@@ -330,8 +344,11 @@ function TaskRow({
                 <button
                   type="button"
                   onClick={openPicker}
+                  tabIndex={tabIndex}
                   className={cn(
                     "relative cursor-pointer text-xs whitespace-nowrap after:absolute after:-inset-x-1.5 after:-inset-y-2.5 hover:underline",
+                    // A task's fills its 44px row, as its checkbox's does; subtask rows sit closer
+                    !isSubtask && "touch:after:-inset-x-2 touch:after:-inset-y-3.5",
                     isDone
                       ? "text-muted-foreground"
                       : due.overdue
@@ -367,6 +384,7 @@ function TaskRow({
                 onClick={openPicker}
                 aria-label="Set due date"
                 title="Set due date"
+                tabIndex={tabIndex}
               >
                 <Calendar size={14} />
               </Button>
@@ -379,6 +397,7 @@ function TaskRow({
                 onClick={() => setAddingSubtask(true)}
                 aria-label="Add subtask"
                 title="Add subtask"
+                tabIndex={tabIndex}
               >
                 <Plus size={14} />
               </Button>
@@ -392,6 +411,7 @@ function TaskRow({
                 onClick={() => onDelete(task)}
                 aria-label="Delete task"
                 title="Delete task"
+                tabIndex={tabIndex}
               >
                 <X size={14} />
               </Button>
@@ -429,6 +449,7 @@ function TaskRow({
                 data-flip-key="done-count"
                 onClick={() => onOpen?.(task.id)}
                 disabled={!onOpen}
+                tabIndex={tabIndex}
                 className="relative rounded-sm py-1 text-xs text-hint transition-colors after:absolute after:-inset-x-2 after:-inset-y-1.5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring touch:py-1.5"
               >
                 {doneSubtaskCount} done
