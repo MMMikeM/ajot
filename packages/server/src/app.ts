@@ -29,14 +29,18 @@ app.onError((err, c) => {
   // live on err.cause. 422 is non-retriable on the client (assertOk treats any 4xx that way),
   // so the mutation is dropped rather than retried forever.
   const cause = err.cause;
-  if (
+  const constraint =
     cause instanceof Error &&
     "code" in cause &&
     (cause as { code: string }).code === "SQLITE_CONSTRAINT" &&
-    cause.message.includes("FOREIGN KEY")
-  ) {
-    console.error("[db] FK constraint failed:", cause.message);
+    cause.message;
+  if (constraint && constraint.includes("FOREIGN KEY")) {
+    console.error("[db] FK constraint failed:", constraint);
     return c.json({ error: "Part of this no longer exists, so it wasn't saved." }, 422);
+  }
+  if (constraint && constraint.includes("CHECK")) {
+    console.error("[db] CHECK constraint failed:", constraint);
+    return c.json({ error: "That change isn't one the app can save." }, 422);
   }
   console.error(err);
   return c.json({ error: "Something went wrong on the server. Try again." }, 500);

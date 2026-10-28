@@ -22,7 +22,10 @@ const purgeIfDue = async () => {
   }
 };
 
-/** Deleted tasks and lists, and Undo records, past keeping: now, then daily while awake. */
+/**
+ * Deleted tasks and lists, Undo records, sessions, invites and notifications past keeping: now,
+ * then daily while awake.
+ */
 export const startPurging = () => {
   void purgeIfDue();
   setInterval(() => void purgeIfDue(), CHECK_MS).unref();

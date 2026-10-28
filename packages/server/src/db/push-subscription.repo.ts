@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { createInsertSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
@@ -18,8 +18,16 @@ const upsert = async (data: PushSubscriptionInsert) => {
     .onConflictDoUpdate({ target: pushSubscriptions.endpoint, set: data });
 };
 
-const remove = async (endpoint: string) => {
-  await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+// Only the user's own, or one from before subscriptions had a user, which gets everyone's pushes
+const remove = async (endpoint: string, userId: string) => {
+  await db
+    .delete(pushSubscriptions)
+    .where(
+      and(
+        eq(pushSubscriptions.endpoint, endpoint),
+        or(eq(pushSubscriptions.userId, userId), isNull(pushSubscriptions.userId)),
+      ),
+    );
 };
 
 const removeMany = async (endpoints: string[]) => {

@@ -4,14 +4,16 @@ import { drizzle } from "drizzle-orm/node-sqlite";
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { hoursFromNow } from "@newtab-todo/shared/iso";
 import { migrate } from "./migrator";
-import { KEEP_DELETED_DAYS, purgeExpired } from "./purge.repo";
+import { KEEP_DELETED_DAYS, KEEP_SENT_DAYS, purgeExpired } from "./purge.repo";
 import {
   categories,
   categoryCollaborators,
+  inviteTokens,
   notes,
   notificationQueue,
   removedCollaborators,
   removedContacts,
+  sessions,
   tasks,
   taskShares,
   users,
@@ -62,8 +64,6 @@ beforeAll(async () => {
       { id: "old-sub", userId: "alice", parentId: "old", title: "With it", deletedAt: longAgo },
       { id: "recent", userId: "alice", title: "Deleted lately", deletedAt: lately },
       { id: "sub-of-live", userId: "alice", parentId: "live", title: "Old", deletedAt: longAgo },
-      { id: "has-live-sub", userId: "alice", title: "Deleted long ago", deletedAt: longAgo },
-      { id: "live-sub", userId: "bob", parentId: "has-live-sub", title: "Restored on its own" },
       { id: "has-recent-sub", userId: "alice", title: "Deleted long ago", deletedAt: longAgo },
       {
         id: "recent-sub",
@@ -105,6 +105,27 @@ beforeAll(async () => {
     .values([
       { ...reminder, id: "remind-old", taskId: "old" },
       { ...reminder, id: "remind-live", taskId: "live" },
+      { ...reminder, id: "sent-long-ago", sentAt: hoursFromNow(-(KEEP_SENT_DAYS + 1) * 24) },
+      { ...reminder, id: "sent-lately", sentAt: hoursFromNow(-(KEEP_SENT_DAYS - 1) * 24) },
+      { ...reminder, id: "never-sent", scheduledFor: longAgo },
+      { ...reminder, id: "due-lately", scheduledFor: lately },
+      { ...reminder, id: "due-later", scheduledFor: hoursFromNow(24) },
+    ])
+    .run();
+  db.insert(sessions)
+    .values([
+      { id: "session-expired", userId: "alice", expiresAt: hoursFromNow(-1) },
+      { id: "session-live", userId: "alice", expiresAt: hoursFromNow(1) },
+    ])
+    .run();
+  const invite = { createdByUserId: "alice", expiresAt: hoursFromNow(24) };
+  db.insert(inviteTokens)
+    .values([
+      { ...invite, id: "used-long-ago", usedAt: longAgo, usedByUserId: "bob" },
+      { ...invite, id: "used-lately", usedAt: lately, usedByUserId: "bob" },
+      { ...invite, id: "expired-long-ago", expiresAt: longAgo },
+      { ...invite, id: "expired-lately", expiresAt: lately },
+      { ...invite, id: "unused" },
     ])
     .run();
   const pastTheHour = hoursFromNow(-2);
@@ -132,7 +153,8 @@ describe("purging deleted tasks", () => {
     expect(ids("tasks")).not.toContain("old-sub");
     expect(ids("notes")).toEqual(["note-live"]);
     expect(ids("task_shares")).toEqual(["share-filed"]);
-    expect(ids("notification_queue")).toEqual(["remind-live"]);
+    expect(ids("notification_queue")).not.toContain("remind-old");
+    expect(ids("notification_queue")).toContain("remind-live");
   });
 
   test("takes a subtask deleted long ago from under a live parent", () => {
@@ -146,10 +168,8 @@ describe("purging deleted tasks", () => {
     );
   });
 
-  test("keeps a parent whose subtask is live or deleted lately, which it would cascade to", () => {
-    expect(ids("tasks")).toEqual(
-      expect.arrayContaining(["has-live-sub", "live-sub", "has-recent-sub", "recent-sub"]),
-    );
+  test("keeps a parent whose subtask was deleted lately, which it would cascade to", () => {
+    expect(ids("tasks")).toEqual(expect.arrayContaining(["has-recent-sub", "recent-sub"]));
   });
 });
 
@@ -177,6 +197,28 @@ describe("purging Undo records", () => {
     expect(ids("removed_contacts")).toEqual(["rc-new"]);
     expect(ids("removed_collaborators")).toEqual(["rx-new"]);
     expect(purged.undoRecords).toEqual({ contacts: 1, collaborators: 1 });
+  });
+});
+
+describe("purging what's expired", () => {
+  test("takes sessions past their expiry and keeps the rest", () => {
+    expect(ids("sessions")).toEqual(["session-live"]);
+    expect(purged.sessions).toBe(1);
+  });
+
+  test("takes invites used or expired long ago, and keeps the rest", () => {
+    expect(ids("invite_tokens")).toEqual(["expired-lately", "unused", "used-lately"]);
+    expect(purged.invites).toBe(2);
+  });
+
+  test("takes notifications sent long ago or never sent though due long ago", () => {
+    expect(ids("notification_queue")).toEqual([
+      "due-lately",
+      "due-later",
+      "remind-live",
+      "sent-lately",
+    ]);
+    expect(purged.notifications).toBe(2);
   });
 });
 

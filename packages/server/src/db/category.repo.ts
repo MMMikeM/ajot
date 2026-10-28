@@ -7,6 +7,7 @@ import { categories, listMembers, tasks, taskShares, type CategoryDeletion } fro
 import { BadRequestError, ConflictError, NotFoundError, StaleUpdateError } from "./errors";
 import { now } from "@newtab-todo/shared/iso";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
+import { keptSortOrder } from "./sort-key";
 import { CATEGORY_TASK_ACTIONS, type CategoryTaskAction } from "@newtab-todo/shared/constants";
 
 export type CategoryInsert = typeof categories.$inferInsert;
@@ -138,7 +139,7 @@ const canUse = async (id: string, userId: string) => {
 const insert = async (data: CategoryInsert) => {
   const [row] = await db
     .insert(categories)
-    .values(data)
+    .values({ ...data, sortOrder: keptSortOrder(data.sortOrder) })
     .onConflictDoUpdate({
       target: categories.id,
       set: { updatedAt: sql`${categories.updatedAt}` },
@@ -152,7 +153,7 @@ const insert = async (data: CategoryInsert) => {
 const update = async (id: string, updatedAt: string, fields: Partial<CategoryInsert>) => {
   const [row] = await db
     .update(categories)
-    .set({ ...fields, updatedAt })
+    .set({ ...fields, sortOrder: keptSortOrder(fields.sortOrder), updatedAt })
     .where(and(eq(categories.id, id), lt(categories.updatedAt, updatedAt)))
     .returning(sentColumns);
   if (!row) throw new StaleUpdateError("category", id);
