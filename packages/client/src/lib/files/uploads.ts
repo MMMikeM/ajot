@@ -1,3 +1,5 @@
+import { hc } from "hono/client";
+import type { AppType } from "@newtab-todo/server/app";
 import { servedType } from "@newtab-todo/shared/attachments";
 import { changeUpload, readBlobs, readUploads, type Upload } from "~/lib/files/store";
 import {
@@ -34,7 +36,9 @@ const defaults = (): DrainDeps => ({
   now: Date.now,
 });
 
-const errorOf = async (res: Response) => {
+type Reply = { ok: boolean; status: number; json(): Promise<unknown> };
+
+const errorOf = async (res: Reply) => {
   try {
     const body = (await res.json()) as { error?: unknown };
     return typeof body.error === "string" ? body.error : undefined;
@@ -43,7 +47,7 @@ const errorOf = async (res: Response) => {
   }
 };
 
-const answerOf = async (request: Promise<Response>): Promise<Answer & { res?: Response }> => {
+const answerOf = async <R extends Reply>(request: Promise<R>): Promise<Answer & { res?: R }> => {
   try {
     const res = await request;
     return res.ok ? { status: res.status, res } : { status: res.status, error: await errorOf(res) };
@@ -52,20 +56,10 @@ const answerOf = async (request: Promise<Response>): Promise<Answer & { res?: Re
   }
 };
 
-const callApi = (
-  { fetch }: DrainDeps,
-  session: FilesSession,
-  method: string,
-  path: string,
-  body: unknown,
-) =>
-  answerOf(
-    fetch(`${session.serverUrl}/api/attachments${path}`, {
-      method,
-      headers: { Authorization: `Bearer ${session.token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  );
+// The server's own route types, so a path or body it doesn't take fails to compile. Not the page's
+// client in lib/api.ts, which reads the page's session: this runs wherever the session is handed in.
+const attachmentsApi = ({ fetch }: DrainDeps, { serverUrl, token }: FilesSession) =>
+  hc<AppType>(serverUrl, { fetch, headers: { Authorization: `Bearer ${token}` } }).api.attachments;
 
 /** Applies the answer to the entry as it is now; undefined when the entry is gone. */
 const settle = async (deps: DrainDeps, id: string, request: Request, answer: Answer) => {
@@ -101,18 +95,15 @@ const sendBytes = async (deps: DrainDeps, session: FilesSession, upload: Upload)
     }));
     return undefined;
   }
-  const urls = await callApi(deps, session, "POST", "/upload-url", {
-    id,
-    ...(hasThumb && { thumbSize: thumb!.blob.size }),
-  });
+  const api = attachmentsApi(deps, session);
+  const urls = await answerOf(
+    api["upload-url"].$post({ json: { id, ...(hasThumb && { thumbSize: thumb!.blob.size }) } }),
+  );
   let next = await settle(deps, id, "upload-url", urls);
   if (!goesOn(next, deps)) return next;
   // 409: already uploaded, and /complete answers again
-  if (urls.res) {
-    const { file: fileUrl, thumb: thumbUrl } = (await urls.res.json()) as {
-      file: string;
-      thumb?: string;
-    };
+  if (urls.res?.status === 200) {
+    const { file: fileUrl, thumb: thumbUrl } = await urls.res.json();
     if (thumbUrl && thumb) {
       next = await settle(deps, id, "put", await put(deps, thumbUrl, thumb.blob, "image/jpeg"));
       if (!goesOn(next, deps)) return next;
@@ -120,14 +111,16 @@ const sendBytes = async (deps: DrainDeps, session: FilesSession, upload: Upload)
     next = await settle(deps, id, "put", await put(deps, fileUrl, file.blob, servedType(mimeType)));
     if (!goesOn(next, deps)) return next;
   }
-  const completed = await callApi(deps, session, "POST", "/complete", { id });
+  const completed = await answerOf(api.complete.$post({ json: { id } }));
   next = await settle(deps, id, "complete", completed);
-  if (next === "uploaded" && completed.res) deps.onUploaded?.(await completed.res.json());
+  if (next === "uploaded" && completed.res?.status === 200)
+    deps.onUploaded?.(await completed.res.json());
   return next;
 };
 
 const run = async (deps: DrainDeps, session: FilesSession, upload: Upload, step: Step) => {
   const { id } = upload.row;
+  const api = attachmentsApi(deps, session);
   switch (step) {
     case "drop":
       await changeUpload(id, (current) =>
@@ -135,11 +128,11 @@ const run = async (deps: DrainDeps, session: FilesSession, upload: Upload, step:
       );
       return undefined;
     case "insert":
-      return settle(deps, id, "insert", await callApi(deps, session, "POST", "", upload.row));
+      return settle(deps, id, "insert", await answerOf(api.$post({ json: upload.row })));
     case "delete":
-      return settle(deps, id, "delete", await callApi(deps, session, "DELETE", "", { id }));
+      return settle(deps, id, "delete", await answerOf(api.$delete({ json: { id } })));
     case "restore":
-      return settle(deps, id, "restore", await callApi(deps, session, "PUT", "", { id }));
+      return settle(deps, id, "restore", await answerOf(api.$put({ json: { id } })));
     case "upload":
       return sendBytes(deps, session, upload);
   }

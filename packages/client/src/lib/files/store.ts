@@ -1,3 +1,5 @@
+import type { ISODateString } from "@newtab-todo/shared/iso";
+
 // Outside lib/db, which the extension backgrounds and the PWA's worker can't import, so they can
 // send uploads too. A database of its own, because the snapshot's drops its lists on a version bump.
 const DB_NAME = "ajot-files";
@@ -24,8 +26,8 @@ export type NewAttachment = {
   size: number;
   thumbhash: null;
   hasThumb: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
 };
 
 export type Upload = {

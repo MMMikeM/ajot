@@ -1,4 +1,5 @@
 import "fake-indexeddb/auto";
+import { now as stamp } from "@newtab-todo/shared/iso";
 import { beforeEach, describe, expect, test } from "vite-plus/test";
 import { addUpload, readBlob, readUploads, type Upload } from "~/lib/files/store";
 import { deleteUpload, drainUploads, undoDeleteUpload, type DrainDeps } from "~/lib/files/uploads";
@@ -14,8 +15,8 @@ const entry = (id: string, fields: Partial<Upload> = {}): Upload => ({
     size: 3,
     thumbhash: null,
     hasThumb: true,
-    createdAt: "2026-10-29T00:00:00.000Z",
-    updatedAt: "2026-10-29T00:00:00.000Z",
+    createdAt: stamp(),
+    updatedAt: stamp(),
   },
   uploaderId: "u1",
   posted: false,
