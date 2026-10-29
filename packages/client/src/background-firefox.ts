@@ -13,7 +13,7 @@ import { getStoredSession, notifyTabs } from "~/lib/ext";
 import { setupContextMenu } from "~/lib/context-menu";
 import { prewarmPeriodically, prewarmSnapshot } from "~/lib/sync/prewarm-extension";
 
-// Changes arrive in bursts (a drag, Clear done); save the lists once after the last of them
+// Changes arrive in bursts (a drag); save the lists once after the last of them
 const PREWARM_DELAY_MS = 1000;
 let prewarmTimer: ReturnType<typeof setTimeout> | undefined;
 const schedulePrewarm = () => {
