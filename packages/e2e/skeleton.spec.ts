@@ -1,4 +1,5 @@
-import { test, expect, type Browser, type Locator } from "@playwright/test";
+import { type Browser } from "@playwright/test";
+import { test, expect, type Locator } from "./fixtures";
 import { mockApi } from "./helpers/mock-api";
 
 // The skeleton only exists in the prerendered index.html, so this runs against a production

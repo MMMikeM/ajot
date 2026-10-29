@@ -37,7 +37,7 @@ Playwright test suite. Two projects: `desktop` (Chrome) runs every spec, and `mo
 
 ## Fixtures (`fixtures.ts`)
 
-Import `test` and `expect` from here instead of `@playwright/test` to get the custom fixtures:
+Specs import `test` and `expect` from here, never `@playwright/test` (lint refuses it): every page in its contexts fails the test on a Content Security Policy violation (`helpers/csp.ts`), which the report-only policy would only log. A context a spec opens itself is watched only if it calls `watchCsp`. The fixtures:
 
 - `appPage` — navigated to `/` and ready (unauthenticated)
 - `user1Auth` / `user2Auth` — this worker's own Alice and Bob (`e2e_alice_<worker>`), contacts of each other

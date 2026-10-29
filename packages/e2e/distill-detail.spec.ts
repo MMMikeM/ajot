@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { openListPicker, startsWith, tapAddLine } from "./helpers/app";
 import { MOCK_ME, MOCK_SARAH, mockApi, noteOn, shareWith } from "./helpers/mock-api";
 

@@ -30,6 +30,10 @@
 
 `packages/client/build-extension.ts` handles the extension build (`pnpm build:ext`). Inline scripts must be extracted.
 
+### The PWA has a CSP too
+
+`shared/src/csp.ts` is sent by the server and by `vp preview`, so the e2e suites run under it, and a page from `e2e/fixtures.ts` fails its test on any violation. No inline scripts or `on*` attributes, no `eval` or `new Function`, and nothing from another origin until the policy names it.
+
 ## Stack
 
 Hono (server) + Vite (client) + React 19 + TanStack DB/Router/Query + Drizzle v1 (Turso/libSQL). Dual target: browser extension (MV2) + PWA.

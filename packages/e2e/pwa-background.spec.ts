@@ -2,6 +2,7 @@ import type { BrowserContext, Page, Worker } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { apiRequest } from "./helpers/api";
 import { signIn } from "./helpers/auth";
+import { watchCsp } from "./helpers/csp";
 import { deliverPush, dispatchPeriodicSync, savedTitles } from "./helpers/background";
 import { PREVIEW_PORT } from "./helpers/stack";
 
@@ -11,6 +12,7 @@ const ORIGIN = `http://localhost:${PREVIEW_PORT}`;
 
 let context: BrowserContext;
 let worker: Worker;
+let expectNoViolations: () => void;
 
 const addTask = (token: string, title: string) => {
   const now = new Date().toISOString();
@@ -20,6 +22,7 @@ const addTask = (token: string, title: string) => {
 
 test.beforeEach(async ({ browser, user1Auth }) => {
   context = await browser.newContext({ baseURL: ORIGIN });
+  expectNoViolations = await watchCsp(context);
   // The "changes" push shows a notification, which needs the permission
   await context.grantPermissions(["notifications"], { origin: ORIGIN });
   const page = await context.newPage();
@@ -33,7 +36,10 @@ test.beforeEach(async ({ browser, user1Auth }) => {
   await page.close();
 });
 
-test.afterEach(() => context.close());
+test.afterEach(async () => {
+  expectNoViolations();
+  await context.close();
+});
 
 const openInFlightMode = async (path = "/"): Promise<Page> => {
   await context.setOffline(true);

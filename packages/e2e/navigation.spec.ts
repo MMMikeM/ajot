@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { mockApi, openList } from "./helpers/mock-api";
 
 test("an empty Inbox stays open and listed", async ({ page }) => {

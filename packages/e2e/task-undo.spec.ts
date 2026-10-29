@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { mockApi } from "./helpers/mock-api";
 
 // Against mocked /api: what Undo of a delete sends

@@ -1,4 +1,4 @@
-import { test, expect, type Locator, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "./fixtures";
 import { mockApi } from "./helpers/mock-api";
 
 // Finishing a list: the cleared state, its settle-in, and how done checkboxes recede.

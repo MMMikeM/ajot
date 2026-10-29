@@ -1,4 +1,5 @@
-import { test, expect, type Page, type Request } from "@playwright/test";
+import { type Request } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { startsWith, tapAddLine } from "./helpers/app";
 import { mockApi } from "./helpers/mock-api";
 
