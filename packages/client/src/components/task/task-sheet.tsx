@@ -26,13 +26,21 @@ export function TaskSheet({ taskId, page }: { taskId: string; page: "/" | "/sear
     else void navigate({ to: page, replace: true });
   };
 
+  // In place of the open sheet, so closing the parent lands on the page, not back on its subtask
+  const openTask = (id: string) =>
+    void navigate({
+      to: page === "/" ? "/task/$taskId" : "/search/task/$taskId",
+      params: { taskId: id },
+      replace: true,
+    });
+
   useEffect(() => {
     if (missing) void navigate({ to: page, replace: true });
   }, [missing, navigate, page]);
 
   return (
     <Suspense>
-      <TaskDetail taskId={taskId} open onClose={close} />
+      <TaskDetail taskId={taskId} open onClose={close} onOpenTask={openTask} />
     </Suspense>
   );
 }
