@@ -126,5 +126,15 @@ app.doc("/api/openapi.json", {
   info: { title: "NewTab Todo API", version: "1.0.0" },
 });
 
+// Nothing else shows a request for a route the API doesn't have: a client with a wrong path, or an
+// older one calling a route since removed
+app.all("/api/*", (c) => {
+  console.warn(`[404] no route for ${c.req.method} ${c.req.path}`);
+  return c.json(
+    { error: "The server doesn't know that request. Reload to get the latest app." },
+    404,
+  );
+});
+
 export type AppType = typeof api;
 export default app;

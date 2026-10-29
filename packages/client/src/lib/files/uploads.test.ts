@@ -1,4 +1,5 @@
 import "fake-indexeddb/auto";
+import { now as stamp } from "@newtab-todo/shared/iso";
 import { beforeEach, describe, expect, test } from "vite-plus/test";
 import { addUpload, readBlob, readUploads, type Upload } from "~/lib/files/store";
 import { deleteUpload, drainUploads, undoDeleteUpload, type DrainDeps } from "~/lib/files/uploads";
@@ -14,8 +15,8 @@ const entry = (id: string, fields: Partial<Upload> = {}): Upload => ({
     size: 3,
     thumbhash: null,
     hasThumb: true,
-    createdAt: "2026-10-29T00:00:00.000Z",
-    updatedAt: "2026-10-29T00:00:00.000Z",
+    createdAt: stamp(),
+    updatedAt: stamp(),
   },
   uploaderId: "u1",
   posted: false,
@@ -50,7 +51,7 @@ const deps = (fetch: DrainDeps["fetch"]): DrainDeps => ({
 });
 
 const happyPath = (seen: Record<string, unknown> = {}): Record<string, Handler> => ({
-  "POST /api/attachments/": (body) => Response.json(body),
+  "POST /api/attachments": (body) => Response.json(body),
   "POST /api/attachments/upload-url": (body) => {
     seen.uploadUrl = body;
     return Response.json({ file: "https://bucket.test/file", thumb: "https://bucket.test/thumb" });
@@ -97,7 +98,7 @@ describe("drainUploads", () => {
     ).toBeUndefined();
     expect(uploaded).toEqual([{ id: "a1", uploadedAt: "now" }]);
     expect(sent).toEqual([
-      "POST /api/attachments/",
+      "POST /api/attachments",
       "POST /api/attachments/upload-url",
       "PUT https://bucket.test/thumb",
       "PUT https://bucket.test/file",
@@ -134,10 +135,10 @@ describe("drainUploads", () => {
     await addUpload(entry("a1"), { file: new Blob(["abc"]), thumb: new Blob(["tt"]) });
     const { sent, fetch } = server({
       ...happyPath(),
-      "POST /api/attachments/": () => Response.json({ error: "No task" }, { status: 404 }),
+      "POST /api/attachments": () => Response.json({ error: "No task" }, { status: 404 }),
     });
     const retryAt = await drainUploads(SESSION, deps(fetch));
-    expect(sent).toEqual(["POST /api/attachments/"]);
+    expect(sent).toEqual(["POST /api/attachments"]);
     expect(retryAt).toBeGreaterThan(now);
     expect((await readUploads())[0]).toMatchObject({ posted: false, taskMissingSince: now });
   });
@@ -146,7 +147,7 @@ describe("drainUploads", () => {
     await addUpload(entry("a1"), { file: new Blob(["abc"]), thumb: new Blob(["tt"]) });
     const { fetch } = server({
       ...happyPath(),
-      "POST /api/attachments/": () =>
+      "POST /api/attachments": () =>
         Response.json({ error: "That's over your 2048 MB of files." }, { status: 413 }),
     });
     expect(await drainUploads(SESSION, deps(fetch))).toBeUndefined();
@@ -188,16 +189,16 @@ describe("drainUploads", () => {
     await deleteUpload("a1", now);
     const { sent, fetch } = server({
       ...happyPath(),
-      "DELETE /api/attachments/": () => Response.json({}),
-      "PUT /api/attachments/": () => Response.json({}),
+      "DELETE /api/attachments": () => Response.json({}),
+      "PUT /api/attachments": () => Response.json({}),
     });
     await drainUploads(SESSION, deps(fetch));
-    expect(sent).toEqual(["DELETE /api/attachments/"]);
+    expect(sent).toEqual(["DELETE /api/attachments"]);
     await undoDeleteUpload("a1");
     await drainUploads(SESSION, deps(fetch));
     expect(sent).toEqual([
-      "DELETE /api/attachments/",
-      "PUT /api/attachments/",
+      "DELETE /api/attachments",
+      "PUT /api/attachments",
       "POST /api/attachments/upload-url",
       "PUT https://bucket.test/thumb",
       "PUT https://bucket.test/file",
