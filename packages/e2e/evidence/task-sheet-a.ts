@@ -3,7 +3,7 @@
 //   node_modules/.bin/tsx evidence/task-sheet-a.ts --url http://localhost:5321 --out .evidence/task-sheet-a/before
 import { mkdirSync } from "node:fs";
 import { chromium, devices, type Browser, type Page } from "@playwright/test";
-import { mockApi } from "../helpers/mock-api";
+import { MOCK_SARAH, mockApi, noteOn, shareWith } from "../helpers/mock-api";
 import { startEventStream } from "../helpers/event-stream";
 
 const arg = (name: string) => {
@@ -42,17 +42,13 @@ const scene = async (
   // The flights task, filed in Work, shared with Sarah, with its two subtasks and a note
   const flights = data.tasks[0]!;
   flights.categoryId = "c-work";
-  const sarahShare = data.tasks[3]!.shares[0] as { taskId: string; id: string };
-  flights.shares = [{ ...sarahShare, id: "s-flights", taskId: flights.id }];
-  data.notes.push({
-    id: "n-flights",
-    userId: flights.userId,
-    taskId: flights.id,
-    title: null,
-    content: "Window seat if possible, and check the luggage allowance on the cheap fare",
-    createdAt: WRITTEN,
-    updatedAt: WRITTEN,
-  });
+  flights.shares = [shareWith(flights.id, MOCK_SARAH)];
+  data.notes.push(
+    noteOn(flights, "Window seat if possible, and check the luggage allowance on the cheap fare", {
+      createdAt: WRITTEN,
+      updatedAt: WRITTEN,
+    }),
+  );
 
   await page.goto(`${BASE_URL}/task/${taskId}`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector('[data-slot="drawer-content"]', { timeout: 15000 });

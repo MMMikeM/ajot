@@ -1,5 +1,4 @@
-import { useRef, useState, type RefObject } from "react";
-import { flushSync } from "react-dom";
+import { useRef, useState } from "react";
 import { CalendarDays, Trash2 } from "lucide-react";
 import type { Task } from "~/lib/types";
 import { useNotes, updateTask } from "~/lib/db/hooks";
@@ -24,7 +23,7 @@ import { holders, ownerNameOf } from "~/lib/task-holders";
 import { isReadyToTick } from "~/lib/ready-to-tick";
 import { useTasks } from "~/lib/db/hooks";
 import { useTaskActions } from "~/components/task/use-actions";
-import { AddRow, DetailRow } from "~/components/task/detail-row";
+import { AddRow, DetailRow, lineButton } from "~/components/task/detail-row";
 import { Notes, Subtasks } from "~/components/task/detail-items";
 import {
   AssigneeField,
@@ -112,8 +111,6 @@ function TaskDetail({
   );
 }
 
-type Piece = "subtask" | "note" | "share" | "assignee";
-
 const TaskDetailContent = ({
   task,
   parent,
@@ -131,19 +128,9 @@ const TaskDetailContent = ({
   const { handleToggle, handleDelete } = useTaskActions();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
-  const [revealed, setRevealed] = useState<ReadonlySet<Piece>>(new Set());
-  // Rows shown when the sheet opened stay until it closes: unassigning would otherwise remove
-  // the row under the pointer, as hiding an added field on blur did
-  const [openedAssigned] = useState(() => !!task.assigneeId);
   const isDone = task.status === "done";
   const isTopLevel = !task.parentId;
   const dateRef = useRef<HTMLInputElement>(null);
-  const subtaskRef = useRef<HTMLInputElement>(null);
-  const noteRef = useRef<HTMLInputElement>(null);
-  const focusOnReveal: Partial<Record<Piece, RefObject<HTMLElement | null>>> = {
-    subtask: subtaskRef,
-    note: noteRef,
-  };
 
   // Sync local state when task changes externally (but not mid-edit)
   if (title !== task.title && document.activeElement?.getAttribute("data-slot") !== TITLE_SLOT) {
@@ -153,17 +140,11 @@ const TaskDetailContent = ({
   const { data: allNotes = [] } = useNotes();
   const notes = allNotes.filter((n) => n.taskId === task.id);
   const filing = useListFiling(task);
-  const sharing = useSharing(task);
   const lists = useCategoriesById();
+  const sharing = useSharing(task, lists, parent);
   const ownerName = ownerNameOf(task, lists);
   const held = holders(task, lists, parent);
   const canEdit = canEditTask(held, userId);
-
-  // Synchronous, so the field is focused inside the tap and a phone raises its keyboard
-  const reveal = (piece: Piece) => {
-    flushSync(() => setRevealed((current) => new Set(current).add(piece)));
-    focusOnReveal[piece]?.current?.focus();
-  };
 
   return (
     <div className="relative mx-auto flex w-full max-w-2xl flex-col gap-3 px-6 pt-1 pb-[max(1rem,env(safe-area-inset-bottom))] touch:gap-2 touch:px-5">
@@ -302,43 +283,19 @@ const TaskDetailContent = ({
             )
           )}
           {isTopLevel ? (
-            <SharingField
-              task={task}
-              sharing={sharing}
-              adding={revealed.has("share")}
-              onAdd={() => reveal("share")}
-            />
+            <SharingField task={task} sharing={sharing} />
           ) : (
-            parent && <SubtaskSharing parent={parent} userId={userId} />
+            parent && <SubtaskSharing parent={parent} sharing={sharing} lists={lists} />
           )}
-          <AssigneeField
-            task={task}
-            sharing={sharing}
-            choosing={revealed.has("assignee") || openedAssigned}
-            onChoose={() => reveal("assignee")}
-          />
+          <AssigneeField task={task} sharing={sharing} />
         </div>
       </div>
 
       {isTopLevel && (
-        <Subtasks
-          task={task}
-          subtasks={subtasks}
-          canAdd={canEdit}
-          adding={revealed.has("subtask")}
-          onAdd={() => reveal("subtask")}
-          inputRef={subtaskRef}
-          onToggle={handleToggle}
-        />
+        <Subtasks task={task} subtasks={subtasks} canAdd={canEdit} onToggle={handleToggle} />
       )}
 
-      <Notes
-        taskId={task.id}
-        notes={notes}
-        adding={revealed.has("note")}
-        onAdd={() => reveal("note")}
-        inputRef={noteRef}
-      />
+      <Notes taskId={task.id} notes={notes} />
     </div>
   );
 };
@@ -355,27 +312,25 @@ const DueDateRow = ({
   onClear: () => void;
 }) => {
   const label = formatDueDateTime(dueDate);
-  if (!canEdit)
-    return (
-      <DetailRow icon={<CalendarDays />}>
-        <p className="text-sm leading-9 text-date touch:text-base touch:leading-11">{label}</p>
-      </DetailRow>
-    );
   return (
     <DetailRow icon={<CalendarDays />}>
-      <div className="flex items-center">
-        <button
-          type="button"
-          onClick={onPick}
-          aria-label={`Due date: ${label}`}
-          className="flex h-9 flex-1 cursor-pointer items-center rounded-md text-left text-sm text-date outline-none focus-visible:ring-3 focus-visible:ring-ring/50 touch:h-11 touch:text-base"
-        >
-          {label}
-        </button>
-        <Button variant="subtle" size="sm" bleed="end" onClick={onClear}>
-          Clear
-        </Button>
-      </div>
+      {canEdit ? (
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={onPick}
+            aria-label={`Due date: ${label}`}
+            className={cn(lineButton, "h-9 flex-1 text-sm text-date touch:h-11 touch:text-base")}
+          >
+            {label}
+          </button>
+          <Button variant="subtle" size="sm" bleed="end" onClick={onClear}>
+            Clear
+          </Button>
+        </div>
+      ) : (
+        <p className="text-sm leading-9 text-date touch:text-base touch:leading-11">{label}</p>
+      )}
     </DetailRow>
   );
 };

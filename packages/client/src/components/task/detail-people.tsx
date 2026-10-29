@@ -16,12 +16,12 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { ColorDot } from "~/components/ui/color-dot";
-import { cn } from "~/lib/utils";
+import { cn, listNames } from "~/lib/utils";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { TogglePill } from "~/components/ui/toggle-pill";
-import { AddRow, DetailRow } from "~/components/task/detail-row";
+import { AddRow, DetailRow, HintRow, lineButton, quietText } from "~/components/task/detail-row";
 import { InviteButton } from "~/components/InviteButton";
 import { INBOX_COLOR } from "~/lib/constants";
 
@@ -123,10 +123,7 @@ export const ParentCrumb = ({
     <button
       type="button"
       onClick={() => onOpen(parent.id)}
-      className={cn(
-        crumb,
-        "cursor-pointer rounded-md text-hint outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 touch:active:text-foreground",
-      )}
+      className={cn(lineButton, quietText, crumb)}
     >
       <CornerLeftUp aria-hidden className="size-4 shrink-0" />
       <span className="truncate">
@@ -136,31 +133,34 @@ export const ParentCrumb = ({
   );
 };
 
-/** Everyone who can see the task besides its owner: its shares, then its list's people. */
-const peopleOnTask = (task: Task, lists: CategoriesById): Person[] => {
-  const category = task.categoryId ? lists.get(task.categoryId) : undefined;
+/**
+ * Everyone who can see the task besides its owner: its shares, then its list's people. A
+ * subtask's are its parent's.
+ */
+const peopleOnTask = (task: Task, lists: CategoriesById, parent?: Task): Person[] => {
+  const root = parent ?? task;
+  const category = root.categoryId ? lists.get(root.categoryId) : undefined;
   const names = new Map<string, string | undefined>(
-    task.shares.map((s) => [s.sharedWithUserId, s.sharedWithUser.name]),
+    root.shares.map((s) => [s.sharedWithUserId, s.sharedWithUser.name]),
   );
   if (category) {
     names.set(category.userId, category.user?.name);
     for (const c of category.collaborators ?? []) names.set(c.userId, c.user.name);
   }
-  return grants(holders(task, lists)).flatMap(({ userId: id }) => {
+  return grants(holders(task, lists, parent)).flatMap(({ userId: id }) => {
     const name = names.get(id);
-    return id !== task.userId && name ? [{ id, name }] : [];
+    return id !== root.userId && name ? [{ id, name }] : [];
   });
 };
 
-export const useSharing = (task: Task) => {
+export const useSharing = (task: Task, lists: CategoriesById, parent?: Task) => {
   const userId = useOptimisticUserId();
-  const lists = useCategoriesById();
   const { data: contacts = [] } = useContacts();
   const category = task.categoryId ? lists.get(task.categoryId) : undefined;
   const isOwner = task.userId === userId;
   const sharedList = category?.collaborators?.length ? category : undefined;
   const sharedWithIds = new Set(task.shares.map((s) => s.sharedWithUserId));
-  const others = peopleOnTask(task, lists);
+  const others = peopleOnTask(task, lists, parent);
   return {
     userId,
     isOwner,
@@ -173,32 +173,21 @@ export const useSharing = (task: Task) => {
 
 type Sharing = ReturnType<typeof useSharing>;
 
-export const SharingField = ({
-  task,
-  sharing,
-  adding,
-  onAdd,
-}: {
-  task: Task;
-  sharing: Sharing;
-  adding: boolean;
-  onAdd: () => void;
-}) => {
+export const SharingField = ({ task, sharing }: { task: Task; sharing: Sharing }) => {
+  const [adding, setAdding] = useState(false);
   const { isOwner, sharedList, userId } = sharing;
   // Someone it was shared with sees who else has it, never themselves
   const shares = task.shares.filter((s) => s.sharedWithUserId !== userId);
 
   if (sharedList)
     return (
-      <DetailRow icon={<Users />} label="Sharing">
-        <p className="py-2 text-sm text-hint touch:py-3 touch:text-base">
-          Everyone in <span dir="auto">{sharedList.name}</span> can see this
-        </p>
-      </DetailRow>
+      <HintRow icon={<Users />} label="Sharing">
+        Everyone in <span dir="auto">{sharedList.name}</span> can see this
+      </HintRow>
     );
 
   const offer = isOwner && !adding && (
-    <AddRow icon={<UserPlus />} onClick={onAdd}>
+    <AddRow icon={<UserPlus />} onClick={() => setAdding(true)}>
       {shares.length > 0 ? "Share with someone else" : "Share"}
     </AddRow>
   );
@@ -232,29 +221,31 @@ export const SharingField = ({
   );
 };
 
-const listFormat = new Intl.ListFormat(undefined, { type: "conjunction" });
-
 /** Who else a subtask reaches: everyone who can see the task it sits under, besides the viewer. */
-export const SubtaskSharing = ({ parent, userId }: { parent: Task; userId: string }) => {
-  const lists = useCategoriesById();
+export const SubtaskSharing = ({
+  parent,
+  sharing,
+  lists,
+}: {
+  parent: Task;
+  sharing: Sharing;
+  lists: CategoriesById;
+}) => {
   const owner = { id: parent.userId, name: ownerNameOf(parent, lists) ?? "" };
-  const names = [owner, ...peopleOnTask(parent, lists)]
-    .filter((p) => p.id !== userId)
+  const names = [owner, ...sharing.others]
+    .filter((p) => p.id !== sharing.userId)
     .map((p) => p.name.trim())
     .filter(Boolean);
   if (names.length === 0) return null;
 
-  const parts = listFormat.formatToParts(names);
   return (
-    <DetailRow icon={<Users />}>
-      <p className="py-2 text-sm text-hint touch:py-3 touch:text-base">
-        With{" "}
-        {parts.map((part, i) =>
-          part.type === "element" ? <bdi key={i}>{part.value}</bdi> : part.value,
-        )}
-        , like the task it’s in
-      </p>
-    </DetailRow>
+    <HintRow icon={<Users />}>
+      With{" "}
+      {listNames
+        .formatToParts(names)
+        .map((part, i) => (part.type === "element" ? <bdi key={i}>{part.value}</bdi> : part.value))}
+      , like the task it’s in
+    </HintRow>
   );
 };
 
@@ -313,23 +304,16 @@ const AddShare = ({ taskId, sharing }: { taskId: string; sharing: Sharing }) => 
   );
 };
 
-export const AssigneeField = ({
-  task,
-  sharing,
-  choosing,
-  onChoose,
-}: {
-  task: Task;
-  sharing: Sharing;
-  choosing: boolean;
-  onChoose: () => void;
-}) => {
+export const AssigneeField = ({ task, sharing }: { task: Task; sharing: Sharing }) => {
+  // Shown while the sheet is open once there's been an assignee: unassigning would otherwise
+  // remove the row under the pointer, as hiding an added field on blur did
+  const [choosing, setChoosing] = useState(() => !!task.assigneeId);
   if (task.parentId) return null;
 
   if (!task.assigneeId && !choosing) {
     const canAssign = sharing.isOwner && sharing.others.length > 0;
     return canAssign ? (
-      <AddRow icon={<UserRound />} onClick={onChoose}>
+      <AddRow icon={<UserRound />} onClick={() => setChoosing(true)}>
         Assign
       </AddRow>
     ) : null;

@@ -5,8 +5,8 @@ import {
   type ComponentProps,
   type KeyboardEvent,
   type ReactNode,
-  type Ref,
 } from "react";
+import { flushSync } from "react-dom";
 import { Plus, StickyNote, Trash2 } from "lucide-react";
 import { compareSortOrder } from "@newtab-todo/shared/sort-order";
 import type { Task, Note } from "~/lib/types";
@@ -23,6 +23,7 @@ import { canDeleteTask, canEditTask } from "@newtab-todo/shared/task-access";
 import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
 import { holders } from "~/lib/task-holders";
 import { SectionLabel } from "~/components/ui/section-label";
+import { formatDay } from "~/lib/due-date";
 import { AddRow, DetailRow } from "~/components/task/detail-row";
 import { pushUndoToast, quoted } from "~/lib/undo-toast";
 
@@ -33,25 +34,26 @@ import { pushUndoToast, quoted } from "~/lib/undo-toast";
  */
 const AddLine = ({
   label,
-  open,
-  onOpen,
-  inputRef,
   placeholder,
   maxLength,
   onAdd,
 }: {
   label: string;
-  open: boolean;
-  onOpen: () => void;
-  inputRef: Ref<HTMLInputElement>;
   placeholder: string;
   maxLength: number;
   onAdd: (value: string) => void;
 }) => {
+  const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Synchronous, so the field is focused inside the tap and a phone raises its keyboard
+  const openField = () => {
+    flushSync(() => setOpen(true));
+    inputRef.current?.focus();
+  };
   if (!open)
     return (
-      <AddRow icon={<Plus />} onClick={onOpen}>
+      <AddRow icon={<Plus />} onClick={openField}>
         {label}
       </AddRow>
     );
@@ -179,17 +181,11 @@ export const Subtasks = ({
   task,
   subtasks: rawSubtasks,
   canAdd,
-  adding,
-  onAdd,
-  inputRef,
   onToggle,
 }: {
   task: Task;
   subtasks: Task[];
   canAdd: boolean;
-  adding: boolean;
-  onAdd: () => void;
-  inputRef: Ref<HTMLInputElement>;
   onToggle: (task: Task) => void;
 }) => {
   const userId = useOptimisticUserId();
@@ -203,56 +199,54 @@ export const Subtasks = ({
   return (
     <fieldset aria-label="Subtasks" className="flex min-w-0 flex-col">
       {subtasks.length > 0 && (
-        <SectionHeading>
-          Subtasks
-          <span className="tabular-nums">
-            {done} of {subtasks.length}
-          </span>
-        </SectionHeading>
-      )}
-      {subtasks.length > 0 && (
-        <DetailRow>
-          {subtasks.map((sub) => {
-            const isDone = sub.status === "done";
-            return (
-              <ListRow key={sub.id} size="sm" className="-mx-2 min-h-9 items-start touch:min-h-11">
-                {/* Checkbox, title and Delete centre on the title's first line. The target ends
+        <>
+          <SectionHeading>
+            Subtasks
+            <span className="tabular-nums">
+              {done} of {subtasks.length}
+            </span>
+          </SectionHeading>
+          <DetailRow>
+            {subtasks.map((sub) => {
+              const isDone = sub.status === "done";
+              const held = holders(sub, lists, task);
+              return (
+                <ListRow
+                  key={sub.id}
+                  size="sm"
+                  className="-mx-2 min-h-9 items-start touch:min-h-11"
+                >
+                  {/* Checkbox, title and Delete centre on the title's first line. The target ends
                     where the gap does and reaches left into the gutter, off the title. */}
-                <Checkbox
-                  checked={isDone}
-                  aria-label={sub.title}
-                  onCheckedChange={() => onToggle(sub)}
-                  className={cn(
-                    "mt-1.75 size-3.5 after:-right-2 after:-left-4 touch:mt-2.5 touch:size-4 touch:after:-inset-y-3.75 touch:after:-right-2 touch:after:-left-6",
-                    isDone && checkboxDoneClass,
+                  <Checkbox
+                    checked={isDone}
+                    aria-label={sub.title}
+                    onCheckedChange={() => onToggle(sub)}
+                    className={cn(
+                      "mt-1.75 size-3.5 after:-right-2 after:-left-4 touch:mt-2.5 touch:size-4 touch:after:-inset-y-3.75 touch:after:-right-2 touch:after:-left-6",
+                      isDone && checkboxDoneClass,
+                    )}
+                  />
+                  <SubtaskTitle sub={sub} done={isDone} canEdit={canEditTask(held, userId)} />
+                  {canDeleteTask(held, userId) && (
+                    <RevealGroup className="items-start pt-1.5 touch:pt-0">
+                      <DeleteItemButton
+                        label="Delete subtask"
+                        onClick={() =>
+                          pushUndoToast(quoted(sub.title, " deleted"), deleteTask(sub.id))
+                        }
+                      />
+                    </RevealGroup>
                   )}
-                />
-                <SubtaskTitle
-                  sub={sub}
-                  done={isDone}
-                  canEdit={canEditTask(holders(sub, lists, task), userId)}
-                />
-                {canDeleteTask(holders(sub, lists, task), userId) && (
-                  <RevealGroup className="items-start pt-1.5 touch:pt-0">
-                    <DeleteItemButton
-                      label="Delete subtask"
-                      onClick={() =>
-                        pushUndoToast(quoted(sub.title, " deleted"), deleteTask(sub.id))
-                      }
-                    />
-                  </RevealGroup>
-                )}
-              </ListRow>
-            );
-          })}
-        </DetailRow>
+                </ListRow>
+              );
+            })}
+          </DetailRow>
+        </>
       )}
       {canAdd && (
         <AddLine
           label="Add a subtask"
-          open={adding}
-          onOpen={onAdd}
-          inputRef={inputRef}
           placeholder="New subtask"
           maxLength={MAX_TITLE}
           onAdd={(title) => void addTask(title, null, task.id)}
@@ -273,24 +267,16 @@ const DeleteItemButton = ({ label, onClick }: { label: string; onClick: () => vo
 );
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
-const dayFormat = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
-const otherYearDayFormat = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
-
 const writtenOn = (at: Date) => {
   const day = Temporal.PlainDate.from({
     year: at.getFullYear(),
     month: at.getMonth() + 1,
     day: at.getDate(),
   });
-  const today = Temporal.Now.plainDateISO();
-  const daysAgo = today.since(day, { largestUnit: "day" }).days;
+  const daysAgo = Temporal.Now.plainDateISO().since(day, { largestUnit: "day" }).days;
   if (daysAgo === 0) return "Today";
   if (daysAgo === 1) return "Yesterday";
-  return (day.year === today.year ? dayFormat : otherYearDayFormat).format(at);
+  return formatDay(day);
 };
 
 /** When a note was written, in the device's zone: "Today, 18:02", "Yesterday, 21:40", "Oct 25, 09:14". */
@@ -347,19 +333,7 @@ const NoteItem = ({ note }: { note: Note }) => {
   );
 };
 
-export const Notes = ({
-  taskId,
-  notes,
-  adding,
-  onAdd,
-  inputRef,
-}: {
-  taskId: string;
-  notes: Note[];
-  adding: boolean;
-  onAdd: () => void;
-  inputRef: Ref<HTMLInputElement>;
-}) => (
+export const Notes = ({ taskId, notes }: { taskId: string; notes: Note[] }) => (
   <fieldset aria-label="Notes" className="flex min-w-0 flex-col">
     {notes.length > 0 && <SectionHeading>Notes</SectionHeading>}
     {notes.map((note) => (
@@ -367,9 +341,6 @@ export const Notes = ({
     ))}
     <AddLine
       label="Add a note"
-      open={adding}
-      onOpen={onAdd}
-      inputRef={inputRef}
       placeholder="New note"
       maxLength={MAX_TEXT}
       onAdd={(content) => addNote({ userId: getCurrentUserId(), taskId, content })}

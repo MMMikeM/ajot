@@ -13,7 +13,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/field";
 import { MAX_TITLE } from "@newtab-todo/shared/field-limits";
-import { cn } from "~/lib/utils";
+import { cn, listNames } from "~/lib/utils";
 import { Calendar, Plus, Trash2, Users } from "lucide-react";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { useSwipeReveal } from "~/lib/hooks/use-swipe-reveal";
@@ -50,8 +50,6 @@ const hoverActionsWidth = (count: number) =>
 // existed appear at once, so loading, switching lists or opening Done shows them without a fade.
 const ENTER_WINDOW_MS = 3000;
 const isJustCreated = (task: Task) => Date.now() - Date.parse(task.createdAt) < ENTER_WINDOW_MS;
-
-const listNames = new Intl.ListFormat(undefined, { type: "conjunction" });
 
 // As in the sidebar: a face always means whose task it is, so a task you shared never shows a
 // recipient's face

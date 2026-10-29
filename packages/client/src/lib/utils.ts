@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 export { cn } from "tailwind-variants";
 export { now } from "@newtab-todo/shared/iso";
 
+export const listNames = new Intl.ListFormat(undefined, { type: "conjunction" });
+
 /**
  * Props for a base-ui primitive wrapped with a tv() variant definition.
  * Replaces base-ui's render-prop className with a plain string and
