@@ -1,0 +1,75 @@
+name: Release
+
+# A tag like v1.1.0 makes a GitHub release with both extensions attached. Bump
+# packages/client/package.json first: the tag must match it.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Check the tag matches the version
+        id: version
+        run: |
+          version=$(jq -r .version packages/client/package.json)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match packages/client/package.json ($version)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Builds the client first
+      - run: pnpm build:ext
+
+      - name: Package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          (cd packages/client/dist-extension/firefox && zip -r -X -q "$OLDPWD/ajot-$VERSION-firefox.zip" .)
+          (cd packages/client/dist-extension/chrome && zip -r -X -q "$OLDPWD/ajot-$VERSION-chrome.zip" .)
+          git archive --format=zip -o "ajot-$VERSION-source.zip" HEAD
+
+      # A secret can't be read in an `if`, so this says whether there is one
+      - name: Check for an AMO key
+        id: amo
+        env:
+          KEY: ${{ secrets.AMO_API_KEY }}
+        run: echo "configured=${KEY:+yes}" >> "$GITHUB_OUTPUT"
+
+      # Release Firefox refuses an unsigned add-on except as a temporary one. Signed for
+      # self-distribution ("unlisted"): automatic, with no wait for review and no store listing.
+      # Skipped until the AMO API key is a secret.
+      - name: Sign for Firefox
+        if: steps.amo.outputs.configured == 'yes'
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          pnpm dlx web-ext@10.8.0 sign --channel=unlisted \
+            --source-dir=packages/client/dist-extension/firefox \
+            --upload-source-code="ajot-$VERSION-source.zip" \
+            --artifacts-dir=signed
+          mv signed/*.xpi "ajot-$VERSION-firefox.xpi"
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh release create "$GITHUB_REF_NAME" ajot-"$VERSION"-* --generate-notes
