@@ -10,6 +10,6 @@ export {
   MSG_BG_STATUS,
   MSG_SYNC_ALL,
 } from "@newtab-todo/shared";
-export type { MutationEvent, CategoryTaskAction } from "@newtab-todo/shared";
+export type { MutationEvent, ModelName, CategoryTaskAction } from "@newtab-todo/shared";
 
 export const CATEGORY_DROP_PREFIX = "category-drop-";
