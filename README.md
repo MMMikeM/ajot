@@ -31,7 +31,7 @@ pnpm build:ext
 
 In Firefox, open `about:debugging`, choose **This Firefox → Load Temporary Add-on** and pick `packages/client/dist-extension/firefox/manifest.json`. In Chrome, open `chrome://extensions`, turn on **Developer mode** and load `packages/client/dist-extension/chrome` unpacked. Every deploy also uploads store-ready zips of both as CI artifacts.
 
-To cut a release, bump `version` in `packages/client/package.json`, merge it, and push a matching tag (`git tag v1.1.0 && git push origin v1.1.0`). `.github/workflows/release.yml` builds both extensions and attaches them, with the source, to a GitHub release. With `AMO_API_KEY` and `AMO_API_SECRET` set as repository secrets (an API key from addons.mozilla.org), it also signs the Firefox add-on for self-distribution, so it installs in release Firefox; without them the Firefox zip only loads as a temporary add-on.
+To cut a release, bump `version` in `packages/client/package.json`, merge it, and push a matching tag (`git tag v1.1.0 && git push origin v1.1.0`). `.github/workflows/release.yml` builds both extensions and attaches them, with the source, to a GitHub release. With `AMO_API_KEY` and `AMO_API_SECRET` set as repository secrets (an API key from addons.mozilla.org), it also signs the Firefox add-on for self-distribution, so it installs in release Firefox, and attaches the `updates.json` the add-on checks, so an installed copy updates itself to the latest release within a day; without them the Firefox zip only loads as a temporary add-on.
 
 **3. Sign in.** In the extension, choose **Sign in** and enter your server's address. On your phone, open the same address and add it to the home screen.
 

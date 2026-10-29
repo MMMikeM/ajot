@@ -1,7 +1,12 @@
 import { ext, getStoredSession } from "~/lib/ext";
-import { createPrewarm } from "~/lib/sync/prewarm";
+import { createPrewarm, filesRunOf } from "~/lib/sync/prewarm";
+import { syncFiles } from "~/lib/files/file-job";
 
-export const prewarmSnapshot = createPrewarm(getStoredSession);
+const prewarm = createPrewarm(getStoredSession);
+
+/** Saves the lists, then the files they show: after prewarm's queue, which never waits on bytes. */
+export const prewarmSnapshot = (rows?: Parameters<typeof prewarm>[0]) =>
+  prewarm(rows).then((run) => (run ? syncFiles(filesRunOf(run)) : undefined));
 
 const ALARM = "prewarm";
 const PREWARM_EVERY_MINUTES = 5;

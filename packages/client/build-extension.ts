@@ -24,6 +24,8 @@ const firefoxManifest = {
   browser_specific_settings: {
     gecko: {
       id: "@ajot",
+      // Each release attaches this, naming its signed .xpi, so an installed copy updates itself
+      update_url: "https://github.com/MMMikeM/ajot/releases/latest/download/updates.json",
       // Firefox asks before an add-on sends personal data anywhere (140+ has the prompt). Local-only
       // sends nothing; signing in to a server sends the account there, so that's asked then.
       strict_min_version: "140.0",

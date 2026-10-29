@@ -1,7 +1,7 @@
 import { chromium, type BrowserContext, type Worker } from "@playwright/test";
 import { resolve } from "node:path";
 import { test, expect } from "./fixtures";
-import { apiRequest } from "./helpers/api";
+import { apiRequest, uploadImage } from "./helpers/api";
 import type { AuthResult } from "./helpers/auth";
 import { deliverPush, queueUpload, savedTitles } from "./helpers/background";
 import { API_PORT } from "./helpers/stack";
@@ -32,7 +32,7 @@ test.afterEach(() => context.close());
 const addTask = (token: string, title: string) => {
   const now = new Date().toISOString();
   const task = { id: crypto.randomUUID(), userId: "", title, createdAt: now, updatedAt: now };
-  return apiRequest("POST", "/api/tasks", task, token);
+  return apiRequest<{ id: string }>("POST", "/api/tasks", task, token);
 };
 
 // The part of the extension API used below, which only exists inside the extension
@@ -130,4 +130,50 @@ test("the extension's background sends a file a tab queued, on a push", async ({
       return rows.find((row) => row.id === id)?.uploadedAt ?? null;
     })
     .not.toBeNull();
+});
+
+const savedThumbnail = (id: string) =>
+  background.evaluate(
+    (key) =>
+      new Promise<boolean>((done) => {
+        const open = indexedDB.open("ajot-files");
+        open.onupgradeneeded = () => open.transaction?.abort();
+        open.onerror = () => done(false);
+        open.onsuccess = () => {
+          const db = open.result;
+          if (!db.objectStoreNames.contains("blobs")) return done(false);
+          const read = db.transaction("blobs").objectStore("blobs").get(key);
+          read.onsuccess = () => {
+            db.close();
+            done(read.result !== undefined);
+          };
+        };
+      }),
+    `${id}:thumb`,
+  );
+
+test("the extension's background saves an attachment's thumbnail, which a tab offline shows", async ({
+  user1Auth,
+}) => {
+  const title = `With a photo ${Date.now()}`;
+  const task = await addTask(user1Auth.token, title);
+  const id = await uploadImage(user1Auth.token, task.id);
+  await background.evaluate(
+    (session) =>
+      chrome.storage.local.set({
+        "newtab-todo-token": session.token,
+        "newtab-todo-server-url": session.serverUrl,
+        "newtab-todo-user-id": session.userId,
+      }),
+    { token: user1Auth.token, serverUrl: SERVER_URL, userId: user1Auth.userId },
+  );
+
+  await deliverPush(context, extensionUrl, { type: "sync" });
+  await expect.poll(() => savedThumbnail(id)).toBe(true);
+
+  const page = await openInFlightMode(user1Auth);
+  await page.getByText(title).click();
+  const tile = page.getByRole("button", { name: "pixel.png" });
+  await expect(tile.locator("img")).toHaveJSProperty("complete", true);
+  expect(await tile.locator("img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1);
 });

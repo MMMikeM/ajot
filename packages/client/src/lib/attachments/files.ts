@@ -4,6 +4,7 @@ import { getFromBucket } from "~/lib/files/bucket";
 import { getSignedInUserId } from "~/lib/auth/current-user";
 import {
   blobKey,
+  markUsed,
   readBlob,
   readUploads,
   saveBlob,
@@ -58,7 +59,11 @@ export const loadBlob = (id: string, variant: Variant) => {
 
 const fetchBlob = async (id: string, variant: Variant) => {
   const saved = await readBlob(id, variant);
-  if (saved) return saved.blob;
+  if (saved) {
+    // Over the budget, the files shown least recently go first
+    if (variant === "file") markUsed(id, variant, Date.now()).catch(console.error);
+    return saved.blob;
+  }
   const userId = getSignedInUserId();
   if (!navigator.onLine || !userId) return undefined;
   const url = await urlFor(id, variant);

@@ -70,9 +70,19 @@ const sendWaitingNow = () => retryWaitingNow().catch(console.error).then(sendUpl
 const whenIdle = (run: () => void) =>
   typeof requestIdleCallback === "function" ? requestIdleCallback(run) : setTimeout(run, 0);
 
+// Asks the browser not to clear this origin's storage under pressure, which would take the saved
+// files and a waiting upload's only copy with it. The extensions' storage isn't cleared that way.
+const keepStorage = () => {
+  if (getBuildTarget() !== "browser" || !navigator.storage?.persist) return;
+  navigator.storage.persist().catch(console.error);
+};
+
 export const initAttachments = () => {
   whenIdle(() => {
-    if (getAuthToken()) refreshAttachmentsConfig().catch(console.error);
+    if (getAuthToken()) {
+      refreshAttachmentsConfig().catch(console.error);
+      keepStorage();
+    }
     void sendWaitingNow();
     // Another tab's change, such as one that closed mid-upload, is this tab's to send. Its own
     // drain's changes call this too, which costs one run that finds nothing due.
@@ -82,6 +92,7 @@ export const initAttachments = () => {
   subscribeAuthToken(() => {
     if (!getAuthToken()) return;
     refreshAttachmentsConfig().catch(console.error);
+    keepStorage();
     void sendUploads();
   });
 };

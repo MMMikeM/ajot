@@ -120,3 +120,46 @@ export const deleteAllTasksInCategory = async (
   const targets = tasks.filter((t) => t.categoryId === categoryId);
   await Promise.all(targets.map((t) => apiRequest("DELETE", "/api/tasks", { id: t.id }, token)));
 };
+
+// A 1×1 PNG, which a page can show as a thumbnail
+const PIXEL = Uint8Array.from(
+  atob(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  ),
+  (c) => c.charCodeAt(0),
+);
+
+/** An image uploaded to `taskId` with its thumbnail, as a device that attached it leaves it. */
+export const uploadImage = async (token: string, taskId: string) => {
+  const id = newId();
+  await apiRequest(
+    "POST",
+    "/api/attachments",
+    {
+      id,
+      taskId,
+      name: "pixel.png",
+      mimeType: "image/png",
+      size: PIXEL.length,
+      hasThumb: true,
+      createdAt: now(),
+      updatedAt: now(),
+    },
+    token,
+  );
+  const urls = await apiRequest<{ file: string; thumb: string }>(
+    "POST",
+    "/api/attachments/upload-url",
+    { id, thumbSize: PIXEL.length },
+    token,
+  );
+  for (const [url, type] of [
+    [urls.thumb, "image/jpeg"],
+    [urls.file, "image/png"],
+  ] as const) {
+    const res = await fetch(url, { method: "PUT", body: PIXEL, headers: { "content-type": type } });
+    if (!res.ok) throw new Error(`PUT answered ${res.status}`);
+  }
+  await apiRequest("POST", "/api/attachments/complete", { id }, token);
+  return id;
+};
