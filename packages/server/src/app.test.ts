@@ -5,7 +5,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { beforeEach, expect, test, vi } from "vite-plus/test";
 import app, { MAX_BODY_BYTES } from "./app";
 import { MAX_ID, MAX_TASK_IDS, MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
-import { CONTENT_SECURITY_POLICY, CSP_HEADER } from "@newtab-todo/shared/csp";
+import { CSP_HEADER, contentSecurityPolicy } from "@newtab-todo/shared/csp";
 import { signup } from "./auth-service";
 
 vi.mock("./db/client", () => ({ db: {}, inTransaction: vi.fn() }));
@@ -28,7 +28,7 @@ test("the page and the API carry the Content Security Policy", async () => {
 
   for (const path of ["/", "/task/abc", "/api/config"]) {
     const res = await app.request(path);
-    expect(res.headers.get(CSP_HEADER), path).toBe(CONTENT_SECURITY_POLICY);
+    expect(res.headers.get(CSP_HEADER), path).toBe(contentSecurityPolicy());
   }
   expect(await (await app.request("/task/abc")).text()).toBe("<!doctype html>");
 });
