@@ -16,6 +16,9 @@ const buttonVariants = tv({
       subtle:
         "text-hint hover:text-foreground touch:active:bg-secondary touch:active:text-foreground",
       link: "text-primary underline-offset-4 hover:underline",
+      // Dark ink on the leaf green clears 5:1, where light text doesn't: for the one action that
+      // must outrank the page
+      solid: "bg-primary font-semibold text-background hover:bg-primary/90 active:bg-primary/85",
     },
     intent: {
       default: "",

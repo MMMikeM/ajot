@@ -7,6 +7,6 @@ import { cn } from "~/lib/utils";
  */
 export const dockedSheet = cn(
   "max-w-(--column-w) border-x touch:max-w-none touch:border-x-0",
-  "desk:mb-(--sheet-inset) desk:max-h-[calc(100dvh-2*var(--sheet-inset)-4rem)] desk:translate-x-(--column-shift) desk:rounded-2xl desk:border-b",
+  "desk:mb-(--sheet-inset) desk:max-h-[calc(100dvh-2*var(--sheet-inset)-4rem-var(--banner-h,0px))] desk:translate-x-(--column-shift) desk:rounded-2xl desk:border-b",
   "desk:data-[ending-style]:[transform:translateY(calc(100%+var(--sheet-inset)+2px))] desk:data-[starting-style]:[transform:translateY(calc(100%+var(--sheet-inset)+2px))]",
 );

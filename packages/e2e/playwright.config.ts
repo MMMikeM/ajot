@@ -23,6 +23,7 @@ export default defineConfig({
     "skeleton.spec.ts",
     "stale-chunk.spec.ts",
     "perf.spec.ts",
+    "update-reload.spec.ts",
     "extension.spec.ts",
     "pwa-background.spec.ts",
   ],
