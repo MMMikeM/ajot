@@ -18,17 +18,25 @@ import {
 import { ColorDot } from "~/components/ui/color-dot";
 import { cn, listNames } from "~/lib/utils";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
-import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { TogglePill } from "~/components/ui/toggle-pill";
-import { AddRow, DetailRow, HintRow, lineButton, quietText } from "~/components/task/detail-row";
+import {
+  AddRow,
+  DetailRow,
+  ItemRow,
+  lineButton,
+  quietText,
+  rowText,
+} from "~/components/task/detail-row";
 import { InviteButton } from "~/components/InviteButton";
 import { INBOX_COLOR } from "~/lib/constants";
 
 const INBOX_VALUE = "__inbox__";
 
-const rowTrigger =
-  "h-9 w-full min-w-0 justify-between border-0 py-0 text-sm hover:text-foreground touch:h-11 touch:text-base";
+const rowTrigger = cn(
+  "h-9 w-full min-w-0 justify-between border-0 py-0 hover:text-foreground touch:h-11",
+  rowText,
+);
 
 // The sheet's header line: where the task sits, quieter than anything in it
 const crumb = "flex h-9 min-w-0 items-center gap-2 text-sm text-muted-foreground touch:h-11";
@@ -181,9 +189,9 @@ export const SharingField = ({ task, sharing }: { task: Task; sharing: Sharing }
 
   if (sharedList)
     return (
-      <HintRow icon={<Users />} label="Sharing">
+      <DetailRow icon={<Users />} label="Sharing" content="hint">
         Everyone in <span dir="auto">{sharedList.name}</span> can see this
-      </HintRow>
+      </DetailRow>
     );
 
   const offer = isOwner && !adding && (
@@ -198,13 +206,13 @@ export const SharingField = ({ task, sharing }: { task: Task; sharing: Sharing }
     <>
       <DetailRow icon={<Users />} label="Shared with">
         {shares.map((share) => (
-          <ListRow key={share.id} size="sm" className="-mx-2 min-h-9 touch:min-h-11">
+          <ItemRow key={share.id}>
             <InitialsAvatar
               name={share.sharedWithUser.name}
               userId={share.sharedWithUserId}
               size="sm"
             />
-            <span dir="auto" className="min-w-0 flex-1 truncate text-sm touch:text-base">
+            <span dir="auto" className="min-w-0 flex-1 truncate">
               {share.sharedWithUser.name}
             </span>
             {isOwner && (
@@ -212,7 +220,7 @@ export const SharingField = ({ task, sharing }: { task: Task; sharing: Sharing }
                 <RevealButton onClick={() => removeTaskShare(share.id)}>Remove</RevealButton>
               </RevealGroup>
             )}
-          </ListRow>
+          </ItemRow>
         ))}
         {isOwner && adding && <AddShare taskId={task.id} sharing={sharing} />}
       </DetailRow>
@@ -239,13 +247,13 @@ export const SubtaskSharing = ({
   if (names.length === 0) return null;
 
   return (
-    <HintRow icon={<Users />}>
+    <DetailRow icon={<Users />} content="hint">
       With{" "}
       {listNames
         .formatToParts(names)
         .map((part, i) => (part.type === "element" ? <bdi key={i}>{part.value}</bdi> : part.value))}
       , like the task it’s in
-    </HintRow>
+    </DetailRow>
   );
 };
 
@@ -323,10 +331,8 @@ export const AssigneeField = ({ task, sharing }: { task: Task; sharing: Sharing 
     const name = task.assigneeId === sharing.userId ? "you" : task.assignee?.name;
     if (!name) return null;
     return (
-      <DetailRow icon={<UserRound />} label="Assignee">
-        <p className="text-sm leading-9 touch:text-base touch:leading-11">
-          Assigned to <span dir="auto">{name}</span>
-        </p>
+      <DetailRow icon={<UserRound />} label="Assignee" content="line">
+        Assigned to <span dir="auto">{name}</span>
       </DetailRow>
     );
   }
