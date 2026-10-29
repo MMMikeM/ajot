@@ -15,6 +15,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Textarea } from "~/components/ui/field";
 import { MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { cn } from "~/lib/utils";
+import { formatDueDateTime } from "~/lib/dates";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 import { dockedSheet } from "~/components/docked-sheet";
 import { canDeleteTask, canEditTask } from "@newtab-todo/shared/task-access";
@@ -36,19 +37,6 @@ import {
 } from "~/components/task/detail-people";
 
 const TITLE_SLOT = "task-title";
-
-// Device locale; time and year only when they carry information
-const formatDueDateTime = (due: string) => {
-  const dt = Temporal.PlainDateTime.from(due);
-  const sameYear = dt.year === Temporal.Now.plainDateISO().year;
-  return dt.toLocaleString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    ...(!sameYear && { year: "numeric" }),
-    ...(due.length > 10 && { hour: "numeric", minute: "2-digit" }),
-  });
-};
 
 // Fallback for engines without `field-sizing: content`
 const autoGrow = (el: HTMLTextAreaElement | null) => {

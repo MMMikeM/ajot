@@ -22,7 +22,7 @@ import { canDeleteTask } from "@newtab-todo/shared/task-access";
 import { holders, ownerNameOf, type CategoriesById } from "~/lib/task-holders";
 import { isReadyToTick } from "~/lib/ready-to-tick";
 import { rowDragSensors } from "./row-drag";
-import { formatDueDate } from "~/lib/due-date";
+import { formatDueDate } from "~/lib/dates";
 import { FlipList } from "./flip-list";
 import { useIsTabStop } from "./row-focus";
 
