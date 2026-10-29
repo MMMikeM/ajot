@@ -3,7 +3,7 @@
 //   npx tsx evidence/task-sheet.ts --url http://localhost:5311 --out .evidence/task-sheet/before
 import { mkdirSync, writeFileSync } from "node:fs";
 import { chromium, devices, type Browser, type Page } from "@playwright/test";
-import { addField, startsWith, taskRow } from "../helpers/app";
+import { openListPicker, startsWith, taskRow } from "../helpers/app";
 import { mockApi, mockData } from "../helpers/mock-api";
 import { startEventStream } from "../helpers/event-stream";
 
@@ -211,7 +211,7 @@ await fresh(browser, phone, async (page) => {
 });
 await fresh(browser, phone, async (page) => {
   await openTask(page, "Pick up dry cleaning");
-  await addField(sheet(page), "List");
+  await openListPicker(sheet(page));
   await page.waitForTimeout(500);
   await shot(page, "phone-08-list-picker");
 });
@@ -245,7 +245,7 @@ await fresh(browser, desktop, async (page) => {
 });
 await fresh(browser, desktop, async (page) => {
   await openTask(page, "Pick up dry cleaning");
-  await addField(sheet(page), "List");
+  await openListPicker(sheet(page));
   await page.waitForTimeout(500);
   await shot(page, "desktop-07-list-picker");
 });

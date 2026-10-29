@@ -52,14 +52,21 @@ export const clearIDB = async (page: Page): Promise<void> => {
 export const startsWith = (text: string) =>
   new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
 
-/** The sheet shows only what a task has; anything else is offered under Add */
-export const addField = async (sheet: Locator, field: string) => {
-  await sheet.getByRole("button", { name: "Add", exact: true }).click();
-  await sheet
-    .getByRole("group", { name: "Add to task" })
-    .getByRole("button", { name: field })
-    .click();
-};
+/** The sheet offers what a task doesn't have yet on a quiet line where it would live */
+export const tapAddLine = (
+  sheet: Locator,
+  line:
+    | "Add a date"
+    | "Share"
+    | "Share with someone else"
+    | "Assign"
+    | "Add a subtask"
+    | "Add a note",
+) => sheet.getByRole("button", { name: line, exact: true }).click();
+
+/** Opens the List picker in the sheet's header */
+export const openListPicker = (sheet: Locator) =>
+  sheet.getByRole("combobox", { name: "List" }).click();
 
 export const taskRow = (page: Page, title: string) =>
   page.locator("[data-task-id]", { hasText: title }).first();

@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures";
-import { addField, createTask } from "./helpers/app";
+import { createTask, tapAddLine } from "./helpers/app";
 import { apiRequest, ensureMutualContacts } from "./helpers/api";
 
 const openFirstTaskDetail = async (page: Parameters<typeof createTask>[0]) => {
@@ -25,13 +25,12 @@ test.beforeEach(async ({ user1Auth }) => {
 });
 
 test.describe("task detail — visual language", () => {
-  test("description field has no box styling", async ({ user1Page: page }) => {
+  test("details field has no box styling", async ({ user1Page: page }) => {
     await createTask(page, "Test task");
     await page.waitForSelector("[data-task-id]");
     await openFirstTaskDetail(page);
 
-    await addField(drawer(page), "Description");
-    const textarea = drawer(page).getByRole("textbox", { name: "Description" });
+    const textarea = drawer(page).getByRole("textbox", { name: "Details" });
     await expect(textarea).toBeVisible();
 
     const cls = (await textarea.getAttribute("class")) ?? "";
@@ -56,11 +55,12 @@ test.describe("task detail — visual language", () => {
     expect(cls).toContain("invisible");
     expect(cls).toContain("size-0");
 
-    // An undated task has no date row; Add offers one
+    // An undated task offers one where it would be
     await expect(d.getByRole("button", { name: /^Due date:/ })).toHaveCount(0);
+    await expect(d.getByRole("button", { name: "Add a date" })).toBeVisible();
   });
 
-  test("delete button is a quiet text link, not a destructive Button variant", async ({
+  test("delete button is a quiet icon, not a destructive Button variant", async ({
     user1Page: page,
   }) => {
     await createTask(page, "Test task");
@@ -103,7 +103,7 @@ test.describe("task detail — visual language", () => {
     await page.waitForSelector("[data-task-id]");
     await page.waitForTimeout(1000); // contacts collection hydrate
     await openFirstTaskDetail(page);
-    await addField(drawer(page), "Share");
+    await tapAddLine(drawer(page), "Share");
 
     await expect(drawer(page).locator("select")).toHaveCount(0);
     const shareWith = drawer(page).getByRole("combobox", { name: "Share with" });
@@ -123,8 +123,8 @@ test.describe("task detail — functionality", () => {
     await titleInput.click({ clickCount: 3 });
     await titleInput.fill("Updated title");
 
-    // Blur by moving to the description
-    await addField(drawer(page), "Description");
+    // Blur by moving to the details
+    await drawer(page).getByRole("textbox", { name: "Details" }).click();
     await page.waitForTimeout(400);
 
     await expect(titleInput).toHaveValue("Updated title");
@@ -179,8 +179,7 @@ test.describe("task detail — functionality", () => {
     await openFirstTaskDetail(page);
 
     const d = drawer(page);
-    await addField(drawer(page), "Description");
-    const desc = d.getByRole("textbox", { name: "Description" });
+    const desc = d.getByRole("textbox", { name: "Details" });
     await desc.click();
     await desc.fill("My description");
 
@@ -195,7 +194,7 @@ test.describe("task detail — functionality", () => {
     });
 
     await openFirstTaskDetail(page);
-    await expect(d.getByRole("textbox", { name: "Description" })).toHaveValue("My description");
+    await expect(d.getByRole("textbox", { name: "Details" })).toHaveValue("My description");
   });
 });
 

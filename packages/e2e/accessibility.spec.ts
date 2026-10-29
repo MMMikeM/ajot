@@ -57,7 +57,8 @@ test("the sheet's Close shows on keyboard focus and closes it", async ({ page })
   const sheet = page.locator('[data-slot="drawer-content"]');
   const close = sheet.getByRole("button", { name: "Close" });
   expect((await close.boundingBox())?.width).toBeLessThanOrEqual(1);
-  await sheet.getByRole("button", { name: "Delete task" }).focus();
+  // The sheet's last control before Close
+  await sheet.getByRole("button", { name: "Add a note" }).focus();
   await page.keyboard.press("Tab");
   await expect(close).toBeFocused();
   expect((await close.boundingBox())?.width).toBeGreaterThan(20);

@@ -1,8 +1,7 @@
 import { Users } from "lucide-react";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import type { Category } from "~/lib/types";
-
-const listNames = new Intl.ListFormat(undefined, { type: "conjunction" });
+import { listNames } from "~/lib/utils";
 
 /** A face always means whose list it is, so your own shared list never shows a collaborator's. */
 export function CollabBadge({

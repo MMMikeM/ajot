@@ -5,13 +5,25 @@ import type { Page } from "@playwright/test";
  * need only the Vite dev server. SSE gets a 204 so the client stops reconnecting.
  */
 
-const MOCK_ME = { id: "u-mike", name: "Mike Murray", username: "mike" };
-const MOCK_SARAH = { id: "u-sarah", name: "Sarah Murray", username: "sarah" };
+export const MOCK_ME = { id: "u-mike", name: "Mike Murray", username: "mike" };
+export const MOCK_SARAH = { id: "u-sarah", name: "Sarah Murray", username: "sarah" };
 const MOCK_SAM = { id: "u-sam", name: "Sam Okafor", username: "sam" };
 
 type MockUser = typeof MOCK_ME;
 
 const TIMESTAMP = "2026-09-20T09:00:00.000Z";
+
+/** `taskId` shared with `user`, who may edit it and hasn't filed it in a list */
+export const shareWith = (taskId: string, user: MockUser) => ({
+  id: `s-${taskId}-${user.id}`,
+  taskId,
+  sharedWithUserId: user.id,
+  categoryId: null,
+  permission: "edit",
+  createdAt: TIMESTAMP,
+  updatedAt: TIMESTAMP,
+  sharedWithUser: user,
+});
 
 /** Local YYYY-MM-DD, `offsetDays` from today — due dates render relative to the device's today */
 export const isoDay = (offsetDays: number) => {
@@ -62,17 +74,6 @@ export const mockData = () => {
       ...extra,
     };
   };
-  const shareWith = (taskId: string, user: MockUser) => ({
-    id: `s-${taskId}-${user.id}`,
-    taskId,
-    sharedWithUserId: user.id,
-    categoryId: null,
-    permission: "edit",
-    createdAt: TIMESTAMP,
-    updatedAt: TIMESTAMP,
-    sharedWithUser: user,
-  });
-
   const flights = task(
     "Book flights for the October trip and check whether the Tuesday fare is still under €200",
     { description: "Sam said the 7am one is fine" },
@@ -170,7 +171,7 @@ type MockData = ReturnType<typeof mockData>;
 export const noteOn = (
   task: { id: string; userId: string; createdAt: string },
   content: string,
-  extra: { id?: string; title?: string | null } = {},
+  extra: { id?: string; title?: string | null; createdAt?: string; updatedAt?: string } = {},
 ) => ({
   id: `n-${task.id}`,
   userId: task.userId,
