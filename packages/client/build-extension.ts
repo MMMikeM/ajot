@@ -74,18 +74,11 @@ const patchHtml = (outDir: string) => {
     },
   );
 
-  // Extension CSP blocks the async preload's inline onload handler (script-src-attr), and every
-  // asset is local in the extension, so a blocking stylesheet costs nothing
-  html = html.replace(
-    /<link rel="preload" href="([^"]+)" as="style" onload="[^"]*"><noscript>.*?<\/noscript>/g,
-    (_, href) => `<link rel="stylesheet" href="${href}">`,
-  );
-
   // assemble() deletes the web manifest, so the link would fail on every new tab
   html = html.replace(/<link rel="manifest"[^>]*>/, "");
 
   writeFileSync(join(outDir, "index.html"), html);
-  console.log(`  Extracted ${scriptCount} inline script(s), converted CSS preloads`);
+  console.log(`  Extracted ${scriptCount} inline script(s)`);
 };
 
 type Target = {

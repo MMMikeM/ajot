@@ -5,7 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 import { injectFontPreloads } from "./plugins/inject-font-preloads";
 import { prerender } from "./plugins/prerender";
-import { injectCriticalCss } from "./plugins/inject-critical-css";
+import { inlineStylesheet } from "./plugins/inline-stylesheet";
 import babel from "@rolldown/plugin-babel";
 
 export default defineConfig(({ mode }) => {
@@ -84,7 +84,7 @@ export default defineConfig(({ mode }) => {
       }),
       injectFontPreloads(),
       prerender(),
-      injectCriticalCss(),
+      inlineStylesheet(),
       babel({
         presets: [reactCompilerPreset()],
       }),
