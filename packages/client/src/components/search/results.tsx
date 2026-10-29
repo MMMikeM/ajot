@@ -2,7 +2,7 @@ import { CornerDownRight, FileText } from "lucide-react";
 import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { ColorDot } from "~/components/ui/color-dot";
 import { INBOX_COLOR } from "~/lib/constants";
-import { formatDueDate } from "~/lib/due-date";
+import { formatDueDate } from "~/lib/dates";
 import { cn } from "~/lib/utils";
 import type { SearchHit, SearchResults as Results } from "~/lib/search";
 import type { Category, Task } from "~/lib/types";
