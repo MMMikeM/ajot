@@ -39,7 +39,6 @@ const scene = async (
   const data = await mockApi(page);
   await stream.holdOpen(page);
 
-  // The flights task, filed in Work, shared with Sarah, with its two subtasks and a note
   const flights = data.tasks[0]!;
   flights.categoryId = "c-work";
   flights.shares = [shareWith(flights.id, MOCK_SARAH)];
@@ -56,7 +55,6 @@ const scene = async (
   await page.waitForTimeout(900);
   await shot(page, name);
 
-  // A sheet taller than the screen gets a second still, scrolled to its end
   const scroller = page.locator('[data-slot="drawer-content"] > [class*="overflow-y-auto"]');
   if (await scroller.evaluate((el) => el.scrollHeight > el.clientHeight + 1)) {
     await scroller.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));

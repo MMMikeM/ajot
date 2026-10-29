@@ -38,6 +38,8 @@ import {
 
 const TITLE_SLOT = "task-title";
 
+const isEditingTitle = () => document.activeElement?.getAttribute("data-slot") === TITLE_SLOT;
+
 // Fallback for engines without `field-sizing: content`
 const autoGrow = (el: HTMLTextAreaElement | null) => {
   if (!el || CSS.supports("field-sizing", "content")) return;
@@ -89,7 +91,7 @@ function TaskDetail({
           task={task}
           parent={allTasks?.find((t) => t.id === task.parentId)}
           // From the live collection, not task.subtasks: that embedded copy only refreshes
-          // on a server refetch, so ticking or deleting a subtask here looked like a no-op
+          // on a server refetch
           subtasks={(allTasks ?? []).filter((t) => t.parentId === task.id)}
           onClose={onClose}
           onOpenTask={onOpenTask}
@@ -120,8 +122,7 @@ const TaskDetailContent = ({
   const isTopLevel = !task.parentId;
   const dateRef = useRef<HTMLInputElement>(null);
 
-  // Sync local state when task changes externally (but not mid-edit)
-  if (title !== task.title && document.activeElement?.getAttribute("data-slot") !== TITLE_SLOT) {
+  if (title !== task.title && !isEditingTitle()) {
     setTitle(task.title);
   }
 
