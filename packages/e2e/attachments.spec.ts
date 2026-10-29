@@ -193,10 +193,6 @@ test("a file attached offline waits on this device and uploads once back online"
   user1Page: page,
   user1Auth,
 }) => {
-  test.fail(
-    true,
-    "The online event doesn't clear the queue's backoff: it sends when the retry timer fires",
-  );
   const { task, sheet } = await openNewTask(page, user1Auth, "Offline");
   await expect(sheet.getByRole("button", { name: "Attach a file" })).toBeVisible();
 
