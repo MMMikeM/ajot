@@ -13,9 +13,7 @@ on:
 permissions:
   contents: read
 
-# A new push to a pull request stops its last run. On main a newer run stops the older one's
-# build, tests and image job by job instead, since stopping a whole run would stop a deploy or
-# migration halfway; the deploy job never is, and an older run skips it (latest, below).
+# On main, jobs cancel their own older copies: cancelling a run could stop a deploy halfway
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'push' && github.run_id || '' }}
   cancel-in-progress: true
@@ -145,8 +143,7 @@ jobs:
           docker build --target server -t registry.fly.io/ajot:server-${{ github.sha }} .
           docker push registry.fly.io/ajot:server-${{ github.sha }}
 
-  # An older run can pass its tests before a newer one has started its own, which would deploy
-  # the older commit and then the newer one
+  # An older run can pass its tests before a newer one starts its own
   latest:
     needs: [e2e, server-image]
     if: github.event_name == 'push'
@@ -154,7 +151,6 @@ jobs:
     outputs:
       is-head: ${{ steps.head.outputs.is-head }}
     steps:
-      # If GitHub can't say, it deploys, as every run did before
       - id: head
         run: |
           head=$(curl -sf -H "Accept: application/vnd.github.sha" -H "Authorization: Bearer $GH_TOKEN" \
@@ -167,7 +163,6 @@ jobs:
     needs: latest
     if: needs.latest.outputs.is-head == 'true'
     runs-on: ubuntu-26.04
-    # One at a time, and never stopped: a newer one waits for it
     concurrency:
       group: deploy-production
       cancel-in-progress: false
