@@ -24,7 +24,6 @@ const detailRow = tv({
   },
   variants: {
     content: {
-      /** Controls the caller lays out */
       stack: { body: "flex flex-col" },
       /** One line of text, centred on the gutter */
       line: { body: "leading-9 touch:leading-11" },

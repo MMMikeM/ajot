@@ -313,8 +313,8 @@ const AddShare = ({ taskId, sharing }: { taskId: string; sharing: Sharing }) => 
 };
 
 export const AssigneeField = ({ task, sharing }: { task: Task; sharing: Sharing }) => {
-  // Shown while the sheet is open once there's been an assignee: unassigning would otherwise
-  // remove the row under the pointer, as hiding an added field on blur did
+  // Stays shown once there's been an assignee: unassigning would otherwise
+  // remove the row under the pointer
   const [choosing, setChoosing] = useState(() => !!task.assigneeId);
   if (task.parentId) return null;
 
