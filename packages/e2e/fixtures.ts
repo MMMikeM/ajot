@@ -1,4 +1,5 @@
 import { test as base, type Page } from "@playwright/test";
+import { watchCsp } from "./helpers/csp";
 import { ensureMutualContacts } from "./helpers/api";
 import { getOrCreateUser, signIn, type AuthResult } from "./helpers/auth";
 import { waitForAppReady } from "./helpers/app";
@@ -29,6 +30,12 @@ const forWorker = (user: TestUser, workerIndex: number): TestUser => ({
 });
 
 export const test = base.extend<Fixtures, WorkerFixtures>({
+  context: async ({ context }, use) => {
+    const expectNoViolations = await watchCsp(context);
+    await use(context);
+    expectNoViolations();
+  },
+
   appPage: async ({ page }, use) => {
     await waitForAppReady(page);
     await use(page);
@@ -62,12 +69,14 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
 
   user2Page: async ({ browser, user2Auth }, use) => {
     const context = await browser.newContext();
+    const expectNoViolations = await watchCsp(context);
     const page = await context.newPage();
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await signIn(page, user2Auth);
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForSelector("#add-task-input", { timeout: 10000 });
     await use(page);
+    expectNoViolations();
     await context.close();
   },
 
@@ -78,4 +87,4 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   },
 });
 
-export { expect } from "@playwright/test";
+export { expect, type Locator, type Page } from "@playwright/test";

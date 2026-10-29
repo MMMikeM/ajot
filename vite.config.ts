@@ -27,6 +27,13 @@ const rawInputs = [
   },
 ];
 
+const playwrightTest = {
+  name: "@playwright/test",
+  importNames: ["test"],
+  message:
+    "Import test from ./fixtures: its pages fail the test on a Content Security Policy violation, which a report-only policy only logs.",
+};
+
 // A class ending in a bracket is an arbitrary value or property; variants end in a colon. Values
 // with a function or a list in them (calc, env, max, transition lists) and viewport units have no
 // scale equivalent, so they stay allowed
@@ -90,6 +97,15 @@ export default defineConfig({
                 },
               ],
             },
+          ],
+        },
+      },
+      {
+        files: ["packages/e2e/*.spec.ts"],
+        rules: {
+          "typescript/no-restricted-imports": [
+            "error",
+            { paths: [manualMemoHooks, playwrightTest] },
           ],
         },
       },

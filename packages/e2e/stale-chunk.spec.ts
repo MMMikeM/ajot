@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { mockApi } from "./helpers/mock-api";
 
 // Vite only reports a failed chunk (vite:preloadError) from a production build, so this runs with

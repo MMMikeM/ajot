@@ -1,4 +1,5 @@
-import { test, expect, type Browser } from "@playwright/test";
+import { type Browser } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 // Runs against a production build: `pnpm test:e2e:prerender` (playwright.prerender.config.ts)
 
