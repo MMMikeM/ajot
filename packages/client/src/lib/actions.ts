@@ -1,4 +1,5 @@
 import { apiHeaders, client } from "~/lib/api";
+import { apiClient, errorOf } from "~/lib/api-client";
 import { getAuthToken } from "~/lib/auth/token";
 import { clearSession } from "~/lib/auth/session";
 import { getServerUrl } from "~/lib/server-url";
@@ -14,10 +15,8 @@ const reach = <T>(request: Promise<T>) =>
     throw new Error(UNREACHABLE);
   });
 
-const errorFrom = async (res: Response, fallback: string) => {
-  const body = (await res.json().catch(() => ({}))) as { error?: string };
-  return new Error(body.error ?? fallback);
-};
+const errorFrom = async (res: Response, fallback: string) =>
+  new Error((await errorOf(res)) ?? fallback);
 
 export const createInvite = async (): Promise<{ token: string; expiresAt: string }> => {
   const res = await reach(client.api.invites.$post());
@@ -128,10 +127,8 @@ export const authenticate = async (
 // Not through `client`, which signs each request with whoever is signed in when it's sent
 const endServerSession = async (token: string) => {
   try {
-    await fetch(`${getServerUrl()}/api/auth/logout`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      keepalive: true,
+    await apiClient({ serverUrl: getServerUrl(), token }).api.auth.logout.$post(undefined, {
+      init: { keepalive: true },
     });
   } catch {
     // Unreachable: the session stays valid on the server, but nothing here holds its token

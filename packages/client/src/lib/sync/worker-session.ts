@@ -1,5 +1,5 @@
 import { loadSnapshotEntry, saveSnapshot } from "~/lib/snapshot-store";
-import type { PrewarmSession } from "~/lib/sync/prewarm";
+import type { SignedInSession } from "~/lib/api-client";
 
 // The PWA's service worker can't read localStorage, where the token lives, so it gets a copy
 const SESSION_KEY = "session";
@@ -11,7 +11,7 @@ export const shareSessionWithWorker = (token: string | null, userId: string | nu
     [USER_KEY, userId ?? undefined],
   ]).catch(console.error);
 
-export const readWorkerSession = async (): Promise<PrewarmSession | null> => {
+export const readWorkerSession = async (): Promise<SignedInSession | null> => {
   const [token, userId] = await Promise.all([
     loadSnapshotEntry(SESSION_KEY),
     loadSnapshotEntry(USER_KEY),

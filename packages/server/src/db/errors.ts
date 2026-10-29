@@ -26,7 +26,7 @@ const goneMessages = {
 export class LoggedHTTPException extends HTTPException {
   readonly detail: string;
 
-  constructor(status: 404 | 409 | 500, message: string, detail: string) {
+  constructor(status: 404 | 409 | 500 | 501, message: string, detail: string) {
     super(status, { message });
     this.detail = detail;
   }

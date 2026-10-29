@@ -10,6 +10,8 @@ Any module that accesses `localStorage`, `window`, or browser-only APIs (`Indexe
 
 - **`db/`** — TanStack DB layer: `collections.ts`, `hooks.ts` (useLiveQuery + mutations), `offline.ts` (offline executor and its mutation functions), `shared-outbox.ts` (every tab queues in one outbox, the leader sends it), `tab-leader.ts` (which tab leads, and the next one when it closes), `outbox-storage.ts`, `synced-writes.ts`, `add-task.ts`
 - **`sync/`** — Live sync mechanisms: `sse.ts` (browser tab SSE), `push.ts` (Web Push), `register-sw.ts`, `prewarm.ts` (save every list for the next page opened offline), `prewarm-extension.ts` (the backgrounds' session and 5-minute alarm), `worker-session.ts` (the PWA worker's copy of the token)
+- **`api-client.ts`** — `apiClient(session)`, the server's routes typed from the server, for any context; `api.ts` builds the page's `client` on it, signing each request with the page's session. Nothing else in the client calls `fetch` (lint refuses it), except `files/bucket.ts` for the bucket's presigned URLs
+- **`files/`** — attachments a device holds: the `ajot-files` store, preparing a file, and the upload queue. Outside `db/`, so the backgrounds and the worker can send uploads too
 - **`snapshot-store.ts`** — the IndexedDB lists a new tab starts from; outside `db/` so the backgrounds can write them
 - **`auth/`** — Identity: `signed-in.ts` (the token and its user, one store so no tab ever holds one account's token with another's user), `token.ts` and `current-user.ts` (read it), `session.ts` (sign-in, sign-out, the backgrounds' copy, and expiry on a 401 from `api.ts`)
 - **`state/`** — App UI state: `active-category.ts`, `undo.ts`

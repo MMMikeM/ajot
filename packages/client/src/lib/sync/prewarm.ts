@@ -9,21 +9,18 @@ import {
   writeSnapshot,
 } from "~/lib/snapshot-store";
 import { applyRows } from "~/lib/sync/saved-rows";
+import { ApiError, apiClient, type SignedInSession } from "~/lib/api-client";
+import { listRoutes, type ListKey } from "~/lib/list-routes";
 
-/** serverUrl is "" for the PWA, which calls its own origin. */
-export type PrewarmSession = { token: string; serverUrl: string; userId: string | null };
+type GetSession = () => Promise<SignedInSession | null>;
 
-type GetSession = () => Promise<PrewarmSession | null>;
-
-const fetchList = async ({ serverUrl, token }: PrewarmSession, key: string) => {
-  const res = await fetch(`${serverUrl}/api/${key}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`/api/${key} answered ${res.status}`);
+const fetchList = async (routes: ReturnType<typeof listRoutes>, key: ListKey) => {
+  const res = await routes[key]();
+  if (!res.ok) throw new ApiError(res.status, `/api/${key}`);
   return [key, (await res.json()) as unknown] as const;
 };
 
-const sameSession = (a: PrewarmSession | null, b: PrewarmSession) =>
+const sameSession = (a: SignedInSession | null, b: SignedInSession) =>
   a?.token === b.token && a.serverUrl === b.serverUrl;
 
 // Rows from another account (a device signed out while offline, still subscribed) never land
@@ -45,7 +42,8 @@ const saveRows = async (getSession: GetSession, rows: PushRows) => {
 const prewarmOnce = async (getSession: GetSession) => {
   const session = await getSession();
   if (!session) return;
-  const results = await Promise.allSettled(SNAPSHOT_KEYS.map((key) => fetchList(session, key)));
+  const routes = listRoutes(apiClient(session));
+  const results = await Promise.allSettled(SNAPSHOT_KEYS.map((key) => fetchList(routes, key)));
   // Signed out or into another account meanwhile: the next tab must not open on these lists
   if (!sameSession(await getSession(), session)) return;
   const lists = results.flatMap((result) => {
