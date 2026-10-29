@@ -7,6 +7,7 @@ import {
   categoriesCollection,
   notesCollection,
   contactsCollection,
+  attachmentsCollection,
 } from "~/lib/db/collections";
 import { refreshPushSubscription, registerPushSubscription } from "~/lib/sync/push";
 import { createBackoff } from "~/lib/sync/backoff";
@@ -71,6 +72,7 @@ const collectionMap = {
   categories: categoriesCollection,
   notes: notesCollection,
   contacts: contactsCollection,
+  attachments: attachmentsCollection,
 } as const;
 
 const isSynced = (model: ModelName): model is keyof typeof collectionMap => model in collectionMap;

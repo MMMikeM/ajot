@@ -18,7 +18,7 @@ import { cn } from "~/lib/utils";
 import { formatDueDateTime } from "~/lib/dates";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 import { dockedSheet } from "~/components/docked-sheet";
-import { canDeleteTask, canEditTask } from "@newtab-todo/shared/task-access";
+import { canDeleteTask, canEditTask, grants } from "@newtab-todo/shared/task-access";
 import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
 import { holders, ownerNameOf } from "~/lib/task-holders";
 import { isReadyToTick } from "~/lib/ready-to-tick";
@@ -26,6 +26,7 @@ import { useTasks } from "~/lib/db/hooks";
 import { useTaskActions } from "~/components/task/use-actions";
 import { AddRow, DetailRow, lineButton } from "~/components/task/detail-row";
 import { Notes, Subtasks } from "~/components/task/detail-items";
+import { Attachments } from "~/components/task/detail-attachments";
 import {
   AssigneeField,
   ListChip,
@@ -285,6 +286,12 @@ const TaskDetailContent = ({
       )}
 
       <Notes taskId={task.id} notes={notes} />
+
+      <Attachments
+        taskId={task.id}
+        canAttach={canEdit}
+        grant={grants(held).find((grant) => grant.userId === userId)}
+      />
     </div>
   );
 };

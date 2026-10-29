@@ -4,6 +4,7 @@ import {
   categoriesCollection,
   notesCollection,
   contactsCollection,
+  attachmentsCollection,
 } from "~/lib/db/collections";
 import {
   createOfflineTransaction,
@@ -15,7 +16,7 @@ import {
 } from "~/lib/db/offline";
 import { getCurrentUserId } from "~/lib/auth/current-user";
 import type { CategoryTaskAction } from "~/lib/constants";
-import type { Task, Category, Note } from "~/lib/types";
+import type { Attachment, Task, Category, Note } from "~/lib/types";
 import type { Placement } from "~/lib/effective-category";
 import { now } from "~/lib/utils";
 import { MAX_TASK_IDS, MAX_TITLE, cutTo } from "@newtab-todo/shared/field-limits";
@@ -25,6 +26,7 @@ export const useTasks = () => useLiveQuery(tasksCollection);
 export const useCategories = () => useLiveQuery(categoriesCollection);
 export const useNotes = () => useLiveQuery(notesCollection);
 export const useContacts = () => useLiveQuery(contactsCollection);
+export const useAttachmentRows = () => useLiveQuery(attachmentsCollection);
 
 export const updateTask = (id: string, fields: Partial<Task>) => {
   console.log(`[mutation] updateTask id=${id}`, fields);
@@ -275,4 +277,15 @@ export const removeContact = (id: string) => {
     return restore.mutate(() => contactsCollection.insert(contact)).isPersisted.promise;
   };
   return { transaction, undo };
+};
+
+/** An uploaded attachment; one still uploading belongs to the upload queue (`lib/files/uploads.ts`). */
+export const deleteAttachment = (row: Attachment) => {
+  console.log(`[mutation] deleteAttachment id=${row.id}`);
+  const tx = createOfflineTransaction({ mutationFnName: "deleteAttachment" });
+  tx.mutate(() => attachmentsCollection.delete(row.id));
+  return () => {
+    const restore = createOfflineTransaction({ mutationFnName: "restoreAttachment" });
+    restore.mutate(() => attachmentsCollection.insert(row));
+  };
 };

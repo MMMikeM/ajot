@@ -19,7 +19,7 @@
     "deps:check": "depcruise packages/client/src packages/server/src packages/shared/src --config .dependency-cruiser.cjs",
     "dup": "jscpd",
     "screenshot": "pnpm --dir packages/e2e run screenshot",
-    "test": "pnpm --filter @newtab-todo/server test",
+    "test": "pnpm --filter @newtab-todo/server --filter @newtab-todo/client test",
     "test:e2e": "vp run @newtab-todo/e2e#test",
     "test:e2e:ui": "vp run @newtab-todo/e2e#test:ui",
     "test:e2e:prerender": "vp run @newtab-todo/e2e#test:prerender",

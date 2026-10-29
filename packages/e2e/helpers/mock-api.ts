@@ -162,7 +162,7 @@ export const mockData = () => {
     contactUser: { ...u, avatarUrl: null },
   }));
 
-  return { tasks, categories, contacts, notes: [] as unknown[] };
+  return { tasks, categories, contacts, notes: [] as unknown[], attachments: [] as unknown[] };
 };
 
 type MockData = ReturnType<typeof mockData>;
@@ -190,6 +190,8 @@ type MockApiOptions = {
   swipeHintSeen?: boolean;
   /** Suppress the install and background-update offers, which would otherwise sit above the list */
   setupHintSeen?: boolean;
+  /** The server has a bucket, so the sheet offers "Attach a file" */
+  attachments?: boolean;
 };
 
 export const mockApi = async (
@@ -199,6 +201,7 @@ export const mockApi = async (
     data = mockData(),
     swipeHintSeen = true,
     setupHintSeen = true,
+    attachments = false,
   }: MockApiOptions = {},
 ) => {
   await page.addInitScript(
@@ -220,7 +223,12 @@ export const mockApi = async (
     "/api/categories": data.categories,
     "/api/contacts": data.contacts,
     "/api/notes": data.notes,
-    "/api/config": { vapidPublicKey: "", awaitingFirstUser: false },
+    "/api/attachments": data.attachments,
+    "/api/config": {
+      vapidPublicKey: "",
+      awaitingFirstUser: false,
+      attachments: attachments ? { maxBytes: 25 * 1024 * 1024 } : null,
+    },
   };
 
   // Lists, contacts and list members go and come back, so a refetch after a delete or an Undo

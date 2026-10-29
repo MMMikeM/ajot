@@ -9,7 +9,7 @@ const STORE = "queries";
  */
 const SCHEMA_VERSION = 1;
 
-export const SNAPSHOT_KEYS = ["tasks", "categories", "notes", "contacts"] as const;
+export const SNAPSHOT_KEYS = ["tasks", "categories", "notes", "contacts", "attachments"] as const;
 
 /**
  * The account the lists were saved for, written with them: a page signed into another one, or

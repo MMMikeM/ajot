@@ -7,6 +7,7 @@ import {
   categoriesCollection,
   notesCollection,
   contactsCollection,
+  attachmentsCollection,
 } from "~/lib/db/collections";
 import { client } from "~/lib/api";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
@@ -274,6 +275,37 @@ const restoreContact = async ({
   refetchSharedLists();
 };
 
+// Deleted or purged meanwhile, by someone else or a late replay of this one: still gone
+const assertAttachmentGone = (res: Response) =>
+  res.status === 404 || res.status === 410 ? res : assertOk(res);
+
+const deleteAttachment = async ({
+  transaction,
+}: {
+  transaction: { metadata: unknown; mutations: PendingWrite[] };
+}) => {
+  assertSignedIn(transaction.metadata);
+  for (const m of transaction.mutations) {
+    console.log(`[sync:attachments] DELETE → id=${m.key}`);
+    await assertAttachmentGone(await client.api.attachments.$delete({ json: { id: m.key } }));
+    await writeDeleted(attachmentsCollection, m.key);
+  }
+};
+
+// A delete only hid it on the server, so Undo clears that rather than adding it again
+const restoreAttachment = async ({
+  transaction,
+}: {
+  transaction: { metadata: unknown; mutations: PendingWrite[] };
+}) => {
+  assertSignedIn(transaction.metadata);
+  for (const m of transaction.mutations) {
+    console.log(`[sync:attachments] restore → id=${m.key}`);
+    const res = await assertOk(await client.api.attachments.$put({ json: { id: m.key } }));
+    await attachmentsCollection.utils.writeUpsert(await res.json());
+  }
+};
+
 export const offline = new SharedOutboxExecutor({
   leaderElection: tabLeader(),
   storage: createOutboxStorage((value) => canSend(value.metadata)),
@@ -283,6 +315,7 @@ export const offline = new SharedOutboxExecutor({
     categories: categoriesCollection,
     notes: notesCollection,
     contacts: contactsCollection,
+    attachments: attachmentsCollection,
   },
   mutationFns: {
     syncTasks: syncEach(syncTask),
@@ -295,6 +328,8 @@ export const offline = new SharedOutboxExecutor({
     restoreCategory: restoreCategoryWithTasks,
     removeContact,
     restoreContact,
+    deleteAttachment,
+    restoreAttachment,
   },
   // The default policy drops any error whose message contains "401" or "403", so decide by type.
   shouldRetry: (error) =>
@@ -317,4 +352,5 @@ subscribeAuthToken(() => {
   categoriesCollection.utils.refetch().catch(console.error);
   notesCollection.utils.refetch().catch(console.error);
   contactsCollection.utils.refetch().catch(console.error);
+  attachmentsCollection.utils.refetch().catch(console.error);
 });
