@@ -30,13 +30,10 @@ const upload = async (subscription: PushSubscription, { token, serverUrl }: Sess
   if (!ok) throw new Error("subscription upload failed");
 };
 
-/**
- * Match the push subscription to the sign-in state: subscribed and uploaded while signed in,
- * unsubscribed when signed out (the server prunes the row as "gone" on its next send).
- */
 const reconcileSubscription = async () => {
   const session = await getStoredSession();
   if (!session) {
+    // The server prunes the row as "gone" on its next send
     await unsubscribe({ registration: self.registration });
     console.log("[bg-push] signed out, unsubscribed");
     return;

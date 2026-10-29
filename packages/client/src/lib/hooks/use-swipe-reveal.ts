@@ -39,7 +39,6 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
 
   const [isOpen, setIsOpen] = useState(false);
 
-  // Refs to avoid stale closures in native event listeners
   const isOpenRef = useRef(false);
   const isDraggingRef = useRef(false);
   const touchStartX = useRef<number | null>(null);

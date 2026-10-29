@@ -86,7 +86,6 @@ const request = async <T>(session: Session, method: string, path: string, body?:
   return (res.status === 204 ? undefined : await res.json()) as T;
 };
 
-// After every other top-level task, as adding one in the app does
 const nextSortOrder = async (session: Session) => {
   const tasks = await request<{ parentId: string | null; sortOrder: string | null }[]>(
     session,
@@ -98,7 +97,6 @@ const nextSortOrder = async (session: Session) => {
 
 const INBOX: Destination = { kind: "inbox", target: "", title: "Inbox", done: "Added to Inbox" };
 
-/** Menu order: the Inbox, shared lists, then sharing and sending. */
 const fetchDestinations = async (session: Session): Promise<Group[]> => {
   const [categories, contacts] = await Promise.all([
     request<Category[]>(session, "GET", "/api/categories"),
@@ -195,8 +193,7 @@ const addDraft = async (session: Session, draft: Draft, kind: DestinationKind, t
   return extras.flatMap(([part], i) => (settled[i].status === "rejected" ? [part] : []));
 };
 
-// Counts which items get used, so the unused ones can go
-const count = (session: Session, name: string) =>
+const recordMenuUse = (session: Session, name: string) =>
   request(session, "POST", "/api/metrics", { name }).catch(console.error);
 
 let doneLabels = new Map<string, string>();
@@ -210,7 +207,7 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
   if (!session) return notify("Not added", "Sign in to Ajot to add tasks from the menu.");
   try {
     const failed = await addDraft(session, draft, kind as DestinationKind, target);
-    void count(session, `menu:${draftId}:${kind}`);
+    void recordMenuUse(session, `menu:${draftId}:${kind}`);
     const done = doneLabels.get(`${kind}|${target}`) ?? "Added to Ajot";
     await notify(failed.length ? `Added, but ${failed.join(" and ")} failed` : done, draft.title);
   } catch (err) {

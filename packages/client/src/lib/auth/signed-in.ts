@@ -21,9 +21,7 @@ const loadUser = (): CurrentUser | null => {
   if (raw) {
     try {
       return JSON.parse(raw);
-    } catch {
-      /* fall through */
-    }
+    } catch {}
   }
   const id = localStorage.getItem(USER_ID_KEY);
   return id ? { id, name: "", username: "" } : null;
@@ -58,7 +56,6 @@ export const setSignedIn = (next: SignedIn) => {
   store.set(next);
 };
 
-// Browser only: window is undefined during SSR prerender
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
     if (e.storageArea !== localStorage) return;

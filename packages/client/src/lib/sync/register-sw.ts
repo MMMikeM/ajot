@@ -6,10 +6,7 @@ type PeriodicSyncRegistration = ServiceWorkerRegistration & {
   periodicSync?: { register: (tag: string, options: { minInterval: number }) => Promise<void> };
 };
 
-/**
- * Wakes the worker now and then to save the lists, so the app opens offline on recent ones.
- * Chromium only, and only once the PWA is installed; elsewhere this does nothing.
- */
+/** Chromium only, and only once the PWA is installed; elsewhere this does nothing. */
 const registerPeriodicPrewarm = async (reg: PeriodicSyncRegistration) => {
   if (!reg.periodicSync) return;
   const { state } = await navigator.permissions.query({

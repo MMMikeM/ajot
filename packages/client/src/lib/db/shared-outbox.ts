@@ -14,10 +14,8 @@ import { refetchLater, writeAccepted } from "~/lib/db/synced-writes";
 type Settlement = { type: "settled"; id: string; error?: { name: string; message: string } };
 type Message = { type: "queued" } | Settlement;
 
-/** An edit this tab shows that the leader hasn't settled. */
 type Unsettled = { mutations: PendingMutation[]; metadata: unknown };
 
-/** Fields of the library's executor that are private there. */
 type ExecutorInternals = {
   loadAndReplayTransactions?: () => Promise<void>;
   scheduler?: KeyScheduler;
@@ -30,15 +28,10 @@ const HELD_RECHECK_MS = 250;
 const QUEUED: Message = { type: "queued" };
 
 /**
- * Every tab of an origin queues its edits in one outbox, and the leader sends it, in the order the
- * edits were made. The library's executor only queues in the leader: anywhere else, or before the
- * leader is known, an edit was sent straight away and dropped if it couldn't be, so one made in a
- * second tab, offline or signed out, was lost. Here a tab that doesn't lead saves the edit to the
- * outbox's localStorage journal, which has landed before the tab can close, and tells the others.
- * The leader picks it up, sends it, and tells the tab once the server has it.
- *
- * An edit waits for the account that made it. `canSend` says whether the account now signed in
- * may send one, and `accountChanged` takes the others off screen and out of the queue until it can.
+ * The library's executor only queues in the leader: anywhere else, or before the leader is known,
+ * it sends an edit straight away and drops it if it can't. Here a tab that doesn't lead saves the
+ * edit to the outbox's localStorage journal, which has landed before the tab can close, and tells
+ * the others. The leader picks it up, sends it, and tells the tab once the server has it.
  */
 export class SharedOutboxExecutor extends OfflineExecutor {
   readonly #outbox: OutboxManager | null;
@@ -46,7 +39,6 @@ export class SharedOutboxExecutor extends OfflineExecutor {
   readonly #canSend: (metadata: unknown) => boolean;
   readonly #channel: BroadcastChannel | null = null;
   readonly #unsettled = new Map<string, Unsettled>();
-  /** Of `#unsettled`, the ones other tabs made. */
   readonly #restored = new Set<string>();
   readonly #settledElsewhere = new Set<string>();
   #reading: Promise<void> | null = null;
@@ -179,9 +171,8 @@ export class SharedOutboxExecutor extends OfflineExecutor {
   }
 
   /**
-   * Leading, sends what other tabs queued; otherwise shows it. Either way settles this tab's edits
-   * that are gone from the outbox: the leader sent them, and this tab missed its word, closed or
-   * frozen. One read at a time, and the last again.
+   * Also settles this tab's edits that are gone from the outbox: the leader sent them, and this tab
+   * missed its word, closed or frozen.
    */
   #pickUp() {
     if (this.#reading) {
@@ -221,9 +212,8 @@ export class SharedOutboxExecutor extends OfflineExecutor {
     }
   }
 
-  // What the library runs as a tab becomes the leader: it schedules each transaction it hasn't,
-  // shows it, and sends the queue. Private in the library, which has no way to add to a running
-  // executor's queue from storage.
+  // What the library runs as a tab becomes the leader. Private in the library, which has no way to
+  // add to a running executor's queue from storage.
   #replay() {
     const executor = this as unknown as ExecutorInternals;
     if (!executor.loadAndReplayTransactions)

@@ -22,7 +22,6 @@ const list = async (userId: string) =>
 
 export type ContactWithUser = Awaited<ReturnType<typeof list>>[number];
 
-/** As `list` has them, for the people whose rows they are. */
 const listByIds = async (ids: string[]): Promise<ContactWithUser[]> => {
   if (ids.length === 0) return [];
   return db.query.contacts.findMany({ where: { id: { in: ids } }, with: withContactUser });
@@ -36,7 +35,6 @@ const exists = async (userId: string, contactUserId: string): Promise<boolean> =
   return !!row;
 };
 
-/** userId's contact with this username: undefined for a stranger and a username no one has. */
 const findContactUser = async (userId: string, username: string) => {
   const row = await db.query.contacts.findFirst({
     where: { userId, contactUser: { username } },
@@ -46,8 +44,7 @@ const findContactUser = async (userId: string, username: string) => {
 };
 
 // One transaction: deleting only one direction would leave one user still seeing the other.
-// Sharing a list needs a contact, so each leaves the lists the other shared with them, and the
-// record keeps all of it for Undo. Returns who reached those lists and their tasks before.
+// Sharing a list needs a contact, so each leaves the lists the other shared with them.
 const remove = async (id: string, userId: string) => {
   const contact = await db.query.contacts.findFirst({ where: { id, userId } });
   if (!contact) throw new NotFoundError("contact", id);
@@ -98,13 +95,7 @@ const remove = async (id: string, userId: string) => {
   });
 };
 
-/**
- * Undoes remove for the user who removed the contact, within an hour: both rows come back with
- * their ids, and so does sharing for each list that still exists, with what leaving it took out.
- * Rows that came back meanwhile through a new invite are kept. Returns the rows it put back, and
- * who reached it all before. A replay after a lost response finds the contact already back and
- * changes nothing.
- */
+/** A replay after a lost response finds the contact already back and changes nothing. */
 const restore = async (id: string, userId: string) =>
   inTransaction(async (tx) => {
     const record = await tx.query.removedContacts.findFirst({

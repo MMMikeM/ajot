@@ -47,14 +47,12 @@ export const RowFocusContext = createContext<RowFocus | null>(null);
 
 const noSubscription = () => () => {};
 
-/** Outside a list, a row's controls stay in the tab order. */
 export const useIsTabStop = (taskId: string) => {
   const rowFocus = useContext(RowFocusContext);
   const isTabStop = () => !rowFocus || rowFocus.tabStopId() === taskId;
   return useSyncExternalStore(rowFocus?.subscribe ?? noSubscription, isTabStop, isTabStop);
 };
 
-/** The rows in the order the list shows them: each task, then its open subtasks. */
 export const rowIdsOf = (tasks: Task[], subtasksByParent: Map<string, Task[]>) =>
   tasks.flatMap((task) => [
     task.id,

@@ -19,7 +19,7 @@ const setSession = (next: SignedIn) => {
     .catch(console.error);
 };
 
-/** Installs signed in before the backgrounds needed the account */
+/** A session saved by an older version has no copy for the backgrounds */
 export const shareSessionWithBackground = () => {
   const session = getSignedIn();
   if (getBuildTarget() === "extension" && session.token)
@@ -28,10 +28,7 @@ export const shareSessionWithBackground = () => {
 
 export const signIn = (token: string, user: CurrentUser) => setSession({ token, user });
 
-/**
- * Signs out on this device. Edits still queued wait, out of sight, for the account to sign back
- * in (lib/db/offline.ts).
- */
+/** Edits still queued wait, out of sight, for the account to sign back in (lib/db/offline.ts). */
 export const clearSession = () => {
   setSession({ token: null, user: null });
   clearSavedLists().catch(console.error);
@@ -46,7 +43,6 @@ export const onSessionExpired = (listener: () => void) => {
   };
 };
 
-/** The server rejected the token: sign out so the header offers "Sign in". */
 export const expireSession = () => {
   clearSession();
   expiredListeners.forEach((listener) => listener());

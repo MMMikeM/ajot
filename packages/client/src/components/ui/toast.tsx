@@ -22,7 +22,7 @@ const subscribeVisibility = (onChange: () => void) => {
 };
 const usePageHidden = () => useSyncExternalStore(subscribeVisibility, () => document.hidden);
 
-/** Whether the window has lost focus: Base UI pauses toast timers for exactly as long. */
+/** Base UI pauses toast timers for exactly as long. */
 const useWindowBlurred = () => {
   const [blurred, setBlurred] = useState(false);
   useEffect(() => {
@@ -42,7 +42,7 @@ const useWindowBlurred = () => {
   return blurred;
 };
 
-/** How long the countdown bar has run: it pauses whenever the toast's timer does. */
+/** The bar pauses whenever the toast's timer does. */
 const countdownElapsed = (bar: HTMLElement | null) => {
   const time = bar?.getAnimations()[0]?.currentTime;
   return typeof time === "number" ? time : 0;
@@ -93,12 +93,10 @@ function ToastItem({ toast, windowBlurred }: { toast: ToastObject; windowBlurred
   return (
     <Toast.Root
       toast={toast}
-      // Presence-only attribute — queried by handleDelete's view transition callback
-      // to assign viewTransitionName after flushSync renders the portal.
+      // Presence-only: handleDelete's view transition and keepOpenOnToastPress look it up
       data-toast-undo=""
       className={cn(
         "group/toast",
-        // Base UI sets --toast-index, --toast-height, etc.
         "[--gap:0.75rem] [--peek:0.625rem]",
         "[--scale:calc(max(0,1-(var(--toast-index)*0.075)))]",
         "[--height:var(--toast-frontmost-height,var(--toast-height))]",
@@ -158,8 +156,7 @@ function ToastItem({ toast, windowBlurred }: { toast: ToastObject; windowBlurred
             <X className="size-3.5" />
           </Toast.Close>
         </div>
-        {/* Pauses with the toast (data-expanded, or the window away); persistent toasts get no bar.
-            Invisible rather than gone under reduced motion: it still measures the time left. */}
+        {/* Invisible rather than gone under reduced motion: it still measures the time left */}
         {duration > 0 && (
           <div
             ref={bar}

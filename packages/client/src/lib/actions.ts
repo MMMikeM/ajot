@@ -1,8 +1,3 @@
-/**
- * The ONLY non-infrastructure module allowed to import `{ client }`: components and routes
- * call these functions instead of reaching for the API client. Infrastructure files
- * (collections.ts, offline.ts, push.ts) are exempt.
- */
 import { apiHeaders, client } from "~/lib/api";
 import { getAuthToken } from "~/lib/auth/token";
 import { clearSession } from "~/lib/auth/session";
@@ -19,7 +14,6 @@ const reach = <T>(request: Promise<T>) =>
     throw new Error(UNREACHABLE);
   });
 
-/** The server's own message, or `fallback` when the body isn't one (a proxy's error page). */
 const errorFrom = async (res: Response, fallback: string) => {
   const body = (await res.json().catch(() => ({}))) as { error?: string };
   return new Error(body.error ?? fallback);
@@ -31,7 +25,6 @@ export const createInvite = async (): Promise<{ token: string; expiresAt: string
   return res.json() as Promise<{ token: string; expiresAt: string }>;
 };
 
-/** Who made an invite, or null when it's unusable or the server can't be reached. */
 export const fetchInviterName = async (token: string): Promise<string | null> => {
   try {
     const res = await client.api.auth.invites[":token"].$get({ param: { token } });
@@ -45,10 +38,8 @@ export const fetchInviterName = async (token: string): Promise<string | null> =>
 export const acceptInvite = async (token: string) => {
   const res = await reach(client.api.invites[":token"].accept.$post({ param: { token } }));
   if (!res.ok) throw await errorFrom(res, "Couldn't accept the invite. Try again.");
-  // Fire-and-forget — the invite is accepted regardless of whether the
-  // local collection refreshes successfully. Awaiting this would surface
-  // a misleading error after a successful server-side acceptance, and the
-  // consumed token would then prevent any retry.
+  // Not awaited: the accept worked and consumed the token, so a refetch error here would offer a
+  // retry that can't succeed
   contactsCollection.utils.refetch().catch(console.error);
 };
 
@@ -147,10 +138,7 @@ const endServerSession = async (token: string) => {
   }
 };
 
-/**
- * Signs out on this device at once. Resolves once the server has heard, or couldn't be reached:
- * the push subscription goes first, since the server drops it only for a live session.
- */
+/** The push subscription goes first, since the server drops it only for a live session. */
 export const signOut = () => {
   const token = getAuthToken();
   const signedOutOnServer = unregisterPushSubscription(apiHeaders()).then(() =>

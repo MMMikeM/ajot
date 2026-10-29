@@ -1,11 +1,5 @@
-// Rehearses the pending migrations on a copy of a Turso database: copies it, takes stock, runs
-// migrate.ts against the copy, takes stock again and says what changed, then destroys the copy.
 // The source is only ever read by `turso db create --from-db`; nothing here connects to it.
-//
-//   pnpm db:rehearse <database> [--group <group>] [--keep]
-//   pnpm db:rehearse --url <copy-url> --token <copy-token>   (a copy you made; never destroyed)
-//
-// Needs the turso CLI, signed in (`turso auth login`). TURSO_BIN overrides where it is.
+// Needs the turso CLI, signed in (`turso auth login`).
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
@@ -67,8 +61,7 @@ const makeCopy = (database: string): Copy => {
   }
 };
 
-// Rows a migration's constraint refuses, counted as it finds them: the table the repair deletes
-// them from, or none for those it changes in place
+// No deletedFrom for rows the repair changes in place rather than deletes
 const refusedRows: { name: string; deletedFrom?: string; count: string }[] = [
   {
     name: "contacts with yourself",

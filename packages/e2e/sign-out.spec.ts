@@ -1,9 +1,6 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { mockApi, mockData } from "./helpers/mock-api";
 
-// Two accounts on one device, against mocked /api: what one leaves behind when they sign out
-// must never reach the next.
-
 test.use({ serviceWorkers: "block" });
 
 const ALEX = { id: "u-alex", name: "Alex Doe", username: "alex" };
@@ -37,7 +34,7 @@ const signOut = async (page: Page) => {
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 };
 
-/** A page signed in as Alex. `answer` serves /api; by default it never does, as on a slow network. */
+/** `answer` serves /api; by default it never does, as on a slow network. */
 const openAsAlex = async (
   context: BrowserContext,
   answer: (path: string, method: string, body: unknown) => unknown = () => undefined,
@@ -187,7 +184,6 @@ test("edits queued by one account are never sent as the next", async ({ context 
   await expect(next.getByText("Mike's unsent task")).toBeHidden();
   expect(sent).toEqual([]);
 
-  // Kept for Mike, and sent once he's back
   await next.close();
   const back = await context.newPage();
   const resent: { title?: string; userId?: string }[] = [];
@@ -228,7 +224,7 @@ test("edits queued as the session expires are sent once the account is back", as
   await expect.poll(() => sent.map((t) => t.title)).toContain("Added as it expired");
 });
 
-/** What each account's GETs answer, by the token they carry. POSTs to /api/tasks fail, so edits stay queued. */
+/** POSTs to /api/tasks fail, so edits stay queued. */
 const serveByAccount = async (context: BrowserContext) => {
   const mike = mockData();
   const [template] = mike.tasks;

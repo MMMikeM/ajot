@@ -1,5 +1,4 @@
-// Before/after evidence for the swipe tray (title stays in view) and touch tap targets. Run once
-// per version of the app:
+// Before/after evidence for the swipe tray and touch tap targets. Run once per version of the app:
 //   npx tsx evidence/swipe-targets.ts --url http://localhost:5311 --out .evidence/swipe-targets/before
 import { mkdirSync, writeFileSync } from "node:fs";
 import { chromium, devices, type Browser, type Page } from "@playwright/test";

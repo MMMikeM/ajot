@@ -12,7 +12,7 @@ const lastReload = () => {
 
 /**
  * A deploy replaces the hashed chunks, so a tab opened before it can't load the lazy ones it hasn't
- * fetched yet. Reload once to pick up the new build, as a hard refresh did by hand.
+ * fetched yet. Reload once to pick up the new build.
  */
 export const reloadOnStaleChunk = () => {
   window.addEventListener("vite:preloadError", (event) => {

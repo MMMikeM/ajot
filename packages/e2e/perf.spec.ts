@@ -6,8 +6,8 @@ const DCL_BUDGET_MS = 1000;
 const SAMPLES = 3;
 
 /**
- * The fastest of a few loads, each in a fresh context so nothing is cached. A regression slows
- * every load, while a busy machine (the first load of a run, parallel workers) slows only some.
+ * A regression slows every load, while a busy machine (the first load of a run, parallel workers)
+ * slows only some.
  */
 const measure = async (browser: Browser, baseURL: string | undefined, url: string) => {
   const times: number[] = [];

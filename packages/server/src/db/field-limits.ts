@@ -11,7 +11,6 @@ const codePoints = (text: string) => {
   return n;
 };
 
-/** A string field of at most `max` characters, refused in words a person can act on. */
 export const limited = (what: string, max: number) => (schema: z.ZodString) =>
   schema.refine(
     (text) => text.length <= max || codePoints(text) <= max,

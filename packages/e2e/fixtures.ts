@@ -8,18 +8,9 @@ import { USER_1, USER_2, type TestUser } from "./helpers/users";
 type Fixtures = {
   /** Navigated to "/" and ready — use for unauthenticated tests. */
   appPage: Page;
-  /** Page signed in as USER_1 in the default browser context. */
   user1Page: Page;
-  /**
-   * Page signed in as USER_2 in an isolated browser context.
-   * Use together with user1Page to test cross-user interactions — localStorage
-   * is not shared between the two contexts.
-   */
+  /** In an isolated browser context, so localStorage is not shared with user1Page. */
   user2Page: Page;
-  /**
-   * Tracks all non-GET /api/* requests made against `page`.
-   * Calls assertNoFailures() automatically in teardown.
-   */
   syncTracker: SyncTracker;
 };
 
@@ -31,7 +22,7 @@ type WorkerFixtures = {
 };
 
 // One pair of accounts per worker: specs clear their account's tasks and lists before each test,
-// which on a shared account deleted what tests in other workers had just made
+// which on a shared account would delete what tests in other workers just made
 const forWorker = (user: TestUser, workerIndex: number): TestUser => ({
   ...user,
   username: `${user.username}_${workerIndex}`,
@@ -44,7 +35,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   },
 
   user1Auth: [
-    // eslint-disable-next-line no-empty-pattern
+    // eslint-disable-next-line no-empty-pattern -- Playwright reads fixture deps from it
     async ({}, use, workerInfo) => {
       const root = await getOrCreateUser(USER_1);
       await use(await getOrCreateUser(forWorker(USER_1, workerInfo.workerIndex), root));

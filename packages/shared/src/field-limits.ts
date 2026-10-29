@@ -19,9 +19,10 @@ export const MAX_SORT_KEY = 1_000;
 // A list delete names the tasks it was shown, unless there are more than this
 export const MAX_TASK_IDS = 2_000;
 
-/** The first `max` UTF-16 units of `text`, as an input's maxLength keeps, without halving an emoji. */
+const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
+
+/** The first `max` UTF-16 units of `text`, as an input's maxLength keeps. */
 export const cutTo = (text: string, max: number) => {
   if (text.length <= max) return text;
-  const lastKept = text.charCodeAt(max - 1);
-  return text.slice(0, lastKept >= 0xd800 && lastKept <= 0xdbff ? max - 1 : max);
+  return text.slice(0, isHighSurrogate(text.charCodeAt(max - 1)) ? max - 1 : max);
 };

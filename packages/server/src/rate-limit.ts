@@ -4,8 +4,8 @@ import { getConnInfo } from "@hono/node-server/conninfo";
 import { HTTPException } from "hono/http-exception";
 
 /**
- * Counts what each key does in a fixed window. Kept in this process: the app runs on one machine,
- * as SSE and the push queue already assume, so a restart or deploy starts every count afresh.
+ * Kept in this process: the app runs on one machine, as SSE and the push queue already assume, so
+ * a restart or deploy starts every count afresh.
  */
 export const createLimiter = ({ limit, windowMs }: { limit: number; windowMs: number }) => {
   const windows = new Map<string, { count: number; endsAt: number }>();
@@ -19,7 +19,6 @@ export const createLimiter = ({ limit, windowMs }: { limit: number; windowMs: nu
   };
 
   return {
-    /** Milliseconds until the key may try again, or 0 if it may now. */
     waitMs: (key: string) => {
       const window = current(key);
       return window && window.count >= limit ? window.endsAt - Date.now() : 0;
@@ -62,8 +61,8 @@ const isPrivate = (address: string) => {
 };
 
 /**
- * The key an address is limited by. An IPv6 address by its /64, the block one subscriber or server
- * is given, since anyone holding one can send from as many addresses in it as they like.
+ * An IPv6 address is limited by its /64, the block one subscriber or server is given, since anyone
+ * holding one can send from as many addresses in it as they like.
  */
 export const limitedAs = (address: string) => {
   const mapped = IPV4_MAPPED.exec(address);
@@ -107,11 +106,11 @@ const clientAddress = (c: Context) => {
 };
 
 /**
- * Who sent the request, to limit by. Fly's proxy sets Fly-Client-IP on every request, overwriting
- * one a client sent. Anywhere else a client can make up any header, so the socket's address is
- * used, unless it's this machine or a private network's: that's a proxy every request would share,
- * so limiting it would lock everyone out at once. Through one, the client is the address it added
- * to X-Forwarded-For, and with none there's no one to limit (docs/self-hosting.md).
+ * Fly's proxy sets Fly-Client-IP on every request, overwriting one a client sent. Anywhere else a
+ * client can make up any header, so the socket's address is used, unless it's this machine or a
+ * private network's: that's a proxy every request would share, so limiting it would lock everyone
+ * out at once. Through one, the client is the address it added to X-Forwarded-For, and with none
+ * there's no one to limit (docs/self-hosting.md).
  */
 export const limitableIp = (c: Context) => {
   const address = clientAddress(c);
@@ -123,7 +122,6 @@ export const limitsFor = (byIp: Limiter, ip: string | undefined, rest: [Limiter,
 
 const minutes = (ms: number) => Math.max(1, Math.ceil(ms / 60_000));
 
-/** Refuses with a 429 the client shows, if any of the keys has used up its limiter. */
 export const refuseIfLimited = (
   c: Context,
   checks: [Limiter, string][],
@@ -144,7 +142,6 @@ const sharing = createLimiter({
   windowMs: 10 * 60_000,
 });
 
-/** Counts a share, send or list invite by this user, and refuses one too many. */
 export const limitSharing = (userId: string) => {
   if (sharing.waitMs(userId) > 0)
     throw new HTTPException(429, {

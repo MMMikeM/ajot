@@ -38,8 +38,8 @@ export const login = (user: TestUser) =>
   });
 
 /**
- * Logs in, or signs the account up on its first run. A server that already has accounts only
- * takes a signup through an invite, which `inviter` creates.
+ * A server that already has accounts only takes a signup through an invite, which `inviter`
+ * creates.
  */
 export const getOrCreateUser = async (
   user: TestUser,

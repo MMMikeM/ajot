@@ -35,10 +35,6 @@ const hashStoredTokens = async () => {
   }
 };
 
-/**
- * Deleted tasks and lists, Undo records, sessions, invites and notifications past keeping, and
- * sessions still stored as their token: now, then daily while awake.
- */
 export const startPurging = () => {
   void purgeIfDue();
   setInterval(() => void purgeIfDue(), CHECK_MS).unref();

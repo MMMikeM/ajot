@@ -94,7 +94,7 @@ export const taskRoutes = authed()
       if (!canUseList) throw new ForbiddenError(NOT_YOUR_LIST);
       if (!mayAssign) throw new BadRequestError(NOT_A_CONTACT);
 
-      // A client from before completedAt existed doesn't send it
+      // An older client doesn't send completedAt
       const result = await taskRepo.insert({
         ...taskChangeStamps({ status: data.status }, data.updatedAt),
         ...data,
@@ -120,7 +120,6 @@ export const taskRoutes = authed()
 
       const restoring = fields.deletedAt === null;
       const [{ task, mine, audience }, canUseList, mayAssign] = await Promise.all([
-        // As with deleting, only the owner can bring a task back
         requireTask(id, userId, restoring ? "manage" : "edit", { deleted: restoring }),
         fields.categoryId ? categoryRepo.canUse(fields.categoryId, userId) : true,
         canAssign(userId, fields.assigneeId),
@@ -143,7 +142,7 @@ export const taskRoutes = authed()
         return c.json(result, 200);
       }
 
-      // What the client stamped wins; one from before these columns existed sends neither
+      // What the client stamped wins; an older one sends neither
       const stamps = taskChangeStamps(fields, updatedAt);
       const moving = "categoryId" in fields ? await reachRepo.read({ taskIds: [id] }) : undefined;
       const result = await taskRepo.update(id, updatedAt, { ...stamps, ...fields });

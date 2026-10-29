@@ -55,7 +55,8 @@ const syncMutation =
   (
     name: string,
     endpoint: ResourceEndpoint,
-    collection: Collection<any, any, any>, // eslint-disable-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- collections of any row type
+    collection: Collection<any, any, any>,
     stripKeys: string[] = [],
   ) =>
   async (m: PendingWrite) => {
@@ -132,7 +133,7 @@ const syncCategory = syncMutation("categories", client.api.categories, categorie
 const syncNote = syncMutation("notes", client.api.notes, notesCollection);
 
 export type TaskDeleteMetadata = { taskIds: string[] };
-// What a single delete queued before batches; an outbox can still hold one after an update
+// An outbox saved by an older version can hold a single delete
 type LegacyTaskDeleteMetadata = { taskId: string };
 
 // One request for the task: the server deletes its subtasks with it, so a DELETE per subtask
@@ -167,8 +168,8 @@ const restoreTask = async (m: PendingWrite) => {
   await tasksCollection.utils.writeUpsert({ ...m.modified, ...(await res.json()) } as never);
 };
 
-// Parents before their subtasks, which the server restores one by one. A restore queued before
-// deletes kept notes also relinks notes.
+// Parents before their subtasks, which the server restores one by one. An outbox saved by an
+// older version can hold note relinks with the restore.
 const restoreTasksAndNotes = async ({
   transaction,
 }: {
@@ -217,7 +218,6 @@ const deleteCategoryWithTasks = async ({
     await client.api.categories.$delete({ json: { id: categoryId, tasks, taskIds } }),
   );
   for (const m of transaction.mutations) await writeAccepted(m);
-  // The server also moved or deleted collaborators' tasks, which this device didn't touch
   refetchLater(categoriesCollection, tasksCollection, notesCollection);
 };
 
@@ -301,7 +301,6 @@ export const offline = new SharedOutboxExecutor({
     error instanceof SessionExpiredError || error instanceof HeldForAccountError ? true : undefined,
 });
 
-// Kick off storage probe + leader election + outbox replay as early as possible.
 offline.waitForInit().catch(console.error);
 
 let account = getSignedInUserId();

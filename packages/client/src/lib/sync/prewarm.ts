@@ -10,7 +10,7 @@ import {
 } from "~/lib/snapshot-store";
 import { applyRows } from "~/lib/sync/saved-rows";
 
-/** serverUrl is "" for the PWA, which calls its own origin. userId is null until it's known. */
+/** serverUrl is "" for the PWA, which calls its own origin. */
 export type PrewarmSession = { token: string; serverUrl: string; userId: string | null };
 
 type GetSession = () => Promise<PrewarmSession | null>;

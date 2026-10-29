@@ -28,7 +28,6 @@ import { useBackToClose } from "~/lib/hooks/use-back-to-close";
 const rowClass = (isActive: boolean) =>
   cn(
     "mx-2 flex items-center rounded-lg text-sm transition-colors",
-    // primary-selected: the app's "chosen" surface (same as selected TogglePills)
     isActive ? "bg-primary-selected font-medium text-foreground" : "text-hint active:bg-muted",
   );
 

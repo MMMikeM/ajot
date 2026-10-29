@@ -36,10 +36,6 @@ export const bySidebarOrder = (userId: string) => (a: Category, b: Category) =>
   Number(a.userId !== userId) - Number(b.userId !== userId) ||
   compareSortOrder(a.sortOrder, b.sortOrder);
 
-/**
- * Where it appears for `userId`, and the lists besides the Inbox they can move it to: what the
- * sheet's List picker offers, and the only lists a drag onto the sidebar accepts.
- */
 export const listChoices = (task: Task, userId: string, lists: CategoriesById) => {
   const where = placement(task, userId, lists);
   const held = holders(task, lists);
