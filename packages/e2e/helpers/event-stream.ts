@@ -18,7 +18,7 @@ export const startEventStream = async () => {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/events`;
   return {
-    /** Registered after mockApi, so it wins for /api/events */
+    /** Call after mockApi: the route registered last wins for /api/events */
     holdOpen: (page: Page) => page.route("**/api/events**", (route) => route.continue({ url })),
     close: () => {
       server.closeAllConnections();

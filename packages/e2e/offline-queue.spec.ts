@@ -8,8 +8,7 @@ import {
 } from "@playwright/test";
 import { mockApi, mockData } from "./helpers/mock-api";
 
-// Tabs of one origin share an outbox, and one of them, the leader, sends it. Against mocked /api,
-// with every tab answered from the same data, as one server would.
+// Tabs of one origin share an outbox, and one of them, the leader, sends it.
 
 test.use({ serviceWorkers: "block" });
 
@@ -18,10 +17,7 @@ type Task = Data["tasks"][number];
 
 const WRITE = /\/api\/(tasks|categories|notes|contacts)(\/|$)/;
 
-/**
- * Each write a page sent that wasn't refused, as "METHOD path title-or-id", in the order sent. A
- * response nobody reads can finish after a later one, so the order is when each was sent.
- */
+/** A response nobody reads can finish after a later one, so the order is when each was sent. */
 const recordWrites = (page: Page) => {
   const writes: { request: Request; name: string }[] = [];
   const refused = new Set<Request>();
@@ -39,7 +35,6 @@ const recordWrites = (page: Page) => {
   return () => writes.filter((w) => !refused.has(w.request)).map((w) => w.name);
 };
 
-/** Waits for these writes, then for a while longer, so one sent twice shows. */
 const expectSentOnce = async (sent: () => string[], expected: string[]) => {
   await expect.poll(sent, { timeout: 15_000 }).toEqual(expected);
   await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -73,7 +68,6 @@ const open = async (context: BrowserContext, data: Data, options: { signedIn?: b
   return { page, sent };
 };
 
-/** The first tab, once it leads, and a second that doesn't. */
 const openTwo = async (context: BrowserContext, options: { signedIn?: boolean } = {}) => {
   const data = mockData();
   const leader = await open(context, data, options);
@@ -109,8 +103,8 @@ const deleteTask = async (page: Page, title: string) => {
 };
 
 /**
- * The API stops answering. page.route still answers while the context is offline, so it refuses
- * too. `offline` also takes the context offline, which the dev server's pages can't reload in.
+ * page.route still answers while the context is offline, so it refuses too. `offline` also takes
+ * the context offline, which a page can't reload in.
  */
 const dropConnection = async (
   context: BrowserContext,

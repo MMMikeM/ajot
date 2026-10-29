@@ -9,9 +9,8 @@ export const audienceFrom = (access: TaskAccessRow[]) =>
   widest(access).map((grant) => grant.userId);
 
 /**
- * The task, with the user's reach and everyone it reaches, if the user may do this to it: `manage`
- * is its owner's alone, to delete, restore, move or share it. Someone who can't see it gets the
- * same 404 as for a task that doesn't exist, so its id can't be probed.
+ * Someone who can't see it gets the same 404 as for a task that doesn't exist, so its id can't be
+ * probed.
  */
 export const requireTask = async (
   id: string,
@@ -29,11 +28,7 @@ export const requireTask = async (
   return { task, mine, access, audience: audienceFrom(access) };
 };
 
-/**
- * The list, if the user may do this to it: `use` is for its members, to add to it or leave it, and
- * `manage` its owner's alone, to rename, delete, restore or share it. Someone not in it gets the
- * same 404 as for a list that doesn't exist. A deleted list has no members, only its owner.
- */
+/** A deleted list has no members, only its owner. */
 export const requireList = async (
   id: string,
   userId: string,
@@ -50,13 +45,9 @@ export const requireList = async (
   return list;
 };
 
-/** Everyone a task reaches now, for a change that may have moved it. */
 export const audienceOf = async (taskId: string) => audienceFrom(await taskRepo.accessTo([taskId]));
 
-/**
- * A note or subtask on the task was added or edited, so the task counts as edited too, when the
- * user may edit it. Its own write has already succeeded, so a failure here is only logged.
- */
+/** The note's or subtask's own write has already succeeded, so a failure here is only logged. */
 export const markTaskEdited = async (
   c: Context,
   taskId: string,

@@ -7,9 +7,7 @@ const isNewer = (incoming: Row, saved: Row) =>
   !incoming.updatedAt || !saved.updatedAt || incoming.updatedAt >= saved.updatedAt;
 
 /**
- * The saved lists with a push's changes applied, as a tab applies the same events from the stream
- * (lib/sync/sse.ts). Only lists that were saved and changed come back; one never saved is left
- * for the fetch to fill.
+ * Only lists that were saved and changed come back; one never saved is left for the fetch to fill.
  */
 export const applyRows = (saved: Map<string, unknown>, events: PushRows["events"]) => {
   const changed = new Map<string, Row[]>();

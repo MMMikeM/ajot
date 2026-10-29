@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent } from "react";
 import { useRouter } from "@tanstack/react-router";
 
 const SHEET = "ajot-sheet";
-// Taking the entry off makes the router render the page again, which stalled the first frames of
+// Taking the entry off makes the router render the page again, which stalls the first frames of
 // the closing slide; so it waits until the sheet has gone
 const CLOSE_MS = 300;
 let pendingBack: ReturnType<typeof setTimeout> | undefined;

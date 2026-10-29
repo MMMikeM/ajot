@@ -19,11 +19,6 @@ const reasons: Record<number, string> = {
   429: "Too many requests",
 };
 
-/**
- * A route's responses by status: a schema is a JSON body of that schema; `true` is the status's own
- * response, no body for a 204 and errorSchema for a refusal; a string is errorSchema with that
- * description.
- */
 type Shorthand = z.ZodType | true | string;
 
 type Expanded<Status, Value> = Value extends z.ZodType
@@ -51,7 +46,6 @@ const expand = (responses: Record<number, Shorthand>) =>
     }),
   );
 
-/** A route whose `responses` are written by status, in shorthand. */
 export const route = <const R extends ShorthandRoute>(spec: R) =>
   // Typed from the argument only: inside .openapi(), the return type's context would widen the
   // statuses to every status code

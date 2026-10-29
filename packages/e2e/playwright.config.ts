@@ -51,8 +51,8 @@ export default defineConfig({
           stdout: "pipe",
         },
         {
-          // A production build: the dev server compiles each module as a page asks for it, which
-          // made every page load slow on CI's four cores. `pnpm test:e2e` builds it first.
+          // A production build: the dev server compiles each module as a page asks for it, too
+          // slow for CI's four cores. `pnpm test:e2e` builds it first.
           command: `exec node_modules/.bin/vp preview --port ${CLIENT_PORT} --strictPort`,
           cwd: "../client",
           url: BASE_URL,

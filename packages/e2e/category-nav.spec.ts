@@ -141,8 +141,6 @@ test("desktop: category options popover Rename item is not obscured by main cont
   const renameBtn = page.getByRole("button", { name: "Rename", exact: true });
   await expect(renameBtn).toBeVisible({ timeout: 3000 });
 
-  // elementFromPoint at the center of the Rename button must resolve to an
-  // element inside the popover — not the AppShell content behind it.
   const box = await renameBtn.boundingBox();
   if (!box) throw new Error("Rename button has no bounding box");
 
@@ -201,7 +199,7 @@ test("desktop: clicking Delete in category options removes the category", async 
   // Exact: "DeleteMe" and each task's "Delete task" are buttons too
   const deleteBtn = page.getByRole("button", { name: "Delete", exact: true });
   await expect(deleteBtn).toBeVisible({ timeout: 3000 });
-  // Same floating-ui/CDP issue as Rename above — use element.click()
+  // Same floating-ui/CDP issue as Rename above
   await deleteBtn.evaluate((el) => (el as HTMLElement).click());
 
   await expect(page.getByTestId("category-sidebar").getByText("DeleteMe")).toHaveCount(0, {
@@ -214,7 +212,6 @@ test("mobile: tapping header trigger opens sheet", async ({ page, isMobile }) =>
 
   await page.getByTestId("category-nav-trigger").tap();
 
-  // Sheet is open — the Add list button is always present
   await expect(page.getByRole("button", { name: "Add list" })).toBeVisible({ timeout: 3000 });
 });
 
@@ -261,7 +258,6 @@ test("mobile: tapping input chip opens the category sheet", async ({ page, isMob
 
   await page.getByTestId("category-input-chip").tap();
 
-  // Sheet is open — the Add list button is always present
   await expect(page.getByRole("button", { name: "Add list" })).toBeVisible({ timeout: 3000 });
 });
 
@@ -271,7 +267,6 @@ test("mobile: header trigger and input chip stay visible while scrolling", async
 }) => {
   test.skip(!isMobile, "mobile only");
 
-  // Add enough tasks to make the list scrollable
   for (let i = 1; i <= 8; i++) {
     await page.fill("#add-task-input", `Task ${i}`);
     await page.keyboard.press("Enter");

@@ -9,8 +9,8 @@ const sign = (key: string, userId: string, at: number) =>
   createHmac("sha256", key).update(`sessions-revoked:${userId}:${at}`).digest();
 
 /**
- * Tells the running server that a user's sessions were deleted in another process. Keyed by the
- * database's token, which the script already holds: whoever has it can delete sessions anyway.
+ * Keyed by the database's token, which the script already holds: whoever has it can delete
+ * sessions anyway.
  */
 export const signRevocation = (key: string, userId: string, at = Date.now()): Revocation => ({
   userId,

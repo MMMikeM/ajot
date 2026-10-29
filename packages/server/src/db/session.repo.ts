@@ -13,8 +13,8 @@ const generateToken = () => randomBytes(TOKEN_BYTES).toString("hex");
 // a token (hex) never is, so a stored id presented as a token is hashed and matches nothing.
 const hashToken = (token: string) => createHash("sha256").update(token).digest("base64url");
 
-// Sessions from before tokens were hashed hold the token itself, until it's next used or the purge
-// hashes it (hashStoredTokens)
+// A session not yet hashed holds the token itself, until it's next used or the purge hashes it
+// (hashStoredTokens)
 const RAW_TOKEN = /^[0-9a-f]{64}$/;
 const storedIds = (token: string) => {
   const id = hashToken(token);
@@ -23,10 +23,10 @@ const storedIds = (token: string) => {
 
 type Session = typeof sessions.$inferSelect;
 
-// Every authed request looks its session up, so a recent answer is reused. Fly suspends the
-// machine only after minutes without traffic, so after a resume nothing is fresh: the first
-// request reads the session, a read that's retried if the resumed socket is dead, before anything
-// writes. Date.now(), not performance.now(): the wall clock has moved on after a resume.
+// Fly suspends the machine only after minutes without traffic, so after a resume nothing is
+// fresh: the first request reads the session, a read that's retried if the resumed socket is
+// dead, before anything writes. Date.now(), not performance.now(): the wall clock has moved on
+// after a resume.
 const CACHE_MS = 30_000;
 const CACHE_LIMIT = 1_000;
 const cache = new Map<string, { session: Session; cachedAt: number }>();
@@ -47,7 +47,6 @@ const forget = (deleted: (session: Session) => boolean) => {
   for (const [id, entry] of cache) if (deleted(entry.session)) cache.delete(id);
 };
 
-/** A new session for the user, and the token that signs it in, which only the client keeps. */
 const insert = async (userId: string) => {
   const token = generateToken();
   const expiresAt = hoursFromNow(SESSION_TTL_DAYS * 24);
@@ -94,7 +93,6 @@ const remove = async (token: string) => {
   }
 };
 
-/** Hashes every session still stored as its token, as findValid does for one that's used. */
 const hashStoredTokens = async () => {
   const stored = await db.query.sessions.findMany({
     columns: { id: true },

@@ -3,9 +3,8 @@ import type { LeaderElection } from "@tanstack/offline-transactions";
 const LOCK = "offline-executor-leader";
 
 /**
- * The tab that sends the outbox, one per origin. The library's own election asks once and gives
- * up when another tab leads, so once the first tab closed, no tab sent anything until a reload.
- * This one waits in line for the lock, and takes over the moment the leader goes.
+ * The library's own election asks once and gives up when another tab leads, so no tab takes over
+ * when the leader closes. This one waits in line for the lock, and takes over the moment it goes.
  */
 const createTabLeader = (): LeaderElection => {
   let leading = false;

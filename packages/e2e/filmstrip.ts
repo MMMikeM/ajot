@@ -1,9 +1,4 @@
 /**
- * Captures a visual filmstrip during page load using CDP screencast.
- * Chrome pushes frames as the renderer updates.
- * Captures until DOMContentLoaded + 1 extra frame, then deduplicates and
- * writes a filmstrip HTML viewer.
- *
  * Usage:
  *   npx tsx filmstrip.ts [path] [--cpu=<rate>] [--network=<preset>]
  *
@@ -98,7 +93,6 @@ let navStart = 0;
 let dclAt: number | null = null;
 let stopped = false;
 
-// Resolves once DCL has fired and one more frame has arrived.
 let resolveDone!: () => void;
 const doneCapturing = new Promise<void>((r) => {
   resolveDone = r;

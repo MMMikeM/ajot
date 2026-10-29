@@ -16,7 +16,6 @@ const undoWindowMs = () => (matchMedia("(pointer: coarse)").matches ? 8000 : 500
 
 const fullTitle = ({ before, name, after = "" }: NamedTitle) => `${before}${name}${after}`;
 
-/** Pushes a toast whose Undo runs `onUndo`; returns the toast's id. */
 export const pushUndoToast = (title: string | NamedTitle, onUndo: () => void) => {
   const isText = typeof title === "string";
   return toastManager.add({
@@ -26,7 +25,6 @@ export const pushUndoToast = (title: string | NamedTitle, onUndo: () => void) =>
   });
 };
 
-/** A task, note or list as an Undo toast names it, first and quoted, so it gets the most room. */
 export const quoted = (name: string, after: string, before = ""): NamedTitle => ({
   before: `${before}“`,
   name: name.split("\n", 1)[0],
@@ -38,8 +36,8 @@ export const UNDO_KEYS = "Control+Z Meta+Z";
 const undone = new WeakSet<() => void>();
 
 /**
- * Closes the toast and runs its Undo once. The button stays pressable while the toast animates
- * out, and a second restore would re-insert rows that are already back.
+ * The button stays pressable while the toast animates out, and a second restore would re-insert
+ * rows that are already back.
  */
 export const pressUndo = (id: string, onUndo: () => void) => {
   toastManager.close(id);
@@ -49,9 +47,9 @@ export const pressUndo = (id: string, onUndo: () => void) => {
 };
 
 /**
- * ⌘Z / Ctrl+Z presses the newest toast's Undo. An open sheet traps Tab, so this is how the
- * keyboard reaches Undo without leaving the sheet. A field keeps its own text undo, except the
- * capture input while it's empty, which is focused on every new tab.
+ * An open sheet traps Tab, so this is how the keyboard reaches Undo without leaving the sheet. A
+ * field keeps its own text undo, except the capture input while it's empty, which is focused on
+ * every new tab.
  */
 export function UndoShortcut() {
   const { toasts } = Toast.useToastManager<ToastData>();

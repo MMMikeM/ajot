@@ -9,6 +9,15 @@ module.exports = {
       to: { path: "^packages/client/src/(components|routes)/" },
     },
     {
+      name: "ui-calls-actions-not-api",
+      comment:
+        "Components and routes reach the server through lib/actions.ts and the collections, " +
+        "never the API client itself.",
+      severity: "error",
+      from: { path: "^packages/client/src/(components|routes)/" },
+      to: { path: "^packages/client/src/lib/api\\.ts$" },
+    },
+    {
       name: "background-stays-light",
       comment:
         "Extension backgrounds and the PWA service worker run without a DOM. collections.ts " +

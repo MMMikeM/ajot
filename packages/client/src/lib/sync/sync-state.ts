@@ -7,7 +7,6 @@ export type SyncState = "disconnected" | "connecting" | "connected";
  */
 const FAILURES_BEFORE_OFFLINE = 2;
 
-/** The sync status of one SSE connection, shared by tabs that hold their own and Firefox's background page. */
 export const trackSyncState = (onChange: (state: SyncState) => void) => {
   let state: SyncState = "disconnected";
   let failures = 0;

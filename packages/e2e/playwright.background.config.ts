@@ -18,7 +18,6 @@ export default defineConfig({
       command: `exec node_modules/.bin/vp preview --port ${PREVIEW_PORT} --strictPort`,
       cwd: "../client",
       url: `http://localhost:${PREVIEW_PORT}`,
-      // The preview server proxies /api as the dev server does
       env: { ...process.env, SERVER_URL: `http://localhost:${API_PORT}` } as Record<string, string>,
       reuseExistingServer: false,
     },

@@ -11,10 +11,8 @@ const compare = (before = new Set<string>(), after = new Set<string>()) => ({
 });
 
 /**
- * After a write that changed who reaches some tasks or lists: whoever gained one gets all of it
- * (a task with its subtasks), whoever lost one has it taken off, and whoever kept one gets it
- * again if the write changed it. `before` is `reachRepo.read` from before the write; a list in it
- * always changed, since its members did. Each person gets one push for all of it.
+ * `before` is `reachRepo.read` from before the write; a list in it always changed, since its
+ * members did.
  */
 export const sendReachChanges = async (
   c: Context,

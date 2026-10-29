@@ -5,8 +5,8 @@ import { listMembers, taskAccess } from "./schema";
 type Reader = typeof db | Transaction;
 
 /**
- * Who reaches each live task and list. A hidden task reaches no one, though `task_access` keeps
- * its rows for the restore, and a deleted list has no members.
+ * A hidden task reaches no one, though `task_access` keeps its rows for the restore, and a
+ * deleted list has no members.
  */
 export type Reach = {
   /** Every task asked about, so the read after a write asks about the same ones */
@@ -26,7 +26,6 @@ const grouped = (rows: { key: string; userId: string }[]) => {
 const tasksAndSubtasks = (ids: string[]) =>
   ids.length === 0 ? [] : [{ id: { in: ids } }, { parentId: { in: ids } }];
 
-// In the list or filed there by someone's share, and their subtasks
 const inLists = (ids: string[]) =>
   ids.length === 0
     ? []

@@ -3,13 +3,11 @@ import base from "./playwright.config";
 
 const PORT = 4174;
 
-// Specs that need a production build: the prerendered index.html, Vite's chunk-error event, or
-// load timing (the dev server's depends on how busy the machine is compiling modules)
 export default defineConfig({
   ...base,
   testMatch: ["skeleton.spec.ts", "stale-chunk.spec.ts", "perf.spec.ts"],
   testIgnore: undefined,
-  // The skeleton needs no accounts, and the preview server has no API to make them on
+  // These need no accounts, and this preview server has no API to make them on
   globalSetup: undefined,
   use: { ...base.use, baseURL: `http://localhost:${PORT}`, serviceWorkers: "allow" },
   // Both viewports, rather than the main suite's touch specs on mobile

@@ -12,11 +12,9 @@ function TaskListView() {
   return (
     <>
       {/*
-       * Desktop: list title, then the input, then content — DOM order.
-       * Mobile (touch): flex column with order swapped. Input gets order-2 so it sinks
-       * to the bottom of the viewport; content gets order-1 and fills the remaining space.
-       * CategoryHeader keeps the default order, so it sits above the content.
-       * Fragment children become direct flex children of AppShell via <Outlet />.
+       * Touch: the input's order-2 sinks it to the bottom of the viewport, below this order-1
+       * content; CategoryHeader keeps the default order, above it. Fragment children become
+       * direct flex children of AppShell via <Outlet />.
        */}
       <CategoryHeader />
       <TaskInputBar />

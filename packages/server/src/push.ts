@@ -27,8 +27,7 @@ const RETRY_DELAYS_MS = [5_000, 15_000, 40_000];
 const isRegistering = (sub: StoredSubscription) =>
   Date.now() - Date.parse(sub.createdAt) < REGISTERING_FOR_MS;
 
-// Per the library: a 429 or 5xx, or the network (TypeError, TimeoutError); anything else fails the
-// same way again
+// Per the library, a network failure is a TypeError or a TimeoutError
 const isWorthRetrying = (error: unknown) =>
   error instanceof WebPushError
     ? error.statusCode === 429 || error.statusCode >= 500
@@ -37,12 +36,7 @@ const isWorthRetrying = (error: unknown) =>
 const retryAfterMs = (error: unknown) =>
   error instanceof WebPushError ? (error.retryAfterMs ?? 0) : 0;
 
-/**
- * Send a typed payload to the given subscriptions, deleting the ones the push service reports
- * gone. A just-made subscription reported gone, or a send that failed for a moment, is tried
- * again a few times. Failed sends are logged, never thrown. Returns how many were delivered on
- * this first try.
- */
+/** Returns how many were delivered on this first try, before any retry. */
 export const sendPush = async (
   subs: StoredSubscription[],
   message: PushMessage,

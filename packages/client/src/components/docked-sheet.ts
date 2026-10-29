@@ -1,9 +1,9 @@
 import { cn } from "~/lib/utils";
 
 /**
- * A sheet over AppShell's column. On desktop it docks inside the notepad's inset, so it reads as a
- * page of the notepad rather than a drawer from the window edge, and it stops short enough to
- * leave room above it for the toast viewport, which moves above an open sheet.
+ * On desktop it docks inside the notepad's inset, so it reads as a page of the notepad rather than
+ * a drawer from the window edge, and it stops short enough to leave room above it for the toast
+ * viewport, which moves above an open sheet.
  */
 export const dockedSheet = cn(
   "max-w-(--column-w) border-x touch:max-w-none touch:border-x-0",

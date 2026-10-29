@@ -94,7 +94,6 @@ const list = async (userId: string) =>
 
 export type CategoryWithOwner = Awaited<ReturnType<typeof list>>[number];
 
-/** The lists in the shape `list` sends, for broadcasting ones that are back. */
 const listByIds = async (ids: string[]) => {
   if (ids.length === 0) return [];
   return db.query.categories.findMany({
@@ -109,7 +108,6 @@ const listByIds = async (ids: string[]) => {
   });
 };
 
-/** A deleted list reads as missing, unless asked for by the restore that brings it back. */
 const findById = async (id: string, { deleted = false } = {}) => {
   const row = await db.query.categories.findFirst({
     where: deleted ? { id } : { ...live, id },
@@ -133,7 +131,6 @@ const findByIdWithCollaborators = async (id: string) => {
   return row;
 };
 
-/** Everyone in a list: its owner and its collaborators. */
 const memberIds = async (id: string) => {
   const rows = await db
     .select({ userId: listMembers.userId })
@@ -142,7 +139,6 @@ const memberIds = async (id: string) => {
   return [...new Set(rows.map((r) => r.userId))];
 };
 
-/** Whether the user owns the list or collaborates on it. */
 const canUse = async (id: string, userId: string) => {
   const rows = await db
     .select()
@@ -199,14 +195,13 @@ const removeWithTasks = async (
     // Read here, in the delete's transaction: afterwards the list reaches no one
     const before = await reachRepo.read({ listIds: [id] }, tx);
 
-    // A client from before confirmed ids were sent meant everything in the category
+    // A client that sends no confirmed ids means everything in the category
     const confirmed = new Set(confirmedIds ?? inCategory.map((t) => t.id));
     const doomed = action === "delete" ? inCategory.filter((t) => confirmed.has(t.id)) : [];
     const deletedIds = doomed.flatMap((t) => [t.id, ...t.subtasks.map((s) => s.id)]);
     const movedIds = inCategory.filter((t) => !doomed.includes(t)).map((t) => t.id);
 
-    // Hidden, as deleting one task does, and stamped with the list's own deletedAt, so Undo can
-    // tell them from tasks deleted on their own
+    // Stamped with the list's own deletedAt, so Undo can tell them from tasks deleted on their own
     const at = now();
     if (deletedIds.length > 0)
       await tx
@@ -240,10 +235,10 @@ const removeWithTasks = async (
   });
 
 /**
- * Undoes removeWithTasks. A task changed since stays where it went: moved back only from the
- * Inbox, refiled only if still unfiled. A task or share of someone no longer on the list goes to
- * their Inbox, where they can still see it. A list that isn't deleted, as when a restore is
- * replayed after a lost response, comes back unchanged. Returns who reached it all before.
+ * A task changed since stays where it went: moved back only from the Inbox, refiled only if still
+ * unfiled. A task or share of someone no longer on the list goes to their Inbox, where they can
+ * still see it. A list that isn't deleted, as when a restore is replayed after a lost response,
+ * comes back unchanged.
  */
 const restore = async (id: string) =>
   inTransaction(async (tx) => {

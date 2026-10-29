@@ -130,7 +130,7 @@ export const tasks = sqliteTable(
       columns: [t.parentId, t.hasParent],
       foreignColumns: [t.id, t.topLevel],
     }),
-    // For task_access's owner, list and subtask paths: looked up by user, category and parent
+    // For task_access's owner, list and subtask paths
     index("tasks_user_idx").on(t.userId),
     index("tasks_category_idx").on(t.categoryId),
     index("tasks_parent_idx").on(t.parentId),

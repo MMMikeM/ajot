@@ -5,8 +5,6 @@ import { test, expect } from "@playwright/test";
 
 test("signed-out: task is visible after adding", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-
-  // Wait for the snapshot read + collection init
   await page.waitForSelector("#add-task-input", { timeout: 10000 });
 
   await page.fill("#add-task-input", "Unauthenticated task");
