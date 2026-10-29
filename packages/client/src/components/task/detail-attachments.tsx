@@ -132,7 +132,13 @@ const FileItem = ({ item, canDelete }: { item: AttachmentItem; canDelete: boolea
           </Button>
         )}
         {canDelete && (
-          <RevealGroup className="items-start pt-1.5 touch:pt-0">
+          <RevealGroup
+            className={cn(
+              "items-start pt-1.5 touch:pt-0",
+              // Laid over the row's end on hover, it would cover Retry and take its click
+              item.state.kind === "failed" && "static bg-transparent mask-none px-0",
+            )}
+          >
             <DeleteItemButton label="Delete attachment" onClick={() => void deleteWithUndo(item)} />
           </RevealGroup>
         )}
