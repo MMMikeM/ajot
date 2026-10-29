@@ -251,11 +251,11 @@ export const Subtasks = ({
   );
 };
 
-const SectionHeading = ({ children }: { children: ReactNode }) => (
+export const SectionHeading = ({ children }: { children: ReactNode }) => (
   <SectionLabel className="flex h-8 items-center justify-between">{children}</SectionLabel>
 );
 
-const DeleteItemButton = ({ label, onClick }: { label: string; onClick: () => void }) => (
+export const DeleteItemButton = ({ label, onClick }: { label: string; onClick: () => void }) => (
   <RevealButton icon aria-label={label} title={label} onClick={onClick}>
     <Trash2 className="size-3.5 touch:size-4" />
   </RevealButton>

@@ -7,7 +7,7 @@ import { injectFontPreloads } from "./plugins/inject-font-preloads";
 import { prerender } from "./plugins/prerender";
 import { inlineStylesheet } from "./plugins/inline-stylesheet";
 import babel from "@rolldown/plugin-babel";
-import { CONTENT_SECURITY_POLICY, CSP_HEADER } from "@newtab-todo/shared/csp";
+import { CSP_HEADER, contentSecurityPolicy } from "@newtab-todo/shared/csp";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, searchForWorkspaceRoot(process.cwd()), "");
@@ -35,10 +35,13 @@ export default defineConfig(({ mode }) => {
     },
     // The e2e suites serve the build with `vp preview`, so they run under the server's policy
     preview: {
-      headers: { [CSP_HEADER]: CONTENT_SECURITY_POLICY },
+      headers: { [CSP_HEADER]: contentSecurityPolicy(env.AWS_ENDPOINT_URL_S3) },
     },
     resolve: {
       tsconfigPaths: true,
+    },
+    test: {
+      include: ["src/**/*.test.ts"],
     },
     define: {
       __BUILD_TIME__: JSON.stringify(new Date().toISOString()),

@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 import base from "./playwright.config";
-import { API_PORT, PREVIEW_PORT } from "./helpers/stack";
+import { API_PORT, PREVIEW_PORT, S3_URL } from "./helpers/stack";
 
 // What runs with no page open: the Chrome extension's background and the PWA's service worker,
 // against the built extension and the production build. Both run in Chromium, so one project.
@@ -18,7 +18,11 @@ export default defineConfig({
       command: `exec node_modules/.bin/vp preview --port ${PREVIEW_PORT} --strictPort`,
       cwd: "../client",
       url: `http://localhost:${PREVIEW_PORT}`,
-      env: { ...process.env, SERVER_URL: `http://localhost:${API_PORT}` } as Record<string, string>,
+      env: {
+        ...process.env,
+        SERVER_URL: `http://localhost:${API_PORT}`,
+        AWS_ENDPOINT_URL_S3: S3_URL,
+      } as Record<string, string>,
       reuseExistingServer: false,
     },
   ],

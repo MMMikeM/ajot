@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { Toast } from "@base-ui/react/toast";
@@ -9,25 +9,11 @@ import { signOut } from "~/lib/actions";
 import { getBuildTarget } from "~/lib/build-target";
 import { useSyncState, usePendingMutations } from "~/lib/sync/sse";
 import { useInstallPrompt } from "~/lib/hooks/use-install-prompt";
+import { useDeviceOnline } from "~/lib/hooks/use-device-online";
 import { Button } from "~/components/ui/button";
 import { MenuItem } from "~/components/ui/menu-item";
 import { Popover, PopoverTrigger, PopoverContent } from "~/components/ui/popover";
 import { cn } from "~/lib/utils";
-
-const subscribeOnline = (onChange: () => void) => {
-  window.addEventListener("online", onChange);
-  window.addEventListener("offline", onChange);
-  return () => {
-    window.removeEventListener("online", onChange);
-    window.removeEventListener("offline", onChange);
-  };
-};
-const useDeviceOnline = () =>
-  useSyncExternalStore(
-    subscribeOnline,
-    () => navigator.onLine,
-    () => true,
-  );
 
 const SYNC_LABELS = {
   connecting: "Syncing…",

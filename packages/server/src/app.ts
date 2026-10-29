@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { compress } from "hono/compress";
 import { secureHeaders } from "hono/secure-headers";
 import { bodyLimit } from "hono/body-limit";
-import { CONTENT_SECURITY_POLICY, CSP_HEADER } from "@newtab-todo/shared/csp";
+import { CSP_HEADER, contentSecurityPolicy } from "@newtab-todo/shared/csp";
 import { authRoutes } from "./routes/auth";
 import { taskRoutes } from "./routes/tasks";
 import { categoryRoutes } from "./routes/categories";
@@ -20,6 +20,7 @@ import { attachmentRoutes } from "./routes/attachments";
 import { isAllowedOrigin, parseAllowedOrigins } from "./origins";
 import { rejectInvalidInput } from "./routes/openapi-schemas";
 import { LoggedHTTPException } from "./db/errors";
+import { storage } from "./storage";
 
 const app = new OpenAPIHono({ defaultHook: rejectInvalidInput });
 
@@ -67,8 +68,10 @@ app.use(
   }),
 );
 
+const policy = contentSecurityPolicy(storage ? process.env.AWS_ENDPOINT_URL_S3 : undefined);
+
 app.use("*", async (c, next) => {
-  c.header(CSP_HEADER, CONTENT_SECURITY_POLICY);
+  c.header(CSP_HEADER, policy);
   await next();
 });
 
