@@ -20,7 +20,7 @@ import {
   MSG_BG_STATUS,
   MSG_SYNC_ALL,
 } from "~/lib/constants";
-import type { MutationEvent } from "~/lib/constants";
+import type { ModelName, MutationEvent } from "~/lib/constants";
 import { createExternalStore } from "~/lib/external-store";
 import { offline } from "~/lib/db/offline";
 import { writeDeleted } from "~/lib/db/synced-writes";
@@ -73,6 +73,8 @@ const collectionMap = {
   contacts: contactsCollection,
 } as const;
 
+const isSynced = (model: ModelName): model is keyof typeof collectionMap => model in collectionMap;
+
 const refetchAll = () => {
   for (const collection of Object.values(collectionMap))
     collection.utils.refetch().catch(console.error);
@@ -100,12 +102,9 @@ const writeMutation = (collection: SyncedCollection, event: MutationEvent) => {
 
 const applyMutation = async (event: MutationEvent) => {
   console.log(`[sse] received ${event.model}.${event.action}`, event.data);
+  // A model this build has no collection for has nothing on this page to change
+  if (!isSynced(event.model)) return;
   const collection = collectionMap[event.model];
-  if (!collection) {
-    console.log("[sse] unknown model, refetching all");
-    refetchAll();
-    return;
-  }
   try {
     // Nothing on this page has read it yet, so it holds no rows to change: load it, which also
     // saves the change for a page opened offline
