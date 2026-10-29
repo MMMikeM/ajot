@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { now as stamp } from "@newtab-todo/shared/iso";
 import { beforeEach, describe, expect, test } from "vite-plus/test";
-import { addUpload, readBlob, readUploads, type Upload } from "~/lib/files/store";
+import { addUpload, readBlob, readUploads, retryWaitingNow, type Upload } from "~/lib/files/store";
 import { deleteUpload, drainUploads, undoDeleteUpload, type DrainDeps } from "~/lib/files/uploads";
 
 const SESSION = { token: "tok", serverUrl: "https://ajot.test", userId: "u1" };
@@ -205,5 +205,20 @@ describe("drainUploads", () => {
       "POST /api/attachments/complete",
     ]);
     expect(await readUploads()).toEqual([]);
+  });
+});
+
+describe("retryWaitingNow", () => {
+  test("makes every waiting upload due, but leaves a refused one alone", async () => {
+    await addUpload(entry("waiting", { attempts: 6, retryAt: now + 3_600_000 }), {
+      file: new Blob(["abc"]),
+    });
+    await addUpload(entry("refused", { retryAt: now + 3_600_000, failed: "Too big" }), {
+      file: new Blob(["abc"]),
+    });
+    await retryWaitingNow();
+    const byId = new Map((await readUploads()).map((u) => [u.row.id, u]));
+    expect(byId.get("waiting")).toMatchObject({ retryAt: 0, attempts: 6 });
+    expect(byId.get("refused")?.retryAt).toBe(now + 3_600_000);
   });
 });
