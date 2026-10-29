@@ -19,6 +19,9 @@ import { requestSyncDataConsent } from "~/lib/ext";
 import { getServerUrl, setServerUrl } from "~/lib/server-url";
 import { fetchServerConfig, normalizeServerUrl, type ServerConfig } from "~/lib/server-config";
 
+// An object schema's first parse would probe for `new Function`, which the CSP refuses and reports
+z.config({ jitless: true });
+
 const loginSchema = z.object({
   username: z.string().check(z.minLength(1, "Enter your username")),
   password: z.string().check(z.minLength(1, "Enter your password")),

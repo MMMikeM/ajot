@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { mockApi } from "./helpers/mock-api";
 
 // A production build registers sw.js, which would answer /api before the mocks see it

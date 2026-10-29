@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { mockApi, mockData } from "./helpers/mock-api";
 
 // Against mocked /api: a list whose order keys aren't what fractional-indexing makes

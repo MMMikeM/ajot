@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { mockApi } from "./helpers/mock-api";
 
 const row = (page: Page, title: string) =>
