@@ -208,6 +208,27 @@ describe("drainUploads", () => {
   });
 });
 
+describe("drainUploads with a filter", () => {
+  test("leaves what this context may not send for one that can", async () => {
+    await addUpload(entry("small", { row: { ...entry("small").row, size: 3 } }), {
+      file: new Blob(["abc"]),
+      thumb: new Blob(["tt"]),
+    });
+    await addUpload(entry("big", { row: { ...entry("big").row, size: 9_000_000 } }), {
+      file: new Blob(["abc"]),
+    });
+    const { sent, fetch } = server({
+      ...happyPath(),
+      "POST /api/attachments": () => new Response(null, { status: 503 }),
+    });
+    await drainUploads(SESSION, { ...deps(fetch), only: (u) => u.row.size < 1_000_000 });
+    expect(sent).toEqual(["POST /api/attachments"]);
+    const byId = new Map((await readUploads()).map((u) => [u.row.id, u]));
+    expect(byId.get("small")?.attempts).toBe(1);
+    expect(byId.get("big")?.attempts).toBe(0);
+  });
+});
+
 describe("retryWaitingNow", () => {
   test("makes every waiting upload due, but leaves a refused one alone", async () => {
     await addUpload(entry("waiting", { attempts: 6, retryAt: now + 3_600_000 }), {

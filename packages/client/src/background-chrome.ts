@@ -16,6 +16,8 @@ import { ext, getStoredSession, notifyTabs } from "~/lib/ext";
 import { apiClient, type SignedInSession } from "~/lib/api-client";
 import { fetchServerConfig } from "~/lib/server-config";
 import { setupContextMenu } from "~/lib/context-menu";
+import { createUploadSender } from "~/lib/files/sender";
+import { retryWaitingNow } from "~/lib/files/store";
 import { prewarmPeriodically, prewarmSnapshot } from "~/lib/sync/prewarm-extension";
 
 declare let self: ServiceWorkerGlobalScope;
@@ -67,8 +69,19 @@ const showNotification = (payload: PushPayload) => {
   });
 };
 
+// This worker dies about 30 s after it goes idle, and a slower PUT with it: a bigger file waits for
+// a tab
+const MAX_WORKER_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+const sendUploads = createUploadSender(getStoredSession, {
+  only: (upload) => upload.row.size <= MAX_WORKER_UPLOAD_BYTES,
+});
+const sendWaitingNow = () => retryWaitingNow().catch(console.error).then(sendUploads);
+
 setupContextMenu();
-prewarmPeriodically();
+prewarmPeriodically(() => void sendUploads());
+// Whatever woke this worker, uploads that were waiting for it go now
+void sendWaitingNow();
 ext.runtime.onInstalled.addListener(() => {
   void queueReconcile();
   void prewarmSnapshot();
@@ -79,8 +92,10 @@ ext.runtime.onStartup.addListener(() => {
 });
 // On the storage write itself: the sign-in's runtime message can arrive before it lands
 ext.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && (TOKEN_KEY in changes || SERVER_URL_KEY in changes))
+  if (area === "local" && (TOKEN_KEY in changes || SERVER_URL_KEY in changes)) {
     void prewarmSnapshot();
+    void sendUploads();
+  }
 });
 ext.runtime.onMessage.addListener((message: unknown) => {
   if ((message as { type?: string })?.type === MSG_TOKEN_CHANGED) void queueReconcile();
@@ -94,7 +109,12 @@ self.addEventListener("push", (event: PushEvent) => {
   // Unpacked extensions can't update themselves, so a deploy needs no action here.
   if (!payload?.type || payload.type === "deploy") return;
   event.waitUntil(
-    Promise.all([showNotification(payload), notifyTabs(), prewarmSnapshot(payload.rows)]),
+    Promise.all([
+      showNotification(payload),
+      notifyTabs(),
+      prewarmSnapshot(payload.rows),
+      sendUploads(),
+    ]),
   );
 });
 

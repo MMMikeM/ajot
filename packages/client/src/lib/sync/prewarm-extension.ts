@@ -11,9 +11,11 @@ const PREWARM_EVERY_MINUTES = 5;
  * that died quietly. Call it at the top level: Chrome only wakes a stopped worker for listeners
  * added there.
  */
-export const prewarmPeriodically = () => {
+export const prewarmPeriodically = (alsoOnAlarm?: () => void) => {
   ext.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === ALARM) void prewarmSnapshot();
+    if (alarm.name !== ALARM) return;
+    void prewarmSnapshot();
+    alsoOnAlarm?.();
   });
   // Creating it again restarts the countdown, and Chrome restarts its worker after seconds idle
   ext.alarms
