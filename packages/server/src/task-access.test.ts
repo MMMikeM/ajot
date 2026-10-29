@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-sqlite";
 import { describe, expect, test } from "vite-plus/test";
 import {
+  canDeleteAttachment,
   canDeleteTask,
   canFileShareIn,
   canMoveTo,
@@ -146,6 +147,20 @@ test("canDeleteTask: the owner, or the parent's for a subtask", () => {
   const sub = holder("sub-of-shared");
   expect(canDeleteTask({ ...sub, parent: holder("shared") }, "alice")).toBe(true);
   expect(canDeleteTask({ ...sub, parent: holder("shared") }, "bob")).toBe(false);
+});
+
+test("an attachment is deleted by its uploader while they see the task, or by whoever deletes it", () => {
+  const deleters = (taskId: string, uploader: string) =>
+    people.filter((userId) =>
+      canDeleteAttachment(
+        { uploaderId: uploader },
+        viewGrants(taskId).find((g) => g.userId === userId),
+      ),
+    );
+  expect(deleters("shared", "carol")).toEqual(["alice", "carol"]);
+  expect(deleters("shared", "bob")).toEqual(["alice", "bob"]);
+  expect(deleters("in-home", "alice")).toEqual(["alice", "bob"]);
+  expect(deleters("own", "dave")).toEqual(["alice"]);
 });
 
 const found = (sql: string) => query(sql).length > 0;

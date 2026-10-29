@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import * as reachRepo from "../db/reach.repo";
 import * as taskRepo from "../db/task.repo";
 import * as categoryRepo from "../db/category.repo";
+import * as attachmentRepo from "../db/attachment.repo";
 import { broadcastPerUser, type BroadcastEvent } from "../broadcast";
 
 const compare = (before = new Set<string>(), after = new Set<string>()) => ({
@@ -40,12 +41,15 @@ const addressedChanges = async (before: reachRepo.Reach, changedTaskIds: string[
     ...compare(before.tasks.get(id), after.tasks.get(id)),
   }));
 
-  const [listRows, taskRows] = await Promise.all([
+  const [listRows, taskRows, attachmentRows] = await Promise.all([
     categoryRepo.listByIds(
       lists.filter((l) => l.gained.length + l.kept.length > 0).map((l) => l.id),
     ),
     taskRepo.findListItems(
       tasks.filter((t) => t.gained.length > 0 || changed.has(t.id)).map((t) => t.id),
+    ),
+    attachmentRepo.uploadedOf(
+      tasks.filter((t) => t.gained.length + t.lost.length > 0).map((t) => t.id),
     ),
   ]);
   const listById = new Map(listRows.map((row) => [row.id, row]));
@@ -69,6 +73,12 @@ const addressedChanges = async (before: reachRepo.Reach, changedTaskIds: string[
     if (row) send(gained, { model: "tasks", action: "insert", data: row });
     if (row && changed.has(id)) send(kept, { model: "tasks", action: "update", data: row });
     send(lost, { model: "tasks", action: "delete", data: { id } });
+  }
+  const taskReach = new Map(tasks.map((t) => [t.id, t]));
+  for (const row of attachmentRows) {
+    const { gained = [], lost = [] } = taskReach.get(row.taskId) ?? {};
+    send(gained, { model: "attachments", action: "insert", data: row });
+    send(lost, { model: "attachments", action: "delete", data: { id: row.id } });
   }
   return addressed;
 };

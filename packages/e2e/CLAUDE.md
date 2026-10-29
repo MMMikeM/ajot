@@ -4,7 +4,7 @@ Playwright test suite. Two projects: `desktop` (Chrome) runs every spec, and `mo
 
 ## The stack
 
-`pnpm test:e2e` brings its own, so it needs Docker and nothing else running: Playwright's `webServer` starts `api-stack.ts` (a throwaway libSQL container, the migrations, then the API server on port 3180) and the client's production build on 5180 (`vp preview`), proxying to it. The `test` task in this package's `vite.config.ts` builds the client first: on the dev server, compiling each module as a page asked for it made every load slow on CI. The build's service worker is blocked, so it can't answer requests a test mocks. Each run starts from an empty database, and stopping the run removes the container. Set `BASE_URL` to run against a stack that's already up instead; nothing is started then.
+`pnpm test:e2e` brings its own, so it needs Docker and nothing else running: Playwright's `webServer` starts `api-stack.ts` (throwaway libSQL and versitygw containers, the latter an S3 bucket that checks presigned signatures as Tigris does, then the migrations and the API server on port 3180) and the client's production build on 5180 (`vp preview`), proxying to it. The `test` task in this package's `vite.config.ts` builds the client first: on the dev server, compiling each module as a page asked for it made every load slow on CI. The build's service worker is blocked, so it can't answer requests a test mocks. Each run starts from an empty database and bucket, and stopping the run removes the containers. Set `BASE_URL` to run against a stack that's already up instead; nothing is started then.
 
 ## Entry points
 

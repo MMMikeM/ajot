@@ -78,6 +78,36 @@ describe("the constraints", async () => {
       "UPDATE tasks SET parent_id = 'other' WHERE id = 'top'",
       /FOREIGN KEY constraint failed/,
     ],
+    [
+      "an empty attachment",
+      `INSERT INTO attachments (id, task_id, uploader_id, name, mime_type, size)
+        VALUES ('empty', 'top', 'alice', 'a.txt', 'text/plain', 0)`,
+      /CHECK constraint failed: attachment_size/,
+    ],
+    [
+      "an attachment over the ceiling",
+      `INSERT INTO attachments (id, task_id, uploader_id, name, mime_type, size)
+        VALUES ('huge', 'top', 'alice', 'a.bin', 'application/octet-stream', 104857601)`,
+      /CHECK constraint failed: attachment_size/,
+    ],
+    [
+      "an attachment's bytes purged while it's live",
+      `INSERT INTO attachments (id, task_id, uploader_id, name, mime_type, size, uploaded_at, purged_at)
+        VALUES ('live', 'top', 'alice', 'a.jpg', 'image/jpeg', 10, '2026-10-01', '2026-10-02')`,
+      /CHECK constraint failed: attachment_purged_once_uploaded_and_deleted/,
+    ],
+    [
+      "an attachment's bytes purged before they were uploaded",
+      `INSERT INTO attachments (id, task_id, uploader_id, name, mime_type, size, deleted_at, purged_at)
+        VALUES ('never', 'top', 'alice', 'a.jpg', 'image/jpeg', 10, '2026-10-01', '2026-10-02')`,
+      /CHECK constraint failed: attachment_purged_once_uploaded_and_deleted/,
+    ],
+    [
+      "an attachment's name past 255 characters",
+      `INSERT INTO attachments (id, task_id, uploader_id, name, mime_type, size)
+        VALUES ('long', 'top', 'alice', '${"a".repeat(256)}', 'text/plain', 1)`,
+      /CHECK constraint failed: attachment_name_length/,
+    ],
   ])("refuse %s", (_what, sql, error) => {
     expect(run(sql)).toThrow(error);
   });
@@ -91,7 +121,13 @@ describe("the constraints", async () => {
       INSERT INTO notification_queue (id, user_id, type, scheduled_for, sent_at) VALUES
         ('tomorrow', 'alice', 'overdue-digest', '2026-10-29T00:00:00.000Z', '2026-10-29T00:00:00.000Z'),
         ('bobs', 'bob', 'overdue-digest', '2026-10-28T08:00:00.000Z', '2026-10-28T08:00:00.000Z');
-      INSERT INTO tasks (id, user_id, parent_id, title) VALUES ('sub2', 'alice', 'other', 'Sub')`);
+      INSERT INTO tasks (id, user_id, parent_id, title) VALUES ('sub2', 'alice', 'other', 'Sub');
+      INSERT INTO attachments (id, task_id, uploader_id, name, mime_type, size)
+        VALUES ('photo', 'top', 'bob', 'photo.jpg', 'image/jpeg', 104857600);
+      UPDATE attachments SET uploaded_at = '2026-10-01' WHERE id = 'photo';
+      UPDATE attachments SET deleted_at = '2026-10-02' WHERE id = 'photo';
+      UPDATE attachments SET purged_at = '2026-11-01' WHERE id = 'photo'`);
+    expect(ids(sqlite, "SELECT id FROM attachments")).toEqual(["photo"]);
     expect(ids(sqlite, "SELECT id FROM notification_queue ORDER BY id")).toEqual([
       "bobs",
       "digest",

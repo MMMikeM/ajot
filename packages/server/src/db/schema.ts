@@ -24,7 +24,15 @@ import {
   bool,
 } from "./columns";
 import type { PushTrigger } from "@newtab-todo/shared/push-payload";
-import { MAX_NAME, MAX_SORT_KEY, MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
+import {
+  MAX_FILE_BYTES,
+  MAX_FILE_NAME,
+  MAX_NAME,
+  MAX_SHORT,
+  MAX_SORT_KEY,
+  MAX_TEXT,
+  MAX_TITLE,
+} from "@newtab-todo/shared/field-limits";
 
 /** isSortKey (shared/sort-order.ts) in SQL: null, or a key fractional-indexing makes. */
 const sortOrderIsAKey = (key: AnySQLiteColumn) => {
@@ -173,6 +181,38 @@ export const notes = sqliteTable(
     atMost("note_title_length", t.title, MAX_TITLE),
     atMost("note_content_length", t.content, MAX_TEXT),
     index("notes_user_idx").on(t.userId),
+  ],
+);
+
+export const attachments = sqliteTable(
+  "attachments",
+  {
+    id: pk(),
+    taskId: fk("task_id", () => tasks.id, { onDelete: "cascade" }),
+    uploaderId: fk("uploader_id", () => users.id, { onDelete: "cascade" }),
+    name: string("name"),
+    mimeType: string("mime_type"),
+    size: int("size"),
+    thumbhash: nullableString("thumbhash"),
+    hasThumb: bool("has_thumb").default(false),
+    uploadedAt: nullableString("uploaded_at"),
+    // The bytes are gone and the row stays, so a late retry of its insert is refused
+    purgedAt: nullableString("purged_at"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: nullableString("deleted_at"),
+  },
+  (t) => [
+    check("attachment_size", sql`${t.size} BETWEEN 1 AND ${sql.raw(String(MAX_FILE_BYTES))}`),
+    check(
+      "attachment_purged_once_uploaded_and_deleted",
+      sql`${t.purgedAt} IS NULL OR (${t.uploadedAt} IS NOT NULL AND ${t.deletedAt} IS NOT NULL)`,
+    ),
+    atMost("attachment_name_length", t.name, MAX_FILE_NAME),
+    atMost("attachment_mime_type_length", t.mimeType, MAX_SHORT),
+    atMost("attachment_thumbhash_length", t.thumbhash, MAX_SHORT),
+    index("attachments_task_idx").on(t.taskId),
+    index("attachments_uploader_idx").on(t.uploaderId),
   ],
 );
 
@@ -344,6 +384,7 @@ export const relations = defineRelations(
     tasks,
     users,
     notes,
+    attachments,
     categories,
     pushSubscriptions,
     pushPreferences,
@@ -406,6 +447,7 @@ export const relations = defineRelations(
       }),
       subtasks: r.many.tasks(),
       notes: r.many.notes(),
+      attachments: r.many.attachments(),
       shares: r.many.taskShares(),
     },
     taskShares: {
@@ -422,6 +464,18 @@ export const relations = defineRelations(
       category: r.one.categories({
         from: r.taskShares.categoryId,
         to: r.categories.id,
+      }),
+    },
+    attachments: {
+      user: r.one.users({
+        from: r.attachments.uploaderId,
+        to: r.users.id,
+        optional: false,
+      }),
+      task: r.one.tasks({
+        from: r.attachments.taskId,
+        to: r.tasks.id,
+        optional: false,
       }),
     },
     notes: {

@@ -10,6 +10,7 @@ const goneMessages = {
   task: "That task no longer exists.",
   category: "That list no longer exists.",
   note: "That note no longer exists.",
+  attachment: "That file no longer exists.",
   user: "That account no longer exists.",
   username: "No one here has that username.",
   contact: "They're no longer one of your contacts.",
@@ -58,6 +59,12 @@ export class ConflictError extends HTTPException {
 export class GoneError extends HTTPException {
   constructor(message: string) {
     super(410, { message });
+  }
+}
+
+export class TooLargeError extends HTTPException {
+  constructor(message: string) {
+    super(413, { message });
   }
 }
 
