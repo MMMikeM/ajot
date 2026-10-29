@@ -33,9 +33,9 @@ const dropViews = async (db: Database) => {
  *
  * SQLite checks every view when a rebuilt table is renamed into place, so the views are dropped
  * before each migration and created from views.ts after the last, on every run. And it ignores
- * PRAGMA foreign_keys inside a transaction, so a rebuild's DROP TABLE would cascade (dropping
- * tasks deleted every share and reminder): they're off for the connection around it, as SQLite's
- * own table-rebuild steps say. https://www.sqlite.org/lang_altertable.html#otheralter
+ * PRAGMA foreign_keys inside a transaction, so a rebuild's DROP TABLE would cascade: they're off
+ * for the connection around it, as SQLite's own table-rebuild steps say.
+ * https://www.sqlite.org/lang_altertable.html#otheralter
  */
 export const migrate = async (db: Database, migrationsFolder: string) => {
   const migrations = readMigrationFiles({ migrationsFolder });

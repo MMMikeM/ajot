@@ -1,6 +1,5 @@
 const extensionProtocols = new Set(["chrome-extension:", "moz-extension:"]);
 
-/** `ALLOWED_ORIGINS`, comma-separated: where a web app on another address than the API is served. */
 export const parseAllowedOrigins = (value: string | undefined) =>
   (value ?? "")
     .split(",")
@@ -14,10 +13,7 @@ export const parseAllowedOrigins = (value: string | undefined) =>
       return [];
     });
 
-/**
- * Who gets CORS headers: each extension, and a web app served from another address than the API.
- * The web app on the API's own address needs none, since its requests are same-origin.
- */
+/** The web app on the API's own address isn't here: its requests are same-origin. */
 export const isAllowedOrigin = (origin: string, allowed: string[]) => {
   const url = URL.parse(origin);
   if (!url) return false;

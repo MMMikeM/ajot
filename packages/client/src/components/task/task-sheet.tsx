@@ -3,7 +3,7 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useIsFetching } from "@tanstack/react-query";
 import { useTasks } from "~/lib/db/hooks";
 
-// Lazy-load: defers @base-ui/drawer, @tanstack/react-form (69KB)
+// Lazy-load: keeps the detail sheet out of the main bundle
 // Prefetched on route load so the first open doesn't wait. Offline without a cached chunk the
 // prefetch fails, so opening a task loads it again rather than replaying that failure.
 const loadTaskDetail = () => import("~/components/task/detail");

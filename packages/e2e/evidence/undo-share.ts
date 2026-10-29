@@ -124,8 +124,7 @@ const removeMember = async (page: Page, name: string) => {
   await page.waitForTimeout(900);
 };
 
-// The page as a phone leaves it when switching apps, and as it comes back
-const setHidden = (page: Page, hidden: boolean) =>
+const setAppInBackground = (page: Page, hidden: boolean) =>
   page.evaluate(`(() => {
     if (${hidden}) {
       Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
@@ -139,7 +138,6 @@ const setHidden = (page: Page, hidden: boolean) =>
 
 const browser = await chromium.launch();
 
-// Phone first
 await fresh(browser, phone, async (page) => {
   await row(page, "Pick up dry cleaning").getByRole("checkbox").click();
   await page.waitForTimeout(2500);
@@ -171,10 +169,10 @@ await fresh(browser, phone, async (page) => {
       await page.waitForTimeout(600);
       await row(page, "Pick up dry cleaning").getByRole("checkbox").click();
       await page.waitForTimeout(1200);
-      await setHidden(page, true);
+      await setAppInBackground(page, true);
       await showCaption(page, "Away in another app for 7 seconds");
       await page.waitForTimeout(7000);
-      await setHidden(page, false);
+      await setAppInBackground(page, false);
       await showCaption(page, "Back in ajot: is Undo still there?");
       await page.waitForTimeout(2500);
       timeline.save();
@@ -183,7 +181,6 @@ await fresh(browser, phone, async (page) => {
   );
 }
 
-// Then desktop
 await fresh(
   browser,
   desktop,

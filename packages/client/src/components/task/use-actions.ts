@@ -10,6 +10,8 @@ import type { Task } from "~/lib/types";
 // edit, and every row they're passed to renders again
 const currentTasks = () => [...(tasksCollection.state?.values() ?? [])];
 
+const supportsViewTransitions = () => typeof document.startViewTransition === "function";
+
 export const useTaskActions = () => {
   const handleToggle = (task: Task) => {
     const newStatus = task.status === "done" ? "todo" : "done";
@@ -32,8 +34,7 @@ export const useTaskActions = () => {
   const handleDelete = (task: Task) => {
     const originEl = document.querySelector<HTMLElement>(`[data-task-id="${task.id}"]`);
 
-    // document.startViewTransition not referenced at module level — SSR-safe
-    if (originEl && typeof document.startViewTransition === "function") {
+    if (originEl && supportsViewTransitions()) {
       originEl.style.viewTransitionName = "undo-morph";
       const vt = document.startViewTransition(() => {
         flushSync(() => {

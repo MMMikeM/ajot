@@ -1,6 +1,4 @@
-// Before/after evidence for the list polish: overdue dates, the phone list's end, list options on
-// the phone, the colour picker, search highlights, the Done chevron and the title under `/`.
-// Run once per version of the app:
+// Before/after evidence for the list polish. Run once per version of the app:
 //   npx tsx evidence/list-polish.ts --url http://localhost:5312 --out .evidence/list-polish/before
 import { mkdirSync } from "node:fs";
 import { chromium, devices, type Browser, type Page } from "@playwright/test";
@@ -25,8 +23,6 @@ const desktop = {
 };
 type Device = typeof phone | typeof desktop;
 
-// The mock's Inbox plus enough rows to run past a phone's fold, an overdue task with a long title,
-// and a list with no colour
 const longListData = () => {
   const data = mockData();
   const template = data.tasks.find((t) => t.title === "Pick up dry cleaning")!;
@@ -166,7 +162,6 @@ const listOptions = async (page: Page, list: string, isDesk: boolean) => {
   await page.waitForTimeout(900);
 };
 
-// Where the title's text starts, on the list and in the search field
 const TITLE_X = `(() => {
   const field = document.querySelector('input[type="search"]');
   if (field) {

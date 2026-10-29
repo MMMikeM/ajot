@@ -125,7 +125,6 @@ const list = async (userId: string) =>
     orderBy: { sortOrder: "asc", createdAt: "asc" },
   });
 
-/** A deleted task reads as missing, unless asked for by the restore that brings it back. */
 const findById = async (id: string, { deleted = false } = {}) => {
   const row = await db.query.tasks.findFirst({
     where: deleted ? { id } : { id, deletedAt: { isNull: true } },
@@ -135,7 +134,7 @@ const findById = async (id: string, { deleted = false } = {}) => {
   return row;
 };
 
-/** Who can reach these tasks, and how far: a row per way in. */
+/** A row per way in. */
 const accessTo = async (taskIds: string[]) =>
   taskIds.length === 0
     ? []
@@ -143,10 +142,7 @@ const accessTo = async (taskIds: string[]) =>
 
 export type TaskAccessRow = Awaited<ReturnType<typeof accessTo>>[number];
 
-/**
- * The task and who can reach it, in one query; no task when it's missing, or deleted unless asked
- * for. Filtered on the view's task_id, so each branch of task_access is an index lookup.
- */
+// Filtered on the view's task_id, so each branch of task_access is an index lookup
 const findWithAccess = async (id: string, { deleted = false } = {}) => {
   const rows = await db
     .select({
@@ -168,7 +164,7 @@ const findWithAccess = async (id: string, { deleted = false } = {}) => {
 const STAMPS = ["updatedAt", "editedAt", "completedAt"] as const;
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
-// Re-inserting a deleted task, as Undo did before restores went through update, restores it.
+// Re-inserting a deleted task restores it, since the conflict update clears deletedAt.
 // An id someone else's task already has updates nothing, so it returns nothing and restores nothing.
 const insert = async (data: TaskInsert) => {
   const [row] = await db
@@ -239,10 +235,7 @@ const nextSortOrder = async (userId: string) => {
   return keyAfter([last?.sortOrder]);
 };
 
-/**
- * Hides the task and its subtasks, keeping their shares, notes and reminders for a restore.
- * Bumping updatedAt makes the delete win over older offline edits.
- */
+// Bumping updatedAt makes the delete win over older offline edits
 const remove = async (id: string) => {
   const at = now();
   const rows = await db
@@ -260,8 +253,8 @@ const liveCategoryId = sql<string | null>`(select ${categories.id} from ${catego
   where ${categories.id} = ${tasks.categoryId} and ${categories.deletedAt} is null)`;
 
 /**
- * Undoes a delete. It skips the stale check update makes: the delete was stamped by the server's
- * clock and the restore by the device's, and a restore always comes after the delete it undoes.
+ * Skips update's stale check: the delete was stamped by the server's clock and the restore by the
+ * device's, and a restore always comes after the delete it undoes.
  */
 const restore = async (id: string, updatedAt: string) => {
   const [row] = await db
@@ -289,7 +282,6 @@ const listItemWith = {
   sentBy: { columns: { id: true, name: true } },
 } as const;
 
-/** A task in the shape the list sends, for broadcasting one that's back. */
 const findListItem = async (id: string) => {
   const row = await db.query.tasks.findFirst({
     where: { id, deletedAt: { isNull: true } },
@@ -300,7 +292,6 @@ const findListItem = async (id: string) => {
   return row;
 };
 
-/** A task as the list sends it, with its subtasks as rows of their own. */
 const findListItemWithSubtasks = async (id: string) =>
   db.query.tasks.findMany({
     where: { OR: [{ id }, { parentId: id }], deletedAt: { isNull: true } },
@@ -319,8 +310,6 @@ const findListItems = async (ids: string[]) => {
 
 export type TaskWithRelations = Awaited<ReturnType<typeof list>>[number];
 
-/** The share, and whether it's new: sharing a task with someone again changes nothing. */
-/** Sharing again with someone it's already shared with changes only its permission. */
 const insertShare = async (data: TaskShareInsert) => {
   const [row] = await db.insert(taskShares).values(data).onConflictDoNothing().returning();
   if (row) return { share: row, added: true, changed: true };
@@ -370,7 +359,6 @@ const updateShareCategory = async (
   return row;
 };
 
-/** Each task's shares, in the shape the task list sends them. */
 const listSharesForTasks = async (taskIds: string[]) => {
   if (taskIds.length === 0) return [];
   return db.query.tasks.findMany({

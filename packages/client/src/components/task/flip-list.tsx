@@ -30,7 +30,7 @@ const topsWithin = (list: HTMLElement): Tops => {
 /**
  * Glides the children of `list` that carry a `data-flip-key` to their new places when others come,
  * go or change height above them, and with `arrivals` fades in one that comes back, as Undo does.
- * Transform and opacity only. A class for getSnapshotBeforeUpdate: the old places must be read
+ * A class for getSnapshotBeforeUpdate: the old places must be read
  * just before React changes the DOM. A row that grows or shrinks on its own (its subtask field
  * opening or closing) renders without this, so a ResizeObserver catches that.
  */

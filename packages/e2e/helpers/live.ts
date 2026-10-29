@@ -41,10 +41,7 @@ export const listenLive = (page: Page) => {
   page.on("requestfailed", settled);
 
   return {
-    /**
-     * Loads `path`, then waits for the stream to open and the page's fetches of the lists to be
-     * back, so a change made after this can only reach the page live.
-     */
+    /** Once it resolves, a change can only reach the page live. */
     open: async (path = "/") => {
       streamOpen = false;
       tasksFetchedSinceOpen = false;

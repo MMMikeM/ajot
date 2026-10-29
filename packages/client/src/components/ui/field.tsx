@@ -44,7 +44,6 @@ const Input = ({ className, ...props }: ComponentProps<"input">) => (
   <InputPrimitive
     dir="auto"
     className={cn(
-      // Strip the box style from the primitive
       "h-auto rounded-none border-0 border-b py-2 shadow-none",
       "bg-transparent px-0",
       "border-ghost focus-visible:border-hint",
@@ -60,7 +59,6 @@ const Textarea = ({ className, ...props }: ComponentProps<"textarea">) => (
   <TextareaPrimitive
     dir="auto"
     className={cn(
-      // Strip the box style
       "rounded-none border-0 border-b shadow-none",
       "min-h-0 bg-transparent px-0 py-1.5",
       "field-sizing-content resize-none",

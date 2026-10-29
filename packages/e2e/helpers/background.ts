@@ -40,7 +40,6 @@ export const dispatchPeriodicSync = (context: BrowserContext, origin: string, ta
     await cdp.send("ServiceWorker.dispatchPeriodicSyncEvent", { origin, registrationId, tag });
   });
 
-/** The task titles saved for a page opened offline, or null before the first save. */
 export const savedTitles = (worker: Worker) =>
   worker.evaluate(
     () =>

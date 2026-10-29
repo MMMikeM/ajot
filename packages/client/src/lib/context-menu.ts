@@ -51,9 +51,11 @@ const draftFor = (id: DraftId, info: ClickData, tab?: browser.tabs.Tab): Draft =
   switch (id) {
     case "selection": {
       const title = toTitle(selection);
-      // A selection too long for a title is kept whole in the description
-      const fullText = title.endsWith("…") ? selection : null;
-      return { title, description: [fullText, pageUrl].filter(Boolean).join("\n\n") || null };
+      const selectionIfTruncated = title.endsWith("…") ? selection : null;
+      return {
+        title,
+        description: [selectionIfTruncated, pageUrl].filter(Boolean).join("\n\n") || null,
+      };
     }
     case "selection-as-note":
       return { title: pageTitle, description: pageUrl, note: selection };
@@ -84,7 +86,6 @@ const request = async <T>(session: Session, method: string, path: string, body?:
   return (res.status === 204 ? undefined : await res.json()) as T;
 };
 
-// After every other top-level task, as adding one in the app does
 const nextSortOrder = async (session: Session) => {
   const tasks = await request<{ parentId: string | null; sortOrder: string | null }[]>(
     session,
@@ -96,7 +97,6 @@ const nextSortOrder = async (session: Session) => {
 
 const INBOX: Destination = { kind: "inbox", target: "", title: "Inbox", done: "Added to Inbox" };
 
-/** In groups, a separator between each: the Inbox, shared lists, then sharing and sending. */
 const fetchDestinations = async (session: Session): Promise<Group[]> => {
   const [categories, contacts] = await Promise.all([
     request<Category[]>(session, "GET", "/api/categories"),
@@ -193,8 +193,7 @@ const addDraft = async (session: Session, draft: Draft, kind: DestinationKind, t
   return extras.flatMap(([part], i) => (settled[i].status === "rejected" ? [part] : []));
 };
 
-// Counts which items get used, so the unused ones can go
-const count = (session: Session, name: string) =>
+const recordMenuUse = (session: Session, name: string) =>
   request(session, "POST", "/api/metrics", { name }).catch(console.error);
 
 let doneLabels = new Map<string, string>();
@@ -208,7 +207,7 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
   if (!session) return notify("Not added", "Sign in to Ajot to add tasks from the menu.");
   try {
     const failed = await addDraft(session, draft, kind as DestinationKind, target);
-    void count(session, `menu:${draftId}:${kind}`);
+    void recordMenuUse(session, `menu:${draftId}:${kind}`);
     const done = doneLabels.get(`${kind}|${target}`) ?? "Added to Ajot";
     await notify(failed.length ? `Added, but ${failed.join(" and ")} failed` : done, draft.title);
   } catch (err) {
@@ -219,6 +218,9 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
 
 const create = (item: browser.contextMenus._CreateCreateProperties) =>
   ext.contextMenus.create(item);
+
+const separatedFromPrevious = (groups: Group[], i: number) =>
+  i > 0 && !(groups[i]!.submenu && groups[i - 1]!.submenu);
 
 const buildMenu = (groups: Group[]) => {
   const nonEmpty = groups.filter((group) => group.destinations.length > 0);
@@ -234,8 +236,7 @@ const buildMenu = (groups: Group[]) => {
     create({ id: draftId, ...item });
     nonEmpty.forEach(({ submenu, destinations }, i) => {
       const child = { parentId: draftId, contexts: item.contexts };
-      // Submenus sit together, with one separator before the first
-      if (i > 0 && !(submenu && nonEmpty[i - 1]!.submenu))
+      if (separatedFromPrevious(nonEmpty, i))
         create({ id: `${draftId}|separator-${i}`, type: "separator", ...child });
       // Outside the "draft|kind|target" ids, so clicking it adds nothing
       const parentId = submenu ? `${draftId}:${submenu.id}` : draftId;

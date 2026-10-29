@@ -82,7 +82,7 @@ class GradientBuilder {
     return this;
   }
 
-  /** Raw comma-separated stops — use when composing multiple segments (e.g. SIDES) */
+  /** Raw comma-separated stops — use when composing multiple segments */
   stops(): string {
     return this._buildStops().join(", ");
   }

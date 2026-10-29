@@ -1,8 +1,7 @@
 /**
- * Ticking or deleting a task unmounts its row, which drops keyboard focus to <body>. Before that
- * happens, hand focus to the next row's checkbox, else the previous row's, else the capture input.
- * Keyboard focus only: a tap focuses the checkbox on Android, and moving that focus to the capture
- * input would raise the on-screen keyboard.
+ * Runs before ticking or deleting a task unmounts its row, which would drop keyboard focus to
+ * <body>. Keyboard focus only: a tap focuses the checkbox on Android, and moving that focus to the
+ * capture input would raise the on-screen keyboard.
  */
 export const handOffRowFocus = (list: HTMLElement | null, taskId: string) => {
   const row = list?.querySelector(`[data-task-id="${CSS.escape(taskId)}"]`);

@@ -14,7 +14,6 @@ import { MenuItem } from "~/components/ui/menu-item";
 import { Popover, PopoverTrigger, PopoverContent } from "~/components/ui/popover";
 import { cn } from "~/lib/utils";
 
-// The device's own connection, as distinct from whether the sync server answers
 const subscribeOnline = (onChange: () => void) => {
   window.addEventListener("online", onChange);
   window.addEventListener("offline", onChange);
@@ -36,11 +35,6 @@ const SYNC_LABELS = {
   connected: "Sync",
 } as const;
 
-/**
- * What a screen reader hears when sync goes offline or comes back. Silent for the state the page
- * opens in, and while a reconnect is still being tried. "Back online" only once the device itself
- * was offline: a server that answers again after refusing is "Syncing again".
- */
 const useSyncAnnouncement = (syncState: keyof typeof SYNC_LABELS, deviceOnline: boolean) => {
   const [announcement, setAnnouncement] = useState("");
   const wasOffline = useRef<boolean | null>(null);

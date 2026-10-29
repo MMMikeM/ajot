@@ -13,10 +13,7 @@ export type DevicePreferences = { muted: PushTrigger[]; urgent: boolean };
 // throws for anything longer, before sending to anyone
 const MAX_PAYLOAD_BYTES = 3993;
 
-/**
- * The message, without its rows if they make it too long. Still too long, it becomes a plain
- * "changes": that still makes the device fetch the lists, which is what every push is for.
- */
+/** A plain "changes" still makes the device fetch the lists, which is what every push is for. */
 export const fitted = (message: PushMessage): PushMessage => {
   if (Buffer.byteLength(JSON.stringify(message)) <= MAX_PAYLOAD_BYTES) return message;
   const { rows, ...withoutRows } = message;
@@ -27,7 +24,6 @@ export const DEFAULT_PUSH_PREFERENCES: DevicePreferences = { muted: [], urgent: 
 
 export const deviceKey = (userId: string, deviceId: string) => `${userId}:${deviceId}`;
 
-/** Who made a change, and on which device. */
 export type ChangeSource = { userId?: string; deviceId?: string };
 
 export type NotificationPayload = Extract<
@@ -35,7 +31,6 @@ export type NotificationPayload = Extract<
   { type: keyof typeof NOTIFICATION_TRIGGERS }
 >;
 
-/** One user's changes and notifications, sent together. */
 export type PushBatch = {
   changes: { event: Omit<MutationEvent, "sourceClientId">; source: ChangeSource }[];
   notifications: NotificationPayload[];
@@ -55,10 +50,8 @@ const preferencesOf = (sub: Recipient, preferences: Map<string, DevicePreference
   DEFAULT_PUSH_PREFERENCES;
 
 /**
- * Every push makes a device save the lists, so each gets one: the notifications it hasn't turned
- * off, or else one general push for changes it didn't make (a quiet "changes" for the PWA, a silent
- * "sync" for an extension). High urgency wakes an idle phone to save them before it goes offline,
- * unless the device chose to wait for its next wake-up.
+ * Every push makes a device save the lists, so one sent a notification needs no other. High
+ * urgency wakes an idle phone to save them before it goes offline.
  */
 export const planPushes = <S extends Recipient>(
   userId: string,

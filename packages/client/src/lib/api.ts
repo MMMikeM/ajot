@@ -8,8 +8,7 @@ import { getBuildTarget } from "~/lib/build-target";
 import { getServerUrl } from "~/lib/server-url";
 import { markStartup } from "~/lib/startup-timing";
 
-// During SSR prerender (Node.js), relative URLs are invalid and there's no auth.
-// Return empty JSON so collections render with no data — client hydrates after mount.
+// During SSR prerender (Node.js), relative URLs are invalid and there's no auth
 const ssrFetch = () =>
   Promise.resolve(new Response("[]", { headers: { "content-type": "application/json" } }));
 

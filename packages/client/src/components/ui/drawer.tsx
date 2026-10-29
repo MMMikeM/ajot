@@ -8,8 +8,7 @@ import { cn } from "~/lib/utils";
 const SheetContext = createContext({ open: false, settled: false });
 
 // Base UI skips the enter transition for a drawer that mounts already open, and ours do (a task's
-// route mounts its sheet open), so they appeared at once instead of sliding in. Opening a frame
-// after mounting gives the slide its starting frame.
+// route mounts its sheet open). Opening a frame after mounting gives the slide its starting frame.
 const Drawer = ({
   open,
   onOpenChangeComplete,
@@ -39,10 +38,8 @@ const Drawer = ({
 
 /**
  * Blurs the page above the sheet, once the sheet covers about half the screen: blurring the whole
- * page through the slide dropped frames on phones. It watches the sheet's top edge while it
- * slides; a sheet shorter than half the screen blurs once it settles. Sliding, it reaches the top
- * of the screen; settled, it shrinks to the strip left showing, since the opaque sheet hides the
- * rest.
+ * page through the slide drops frames on phones. Settled, it shrinks to the strip left showing,
+ * since the opaque sheet hides the rest.
  */
 function SheetBlur() {
   const { open, settled } = use(SheetContext);

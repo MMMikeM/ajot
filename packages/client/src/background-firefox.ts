@@ -91,9 +91,7 @@ const connect = async () => {
         const payload = JSON.parse(e.data);
         browser.runtime.sendMessage({ type: "SSE_MUTATION", payload }).catch(() => {});
         return;
-      } catch {
-        // fall through to generic notify
-      }
+      } catch {}
     }
     void notifyTabs();
   });

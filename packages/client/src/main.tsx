@@ -24,10 +24,9 @@ console.log(`[build] ${__BUILD_VERSION__}`);
 
 const root = document.getElementById("root")!;
 const router = getRouter();
+const isPrerendered = root.innerHTML.trim() !== "";
 
-// In prod, index.html has prerendered content — hydrate to preserve it.
-// In dev (vite dev), root is empty — fall back to createRoot.
-if (root.innerHTML.trim()) {
+if (isPrerendered) {
   router.ssr = { manifest: undefined };
   await router.load();
   hydrateRoot(

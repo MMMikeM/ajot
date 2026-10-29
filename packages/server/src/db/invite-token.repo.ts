@@ -16,8 +16,8 @@ const create = async (createdByUserId: string, expiresAt: string) => {
 };
 
 /**
- * The display name of whoever made a still-usable invite. An unknown, used or expired one is the
- * same NotFoundError, without the token, which is the link's secret.
+ * An unknown, used or expired invite is the same NotFoundError, without the token, which is the
+ * link's secret.
  */
 const findInviterName = async (token: string) => {
   const invite = await db.query.inviteTokens.findFirst({
@@ -48,7 +48,6 @@ const claim = async (token: string) => {
 
 type InviteToken = NonNullable<Awaited<ReturnType<typeof claim>>>;
 
-/** Undoes claim() when what it was claimed for, an account or a contact, didn't happen. */
 const release = async (token: string) => {
   await db.update(inviteTokens).set({ usedAt: null }).where(eq(inviteTokens.id, token));
 };
@@ -61,9 +60,8 @@ const removedBy = (userId: string, otherId: string) =>
   );
 
 // One transaction, so a failed contact insert leaves the token unused for a retry. The caller
-// passes an invite it claimed; this doesn't check it again. Returns the
-// contact rows it added, none if the two were contacts already. Being contacts again drops the
-// Undo of either one's removal of the other, which would put back lists they shared then.
+// passes an invite it claimed; this doesn't check it again. Being contacts again drops the Undo
+// of either one's removal of the other, which would put back lists they shared then.
 const consume = async (invite: InviteToken, usedByUserId: string) =>
   inTransaction(async (tx) => {
     const inviterId = invite.createdByUserId;

@@ -9,8 +9,8 @@ const focusIt = (el: HTMLButtonElement | null) => {
 };
 
 /**
- * People's invite, wherever someone runs out of people to add. `takeFocus` is for when it replaces
- * the control that had focus, which would otherwise drop it to the page.
+ * `takeFocus` is for when it replaces the control that had focus, which would otherwise drop it to
+ * the page.
  */
 export function InviteButton({
   label = "Invite someone",

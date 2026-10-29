@@ -51,8 +51,7 @@ app.onError((err, c) => {
   return c.json({ error: "Something went wrong on the server. Try again." }, 500);
 });
 
-// Compress all responses except SSE (streamSSE is a streaming response — buffered
-// compression would break it by preventing chunks from flushing to the client).
+// Buffered compression would keep SSE chunks from flushing to the client
 app.use("*", async (c, next) => {
   if (c.req.path === "/api/events") return next();
   return compress()(c, next);
@@ -68,10 +67,8 @@ app.use(
 
 const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 
-// CORS — needed for extension context (moz-extension:// origin).
-// Headers are set BEFORE next() so they're present on error responses too:
-// if a route throws HTTPException, onError() calls c.json() which picks up
-// whatever is already in c._headers — but post-next() code is never reached.
+// Set BEFORE next() so error responses have them too: when a route throws, onError()'s c.json()
+// picks up the headers already set, but code after next() is never reached.
 // No Allow-Credentials: see extractToken.
 app.use("*", (c, next) => {
   c.header("Vary", "Origin", { append: true });

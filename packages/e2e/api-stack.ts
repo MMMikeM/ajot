@@ -1,6 +1,3 @@
-// Playwright's webServer runs this: a throwaway libSQL database in Docker, the migrations run on
-// it, and the API server on top. Stopping it removes the container, so every run starts empty.
-
 import { execFileSync, spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { API_PORT } from "./helpers/stack";

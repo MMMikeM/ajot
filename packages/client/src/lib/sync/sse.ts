@@ -63,7 +63,6 @@ const subscribePending = (cb: () => void) => {
   };
 };
 
-/** True while any optimistic mutations have not yet been confirmed by the server. */
 export const usePendingMutations = () =>
   useSyncExternalStore(subscribePending, () => pendingSnapshot) > 0;
 
@@ -233,8 +232,8 @@ export const initSync = () => {
     listenExtensionMessages();
     shareSessionWithBackground();
     if (!backgroundHoldsSse()) return;
-    // Probe the background page for its current SSE connection state so the
-    // indicator isn't stuck at "Offline" on fresh tab load. It broadcasts later changes.
+    // The background page broadcasts only later changes, so without asking the indicator would
+    // be stuck at "Offline" on a fresh tab.
     syncStateStore.set(navigator.onLine ? "connecting" : "disconnected");
     ext.runtime
       .sendMessage({ type: MSG_GET_STATUS })

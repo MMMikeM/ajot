@@ -26,15 +26,12 @@ export const injectCriticalCss = (): PluginOption => {
         ),
       ];
 
-      // Strip font @imports from app.css before compilation — fontsource emits
-      // @font-face with relative ./files/... URLs that only resolve from the CSS
-      // file's location, not from an inline <style>. The full stylesheet (loaded
-      // non-blocking) declares them with the correct hashed absolute paths.
+      // fontsource's @font-face URLs (./files/...) only resolve from the CSS file's location,
+      // not from an inline <style>. The full stylesheet declares them with hashed absolute paths.
       const appCss = readFileSync(join(srcDir, "app.css"), "utf-8")
         .replace(/source\("[^"]+"\)/, "source(none)")
         .replace(/@import "@fontsource[^;]+;\n?/g, "");
 
-      // Tailwind's node API resolves the same @import chains as the full build
       const compiler = await compile(appCss, { base: srcDir, onDependency: () => {} });
 
       const { code } = transform({

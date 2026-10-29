@@ -27,10 +27,7 @@ export type PushRows = { userId: string; events: Omit<MutationEvent, "sourceClie
 
 export type PushMessage = PushPayload & { rows?: PushRows };
 
-/**
- * What can send a device a notification, each of which a person can turn off per device. Stored
- * as what's muted, so a trigger added later starts on.
- */
+/** Stored as what's muted, so a trigger added later starts on. */
 export const PUSH_TRIGGERS = [
   "own-changes",
   "others-changes",
@@ -44,7 +41,6 @@ export const PUSH_TRIGGERS = [
 ] as const;
 export type PushTrigger = (typeof PUSH_TRIGGERS)[number];
 
-// Background sync for the extensions, so never something to turn off
 type SilentPushType = "sync" | "deploy";
 
 /** "changes" is either trigger, depending on who made the change. */

@@ -1,5 +1,4 @@
-// Assembles the Firefox MV2 and Chrome MV3 extensions from the PWA build in dist/, so it must
-// run after `pnpm build`.
+// Starts from the PWA build in dist/, so it must run after `pnpm build`.
 import { build } from "vite";
 import { readFileSync, writeFileSync, cpSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -113,7 +112,6 @@ const assemble = async (target: Target) => {
   console.log(`[build:ext] ${target.name}`);
 
   cpSync(CLIENT_DIST, outDir, { recursive: true });
-  // The extension ships neither a service worker nor a web manifest
   rmSync(join(outDir, "sw.js"), { force: true });
   rmSync(join(outDir, "manifest.webmanifest"), { force: true });
 
