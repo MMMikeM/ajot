@@ -6,6 +6,7 @@ import { hoursFromNow } from "@newtab-todo/shared/iso";
 import { migrate } from "./migrator";
 import { KEEP_DELETED_DAYS, KEEP_SENT_DAYS, purgeExpired } from "./purge.repo";
 import {
+  attachments,
   categories,
   categoryCollaborators,
   inviteTokens,
@@ -37,6 +38,19 @@ const ids = (table: string) =>
   );
 
 let purged: Awaited<ReturnType<typeof purgeExpired>>;
+
+// Key to when it was last written
+const objects = new Map<string, string>();
+const bucket = {
+  remove: async (key: string) => void objects.delete(key),
+  list: async function* () {
+    for (const [key, lastModified] of objects) yield { key, lastModified };
+  },
+};
+const twoDaysAgo = hoursFromNow(-48);
+const stored = (...keys: string[]) => {
+  for (const key of keys) objects.set(key, twoDaysAgo);
+};
 
 beforeAll(async () => {
   db.insert(users)
@@ -154,7 +168,34 @@ beforeAll(async () => {
     ])
     .run();
 
-  purged = await purgeExpired(db);
+  const file = { uploaderId: "bob", name: "f.jpg", mimeType: "image/jpeg", size: 10 };
+  const uploaded = { ...file, uploadedAt: longAgo };
+  db.insert(attachments)
+    .values([
+      { ...uploaded, id: "att-of-old", taskId: "old" },
+      { ...uploaded, id: "att-of-old-sub", taskId: "old-sub" },
+      { ...uploaded, id: "att-deleted-long-ago", taskId: "live", deletedAt: longAgo },
+      { ...uploaded, id: "att-deleted-lately", taskId: "live", deletedAt: lately },
+      { ...uploaded, id: "att-live", taskId: "live" },
+      { ...file, id: "att-abandoned", taskId: "live", createdAt: twoDaysAgo },
+      { ...file, id: "att-uploading", taskId: "live" },
+    ])
+    .run();
+  stored(
+    "a/att-of-old",
+    "t/att-of-old",
+    "a/att-of-old-sub",
+    "a/att-deleted-long-ago",
+    "a/att-deleted-lately",
+    "a/att-live",
+    "u/a/att-live",
+    "u/a/att-abandoned",
+    "a/no-row",
+  );
+  objects.set("u/a/att-uploading", hoursFromNow(0));
+  objects.set("a/just-copied", hoursFromNow(0));
+
+  purged = await purgeExpired(db, bucket);
 });
 
 describe("purging deleted tasks", () => {
@@ -229,6 +270,68 @@ describe("purging what's expired", () => {
       "sent-lately",
     ]);
     expect(purged.notifications).toBe(2);
+  });
+});
+
+describe("purging attachments", () => {
+  test("takes the bytes of a purged task's attachments and its subtasks', and their rows go with it", () => {
+    expect(objects.has("a/att-of-old")).toBe(false);
+    expect(objects.has("t/att-of-old")).toBe(false);
+    expect(objects.has("a/att-of-old-sub")).toBe(false);
+    expect(ids("attachments")).not.toContain("att-of-old");
+  });
+
+  test("takes the bytes of one deleted long ago and keeps its row, marked purged", () => {
+    expect(objects.has("a/att-deleted-long-ago")).toBe(false);
+    const row = sqlite.prepare(
+      "SELECT purged_at FROM attachments WHERE id = 'att-deleted-long-ago'",
+    );
+    expect(row.get()).toEqual({ purged_at: expect.any(String) });
+  });
+
+  test("takes an upload abandoned over a day ago, row and bytes", () => {
+    expect(ids("attachments")).not.toContain("att-abandoned");
+    expect(objects.has("u/a/att-abandoned")).toBe(false);
+  });
+
+  test("takes a day-old staged copy and bytes no confirmed row owns, and nothing newer", () => {
+    expect([...objects.keys()].sort()).toEqual([
+      "a/att-deleted-lately",
+      "a/att-live",
+      "a/just-copied",
+      "u/a/att-uploading",
+    ]);
+    expect(purged.attachments).toEqual({ ofPurgedTasks: 2, deleted: 1, unfinished: 1, strays: 2 });
+  });
+
+  test("keeps the rows of a live one, one deleted lately and one still uploading", () => {
+    expect(ids("attachments")).toEqual(
+      expect.arrayContaining(["att-live", "att-deleted-lately", "att-uploading"]),
+    );
+  });
+
+  test("a step whose bucket call fails is logged, and the rest of the purge still runs", async () => {
+    db.insert(attachments)
+      .values({
+        id: "att-again",
+        taskId: "live",
+        uploaderId: "bob",
+        name: "f",
+        mimeType: "x",
+        size: 1,
+        uploadedAt: longAgo,
+        deletedAt: longAgo,
+      })
+      .run();
+    const failing = { ...bucket, remove: async () => Promise.reject(new Error("bucket down")) };
+    const again = await purgeExpired(db, failing);
+    expect(again.attachments?.deleted).toBe("failed");
+    expect(again.sessions).toBe(0);
+    expect(
+      sqlite.prepare("SELECT purged_at FROM attachments WHERE id = 'att-again'").get(),
+    ).toEqual({
+      purged_at: null,
+    });
   });
 });
 

@@ -9,6 +9,9 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.64.1",
+    "@smithy/hash-node": "4.5.2",
+    "@smithy/protocol-http": "5.6.2",
+    "@smithy/signature-v4": "5.7.4",
     "tsx": "^4.23.15",
     "vite-plus": "catalog:"
   }

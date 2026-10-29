@@ -149,3 +149,16 @@ export const limitSharing = (userId: string) => {
     });
   sharing.count(userId);
 };
+
+const attaching = createLimiter({
+  limit: Number(process.env.ATTACHMENTS_PER_10_MINUTES) || 300,
+  windowMs: 10 * 60_000,
+});
+
+export const limitAttaching = (userId: string) => {
+  if (attaching.waitMs(userId) > 0)
+    throw new HTTPException(429, {
+      message: "That's a lot of files at once. They'll upload in a few minutes.",
+    });
+  attaching.count(userId);
+};

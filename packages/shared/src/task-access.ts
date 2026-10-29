@@ -71,6 +71,10 @@ export const canDeleteTask = (task: TaskWithHolders, userId: string) =>
 export const canEditTask = (task: TaskWithHolders, userId: string) =>
   grants(task).some((grant) => grant.userId === userId && grant.canEdit);
 
+/** `grant` is the user's on its task, from `task_access` on the server or `grants` on a page. */
+export const canDeleteAttachment = (attachment: { uploaderId: string }, grant: Grant | undefined) =>
+  !!grant && (grant.canDelete || grant.userId === attachment.uploaderId);
+
 /** The server's `categoryRepo.canUse`. */
 const canFileIn = (list: List | null, userId: string) =>
   list === null || listMemberIds(list).includes(userId);

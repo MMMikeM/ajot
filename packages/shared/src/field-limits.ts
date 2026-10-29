@@ -18,6 +18,9 @@ export const MAX_PASSWORD = 1_000;
 export const MAX_SORT_KEY = 1_000;
 // A list delete names the tasks it was shown, unless there are more than this
 export const MAX_TASK_IDS = 2_000;
+export const MAX_FILE_NAME = 255;
+// The most a server may be configured to take in one file (ATTACHMENT_MAX_MB)
+export const MAX_FILE_BYTES = 100 * 1024 * 1024;
 
 const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
 

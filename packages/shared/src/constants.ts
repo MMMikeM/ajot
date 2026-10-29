@@ -24,7 +24,7 @@ export const MSG_GET_STATUS = "GET_STATUS";
 export const MSG_BG_STATUS = "BG_STATUS";
 export const MSG_SYNC_ALL = "SYNC_ALL";
 
-export const MODEL_NAMES = ["tasks", "categories", "notes", "contacts"] as const;
+export const MODEL_NAMES = ["tasks", "categories", "notes", "contacts", "attachments"] as const;
 export type ModelName = (typeof MODEL_NAMES)[number];
 
 export const CATEGORY_TASK_ACTIONS = ["uncategorise", "delete"] as const;

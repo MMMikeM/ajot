@@ -16,6 +16,7 @@ import { notificationRoutes } from "./routes/notifications";
 import { deployRoutes } from "./routes/deploy";
 import { configRoutes } from "./routes/config";
 import { metricRoutes } from "./routes/metrics";
+import { attachmentRoutes } from "./routes/attachments";
 import { isAllowedOrigin, parseAllowedOrigins } from "./origins";
 import { rejectInvalidInput } from "./routes/openapi-schemas";
 import { LoggedHTTPException } from "./db/errors";
@@ -108,6 +109,7 @@ const api = app
   .route("/api/tasks", taskRoutes)
   .route("/api/categories", categoryRoutes)
   .route("/api/notes", noteRoutes)
+  .route("/api/attachments", attachmentRoutes)
   .route("/api/push", pushRoutes)
   .route("/api/events", eventsRoute)
   .route("/api/invites", inviteRoutes)

@@ -44,17 +44,19 @@ Keep the private key secret. Changing the keys later makes every device subscrib
 
 ## 4. Configure and deploy
 
-| Variable             | Required | What it is                                                           |
-| -------------------- | -------- | -------------------------------------------------------------------- |
-| `TURSO_DATABASE_URL` | yes      | From step 1                                                          |
-| `TURSO_AUTH_TOKEN`   | yes      | From step 1                                                          |
-| `VAPID_PUBLIC_KEY`   | yes      | From step 3; clients fetch it from `/api/config`                     |
-| `VAPID_PRIVATE_KEY`  | yes      | From step 3                                                          |
-| `VAPID_SUBJECT`      | yes      | `mailto:` address push services can contact, e.g. `mailto:you@x.com` |
-| `CRON_SECRET`        | no       | Bearer token for `POST /api/notifications/process`                   |
-| `DEPLOY_PUSH_SECRET` | no       | Header for `POST /api/deploy/notify`, which CI calls after deploying |
-| `PORT`               | no       | Defaults to 3000                                                     |
-| `ALLOWED_ORIGINS`    | no       | A web app's address, if served from another address than the API     |
+| Variable              | Required | What it is                                                           |
+| --------------------- | -------- | -------------------------------------------------------------------- |
+| `TURSO_DATABASE_URL`  | yes      | From step 1                                                          |
+| `TURSO_AUTH_TOKEN`    | yes      | From step 1                                                          |
+| `VAPID_PUBLIC_KEY`    | yes      | From step 3; clients fetch it from `/api/config`                     |
+| `VAPID_PRIVATE_KEY`   | yes      | From step 3                                                          |
+| `VAPID_SUBJECT`       | yes      | `mailto:` address push services can contact, e.g. `mailto:you@x.com` |
+| `CRON_SECRET`         | no       | Bearer token for `POST /api/notifications/process`                   |
+| `DEPLOY_PUSH_SECRET`  | no       | Header for `POST /api/deploy/notify`, which CI calls after deploying |
+| `PORT`                | no       | Defaults to 3000                                                     |
+| `ALLOWED_ORIGINS`     | no       | A web app's address, if served from another address than the API     |
+| `ATTACHMENT_MAX_MB`   | no       | The largest file someone can attach; defaults to 25, at most 100     |
+| `ATTACHMENT_QUOTA_MB` | no       | Each person's files in all; defaults to 2048                         |
 
 On Fly, set the app name in `fly.toml`, then:
 
@@ -66,6 +68,24 @@ fly deploy
 
 Elsewhere, build the `server` target of the `Dockerfile` and run it with those variables. It
 listens on `PORT`.
+
+### Attachments
+
+Files attached to tasks live in a [Tigris](https://www.tigrisdata.com) bucket on Fly, which the app
+reaches through presigned URLs, so the bytes never pass through the server. Without a bucket, the
+app offers no way to attach a file. Other S3-compatible storage may work but isn't tested.
+
+```sh
+fly storage create
+```
+
+That sets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3` and `BUCKET_NAME` as
+secrets on the app. Browsers upload to the bucket directly, so it needs CORS. A presigned URL is the
+credential, so any origin may use one. With those four variables in your shell:
+
+```sh
+aws s3api put-bucket-cors --bucket "$BUCKET_NAME" --cors-configuration '{"CORSRules":[{"AllowedOrigins":["*"],"AllowedMethods":["GET","PUT","HEAD"],"AllowedHeaders":["*"],"MaxAgeSeconds":3600}]}'
+```
 
 ### Behind a reverse proxy
 
