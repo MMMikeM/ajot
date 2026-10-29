@@ -68,6 +68,19 @@ describe("afterAnswer", () => {
     expect((after(next, "insert", 404) as Upload).taskMissingSince).toBe(NOW);
   });
 
+  test("a route this server doesn't have (501) retries with the bytes kept, so an older server catches up", () => {
+    for (const request of ["insert", "upload-url", "complete", "delete", "restore"] as const) {
+      const next = after(
+        upload({ posted: true, deletedAt: request === "delete" ? NOW : undefined }),
+        request,
+        501,
+      ) as Upload;
+      expect(next.failed, request).toBeUndefined();
+      expect(next.serverDeleted, request).toBe(false);
+      expect(next.retryAt, request).toBeGreaterThan(NOW);
+    }
+  });
+
   test("backoff grows", () => {
     const first = after(upload(), "insert", 503) as Upload;
     const second = after(first, "insert", 503) as Upload;

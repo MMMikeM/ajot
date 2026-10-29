@@ -126,13 +126,17 @@ app.doc("/api/openapi.json", {
   info: { title: "NewTab Todo API", version: "1.0.0" },
 });
 
-// Nothing else shows a request for a route the API doesn't have: a client with a wrong path, or an
-// older one calling a route since removed
+// Nothing else shows a request for a route the API doesn't have: a client with a wrong path, or one
+// newer or older than this server. 501, not 404, which routes answer for a row that isn't there and
+// clients act on: a client retries a 5xx, so an upload waits for a server that has the route.
 app.all("/api/*", (c) => {
-  console.warn(`[404] no route for ${c.req.method} ${c.req.path}`);
+  console.warn(`[501] no route for ${c.req.method} ${c.req.path}`);
   return c.json(
-    { error: "The server doesn't know that request. Reload to get the latest app." },
-    404,
+    {
+      error:
+        "This server doesn't support that yet, or no longer does. The app or the server may be out of date.",
+    },
+    501,
   );
 });
 
