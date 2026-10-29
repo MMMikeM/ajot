@@ -13,11 +13,11 @@ export type Attachment = Omit<typeof attachments.$inferSelect, "purgedAt">;
 
 const { purgedAt: _purgedAt, ...sentColumns } = getColumns(attachments);
 
-export const attachmentResponseSchema = createSelectSchema(attachments).omit({ purgedAt: true });
+export const responseSchema = createSelectSchema(attachments).omit({ purgedAt: true });
 // Its id is in its bucket keys, so nothing in it may change the URL they're part of
 const keySafeId = (schema: z.ZodString) => limitedId(schema).regex(/^[A-Za-z0-9_-]+$/);
 
-export const attachmentInsertSchema = createInsertSchema(attachments, {
+export const insertSchema = createInsertSchema(attachments, {
   id: keySafeId,
   taskId: limitedId,
   name: limited("A file's name", MAX_FILE_NAME),
@@ -40,7 +40,7 @@ export const attachmentInsertSchema = createInsertSchema(attachments, {
   })
   .required({ id: true, createdAt: true, updatedAt: true })
   .strict();
-export const attachmentIdSchema = createSelectSchema(attachments, { id: keySafeId }).pick({
+export const idSchema = createSelectSchema(attachments, { id: keySafeId }).pick({
   id: true,
 });
 
@@ -64,14 +64,14 @@ const visibleTo = (userId: string, ids?: string[]) =>
     columns: { purgedAt: false },
   });
 
-const list = async (userId: string) => visibleTo(userId);
+export const list = async (userId: string) => visibleTo(userId);
 
-const listByIds = async (ids: string[], userId: string) =>
+export const listByIds = async (ids: string[], userId: string) =>
   ids.length === 0 ? [] : visibleTo(userId, ids);
 
-const find = async (id: string) => db.query.attachments.findFirst({ where: { id } });
+export const find = async (id: string) => db.query.attachments.findFirst({ where: { id } });
 
-const uploadedOf = async (taskIds: string[]) =>
+export const uploadedOf = async (taskIds: string[]) =>
   taskIds.length === 0
     ? []
     : db.query.attachments.findMany({
@@ -84,7 +84,7 @@ const uploadedOf = async (taskIds: string[]) =>
       });
 
 /** Undefined when the id is taken: the caller reads it to tell a retry from a clash. */
-const insert = async (data: AttachmentInsert) => {
+export const insert = async (data: AttachmentInsert) => {
   const [row] = await db
     .insert(attachments)
     .values(stampsNotAfterNow(data, ["createdAt", "updatedAt"]))
@@ -94,7 +94,7 @@ const insert = async (data: AttachmentInsert) => {
 };
 
 /** Every byte that may still be stored, which only the purge frees. */
-const usageFor = async (uploaderId: string) => {
+export const usageFor = async (uploaderId: string) => {
   const [row] = await db
     .select({ bytes: sum(attachments.size).mapWith(Number) })
     .from(attachments)
@@ -102,7 +102,7 @@ const usageFor = async (uploaderId: string) => {
   return row?.bytes ?? 0;
 };
 
-const update = async (id: string, fields: Partial<AttachmentInsert>) => {
+export const update = async (id: string, fields: Partial<AttachmentInsert>) => {
   const [row] = await db
     .update(attachments)
     .set(fields)
@@ -110,5 +110,3 @@ const update = async (id: string, fields: Partial<AttachmentInsert>) => {
     .returning(sentColumns);
   return row;
 };
-
-export default { list, listByIds, find, uploadedOf, insert, usageFor, update };

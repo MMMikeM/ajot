@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import * as reachRepo from "../db/reach.repo";
 import * as taskRepo from "../db/task.repo";
 import * as categoryRepo from "../db/category.repo";
-import attachmentRepo from "../db/attachment.repo";
+import * as attachmentRepo from "../db/attachment.repo";
 import { broadcastPerUser, type BroadcastEvent } from "../broadcast";
 
 const compare = (before = new Set<string>(), after = new Set<string>()) => ({

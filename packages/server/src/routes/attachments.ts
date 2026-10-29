@@ -4,12 +4,7 @@ import { canDeleteAttachment } from "@newtab-todo/shared/task-access";
 import { opensInTab, servedType } from "@newtab-todo/shared/attachments";
 import { MAX_ID } from "@newtab-todo/shared/field-limits";
 import { now } from "@newtab-todo/shared/iso";
-import attachmentRepo, {
-  attachmentIdSchema,
-  attachmentInsertSchema,
-  attachmentResponseSchema,
-  type Attachment,
-} from "../db/attachment.repo";
+import * as attachmentRepo from "../db/attachment.repo";
 import {
   BadRequestError,
   ConflictError,
@@ -37,7 +32,7 @@ const ATTACHMENT_DELETED = "That file was deleted.";
 const TASK_DELETED = "That task was deleted.";
 const NOT_UPLOADED = "The file didn't finish uploading. Try again.";
 
-const uploadUrlRequestSchema = attachmentIdSchema
+const uploadUrlRequestSchema = attachmentRepo.idSchema
   .extend({ thumbSize: z.number().int().positive().max(MAX_THUMB_BYTES).optional() })
   .strict();
 const uploadUrlsSchema = z.object({ file: z.string(), thumb: z.string().optional() });
@@ -46,13 +41,16 @@ const urlsRequestSchema = z
   .strict();
 const urlsSchema = z.array(z.object({ id: z.string(), url: z.string() }));
 
-const audienceFor = (row: Attachment, audience: string[]) =>
+const audienceFor = (row: attachmentRepo.Attachment, audience: string[]) =>
   row.uploadedAt ? audience : [row.uploaderId];
 
-const disposition = (row: Attachment) =>
+const disposition = (row: attachmentRepo.Attachment) =>
   `${opensInTab(row.mimeType) ? "inline" : "attachment"}; filename*=UTF-8''${encodeRfc3986(row.name)}`;
 
-const sent = ({ purgedAt: _purgedAt, ...row }: Attachment & { purgedAt: string | null }) => row;
+const sent = ({
+  purgedAt: _purgedAt,
+  ...row
+}: attachmentRepo.Attachment & { purgedAt: string | null }) => row;
 
 const findOwnUnfinished = async (id: string, userId: string) => {
   const row = await attachmentRepo.find(id);
@@ -94,7 +92,7 @@ export const attachmentRoutes = authed()
     authedRoute({
       method: "get",
       path: "/",
-      responses: { 200: z.array(attachmentResponseSchema) },
+      responses: { 200: z.array(attachmentRepo.responseSchema) },
     }),
     async (c) => c.json(await attachmentRepo.list(c.get("userId")), 200),
   )
@@ -102,9 +100,9 @@ export const attachmentRoutes = authed()
     authedRoute({
       method: "post",
       path: "/",
-      request: jsonBody(attachmentInsertSchema),
+      request: jsonBody(attachmentRepo.insertSchema),
       responses: {
-        200: attachmentResponseSchema,
+        200: attachmentRepo.responseSchema,
         403: true,
         404: true,
         409: true,
@@ -140,8 +138,8 @@ export const attachmentRoutes = authed()
     authedRoute({
       method: "put",
       path: "/",
-      request: jsonBody(attachmentIdSchema.strict()),
-      responses: { 200: attachmentResponseSchema, 403: true, 404: true, 410: true },
+      request: jsonBody(attachmentRepo.idSchema.strict()),
+      responses: { 200: attachmentRepo.responseSchema, 403: true, 404: true, 410: true },
     }),
     async (c) => c.json(await deleteOrRestore(c, c.req.valid("json").id, null), 200),
   )
@@ -149,8 +147,8 @@ export const attachmentRoutes = authed()
     authedRoute({
       method: "delete",
       path: "/",
-      request: jsonBody(attachmentIdSchema.strict()),
-      responses: { 200: attachmentResponseSchema, 403: true, 404: true, 410: true },
+      request: jsonBody(attachmentRepo.idSchema.strict()),
+      responses: { 200: attachmentRepo.responseSchema, 403: true, 404: true, 410: true },
     }),
     async (c) => c.json(await deleteOrRestore(c, c.req.valid("json").id, now()), 200),
   )
@@ -183,8 +181,8 @@ export const attachmentRoutes = authed()
     authedRoute({
       method: "post",
       path: "/complete",
-      request: jsonBody(attachmentIdSchema.strict()),
-      responses: { 200: attachmentResponseSchema, 400: true, 403: true, 404: true, 410: true },
+      request: jsonBody(attachmentRepo.idSchema.strict()),
+      responses: { 200: attachmentRepo.responseSchema, 400: true, 403: true, 404: true, 410: true },
     }),
     async (c) => {
       const { id } = c.req.valid("json");
