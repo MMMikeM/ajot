@@ -3,7 +3,7 @@ import { queryCollectionOptions } from "@tanstack/query-db-collection";
 import { queryClient } from "~/lib/db/query-client";
 import { client } from "~/lib/api";
 import { getAuthToken } from "~/lib/auth/token";
-import type { Task, Category, Contact, Note } from "~/lib/types";
+import type { Attachment, Task, Category, Contact, Note } from "~/lib/types";
 import { getBuildTarget } from "../build-target";
 import { markStartup } from "~/lib/startup-timing";
 import { restoreSnapshot } from "~/lib/db/snapshot";
@@ -30,6 +30,7 @@ async function makeCollections() {
       tasksCollection: null,
       notesCollection: null,
       contactsCollection: null,
+      attachmentsCollection: null,
     };
 
   await openSnapshot();
@@ -100,6 +101,24 @@ async function makeCollections() {
         retry: () => !!getAuthToken(),
       }),
     ),
+    attachmentsCollection: createCollection(
+      queryCollectionOptions<Attachment>({
+        id: "attachments",
+        queryKey: ["attachments"] as const,
+        queryFn: async () => {
+          if (!getAuthToken()) return [];
+          const res = await client.api.attachments.$get();
+          // Wider than this server's types: one from before attachments answers 404
+          const status: number = res.status;
+          if (status === 401 || status === 404) return [];
+          if (!res.ok) throw new Error("Failed to fetch attachments");
+          return res.json();
+        },
+        queryClient,
+        getKey: (item) => item.id,
+        retry: () => !!getAuthToken(),
+      }),
+    ),
   };
 }
 
@@ -109,3 +128,4 @@ export const tasksCollection = collections.tasksCollection!;
 export const categoriesCollection = collections.categoriesCollection!;
 export const notesCollection = collections.notesCollection!;
 export const contactsCollection = collections.contactsCollection!;
+export const attachmentsCollection = collections.attachmentsCollection!;

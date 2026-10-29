@@ -40,6 +40,9 @@ export default defineConfig(({ mode }) => {
     resolve: {
       tsconfigPaths: true,
     },
+    test: {
+      include: ["src/**/*.test.ts"],
+    },
     define: {
       __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
       __BUILD_VERSION__: JSON.stringify(

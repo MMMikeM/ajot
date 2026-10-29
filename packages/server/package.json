@@ -10,7 +10,8 @@
     "./db/task.repo": "./src/db/task.repo.ts",
     "./db/category.repo": "./src/db/category.repo.ts",
     "./db/note.repo": "./src/db/note.repo.ts",
-    "./db/contact.repo": "./src/db/contact.repo.ts"
+    "./db/contact.repo": "./src/db/contact.repo.ts",
+    "./db/attachment.repo": "./src/db/attachment.repo.ts"
   },
   "scripts": {
     "build": "vp pack",
