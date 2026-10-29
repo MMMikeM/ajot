@@ -19,24 +19,28 @@ const newerWorkerAnswers = (page: Page) =>
     ),
   );
 
-const updateToast = (page: Page) => page.getByText("Ajot has been updated.");
+const updateBanner = (page: Page) => page.getByText("A new version of Ajot is ready");
 
 test("a worker of the page's own build taking over offers nothing", async ({ page }) => {
   await openControlled(page);
   // The real worker answers with this build's version
   await page.evaluate(() => navigator.serviceWorker.dispatchEvent(new Event("controllerchange")));
   await page.waitForTimeout(500);
-  await expect(updateToast(page)).toHaveCount(0);
+  await expect(updateBanner(page)).toHaveCount(0);
 });
 
-test("a newer build offers a reload, which waits for the user", async ({ page }) => {
+test("a newer build asks for a reload, which waits for the user and can't be dismissed", async ({
+  page,
+}) => {
   await openControlled(page);
   let loads = 0;
   page.on("load", () => loads++);
   await newerWorkerAnswers(page);
-  await expect(updateToast(page)).toBeVisible();
+  await expect(updateBanner(page)).toBeVisible();
   await page.waitForTimeout(1000);
   expect(loads, "reloaded without being asked").toBe(0);
+  await page.keyboard.press("Escape");
+  await expect(updateBanner(page)).toBeVisible();
 
   const reloaded = page.waitForEvent("load");
   await page.getByRole("button", { name: "Reload" }).click();
@@ -46,7 +50,7 @@ test("a newer build offers a reload, which waits for the user", async ({ page })
 test("a newer build reloads a page that's been put away", async ({ page }) => {
   await openControlled(page);
   await newerWorkerAnswers(page);
-  await expect(updateToast(page)).toBeVisible();
+  await expect(updateBanner(page)).toBeVisible();
 
   const reloaded = page.waitForEvent("load");
   await page.evaluate(() => {
