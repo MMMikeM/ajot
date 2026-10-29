@@ -6,6 +6,8 @@ import { apiRequest } from "./helpers/api";
 // Sidebar or sheet is chosen by pointer type (`touch:` is pointer:coarse), which the
 // mobile project (iPhone 14) emulates.
 
+const APP_SHELL_MAIN_CLASS = "max-w-sm";
+
 test.beforeEach(async ({ page, user1Auth }) => {
   // Tasks first: the server won't delete a category that still has tasks
   const tasks = await apiRequest<{ id: string; parentId: string | null }[]>(
@@ -148,7 +150,7 @@ test("desktop: category options popover Rename item is not obscured by main cont
   const cy = box.y + box.height / 2;
 
   const topElement = await page.evaluate(
-    ([x, y]) => {
+    ([x, y, mainClass]) => {
       const el = document.elementFromPoint(x, y);
       let cur: Element | null = el;
       while (cur) {
@@ -156,13 +158,12 @@ test("desktop: category options popover Rename item is not obscured by main cont
         if (cur.getAttribute("data-slot") === "button") return "popover";
         if (cur.textContent?.trim() === "Rename") return "popover";
         if (cur.getAttribute("data-testid") === "category-sidebar") return "popover";
-        // AppShell main content wrapper
-        if (cur.classList.contains("max-w-sm")) return "main-content";
+        if (cur.classList.contains(mainClass)) return "main-content";
         cur = cur.parentElement;
       }
       return "unknown";
     },
-    [cx, cy] as [number, number],
+    [cx, cy, APP_SHELL_MAIN_CLASS] as [number, number, string],
   );
 
   expect(topElement).toBe("popover");

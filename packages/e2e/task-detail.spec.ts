@@ -55,7 +55,6 @@ test.describe("task detail — visual language", () => {
     expect(cls).toContain("invisible");
     expect(cls).toContain("size-0");
 
-    // An undated task offers one where it would be
     await expect(d.getByRole("button", { name: /^Due date:/ })).toHaveCount(0);
     await expect(d.getByRole("button", { name: "Add a date" })).toBeVisible();
   });

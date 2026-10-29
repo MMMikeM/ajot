@@ -43,12 +43,12 @@ beforeEach(async () => {
 });
 
 test("unsubscribing removes the user's own subscription", async () => {
-  await pushSubscriptionRepo.remove("alices", "alice");
+  await pushSubscriptionRepo.removeOwn("alices", "alice");
   expect(await endpoints()).toEqual(["bobs"]);
 });
 
 test("unsubscribing someone else's endpoint leaves it subscribed", async () => {
-  await pushSubscriptionRepo.remove("bobs", "alice");
+  await pushSubscriptionRepo.removeOwn("bobs", "alice");
   expect(await endpoints()).toEqual(["alices", "bobs"]);
 });
 

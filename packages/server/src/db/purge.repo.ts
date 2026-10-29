@@ -86,7 +86,7 @@ const purgeNotifications = (database: Database, cutoff: string) =>
       OR (${notificationQueue.sentAt} IS NULL AND ${notificationQueue.scheduledFor} < ${cutoff})
     RETURNING ${notificationQueue.id}`);
 
-/** How many of each were purged. Tasks go first, so a list's go before the list is checked. */
+/** Tasks go first, so a list's go before the list is checked. */
 export const purgeExpired = async (database: Database = db) => {
   const cutoff = hoursFromNow(-KEEP_DELETED_DAYS * 24);
   const purgedTasks = await purgeTasks(database, cutoff);

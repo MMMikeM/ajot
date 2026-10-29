@@ -1,12 +1,11 @@
 /**
  * Who can reach a task, and how far. The server reads the `task_access` view in
- * `server/src/db/schema.ts`, which is built from one SQL fragment per path below; this is the
+ * `server/src/db/views.ts`, which is built from one SQL fragment per path below; this is the
  * same rule in JS, for checks a page makes offline. `task-access.test.ts` runs both on the same
  * rows, and both are keyed by `AccessPath`, so a path added to one fails to compile until the
  * other has it too.
  */
 export type AccessPath =
-  /** The task's owner */
   | "owner"
   /** Whoever it's shared with, to view or to edit */
   | "share"

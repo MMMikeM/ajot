@@ -55,7 +55,6 @@ const { tables, writes, fakeDb } = vi.hoisted(() => {
     };
     for (const step of ["where", "returning", "onConflictDoNothing", "onConflictDoUpdate"])
       steps[step] = () => builder;
-    // Awaiting any step resolves to no rows
     const builder = Object.assign(Promise.resolve<Row[]>([]), steps);
     return builder;
   };

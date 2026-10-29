@@ -44,7 +44,6 @@ export const readSnapshot = (db: IDBDatabase, keys: readonly string[]) =>
     store.transaction.onerror = () => reject(store.transaction.error);
   });
 
-/** An entry saved as undefined is removed. */
 export const writeSnapshot = (db: IDBDatabase, entries: Iterable<readonly [string, unknown]>) =>
   new Promise<void>((resolve, reject) => {
     const store = db.transaction(STORE, "readwrite").objectStore(STORE);

@@ -62,7 +62,6 @@ const expectFullyOnScreen = async (page: Page, cell: Locator) => {
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(width);
   expect(await cell.evaluate(isClippedByAncestor)).toBe(false);
-  // The label fits its cell rather than overflowing it
   expect(await cell.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 };
 

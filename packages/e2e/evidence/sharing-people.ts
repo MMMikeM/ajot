@@ -48,7 +48,6 @@ const shareOf = (taskId: string, user: typeof SAM) => ({
   sharedWithUser: user,
 });
 
-/** The mock's lists, plus a task Sarah sent, one Sam added to Home and one Mike added there. */
 const withSharing = () => {
   const data = mockData();
   const template = data.tasks.find((t) => t.title === "Pick up dry cleaning")!;
@@ -67,7 +66,6 @@ const withSharing = () => {
   return data;
 };
 
-/** Everyone Mike knows is already in Home, and has the thank-you note. */
 const everyoneAdded = () => {
   const data = withSharing();
   data.categories.find((c) => c.id === "c-home")!.collaborators = [
@@ -192,7 +190,6 @@ const noContacts = () => {
 
 const browser = await chromium.launch();
 
-// Phone first
 await fresh(browser, phone, async (page) => {
   await row(page, "Pick up Gran").scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
@@ -241,7 +238,6 @@ await fresh(browser, phone, async (page) => shot(page, "phone-10-people-empty"),
   data: noContacts(),
 });
 
-// Then desktop
 await fresh(browser, desktop, async (page) => {
   await shot(page, "desktop-01-inbox");
   await openTask(page, "Pick up Gran");

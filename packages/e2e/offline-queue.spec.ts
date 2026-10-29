@@ -97,7 +97,8 @@ const checkbox = (page: Page, title: string, checked?: boolean) =>
 const tick = async (page: Page, title: string) => {
   await checkbox(page, title).click();
   await expect(checkbox(page, title)).toBeChecked();
-  // The row holds a tick for 600ms, so it can be taken back, before it's an edit
+  // The row lingers 450ms, then leaves over 150ms (item.tsx's COMPLETE_LINGER_MS and
+  // COMPLETE_LEAVE_MS), so a tick can be taken back before it's an edit
   await page.waitForTimeout(800);
 };
 

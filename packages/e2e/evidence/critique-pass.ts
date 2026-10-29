@@ -1,4 +1,4 @@
-// Before/after evidence for the design pass (PR #9). Run once per version of the app:
+// Before/after evidence for the design pass. Run once per version of the app:
 //   npx tsx evidence/critique-pass.ts --url http://localhost:5301 --out .evidence/critique-pass/before
 // Each version is served by its own Vite dev server; /api is mocked, so no server or database is needed.
 import { mkdirSync } from "node:fs";
@@ -114,7 +114,6 @@ const fresh = async (
 
 const browser = await chromium.launch();
 
-// Phone first
 await fresh(browser, phone, async (page) => {
   await shot(page, "phone-01-list");
   await swipe(page, "Pick up dry cleaning");
@@ -167,7 +166,6 @@ await fresh(browser, phone, async (page) => {
   await context.close();
 }
 
-// Then desktop
 await fresh(browser, desktop, async (page) => {
   await shot(page, "desktop-01-list");
   await openTask(page, "Book flights");

@@ -5,7 +5,6 @@ import categoryRepo from "../db/category.repo";
 import { ForbiddenError, NotFoundError } from "../db/errors";
 import { broadcast } from "../broadcast";
 
-/** Everyone the rows say can reach a task, once each. */
 export const audienceFrom = (access: TaskAccessRow[]) =>
   widest(access).map((grant) => grant.userId);
 

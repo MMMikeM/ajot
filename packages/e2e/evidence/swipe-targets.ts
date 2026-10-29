@@ -160,7 +160,6 @@ const targetsShot = async (page: Page, name: string) => {
 
 const browser = await chromium.launch();
 
-// Phone first
 await fresh(browser, phone, async (page) => {
   await shot(page, "phone-01-list");
   await targetsShot(page, "phone-02-list-targets");
@@ -200,7 +199,6 @@ await fresh(browser, smallPhone, async (page) => {
   await shot(page, "phone-11-small-screen-swipe-long-title");
 });
 
-// Then desktop, which shouldn't change
 await fresh(browser, desktop, async (page) => {
   await shot(page, "desktop-01-list");
   await targetsShot(page, "desktop-02-list-targets");

@@ -51,9 +51,11 @@ const draftFor = (id: DraftId, info: ClickData, tab?: browser.tabs.Tab): Draft =
   switch (id) {
     case "selection": {
       const title = toTitle(selection);
-      // A selection too long for a title is kept whole in the description
-      const fullText = title.endsWith("…") ? selection : null;
-      return { title, description: [fullText, pageUrl].filter(Boolean).join("\n\n") || null };
+      const selectionIfTruncated = title.endsWith("…") ? selection : null;
+      return {
+        title,
+        description: [selectionIfTruncated, pageUrl].filter(Boolean).join("\n\n") || null,
+      };
     }
     case "selection-as-note":
       return { title: pageTitle, description: pageUrl, note: selection };
@@ -96,7 +98,7 @@ const nextSortOrder = async (session: Session) => {
 
 const INBOX: Destination = { kind: "inbox", target: "", title: "Inbox", done: "Added to Inbox" };
 
-/** In groups, a separator between each: the Inbox, shared lists, then sharing and sending. */
+/** Menu order: the Inbox, shared lists, then sharing and sending. */
 const fetchDestinations = async (session: Session): Promise<Group[]> => {
   const [categories, contacts] = await Promise.all([
     request<Category[]>(session, "GET", "/api/categories"),
@@ -220,6 +222,9 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
 const create = (item: browser.contextMenus._CreateCreateProperties) =>
   ext.contextMenus.create(item);
 
+const separatedFromPrevious = (groups: Group[], i: number) =>
+  i > 0 && !(groups[i]!.submenu && groups[i - 1]!.submenu);
+
 const buildMenu = (groups: Group[]) => {
   const nonEmpty = groups.filter((group) => group.destinations.length > 0);
   doneLabels = new Map(
@@ -234,8 +239,7 @@ const buildMenu = (groups: Group[]) => {
     create({ id: draftId, ...item });
     nonEmpty.forEach(({ submenu, destinations }, i) => {
       const child = { parentId: draftId, contexts: item.contexts };
-      // Submenus sit together, with one separator before the first
-      if (i > 0 && !(submenu && nonEmpty[i - 1]!.submenu))
+      if (separatedFromPrevious(nonEmpty, i))
         create({ id: `${draftId}|separator-${i}`, type: "separator", ...child });
       // Outside the "draft|kind|target" ids, so clicking it adds nothing
       const parentId = submenu ? `${draftId}:${submenu.id}` : draftId;

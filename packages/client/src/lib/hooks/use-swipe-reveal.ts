@@ -130,9 +130,9 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
       const width = gestureWidth.current;
       // A one-action tray is barely wider than the usual threshold
       const threshold = Math.min(OPEN_THRESHOLD, width / 2);
-      const shouldOpen = isOpenRef.current
-        ? currentPx.current > -(width - threshold) // swipe right past threshold to close
-        : currentPx.current < -threshold; // swipe left past threshold to open
+      const pastOpenThreshold = currentPx.current < -threshold;
+      const keepsOpen = currentPx.current > -(width - threshold);
+      const shouldOpen = isOpenRef.current ? keepsOpen : pastOpenThreshold;
 
       if (shouldOpen) {
         closeRegistry.forEach((fn) => {

@@ -168,7 +168,7 @@ const findWithAccess = async (id: string, { deleted = false } = {}) => {
 const STAMPS = ["updatedAt", "editedAt", "completedAt"] as const;
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
-// Re-inserting a deleted task, as Undo did before restores went through update, restores it.
+// Re-inserting a deleted task restores it, since the conflict update clears deletedAt.
 // An id someone else's task already has updates nothing, so it returns nothing and restores nothing.
 const insert = async (data: TaskInsert) => {
   const [row] = await db
@@ -319,7 +319,6 @@ const findListItems = async (ids: string[]) => {
 
 export type TaskWithRelations = Awaited<ReturnType<typeof list>>[number];
 
-/** The share, and whether it's new: sharing a task with someone again changes nothing. */
 /** Sharing again with someone it's already shared with changes only its permission. */
 const insertShare = async (data: TaskShareInsert) => {
   const [row] = await db.insert(taskShares).values(data).onConflictDoNothing().returning();
