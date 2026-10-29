@@ -135,11 +135,11 @@ const run = async (deps: DrainDeps, session: FilesSession, upload: Upload, step:
       );
       return undefined;
     case "insert":
-      return settle(deps, id, "insert", await callApi(deps, session, "POST", "/", upload.row));
+      return settle(deps, id, "insert", await callApi(deps, session, "POST", "", upload.row));
     case "delete":
-      return settle(deps, id, "delete", await callApi(deps, session, "DELETE", "/", { id }));
+      return settle(deps, id, "delete", await callApi(deps, session, "DELETE", "", { id }));
     case "restore":
-      return settle(deps, id, "restore", await callApi(deps, session, "PUT", "/", { id }));
+      return settle(deps, id, "restore", await callApi(deps, session, "PUT", "", { id }));
     case "upload":
       return sendBytes(deps, session, upload);
   }
