@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, expect, test, vi } from "vite-plus/test";
-import notificationQueueRepo from "../db/notification-queue.repo";
-import taskRepo from "../db/task.repo";
-import userRepo from "../db/user.repo";
+import * as notificationQueueRepo from "../db/notification-queue.repo";
+import * as taskRepo from "../db/task.repo";
+import * as userRepo from "../db/user.repo";
 import { sendNotification } from "../notify";
 import type { NotificationPayload } from "../push-plan";
 import { notificationRoutes } from "./notifications";

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
-import userRepo from "../db/user.repo";
+import * as userRepo from "../db/user.repo";
 import { sendNotification } from "../notify";
 import { notificationRoutes } from "./notifications";
 import { taskRoutes } from "./tasks";

@@ -1,7 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { isPushServiceEndpoint } from "@mmmike/web-push/send";
-import pushPreferenceRepo, { pushPreferencesSchema } from "../db/push-preference.repo";
-import pushSubscriptionRepo from "../db/push-subscription.repo";
+import * as pushPreferenceRepo from "../db/push-preference.repo";
+import * as pushSubscriptionRepo from "../db/push-subscription.repo";
 import { pushSubscriptionKinds } from "../db/schema";
 import { authed, authedRoute } from "../middleware";
 import { jsonBody, okBody } from "./crud";
@@ -65,7 +65,7 @@ export const pushRoutes = authed()
       method: "get",
       path: "/preferences",
       request: { headers: deviceHeaders },
-      responses: { 200: pushPreferencesSchema },
+      responses: { 200: pushPreferenceRepo.schema },
     }),
     async (c) =>
       c.json(
@@ -77,7 +77,7 @@ export const pushRoutes = authed()
     authedRoute({
       method: "put",
       path: "/preferences",
-      request: { headers: deviceHeaders, ...jsonBody(pushPreferencesSchema) },
+      request: { headers: deviceHeaders, ...jsonBody(pushPreferenceRepo.schema) },
       responses: { 200: okSchema },
     }),
     async (c) => {

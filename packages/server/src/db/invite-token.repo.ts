@@ -5,7 +5,7 @@ import { db, inTransaction } from "./client";
 import { contacts, inviteTokens, removedContacts } from "./schema";
 import { InsertFailedError, NotFoundError } from "./errors";
 
-const create = async (createdByUserId: string, expiresAt: string) => {
+export const create = async (createdByUserId: string, expiresAt: string) => {
   const id = createId();
   const [row] = await db
     .insert(inviteTokens)
@@ -19,7 +19,7 @@ const create = async (createdByUserId: string, expiresAt: string) => {
  * An unknown, used or expired invite is the same NotFoundError, without the token, which is the
  * link's secret.
  */
-const findInviterName = async (token: string) => {
+export const findInviterName = async (token: string) => {
   const invite = await db.query.inviteTokens.findFirst({
     columns: {},
     where: { id: token, usedAt: { isNull: true }, expiresAt: { gt: now() } },
@@ -31,7 +31,7 @@ const findInviterName = async (token: string) => {
 
 // Marks the invite used in one statement, so two signups or accepts racing on the same link can't
 // both pass. consume() records who used it once their account exists.
-const claim = async (token: string) => {
+export const claim = async (token: string) => {
   const rows = await db
     .update(inviteTokens)
     .set({ usedAt: now() })
@@ -48,7 +48,7 @@ const claim = async (token: string) => {
 
 type InviteToken = NonNullable<Awaited<ReturnType<typeof claim>>>;
 
-const release = async (token: string) => {
+export const release = async (token: string) => {
   await db.update(inviteTokens).set({ usedAt: null }).where(eq(inviteTokens.id, token));
 };
 
@@ -62,7 +62,7 @@ const removedBy = (userId: string, otherId: string) =>
 // One transaction, so a failed contact insert leaves the token unused for a retry. The caller
 // passes an invite it claimed; this doesn't check it again. Being contacts again drops the Undo
 // of either one's removal of the other, which would put back lists they shared then.
-const consume = async (invite: InviteToken, usedByUserId: string) =>
+export const consume = async (invite: InviteToken, usedByUserId: string) =>
   inTransaction(async (tx) => {
     const inviterId = invite.createdByUserId;
     await tx
@@ -82,5 +82,3 @@ const consume = async (invite: InviteToken, usedByUserId: string) =>
       .onConflictDoNothing()
       .returning();
   });
-
-export default { create, findInviterName, claim, release, consume };

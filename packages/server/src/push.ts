@@ -7,9 +7,9 @@ import {
   type VapidConfig,
 } from "@mmmike/web-push/send";
 import type { PushMessage } from "@newtab-todo/shared";
-import pushPreferenceRepo from "./db/push-preference.repo";
+import * as pushPreferenceRepo from "./db/push-preference.repo";
 import { fitted } from "./push-plan";
-import pushSubscriptionRepo from "./db/push-subscription.repo";
+import * as pushSubscriptionRepo from "./db/push-subscription.repo";
 
 const vapid: VapidConfig = {
   subject: process.env.VAPID_SUBJECT!,

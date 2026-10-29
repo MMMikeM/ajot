@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import sessionRepo from "./session.repo";
+import * as sessionRepo from "./session.repo";
 
 const findFirst = vi.hoisted(() => vi.fn());
 vi.mock("./client", () => ({

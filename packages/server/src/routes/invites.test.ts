@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from "vite-plus/test";
-import inviteTokenRepo from "../db/invite-token.repo";
+import * as inviteTokenRepo from "../db/invite-token.repo";
 import { inviteRoutes } from "./invites";
 
 vi.mock("../auth", () => ({
@@ -8,7 +8,9 @@ vi.mock("../auth", () => ({
 }));
 vi.mock("../db/client", () => ({ db: {}, inTransaction: vi.fn() }));
 vi.mock("../db/invite-token.repo", () => ({
-  default: { claim: vi.fn(), release: vi.fn(), consume: vi.fn() },
+  claim: vi.fn(),
+  release: vi.fn(),
+  consume: vi.fn(),
 }));
 vi.mock("../notify", () => ({ sendNotification: vi.fn(), getUserName: vi.fn(async () => "A") }));
 vi.mock("./contact-changes", () => ({ sendContactChanges: vi.fn() }));

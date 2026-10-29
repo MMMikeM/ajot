@@ -4,7 +4,7 @@ import { db, inTransaction, type Transaction } from "./client";
 import { categoryCollaborators, removedCollaborators, tasks, taskShares } from "./schema";
 import { NotFoundError } from "./errors";
 import { now } from "@newtab-todo/shared/iso";
-import reachRepo from "./reach.repo";
+import * as reachRepo from "./reach.repo";
 import { undoableSince } from "./undo-window";
 
 type Membership = { categoryId: string; userId: string };
@@ -12,7 +12,7 @@ type Membership = { categoryId: string; userId: string };
 type Leaving = Membership & { movedTaskIds: string[]; unfiledTaskIds: string[] };
 
 /** Adding someone afresh drops the Undo of their removal, which would move their tasks again. */
-const add = async (categoryId: string, userId: string) => {
+export const add = async (categoryId: string, userId: string) => {
   await db
     .delete(removedCollaborators)
     .where(
@@ -30,7 +30,7 @@ const add = async (categoryId: string, userId: string) => {
  * Whoever leaves a list can't see it any more, so their tasks in it go to their Inbox, hidden ones
  * too so restoring one doesn't put it back there, and their shares filed there are unfiled.
  */
-const leave = async (tx: Transaction, memberships: Membership[]): Promise<Leaving[]> => {
+export const leave = async (tx: Transaction, memberships: Membership[]): Promise<Leaving[]> => {
   if (memberships.length === 0) return [];
   const theirTasks = await tx.query.tasks.findMany({
     where: { OR: memberships.map(({ categoryId, userId }) => ({ categoryId, userId })) },
@@ -84,7 +84,7 @@ const listFor = (cases: { when: SQL | undefined; categoryId: string }[]) =>
  * A task or share changed since leave stays where it went: moved back only from the Inbox,
  * refiled only if still unfiled.
  */
-const rejoin = async (tx: Transaction, leavings: Leaving[]) => {
+export const rejoin = async (tx: Transaction, leavings: Leaving[]) => {
   const moved = leavings.flatMap((l) => l.movedTaskIds.map((id) => ({ ...l, id })));
   const unfiled = leavings.flatMap((l) => l.unfiledTaskIds.map((taskId) => ({ ...l, taskId })));
   const movedBack =
@@ -123,7 +123,7 @@ const rejoin = async (tx: Transaction, leavings: Leaving[]) => {
  * `keepForUndo` only for the owner removing someone, since Undo putting a leaver's tasks back
  * would undo their own choice.
  */
-const remove = async (categoryId: string, userId: string, { keepForUndo = false } = {}) =>
+export const remove = async (categoryId: string, userId: string, { keepForUndo = false } = {}) =>
   inTransaction(async (tx) => {
     const before = await reachRepo.read({ listIds: [categoryId] }, tx);
     const [row] = await tx
@@ -159,7 +159,7 @@ const remove = async (categoryId: string, userId: string, { keepForUndo = false 
     return { before, left: left! };
   });
 
-const restore = async (categoryId: string, userId: string) =>
+export const restore = async (categoryId: string, userId: string) =>
   inTransaction(async (tx) => {
     const record = await tx.query.removedCollaborators.findFirst({
       where: { categoryId, userId, removedAt: { gte: undoableSince() } },
@@ -183,5 +183,3 @@ const restore = async (categoryId: string, userId: string) =>
     await tx.delete(removedCollaborators).where(eq(removedCollaborators.id, record.id));
     return { before, changed };
   });
-
-export default { add, leave, rejoin, remove, restore };

@@ -1,12 +1,12 @@
 import { expect, test, vi } from "vite-plus/test";
-import userRepo from "./db/user.repo";
+import * as userRepo from "./db/user.repo";
 import { login } from "./auth-service";
 import { hashPassword, verifyPassword } from "./password";
 
-vi.mock("./db/user.repo", () => ({ default: { findWithPassword: vi.fn(async () => undefined) } }));
-vi.mock("./db/session.repo", () => ({ default: { insert: vi.fn() } }));
-vi.mock("./db/category.repo", () => ({ default: { insert: vi.fn() } }));
-vi.mock("./db/invite-token.repo", () => ({ default: {} }));
+vi.mock("./db/user.repo", () => ({ findWithPassword: vi.fn(async () => undefined) }));
+vi.mock("./db/session.repo", () => ({ insert: vi.fn() }));
+vi.mock("./db/category.repo", () => ({ insert: vi.fn() }));
+vi.mock("./db/invite-token.repo", () => ({}));
 vi.mock("./password", () => ({
   hashPassword: vi
     .fn()

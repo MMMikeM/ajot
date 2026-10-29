@@ -47,7 +47,7 @@ const forget = (deleted: (session: Session) => boolean) => {
   for (const [id, entry] of cache) if (deleted(entry.session)) cache.delete(id);
 };
 
-const insert = async (userId: string) => {
+export const insert = async (userId: string) => {
   const token = generateToken();
   const expiresAt = hoursFromNow(SESSION_TTL_DAYS * 24);
   await db.insert(sessions).values({ id: hashToken(token), userId, expiresAt });
@@ -66,7 +66,7 @@ const hashStored = async (token: string) => {
   }
 };
 
-const findValid = async (token: string) => {
+export const findValid = async (token: string) => {
   const id = hashToken(token);
   const cached = cache.get(id);
   if (cached && isFresh(cached)) return cached.session;
@@ -84,7 +84,7 @@ const findValid = async (token: string) => {
 };
 
 // Forgotten even if the delete fails: one that fails in transit may still have been applied
-const remove = async (token: string) => {
+export const remove = async (token: string) => {
   const id = hashToken(token);
   try {
     await db.delete(sessions).where(inArray(sessions.id, storedIds(token)));
@@ -93,7 +93,7 @@ const remove = async (token: string) => {
   }
 };
 
-const hashStoredTokens = async () => {
+export const hashStoredTokens = async () => {
   const stored = await db.query.sessions.findMany({
     columns: { id: true },
     where: { RAW: (session) => sql`length(${session.id}) = 64` },
@@ -119,6 +119,4 @@ const hashTokens = async (tokens: string[]) => {
 };
 
 /** For sessions deleted by another process, as reset-password.ts does. */
-const forgetUser = (userId: string) => forget((session) => session.userId === userId);
-
-export default { insert, findValid, remove, forgetUser, hashStoredTokens };
+export const forgetUser = (userId: string) => forget((session) => session.userId === userId);

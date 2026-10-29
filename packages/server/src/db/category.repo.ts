@@ -2,7 +2,7 @@ import { and, eq, getColumns, inArray, isNull, lt, notInArray, or, sql } from "d
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db, inTransaction } from "./client";
-import reachRepo from "./reach.repo";
+import * as reachRepo from "./reach.repo";
 import { categories, listMembers, tasks, taskShares, type CategoryDeletion } from "./schema";
 import { BadRequestError, IdTakenError, NotFoundError, StaleUpdateError } from "./errors";
 import { now } from "@newtab-todo/shared/iso";
@@ -13,12 +13,12 @@ import { limited, limitedId } from "./field-limits";
 import { notAfterNow, stampsNotAfterNow } from "./stamps";
 import { CATEGORY_TASK_ACTIONS, type CategoryTaskAction } from "@newtab-todo/shared/constants";
 
-export type CategoryInsert = typeof categories.$inferInsert;
+export type Insert = typeof categories.$inferInsert;
 
-export const categorySelectSchema = createSelectSchema(categories, { id: limitedId }).pick({
+export const idSchema = createSelectSchema(categories, { id: limitedId }).pick({
   id: true,
 });
-export const categoryDeleteSchema = categorySelectSchema.extend({
+export const deleteSchema = idSchema.extend({
   tasks: z.enum(CATEGORY_TASK_ACTIONS).optional(),
   /** The top-level tasks the user was shown; only these can be deleted */
   taskIds: z
@@ -35,7 +35,7 @@ const collaboratorUserSchema = z.object({
 
 // list() includes user + collaborators; insert/update/delete return flat rows without them.
 // nullish() allows these keys to be absent so all routes satisfy this schema.
-export const categoryResponseSchema = createSelectSchema(categories)
+export const responseSchema = createSelectSchema(categories)
   .omit({ deletedAt: true, deletion: true })
   .extend({
     user: z.object({ name: z.string() }).nullish(),
@@ -47,7 +47,7 @@ const limitedFields = {
   name: limited("A list's name", MAX_NAME),
   color: limited("A list's colour", MAX_SHORT),
 };
-export const categoryInsertSchema = createInsertSchema(categories, {
+export const insertSchema = createInsertSchema(categories, {
   ...limitedFields,
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
@@ -56,7 +56,7 @@ export const categoryInsertSchema = createInsertSchema(categories, {
   .omit({ deletedAt: true, deletion: true })
   .strict();
 // The fields a client may change, so a column added later isn't editable until it's listed
-export const categoryUpdateSchema = createUpdateSchema(categories, {
+export const updateSchema = createUpdateSchema(categories, {
   ...limitedFields,
   updatedAt: isoDatetime,
 })
@@ -69,7 +69,7 @@ const hidden = { deletedAt: false, deletion: false } as const;
 const { deletedAt: _deletedAt, deletion: _deletion, ...sentColumns } = getColumns(categories);
 const live = { deletedAt: { isNull: true } } as const;
 
-const list = async (userId: string) =>
+export const list = async (userId: string) =>
   db.query.categories.findMany({
     where: {
       ...live,
@@ -94,7 +94,7 @@ const list = async (userId: string) =>
 
 export type CategoryWithOwner = Awaited<ReturnType<typeof list>>[number];
 
-const listByIds = async (ids: string[]) => {
+export const listByIds = async (ids: string[]) => {
   if (ids.length === 0) return [];
   return db.query.categories.findMany({
     where: { ...live, id: { in: ids } },
@@ -108,7 +108,7 @@ const listByIds = async (ids: string[]) => {
   });
 };
 
-const findById = async (id: string, { deleted = false } = {}) => {
+export const findById = async (id: string, { deleted = false } = {}) => {
   const row = await db.query.categories.findFirst({
     where: deleted ? { id } : { ...live, id },
     columns: hidden,
@@ -117,7 +117,7 @@ const findById = async (id: string, { deleted = false } = {}) => {
   return row;
 };
 
-const findByIdWithCollaborators = async (id: string) => {
+export const findByIdWithCollaborators = async (id: string) => {
   const row = await db.query.categories.findFirst({
     where: { ...live, id },
     columns: hidden,
@@ -131,7 +131,7 @@ const findByIdWithCollaborators = async (id: string) => {
   return row;
 };
 
-const memberIds = async (id: string) => {
+export const memberIds = async (id: string) => {
   const rows = await db
     .select({ userId: listMembers.userId })
     .from(listMembers)
@@ -139,7 +139,7 @@ const memberIds = async (id: string) => {
   return [...new Set(rows.map((r) => r.userId))];
 };
 
-const canUse = async (id: string, userId: string) => {
+export const canUse = async (id: string, userId: string) => {
   const rows = await db
     .select()
     .from(listMembers)
@@ -150,7 +150,7 @@ const canUse = async (id: string, userId: string) => {
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
 // An id someone else's list already has updates nothing, so their list isn't sent back.
-const insert = async (data: CategoryInsert) => {
+export const insert = async (data: Insert) => {
   const [row] = await db
     .insert(categories)
     .values({ ...stampsNotAfterNow(data, ["updatedAt"]), sortOrder: keptSortOrder(data.sortOrder) })
@@ -164,7 +164,7 @@ const insert = async (data: CategoryInsert) => {
   return row;
 };
 
-const update = async (id: string, updatedAt: string, fields: Partial<CategoryInsert>) => {
+export const update = async (id: string, updatedAt: string, fields: Partial<Insert>) => {
   const at = notAfterNow(updatedAt);
   const [row] = await db
     .update(categories)
@@ -177,7 +177,7 @@ const update = async (id: string, updatedAt: string, fields: Partial<CategoryIns
 
 // Reads and writes in one transaction, so a task moved out meanwhile is left alone, and one
 // added meanwhile goes to the Inbox rather than being deleted unseen
-const removeWithTasks = async (
+export const removeWithTasks = async (
   id: string,
   action: CategoryTaskAction | undefined,
   confirmedIds: string[] | undefined,
@@ -240,7 +240,7 @@ const removeWithTasks = async (
  * still see it. A list that isn't deleted, as when a restore is replayed after a lost response,
  * comes back unchanged.
  */
-const restore = async (id: string) =>
+export const restore = async (id: string) =>
   inTransaction(async (tx) => {
     const found = await tx.query.categories.findFirst({
       where: { id },
@@ -328,16 +328,3 @@ const restore = async (id: string) =>
     const changed = [...movedBack.map((t) => t.id), ...refiled.map((s) => s.taskId)];
     return { before, changed };
   });
-
-export default {
-  list,
-  listByIds,
-  findById,
-  findByIdWithCollaborators,
-  canUse,
-  memberIds,
-  insert,
-  update,
-  removeWithTasks,
-  restore,
-};

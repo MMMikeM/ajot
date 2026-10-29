@@ -2,10 +2,10 @@ import { randomBytes } from "node:crypto";
 import { HTTPException } from "hono/http-exception";
 import { createId } from "@paralleldrive/cuid2";
 import { now } from "@newtab-todo/shared/iso";
-import userRepo from "./db/user.repo";
-import sessionRepo from "./db/session.repo";
-import categoryRepo from "./db/category.repo";
-import inviteTokenRepo from "./db/invite-token.repo";
+import * as userRepo from "./db/user.repo";
+import * as sessionRepo from "./db/session.repo";
+import * as categoryRepo from "./db/category.repo";
+import * as inviteTokenRepo from "./db/invite-token.repo";
 import { ConflictError, ForbiddenError, INVITE_GONE } from "./db/errors";
 import { hashPassword, verifyPassword } from "./password";
 
