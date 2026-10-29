@@ -29,7 +29,8 @@ const firefoxManifest = {
       strict_min_version: "140.0",
       data_collection_permissions: {
         required: ["none"],
-        optional: ["authenticationInfo", "personallyIdentifyingInfo"],
+        // websiteContent: the context menu can attach an image from the page
+        optional: ["authenticationInfo", "personallyIdentifyingInfo", "websiteContent"],
       },
     },
     gecko_android: { strict_min_version: "142.0" },
@@ -37,6 +38,8 @@ const firefoxManifest = {
   chrome_url_overrides: { newtab: "index.html" },
   content_security_policy: `script-src 'self'; object-src 'self'; ${CONNECT_SRC}`,
   permissions: ["storage", "notifications", "contextMenus", "activeTab", "alarms"],
+  // Asked for the first time the context menu attaches an image, to read it from its site
+  optional_permissions: ["<all_urls>"],
   background: { scripts: ["background.js"], persistent: true },
 };
 
@@ -52,6 +55,8 @@ const chromeManifest = {
     extension_pages: `script-src 'self'; object-src 'self'; ${CONNECT_SRC}`,
   },
   permissions: ["storage", "notifications", "contextMenus", "activeTab", "alarms"],
+  // Asked for the first time the context menu attaches an image, to read it from its site
+  optional_host_permissions: ["<all_urls>"],
   background: { service_worker: "background.js" },
 };
 

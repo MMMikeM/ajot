@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { test, expect } from "./fixtures";
 import { apiRequest } from "./helpers/api";
 import type { AuthResult } from "./helpers/auth";
-import { deliverPush, savedTitles } from "./helpers/background";
+import { deliverPush, queueUpload, savedTitles } from "./helpers/background";
 import { API_PORT } from "./helpers/stack";
 
 // Runs against the built Chrome extension: `pnpm test:e2e:background`. Playwright can't load a
@@ -93,4 +93,41 @@ test.describe("the extension's background saves the lists for the next new tab",
     const page = await openInFlightMode(user1Auth);
     await expect(page.getByText(title)).toBeVisible();
   });
+});
+
+// What a tab queued before it closed: the background sends it, so collaborators get it with no tab
+// open
+test("the extension's background sends a file a tab queued, on a push", async ({ user1Auth }) => {
+  const taskId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await apiRequest(
+    "POST",
+    "/api/tasks",
+    { id: taskId, userId: "", title: "With a file", createdAt: now, updatedAt: now },
+    user1Auth.token,
+  );
+  await background.evaluate(
+    (session) =>
+      chrome.storage.local.set({
+        "newtab-todo-token": session.token,
+        "newtab-todo-server-url": session.serverUrl,
+        "newtab-todo-user-id": session.userId,
+      }),
+    { token: user1Auth.token, serverUrl: SERVER_URL, userId: user1Auth.userId },
+  );
+  const id = `bg${Date.now()}`;
+  await queueUpload(background, { id, taskId, uploaderId: user1Auth.userId, text: "from no tab" });
+
+  await deliverPush(context, extensionUrl, { type: "sync" });
+  await expect
+    .poll(async () => {
+      const rows = await apiRequest<{ id: string; uploadedAt: string | null }[]>(
+        "GET",
+        "/api/attachments",
+        undefined,
+        user1Auth.token,
+      );
+      return rows.find((row) => row.id === id)?.uploadedAt ?? null;
+    })
+    .not.toBeNull();
 });

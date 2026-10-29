@@ -3,7 +3,13 @@ import { test, expect } from "./fixtures";
 import { apiRequest } from "./helpers/api";
 import { signIn } from "./helpers/auth";
 import { watchCsp } from "./helpers/csp";
-import { deliverPush, dispatchPeriodicSync, savedTitles } from "./helpers/background";
+import {
+  deliverPush,
+  dispatchPeriodicSync,
+  dispatchSync,
+  queueUpload,
+  savedTitles,
+} from "./helpers/background";
 import { PREVIEW_PORT } from "./helpers/stack";
 
 // Runs against the production build, which has the service worker: `pnpm test:e2e:background`
@@ -103,6 +109,27 @@ test.describe("the PWA's worker saves the lists for the next launch", () => {
     const page = await openInFlightMode(`/task/${id}`);
     await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue(title);
   });
+});
+
+test("the PWA's worker sends a file a page queued, on a background sync, with the app closed", async ({
+  user1Auth,
+}) => {
+  const task = await addTask(user1Auth.token, `With a file ${Date.now()}`);
+  const id = `sw${Date.now()}`;
+  await queueUpload(worker, { id, taskId: task.id, uploaderId: user1Auth.userId, text: "later" });
+
+  await dispatchSync(context, ORIGIN, "ajot-uploads");
+  await expect
+    .poll(async () => {
+      const rows = await apiRequest<{ id: string; uploadedAt: string | null }[]>(
+        "GET",
+        "/api/attachments",
+        undefined,
+        user1Auth.token,
+      );
+      return rows.find((row) => row.id === id)?.uploadedAt ?? null;
+    })
+    .not.toBeNull();
 });
 
 test.describe("settings", () => {
