@@ -80,12 +80,16 @@ fly storage create
 ```
 
 That sets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3` and `BUCKET_NAME` as
-secrets on the app. Browsers upload to the bucket directly, so it needs CORS. A presigned URL is the
-credential, so any origin may use one. With those four variables in your shell:
+secrets on the app, which restarts with them. Browsers upload to the bucket directly, so it needs
+CORS; a presigned URL is the credential, so any origin may use one. Once the app is back up:
 
 ```sh
-aws s3api put-bucket-cors --bucket "$BUCKET_NAME" --cors-configuration '{"CORSRules":[{"AllowedOrigins":["*"],"AllowedMethods":["GET","PUT","HEAD"],"AllowedHeaders":["*"],"MaxAgeSeconds":3600}]}'
+fly ssh console -C "node dist/bucket-setup.js"
 ```
+
+It sets the CORS, then checks with a test file that the bucket refuses an upload longer than, or of
+another type than, its URL was signed for, and that a download carries the file name it was signed
+with. Attachments rely on all of these; if any check fails, remove the four secrets.
 
 ### Behind a reverse proxy
 
