@@ -1,4 +1,5 @@
-import { test, expect, type BrowserContext, type Page, type Route } from "@playwright/test";
+import { type BrowserContext, type Route } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { createCategory } from "./helpers/app";
 import { mockApi, mockData } from "./helpers/mock-api";
 

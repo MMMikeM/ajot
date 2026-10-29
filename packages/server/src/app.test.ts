@@ -1,6 +1,11 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { beforeEach, expect, test, vi } from "vite-plus/test";
 import app, { MAX_BODY_BYTES } from "./app";
 import { MAX_ID, MAX_TASK_IDS, MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
+import { CONTENT_SECURITY_POLICY, CSP_HEADER } from "@newtab-todo/shared/csp";
 import { signup } from "./auth-service";
 
 vi.mock("./db/client", () => ({ db: {}, inTransaction: vi.fn() }));
@@ -15,6 +20,19 @@ const signUp = (body: object) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+
+test("the page and the API carry the Content Security Policy", async () => {
+  // As index.ts serves the client's build
+  const dist = mkdtempSync(join(tmpdir(), "dist-"));
+  writeFileSync(join(dist, "index.html"), "<!doctype html>");
+  app.get("*", serveStatic({ root: dist, path: "index.html" }));
+
+  for (const path of ["/", "/task/abc", "/api/config"]) {
+    const res = await app.request(path);
+    expect(res.headers.get(CSP_HEADER), path).toBe(CONTENT_SECURITY_POLICY);
+  }
+  expect(await (await app.request("/task/abc")).text()).toBe("<!doctype html>");
+});
 
 test("input a route refuses is answered with a message the client can show", async () => {
   const res = await signUp({ username: "ab", password: "long enough", name: "Al" });

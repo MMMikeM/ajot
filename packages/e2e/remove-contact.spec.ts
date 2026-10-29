@@ -1,4 +1,5 @@
-import { test, expect, type Page, type Request, type Route } from "@playwright/test";
+import { type Request, type Route } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { mockApi } from "./helpers/mock-api";
 
 const openPeople = async (page: Page) => {

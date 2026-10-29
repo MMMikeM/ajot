@@ -1,11 +1,5 @@
-import {
-  test,
-  expect,
-  type BrowserContext,
-  type Page,
-  type Request,
-  type Route,
-} from "@playwright/test";
+import { type BrowserContext, type Request, type Route } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { mockApi, mockData } from "./helpers/mock-api";
 
 // Tabs of one origin share an outbox, and one of them, the leader, sends it.

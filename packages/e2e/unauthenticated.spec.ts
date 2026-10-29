@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 // Signed out, the offline executor keeps mutations in its IDB outbox (a retriable
 // error), so optimistic state replays on reload.

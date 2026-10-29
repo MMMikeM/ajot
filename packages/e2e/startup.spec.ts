@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { taskRow as row } from "./helpers/app";
 import { dueLabel, openList } from "./helpers/mock-api";
 

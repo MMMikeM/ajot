@@ -7,6 +7,7 @@ import { injectFontPreloads } from "./plugins/inject-font-preloads";
 import { prerender } from "./plugins/prerender";
 import { inlineStylesheet } from "./plugins/inline-stylesheet";
 import babel from "@rolldown/plugin-babel";
+import { CONTENT_SECURITY_POLICY, CSP_HEADER } from "@newtab-todo/shared/csp";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, searchForWorkspaceRoot(process.cwd()), "");
@@ -31,6 +32,10 @@ export default defineConfig(({ mode }) => {
       warmup: {
         clientFiles: ["./src/main.tsx", "./src/routes/**/*.tsx"],
       },
+    },
+    // The e2e suites serve the build with `vp preview`, so they run under the server's policy
+    preview: {
+      headers: { [CSP_HEADER]: CONTENT_SECURITY_POLICY },
     },
     resolve: {
       tsconfigPaths: true,

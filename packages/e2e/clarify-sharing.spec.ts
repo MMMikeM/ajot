@@ -1,4 +1,4 @@
-import { test, expect, type Locator, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "./fixtures";
 import { mockApi } from "./helpers/mock-api";
 
 // A production build registers sw.js, which would answer /api before the mocks see it

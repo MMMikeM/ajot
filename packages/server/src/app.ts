@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { compress } from "hono/compress";
 import { secureHeaders } from "hono/secure-headers";
 import { bodyLimit } from "hono/body-limit";
+import { CONTENT_SECURITY_POLICY, CSP_HEADER } from "@newtab-todo/shared/csp";
 import { authRoutes } from "./routes/auth";
 import { taskRoutes } from "./routes/tasks";
 import { categoryRoutes } from "./routes/categories";
@@ -64,6 +65,11 @@ app.use(
     strictTransportSecurity: "max-age=63072000; includeSubDomains; preload",
   }),
 );
+
+app.use("*", async (c, next) => {
+  c.header(CSP_HEADER, CONTENT_SECURITY_POLICY);
+  await next();
+});
 
 const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 

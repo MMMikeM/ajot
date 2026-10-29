@@ -1,4 +1,5 @@
-import { test, expect, type BrowserContext, type Page } from "@playwright/test";
+import { type BrowserContext } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { mockApi, mockData } from "./helpers/mock-api";
 
 test.use({ serviceWorkers: "block" });

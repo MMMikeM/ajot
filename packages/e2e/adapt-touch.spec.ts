@@ -1,4 +1,5 @@
-import { test, expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { type TestInfo } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "./fixtures";
 import { dueLabel, mockApi, mockData } from "./helpers/mock-api";
 import { expectTapTarget } from "./helpers/touch";
 
