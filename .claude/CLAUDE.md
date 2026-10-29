@@ -11,6 +11,7 @@
 - **Never run `fly deploy`.** Deploys are triggered by CI on push. Never run this command.
 - **Never commit without explicit user permission.** Always ask before committing. This applies to subagents too — when dispatching subagents, explicitly tell them NOT to commit. Strip or ignore commit steps from any plan template.
 - **Always invoke the relevant skill before writing code that touches its domain.** Don't write Drizzle queries without invoking the drizzle skill. Don't write Legend State code without invoking the legend-state skill. No exceptions — read the reference first, then write code.
+- **Call the server through its typed client, never `fetch`.** `apiClient(session)` (`client/src/lib/api-client.ts`) types every route from the server's own, so a wrong path or body fails to compile. A page uses `client` from `lib/api.ts`, built on it; a context with no page (an extension background, the PWA's worker, the upload queue) builds one from the session it was handed. `fetch` appears only in those two files and `lib/files/bucket.ts`, for the bucket's presigned URLs, and lint refuses it anywhere else in the client. A hand-written `fetch` to `/api/attachments/` once sent every upload to a route that doesn't exist, and its unit tests mocked the same wrong path.
 - **Use static imports by default.** Dynamic `import()` is only acceptable when explicitly needed (e.g., breaking circular deps, lazy-loading heavy modules). Always add a comment explaining why.
 
 ## Sync rules

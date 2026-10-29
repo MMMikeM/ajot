@@ -1,6 +1,6 @@
-import { hc } from "hono/client";
-import type { AppType } from "@newtab-todo/server/app";
 import { servedType } from "@newtab-todo/shared/attachments";
+import { apiClient, type Fetcher } from "~/lib/api-client";
+import { putToBucket } from "~/lib/files/bucket";
 import { changeUpload, readBlobs, readUploads, type Upload } from "~/lib/files/store";
 import {
   afterAnswer,
@@ -15,7 +15,8 @@ import {
 export type FilesSession = { token: string; serverUrl: string; userId: string | null };
 
 export type DrainDeps = {
-  fetch: typeof fetch;
+  /** The global one when left out. */
+  fetch?: Fetcher;
   locks: { request: <T>(name: string, run: () => Promise<T>) => Promise<T> };
   now: () => number;
   /** The row `/complete` answered with, for a page to show before its broadcast arrives. */
@@ -31,7 +32,6 @@ const MAX_ROUNDS = 50;
 const runNow: DrainDeps["locks"] = { request: (_name, run) => run() };
 
 const defaults = (): DrainDeps => ({
-  fetch: (...args) => fetch(...args),
   locks: typeof navigator !== "undefined" && navigator.locks ? navigator.locks : runNow,
   now: Date.now,
 });
@@ -56,10 +56,8 @@ const answerOf = async <R extends Reply>(request: Promise<R>): Promise<Answer & 
   }
 };
 
-// The server's own route types, so a path or body it doesn't take fails to compile. Not the page's
-// client in lib/api.ts, which reads the page's session: this runs wherever the session is handed in.
-const attachmentsApi = ({ fetch }: DrainDeps, { serverUrl, token }: FilesSession) =>
-  hc<AppType>(serverUrl, { fetch, headers: { Authorization: `Bearer ${token}` } }).api.attachments;
+const attachmentsApi = ({ fetch }: DrainDeps, session: FilesSession) =>
+  apiClient(session, fetch).api.attachments;
 
 /** Applies the answer to the entry as it is now; undefined when the entry is gone. */
 const settle = async (deps: DrainDeps, id: string, request: Request, answer: Answer) => {
@@ -79,11 +77,8 @@ const goesOn = (next: Awaited<ReturnType<typeof settle>>, deps: DrainDeps): next
   next.posted &&
   next.retryAt <= deps.now();
 
-// The browser sends each Blob's length as content-length, which the URL signed
 const put = (deps: DrainDeps, url: string, blob: Blob, contentType: string) =>
-  answerOf(
-    deps.fetch(url, { method: "PUT", headers: { "Content-Type": contentType }, body: blob }),
-  );
+  answerOf(putToBucket(url, blob, contentType, deps.fetch));
 
 const sendBytes = async (deps: DrainDeps, session: FilesSession, upload: Upload) => {
   const { id, hasThumb, mimeType } = upload.row;

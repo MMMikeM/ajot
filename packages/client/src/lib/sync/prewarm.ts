@@ -9,18 +9,29 @@ import {
   writeSnapshot,
 } from "~/lib/snapshot-store";
 import { applyRows } from "~/lib/sync/saved-rows";
+import { ApiError, apiClient } from "~/lib/api-client";
 
 /** serverUrl is "" for the PWA, which calls its own origin. */
 export type PrewarmSession = { token: string; serverUrl: string; userId: string | null };
 
 type GetSession = () => Promise<PrewarmSession | null>;
 
-const fetchList = async ({ serverUrl, token }: PrewarmSession, key: string) => {
-  const res = await fetch(`${serverUrl}/api/${key}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`/api/${key} answered ${res.status}`);
-  return [key, (await res.json()) as unknown] as const;
+type Reply = { ok: boolean; status: number; json(): Promise<unknown> };
+
+// A list saved for a page opened offline, and the route it comes from
+const listRoutes = ({ api }: ReturnType<typeof apiClient>) =>
+  ({
+    tasks: () => api.tasks.$get(),
+    categories: () => api.categories.$get(),
+    notes: () => api.notes.$get(),
+    contacts: () => api.contacts.$get(),
+    attachments: () => api.attachments.$get(),
+  }) satisfies Record<(typeof SNAPSHOT_KEYS)[number], () => Promise<Reply>>;
+
+const fetchList = async (session: PrewarmSession, key: (typeof SNAPSHOT_KEYS)[number]) => {
+  const res = await listRoutes(apiClient(session))[key]();
+  if (!res.ok) throw new ApiError(res.status);
+  return [key, await res.json()] as const;
 };
 
 const sameSession = (a: PrewarmSession | null, b: PrewarmSession) =>
