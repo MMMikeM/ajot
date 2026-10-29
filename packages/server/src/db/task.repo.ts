@@ -1,27 +1,21 @@
-import { and, eq, getColumns, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, eq, getColumns, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { keyAfter } from "@newtab-todo/shared/sort-order";
 import { keptSortOrder } from "./sort-key";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db } from "./client";
-import { categories, taskAccess, tasks, taskShares, users } from "./schema";
-import { IdTakenError, InsertFailedError, NotFoundError, StaleUpdateError } from "./errors";
+import { categories, taskAccess, tasks, users } from "./schema";
+import * as taskShareRepo from "./task-share.repo";
+import { IdTakenError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { now } from "@newtab-todo/shared/iso";
 import { MAX_SHORT, MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { limited, limitedId } from "./field-limits";
 import { notAfterNow, stampsNotAfterNow } from "./stamps";
 
-export type TaskShareInsert = typeof taskShares.$inferInsert;
+export type Insert = typeof tasks.$inferInsert;
 
-export const shareSelectSchema = createSelectSchema(taskShares, { id: limitedId }).pick({
-  id: true,
-});
-export const shareResponseSchema = createSelectSchema(taskShares);
-
-export type TaskInsert = typeof tasks.$inferInsert;
-
-export const selectSchema = createSelectSchema(tasks, { id: limitedId }).pick({ id: true });
+export const idSchema = createSelectSchema(tasks, { id: limitedId }).pick({ id: true });
 export const responseSchema = createSelectSchema(tasks).omit({
   live: true,
   topLevel: true,
@@ -47,7 +41,7 @@ export const listItemSchema = responseSchema.extend({
   user: z.object({ id: z.string(), name: z.string() }),
   subtasks: z.array(responseSchema),
   shares: z.array(
-    shareResponseSchema.extend({
+    taskShareRepo.responseSchema.extend({
       sharedWithUser: sharedWithUserSchema,
     }),
   ),
@@ -140,7 +134,7 @@ export const accessTo = async (taskIds: string[]) =>
     ? []
     : db.select().from(taskAccess).where(inArray(taskAccess.taskId, taskIds));
 
-export type TaskAccessRow = Awaited<ReturnType<typeof accessTo>>[number];
+export type AccessRow = Awaited<ReturnType<typeof accessTo>>[number];
 
 // Filtered on the view's task_id, so each branch of task_access is an index lookup
 export const findWithAccess = async (id: string, { deleted = false } = {}) => {
@@ -166,7 +160,7 @@ const STAMPS = ["updatedAt", "editedAt", "completedAt"] as const;
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
 // Re-inserting a deleted task restores it, since the conflict update clears deletedAt.
 // An id someone else's task already has updates nothing, so it returns nothing and restores nothing.
-export const insert = async (data: TaskInsert) => {
+export const insert = async (data: Insert) => {
   const [row] = await db
     .insert(tasks)
     .values({ ...stampsNotAfterNow(data, [...STAMPS]), sortOrder: keptSortOrder(data.sortOrder) })
@@ -182,7 +176,7 @@ export const insert = async (data: TaskInsert) => {
 
 // A task sent to someone, which they own. Nothing retries a send with the same id, so any id
 // already taken is a conflict, and the sender never gets back a task of the recipient's.
-export const insertSent = async (data: TaskInsert) => {
+export const insertSent = async (data: Insert) => {
   const [row] = await db
     .insert(tasks)
     .values(stampsNotAfterNow(data, [...STAMPS]))
@@ -192,7 +186,7 @@ export const insertSent = async (data: TaskInsert) => {
   return row;
 };
 
-export const update = async (id: string, updatedAt: string, fields: Partial<TaskInsert>) => {
+export const update = async (id: string, updatedAt: string, fields: Partial<Insert>) => {
   const at = notAfterNow(updatedAt);
   const [row] = await db
     .update(tasks)
@@ -309,66 +303,6 @@ export const findListItems = async (ids: string[]) => {
 };
 
 export type TaskWithRelations = Awaited<ReturnType<typeof list>>[number];
-
-export const insertShare = async (data: TaskShareInsert) => {
-  const [row] = await db.insert(taskShares).values(data).onConflictDoNothing().returning();
-  if (row) return { share: row, added: true, changed: true };
-  const permission = data.permission ?? "edit";
-  const [updated] = await db
-    .update(taskShares)
-    .set({ permission })
-    .where(
-      and(
-        eq(taskShares.taskId, data.taskId),
-        eq(taskShares.sharedWithUserId, data.sharedWithUserId),
-        ne(taskShares.permission, permission),
-      ),
-    )
-    .returning();
-  if (updated) return { share: updated, added: false, changed: true };
-  const existing = await db.query.taskShares.findFirst({
-    where: { taskId: data.taskId, sharedWithUserId: data.sharedWithUserId },
-  });
-  if (!existing) throw new InsertFailedError("task share");
-  return { share: existing, added: false, changed: false };
-};
-
-export const findShare = async (id: string) => {
-  const row = await db.query.taskShares.findFirst({ where: { id } });
-  if (!row) throw new NotFoundError("task share", id);
-  return row;
-};
-
-export const removeShare = async (id: string) => {
-  const [row] = await db.delete(taskShares).where(eq(taskShares.id, id)).returning();
-  if (!row) throw new NotFoundError("task share", id);
-  return row;
-};
-
-export const updateShareCategory = async (
-  taskId: string,
-  sharedWithUserId: string,
-  categoryId: string | null,
-) => {
-  const [row] = await db
-    .update(taskShares)
-    .set({ categoryId })
-    .where(and(eq(taskShares.taskId, taskId), eq(taskShares.sharedWithUserId, sharedWithUserId)))
-    .returning();
-  if (!row) throw new NotFoundError("task shared with you", taskId);
-  return row;
-};
-
-export const listSharesForTasks = async (taskIds: string[]) => {
-  if (taskIds.length === 0) return [];
-  return db.query.tasks.findMany({
-    where: { id: { in: taskIds } },
-    columns: { id: true },
-    with: {
-      shares: { with: { sharedWithUser: { columns: { id: true, name: true, username: true } } } },
-    },
-  });
-};
 
 export const findOverdue = async (beforeDate: string) =>
   db.query.tasks.findMany({

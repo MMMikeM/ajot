@@ -13,12 +13,12 @@ import { limited, limitedId } from "./field-limits";
 import { notAfterNow, stampsNotAfterNow } from "./stamps";
 import { CATEGORY_TASK_ACTIONS, type CategoryTaskAction } from "@newtab-todo/shared/constants";
 
-export type CategoryInsert = typeof categories.$inferInsert;
+export type Insert = typeof categories.$inferInsert;
 
-export const selectSchema = createSelectSchema(categories, { id: limitedId }).pick({
+export const idSchema = createSelectSchema(categories, { id: limitedId }).pick({
   id: true,
 });
-export const deleteSchema = selectSchema.extend({
+export const deleteSchema = idSchema.extend({
   tasks: z.enum(CATEGORY_TASK_ACTIONS).optional(),
   /** The top-level tasks the user was shown; only these can be deleted */
   taskIds: z
@@ -150,7 +150,7 @@ export const canUse = async (id: string, userId: string) => {
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
 // An id someone else's list already has updates nothing, so their list isn't sent back.
-export const insert = async (data: CategoryInsert) => {
+export const insert = async (data: Insert) => {
   const [row] = await db
     .insert(categories)
     .values({ ...stampsNotAfterNow(data, ["updatedAt"]), sortOrder: keptSortOrder(data.sortOrder) })
@@ -164,7 +164,7 @@ export const insert = async (data: CategoryInsert) => {
   return row;
 };
 
-export const update = async (id: string, updatedAt: string, fields: Partial<CategoryInsert>) => {
+export const update = async (id: string, updatedAt: string, fields: Partial<Insert>) => {
   const at = notAfterNow(updatedAt);
   const [row] = await db
     .update(categories)

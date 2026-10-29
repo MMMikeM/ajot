@@ -8,10 +8,10 @@ import { MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { limited, limitedId } from "./field-limits";
 import { notAfterNow, stampsNotAfterNow } from "./stamps";
 
-export type NoteInsert = typeof notes.$inferInsert;
+export type Insert = typeof notes.$inferInsert;
 export type NoteSelect = typeof notes.$inferSelect;
 
-export const selectSchema = createSelectSchema(notes, { id: limitedId }).pick({ id: true });
+export const idSchema = createSelectSchema(notes, { id: limitedId }).pick({ id: true });
 export const responseSchema = createSelectSchema(notes);
 const limitedFields = {
   id: limitedId,
@@ -46,7 +46,7 @@ export const list = async (userId: string) =>
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
 // An id another note already has updates nothing, so someone else's note isn't sent back.
-export const insert = async (data: NoteInsert) => {
+export const insert = async (data: Insert) => {
   const [row] = await db
     .insert(notes)
     .values(stampsNotAfterNow(data, ["updatedAt"]))
@@ -68,7 +68,7 @@ export const update = async (
   id: string,
   userId: string,
   updatedAt: string,
-  fields: Partial<NoteInsert>,
+  fields: Partial<Insert>,
 ) => {
   const at = notAfterNow(updatedAt);
   const [row] = await db

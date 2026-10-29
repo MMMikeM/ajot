@@ -5,12 +5,12 @@ import { db } from "./client";
 import { pushPreferences } from "./schema";
 import { DEFAULT_PUSH_PREFERENCES, deviceKey, type DevicePreferences } from "../push-plan";
 
-export const preferencesSchema = createInsertSchema(pushPreferences, {
+export const schema = createInsertSchema(pushPreferences, {
   muted: z.array(z.enum(PUSH_TRIGGERS)).max(100),
   urgent: z.boolean(),
 }).pick({ muted: true, urgent: true });
 
-export type PushPreferences = z.infer<typeof preferencesSchema>;
+export type PushPreferences = z.infer<typeof schema>;
 
 export const find = async (userId: string, deviceId: string): Promise<PushPreferences> => {
   const row = await db.query.pushPreferences.findFirst({
