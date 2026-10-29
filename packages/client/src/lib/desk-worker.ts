@@ -1,6 +1,6 @@
 /**
- * Draws the desk on the canvas `desk.ts` hands over, off the main thread, since creating a GPU
- * context can take tens of milliseconds. The CSS gradients in index.html step one 8-bit level at a
+ * Draws the desk in a worker, since creating a GPU context can take tens of milliseconds. The CSS
+ * gradients in index.html step one 8-bit level at a
  * time across the dark vignettes, which shows as stripes on large screens; here the same layers
  * are computed in floats and dithered by one level as the last step, so the steps disappear. The
  * shader must match them (side vignette, bottom fade, moonlit bloom), or the desk shifts when the
@@ -98,8 +98,7 @@ const start = (canvas: OffscreenCanvas) => {
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.uniform2f(size, canvas.width, canvas.height);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    // The frame reaches the screen after this task, later than the message would reach the page,
-    // which would take the CSS layers away with nothing to show in their place
+    // The page removes the CSS layers on this message, which can beat the frame to the screen
     if (!drawn) requestAnimationFrame(() => postMessage("drawn"));
     drawn = true;
   };

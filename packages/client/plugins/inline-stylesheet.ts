@@ -2,11 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import type { PluginOption } from "vite";
 
-/**
- * Puts the whole stylesheet in the page: a <link> holds up the scripts until it arrives, and the
- * CSP refuses the onload handler that would load it without blocking. The service worker and the
- * extensions serve the page from disk, so its extra bytes cost a download once per deploy.
- */
+// A <link> holds up the scripts until it loads, and the CSP refuses the onload swap that avoids it
 export const inlineStylesheet = (): PluginOption => {
   const outDir = join(resolve(import.meta.dirname, ".."), "dist");
 

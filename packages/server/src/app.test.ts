@@ -22,7 +22,6 @@ const signUp = (body: object) =>
   });
 
 test("the page and the API carry the Content Security Policy", async () => {
-  // As index.ts serves the client's build
   const dist = mkdtempSync(join(tmpdir(), "dist-"));
   writeFileSync(join(dist, "index.html"), "<!doctype html>");
   app.get("*", serveStatic({ root: dist, path: "index.html" }));
