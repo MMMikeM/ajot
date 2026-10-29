@@ -5,38 +5,36 @@ import { z } from "@hono/zod-openapi";
 import { db } from "./client";
 import { pushSubscriptions } from "./schema";
 
-export const pushSubscriptionInsertSchema = createInsertSchema(pushSubscriptions)
+export const insertSchema = createInsertSchema(pushSubscriptions)
   .omit({ createdAt: true, id: true })
   .required();
 
-export type PushSubscriptionInsert = z.infer<typeof pushSubscriptionInsertSchema>;
+export type Insert = z.infer<typeof insertSchema>;
 
-const upsert = async (data: PushSubscriptionInsert) => {
+export const upsert = async (data: Insert) => {
   await db
     .insert(pushSubscriptions)
     .values({ id: createId(), ...data })
     .onConflictDoUpdate({ target: pushSubscriptions.endpoint, set: data });
 };
 
-const removeOwn = async (endpoint: string, userId: string) => {
+export const removeOwn = async (endpoint: string, userId: string) => {
   await db
     .delete(pushSubscriptions)
     .where(and(eq(pushSubscriptions.endpoint, endpoint), eq(pushSubscriptions.userId, userId)));
 };
 
-const removeMany = async (endpoints: string[]) => {
+export const removeMany = async (endpoints: string[]) => {
   if (endpoints.length === 0) return;
   await db.delete(pushSubscriptions).where(inArray(pushSubscriptions.endpoint, endpoints));
 };
 
 type PushSubscriptionKind = (typeof pushSubscriptions.$inferSelect)["kind"];
 
-const findForUsers = async (userIds: string[], kind?: PushSubscriptionKind) => {
+export const findForUsers = async (userIds: string[], kind?: PushSubscriptionKind) => {
   if (userIds.length === 0) return [];
   return db.query.pushSubscriptions.findMany({ where: { kind, userId: { in: userIds } } });
 };
 
-const findByKind = async (kind: PushSubscriptionKind) =>
+export const findByKind = async (kind: PushSubscriptionKind) =>
   db.query.pushSubscriptions.findMany({ where: { kind } });
-
-export default { upsert, removeOwn, removeMany, findForUsers, findByKind };

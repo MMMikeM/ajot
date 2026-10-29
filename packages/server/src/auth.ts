@@ -1,5 +1,5 @@
 import { HTTPException } from "hono/http-exception";
-import sessionRepo from "./db/session.repo";
+import * as sessionRepo from "./db/session.repo";
 import { UNAUTHORIZED } from "./db/errors";
 
 /** A Bearer header. Never a cookie: the browser would attach one to a request another site starts. */

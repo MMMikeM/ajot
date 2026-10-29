@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { hoursFromNow } from "@newtab-todo/shared/iso";
-import inviteTokenRepo from "../db/invite-token.repo";
+import * as inviteTokenRepo from "../db/invite-token.repo";
 import { BadRequestError, GoneError, INVITE_GONE } from "../db/errors";
 import { getUserName, sendNotification } from "../notify";
 import { sendContactChanges } from "./contact-changes";

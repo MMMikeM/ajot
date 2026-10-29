@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { now } from "@newtab-todo/shared/iso";
 import { db } from "./client";
-import categoryRepo from "./category.repo";
-import noteRepo from "./note.repo";
-import taskRepo from "./task.repo";
+import * as categoryRepo from "./category.repo";
+import * as noteRepo from "./note.repo";
+import * as taskRepo from "./task.repo";
 import { categories, notes, tasks, users } from "./schema";
 
 // vi.mock runs before this file's imports, so the database it builds can only be imported there

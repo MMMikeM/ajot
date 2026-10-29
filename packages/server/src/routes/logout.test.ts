@@ -1,6 +1,6 @@
 import { beforeAll, expect, test, vi } from "vite-plus/test";
-import sessionRepo from "../db/session.repo";
-import userRepo from "../db/user.repo";
+import * as sessionRepo from "../db/session.repo";
+import * as userRepo from "../db/user.repo";
 import { authRoutes } from "./auth";
 
 // vi.mock runs before this file's imports, so the database it builds can only be imported there

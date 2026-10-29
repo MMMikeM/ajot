@@ -7,10 +7,10 @@ import { notificationQueue, tasks, users } from "./schema";
  * Sets the task's unsent reminder to the due date the task holds as this runs, so two edits at
  * once leave it on the date the task ends up with.
  */
-const scheduleReminder = (taskId: string) => upsertReminder(taskId, sql``);
+export const scheduleReminder = (taskId: string) => upsertReminder(taskId, sql``);
 
 /** Unless the task has had one: a create retried after its reminder went out would send it again. */
-const scheduleFirstReminder = (taskId: string) =>
+export const scheduleFirstReminder = (taskId: string) =>
   upsertReminder(
     taskId,
     sql`AND NOT EXISTS (SELECT 1 FROM ${notificationQueue}
@@ -25,7 +25,7 @@ const upsertReminder = async (taskId: string, unless: SQL) => {
     DO UPDATE SET scheduled_for = excluded.scheduled_for`);
 };
 
-const cancelReminder = async (taskId: string) => {
+export const cancelReminder = async (taskId: string) => {
   await db
     .delete(notificationQueue)
     .where(
@@ -39,7 +39,7 @@ const cancelReminder = async (taskId: string) => {
 };
 
 /** Runs at the same time each mark a reminder only once, so only one sends it. */
-const claimDueReminders = async (at: string) => {
+export const claimDueReminders = async (at: string) => {
   const claimed = await db
     .update(notificationQueue)
     .set({ sentAt: at })
@@ -69,7 +69,7 @@ const claimDueReminders = async (at: string) => {
 };
 
 /** One whose task has a new reminder since stays marked: the new one is its unsent reminder now. */
-const releaseReminders = async (ids: string[], at: string) => {
+export const releaseReminders = async (ids: string[], at: string) => {
   if (ids.length === 0) return;
   await db.run(sql`UPDATE OR IGNORE ${notificationQueue} SET sent_at = NULL
     WHERE ${inArray(notificationQueue.id, ids)} AND ${eq(notificationQueue.sentAt, at)}`);
@@ -82,7 +82,7 @@ export const DIGEST_CLAIM_CHUNK = 200;
  * Records a digest for `day` for each of these users who has none that day. Runs at the same time
  * record each user's only once. A user deleted since they were read is passed over.
  */
-const claimDigests = async (userIds: string[], day: string, at: string) => {
+export const claimDigests = async (userIds: string[], day: string, at: string) => {
   const claimed: { id: string; userId: string }[] = [];
   for (let start = 0; start < userIds.length; start += DIGEST_CLAIM_CHUNK) {
     const chunk = userIds.slice(start, start + DIGEST_CLAIM_CHUNK);
@@ -102,17 +102,7 @@ const claimDigests = async (userIds: string[], day: string, at: string) => {
   return claimed;
 };
 
-const releaseDigests = async (ids: string[]) => {
+export const releaseDigests = async (ids: string[]) => {
   if (ids.length === 0) return;
   await db.delete(notificationQueue).where(inArray(notificationQueue.id, ids));
-};
-
-export default {
-  scheduleReminder,
-  scheduleFirstReminder,
-  cancelReminder,
-  claimDueReminders,
-  releaseReminders,
-  claimDigests,
-  releaseDigests,
 };

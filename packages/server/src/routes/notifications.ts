@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { now, today } from "@newtab-todo/shared/iso";
-import notificationQueueRepo from "../db/notification-queue.repo";
-import taskRepo from "../db/task.repo";
+import * as notificationQueueRepo from "../db/notification-queue.repo";
+import * as taskRepo from "../db/task.repo";
 import { sendNotification } from "../notify";
 import { isSecret } from "../secret";
 

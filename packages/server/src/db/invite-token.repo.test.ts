@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { db } from "./client";
-import contactRepo from "./contact.repo";
+import * as contactRepo from "./contact.repo";
 import { NotFoundError } from "./errors";
-import inviteTokenRepo from "./invite-token.repo";
+import * as inviteTokenRepo from "./invite-token.repo";
 import { contacts, inviteTokens, removedContacts, users } from "./schema";
 
 // vi.mock runs before this file's imports, so the database it builds can only be imported there

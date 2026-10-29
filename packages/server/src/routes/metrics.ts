@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import metricRepo, { metricCountSchema, metricNameSchema } from "../db/metric.repo";
+import * as metricRepo from "../db/metric.repo";
 import { authed, authedRoute } from "../middleware";
 import { jsonBody } from "./crud";
 
@@ -8,7 +8,7 @@ export const metricRoutes = authed()
     authedRoute({
       method: "post",
       path: "/",
-      request: jsonBody(z.object({ name: metricNameSchema })),
+      request: jsonBody(z.object({ name: metricRepo.nameSchema })),
       responses: { 204: true },
     }),
     async (c) => {
@@ -24,7 +24,7 @@ export const metricRoutes = authed()
       responses: {
         200: z.object({
           totals: z.record(z.string(), z.number()),
-          days: z.array(metricCountSchema),
+          days: z.array(metricRepo.countSchema),
         }),
       },
     }),

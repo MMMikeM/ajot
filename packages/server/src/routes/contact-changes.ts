@@ -1,11 +1,14 @@
 import type { Context } from "hono";
-import contactRepo, { type ContactWithUser } from "../db/contact.repo";
+import * as contactRepo from "../db/contact.repo";
 import { broadcastPerUser, type BroadcastEvent } from "../broadcast";
 
 type ContactRow = { id: string; userId: string };
 
 /** Each person lists only their own contact rows, so a row's change goes only to its owner. */
-export const addressContactChanges = (removed: ContactRow[], added: ContactWithUser[]) => [
+export const addressContactChanges = (
+  removed: ContactRow[],
+  added: contactRepo.ContactWithUser[],
+) => [
   ...removed.map((row) => ({
     userId: row.userId,
     event: { model: "contacts", action: "delete", data: { id: row.id } } satisfies BroadcastEvent,
