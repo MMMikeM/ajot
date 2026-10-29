@@ -42,10 +42,19 @@ const task = (id: string, sortOrder: string | null, more = "") =>
     '2026-01-01T00:00:0${id.length % 10}.000Z', '2026-02-01T00:00:00.000Z'${more})`;
 const ids = (rows: Row[]) => rows.map((row) => row.id);
 const keys = (rows: Row[]) => rows.map((row) => row.sort_order);
-// live is new, and only the database reads it; sent_by_id is new too
+// live, top_level and has_parent are new, and only the database reads them; sent_by_id is new too
 const without = (rows: Row[], column: string) =>
   rows
-    .map(({ [column]: _dropped, live: _live, sent_by_id: _sentBy, ...rest }) => rest)
+    .map(
+      ({
+        [column]: _dropped,
+        live: _live,
+        top_level: _topLevel,
+        has_parent: _hasParent,
+        sent_by_id: _sentBy,
+        ...rest
+      }) => rest,
+    )
     .sort((a, b) => String(a.id).localeCompare(String(b.id)));
 
 describe("tables holding keys the CHECK refuses", async () => {

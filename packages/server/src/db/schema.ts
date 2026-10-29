@@ -99,6 +99,14 @@ export const tasks = sqliteTable(
     live: integer("live").generatedAlwaysAs(sql`CASE WHEN deleted_at IS NULL THEN 1 END`, {
       mode: "virtual",
     }),
+    // 1 or null as it has no parent or has one: only for subtask_has_top_level_parent, never sent
+    topLevel: integer("top_level").generatedAlwaysAs(sql`CASE WHEN parent_id IS NULL THEN 1 END`, {
+      mode: "virtual",
+    }),
+    hasParent: integer("has_parent").generatedAlwaysAs(
+      sql`CASE WHEN parent_id IS NOT NULL THEN 1 END`,
+      { mode: "virtual" },
+    ),
   },
   (t) => [
     // A subtask goes wherever its parent is; a list of its own would add that list's people to it
@@ -113,6 +121,14 @@ export const tasks = sqliteTable(
       name: "live_subtask_has_live_parent",
       columns: [t.parentId, t.live],
       foreignColumns: [t.id, t.live],
+    }),
+    // Subtasks can't have subtasks. A task without a parent has null has_parent, which a foreign
+    // key doesn't check.
+    uniqueIndex("tasks_id_top_level_idx").on(t.id, t.topLevel),
+    foreignKey({
+      name: "subtask_has_top_level_parent",
+      columns: [t.parentId, t.hasParent],
+      foreignColumns: [t.id, t.topLevel],
     }),
     // For task_access, looked up by task and by user
     index("tasks_user_idx").on(t.userId),
@@ -217,7 +233,10 @@ export const contacts = sqliteTable(
     contactUserId: fk("contact_user_id", () => users.id, { onDelete: "cascade" }),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("contacts_user_contact_idx").on(t.userId, t.contactUserId)],
+  (t) => [
+    check("contact_is_someone_else", sql`${t.userId} <> ${t.contactUserId}`),
+    uniqueIndex("contacts_user_contact_idx").on(t.userId, t.contactUserId),
+  ],
 );
 
 type ContactRow = typeof contacts.$inferSelect;
@@ -278,15 +297,34 @@ export const removedCollaborators = sqliteTable(
 
 export const notificationQueueTypes = ["reminder-due", "overdue-digest"] as const;
 
-export const notificationQueue = sqliteTable("notification_queue", {
-  id: pk(),
-  userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
-  type: oneOf("type", notificationQueueTypes),
-  taskId: nullableFk("task_id", () => tasks.id, { onDelete: "cascade" }),
-  scheduledFor: string("scheduled_for"),
-  sentAt: nullableString("sent_at"),
-  createdAt: createdAt(),
-});
+export const notificationQueue = sqliteTable(
+  "notification_queue",
+  {
+    id: pk(),
+    userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
+    type: oneOf("type", notificationQueueTypes),
+    taskId: nullableFk("task_id", () => tasks.id, { onDelete: "cascade" }),
+    scheduledFor: string("scheduled_for"),
+    sentAt: nullableString("sent_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    // The cron sends a reminder with its task's title and due date; a digest covers many tasks
+    check(
+      "only_reminders_have_a_task",
+      sql`(${t.type} = 'reminder-due') = (${t.taskId} IS NOT NULL)`,
+    ),
+    // A task has one reminder to send, the target of the upsert that schedules it
+    uniqueIndex("notification_queue_pending_reminder_idx")
+      .on(t.taskId)
+      .where(sql`${t.type} = 'reminder-due' AND ${t.sentAt} IS NULL`),
+    // A digest is scheduled for the day whose overdue tasks it covers, and the cron claims a
+    // user's day by inserting it, so two runs at once can't both send one
+    uniqueIndex("notification_queue_digest_day_idx")
+      .on(t.userId, sql`substr(${t.scheduledFor}, 1, 10)`)
+      .where(sql`${t.type} = 'overdue-digest'`),
+  ],
+);
 
 // Usage counts per UTC day, with nothing about who: enough to see which features get used
 export const metricCounts = sqliteTable(
