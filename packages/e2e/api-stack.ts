@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { Hash } from "@smithy/hash-node";
 import { HttpRequest } from "@smithy/protocol-http";
 import { SignatureV4 } from "@smithy/signature-v4";
-import { API_PORT } from "./helpers/stack";
+import { API_PORT, S3_PORT } from "./helpers/stack";
 
 // Pinned, so a new image can't change the database or the bucket under the suite
 const IMAGE =
@@ -22,8 +22,8 @@ const docker = (...args: string[]) => execFileSync("docker", args, { encoding: "
 const leftovers = docker("ps", "-aq", "--filter", `label=${LABEL}`);
 if (leftovers) docker("rm", "-f", ...leftovers.split("\n"));
 
-const start = async (port: number, readyAt: string, args: string[]) => {
-  const ports = ["-p", `127.0.0.1::${port}`];
+const start = async (port: number, readyAt: string, args: string[], hostPort = "") => {
+  const ports = ["-p", `127.0.0.1:${hostPort}:${port}`];
   const container = docker("run", "-d", "--rm", "--label", LABEL, ...ports, ...args);
   process.on("exit", () => {
     try {
@@ -48,15 +48,20 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => pr
 
 const [dbUrl, s3Url] = await Promise.all([
   start(8080, "/health", [IMAGE]),
-  start(7070, "/", [
-    "-e",
-    `ROOT_ACCESS_KEY=${S3.key}`,
-    "-e",
-    `ROOT_SECRET_KEY=${S3.secret}`,
-    S3_IMAGE,
-    "posix",
-    "/tmp",
-  ]),
+  start(
+    7070,
+    "/",
+    [
+      "-e",
+      `ROOT_ACCESS_KEY=${S3.key}`,
+      "-e",
+      `ROOT_SECRET_KEY=${S3.secret}`,
+      S3_IMAGE,
+      "posix",
+      "/tmp",
+    ],
+    String(S3_PORT),
+  ),
 ]);
 
 // As the bucket's setup in docs/self-hosting.md: a presigned URL is the credential, so any origin
