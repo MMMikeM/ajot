@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { generateKeyBetween } from "fractional-indexing";
 import { db } from "./client";
-import taskRepo from "./task.repo";
+import * as taskRepo from "./task.repo";
 import { StaleUpdateError } from "./errors";
 import { tasks, users } from "./schema";
 

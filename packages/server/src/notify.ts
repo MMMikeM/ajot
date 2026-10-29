@@ -1,4 +1,4 @@
-import userRepo from "./db/user.repo";
+import * as userRepo from "./db/user.repo";
 import type { NotificationPayload } from "./push-plan";
 import { queueNotification } from "./push-queue";
 import { writeNotification } from "./broadcast";

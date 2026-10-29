@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import pushSubscriptionRepo from "../db/push-subscription.repo";
+import * as pushSubscriptionRepo from "../db/push-subscription.repo";
 import { sendPush } from "../push";
 import { isSecret } from "../secret";
 import { UNAUTHORIZED } from "../db/errors";

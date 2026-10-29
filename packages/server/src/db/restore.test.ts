@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { hoursFromNow } from "@newtab-todo/shared/iso";
-import categoryRepo from "./category.repo";
-import categoryCollaboratorRepo from "./category-collaborator.repo";
-import contactRepo from "./contact.repo";
+import * as categoryRepo from "./category.repo";
+import * as categoryCollaboratorRepo from "./category-collaborator.repo";
+import * as contactRepo from "./contact.repo";
 import {
   categories,
   categoryCollaborators,
@@ -75,9 +75,7 @@ vi.mock("./client", () => ({
 
 // Reads the views, which the fake can't; what it reads only addresses the broadcast
 vi.mock("./reach.repo", () => ({
-  default: {
-    read: async () => ({ taskIds: [], listIds: [], tasks: new Map(), lists: new Map() }),
-  },
+  read: async () => ({ taskIds: [], listIds: [], tasks: new Map(), lists: new Map() }),
 }));
 
 const owner = "owner";

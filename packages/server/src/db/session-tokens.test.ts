@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { beforeAll, expect, test, vi } from "vite-plus/test";
 import { db } from "./client";
-import sessionRepo from "./session.repo";
+import * as sessionRepo from "./session.repo";
 import { sessions, users } from "./schema";
 
 // vi.mock runs before this file's imports, so the database it builds can only be imported there

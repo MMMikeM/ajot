@@ -1,11 +1,11 @@
 import type { Context } from "hono";
 import { widest } from "@newtab-todo/shared/task-access";
-import taskRepo, { type TaskAccessRow } from "../db/task.repo";
-import categoryRepo from "../db/category.repo";
+import * as taskRepo from "../db/task.repo";
+import * as categoryRepo from "../db/category.repo";
 import { ForbiddenError, NotFoundError } from "../db/errors";
 import { broadcast } from "../broadcast";
 
-export const audienceFrom = (access: TaskAccessRow[]) =>
+export const audienceFrom = (access: taskRepo.TaskAccessRow[]) =>
   widest(access).map((grant) => grant.userId);
 
 /**
@@ -53,7 +53,7 @@ export const markTaskEdited = async (
   taskId: string,
   userId: string,
   at: string,
-  access?: TaskAccessRow[],
+  access?: taskRepo.TaskAccessRow[],
 ) => {
   try {
     const reach = access ?? (await taskRepo.accessTo([taskId]));

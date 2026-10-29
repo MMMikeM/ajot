@@ -1,8 +1,8 @@
 import { OpenAPIHono, z } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 import { login, signup } from "../auth-service";
-import sessionRepo from "../db/session.repo";
-import inviteTokenRepo from "../db/invite-token.repo";
+import * as sessionRepo from "../db/session.repo";
+import * as inviteTokenRepo from "../db/invite-token.repo";
 import { INVITE_GONE, UNAUTHORIZED } from "../db/errors";
 import { extractToken } from "../auth";
 import { okSchema } from "./openapi-schemas";

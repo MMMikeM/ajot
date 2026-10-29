@@ -1,16 +1,11 @@
 import { z } from "@hono/zod-openapi";
-import categoryRepo, {
-  categoryInsertSchema,
-  categoryUpdateSchema,
-  categoryDeleteSchema,
-  categoryResponseSchema,
-} from "../db/category.repo";
-import categoryCollaboratorRepo from "../db/category-collaborator.repo";
-import reachRepo from "../db/reach.repo";
+import * as categoryRepo from "../db/category.repo";
+import * as categoryCollaboratorRepo from "../db/category-collaborator.repo";
+import * as reachRepo from "../db/reach.repo";
 import { requireList } from "./task-users";
 import { sendReachChanges } from "./reach";
-import { userPublicSchema } from "../db/user.repo";
-import contactRepo from "../db/contact.repo";
+import * as userRepo from "../db/user.repo";
+import * as contactRepo from "../db/contact.repo";
 import { BadRequestError, NotFoundError, ONLY_CONTACTS } from "../db/errors";
 import { authed, authedRoute } from "../middleware";
 import { broadcast } from "../broadcast";
@@ -29,7 +24,7 @@ export const categoryRoutes = authed()
     authedRoute({
       method: "get",
       path: "/",
-      responses: { 200: z.array(categoryResponseSchema) },
+      responses: { 200: z.array(categoryRepo.responseSchema) },
     }),
     async (c) => c.json(await categoryRepo.list(c.get("userId")), 200),
   )
@@ -37,8 +32,8 @@ export const categoryRoutes = authed()
     authedRoute({
       method: "post",
       path: "/",
-      request: jsonBody(categoryInsertSchema),
-      responses: { 200: categoryResponseSchema, 409: true },
+      request: jsonBody(categoryRepo.insertSchema),
+      responses: { 200: categoryRepo.responseSchema, 409: true },
     }),
     async (c) => {
       const userId = c.get("userId");
@@ -51,8 +46,8 @@ export const categoryRoutes = authed()
     authedRoute({
       method: "put",
       path: "/",
-      request: jsonBody(categoryUpdateSchema),
-      responses: { 200: categoryResponseSchema, 403: true, 404: true, 409: true },
+      request: jsonBody(categoryRepo.updateSchema),
+      responses: { 200: categoryRepo.responseSchema, 403: true, 404: true, 409: true },
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
@@ -72,8 +67,8 @@ export const categoryRoutes = authed()
     authedRoute({
       method: "delete",
       path: "/",
-      request: jsonBody(categoryDeleteSchema),
-      responses: { 200: categoryResponseSchema, 400: true, 403: true, 404: true },
+      request: jsonBody(categoryRepo.deleteSchema),
+      responses: { 200: categoryRepo.responseSchema, 400: true, 403: true, 404: true },
     }),
     async (c) => {
       const { id, tasks: taskAction, taskIds } = c.req.valid("json");
@@ -91,7 +86,7 @@ export const categoryRoutes = authed()
     authedRoute({
       method: "post",
       path: "/:id/restore",
-      responses: { 200: categoryResponseSchema, 403: true, 404: true },
+      responses: { 200: categoryRepo.responseSchema, 403: true, 404: true },
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -107,7 +102,7 @@ export const categoryRoutes = authed()
     authedRoute({
       method: "get",
       path: "/:id/collaborators",
-      responses: { 200: z.array(userPublicSchema), 403: true, 404: true },
+      responses: { 200: z.array(userRepo.publicSchema), 403: true, 404: true },
     }),
     async (c) => {
       const { id } = c.req.param();
@@ -127,7 +122,7 @@ export const categoryRoutes = authed()
       method: "post",
       path: "/:id/collaborators",
       request: jsonBody(collaboratorSchema),
-      responses: { 200: userPublicSchema, 400: true, 403: true, 404: true, 429: true },
+      responses: { 200: userRepo.publicSchema, 400: true, 403: true, 404: true, 429: true },
     }),
     async (c) => {
       const { id } = c.req.param();

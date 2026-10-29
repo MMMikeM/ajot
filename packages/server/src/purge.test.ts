@@ -1,11 +1,11 @@
 import { expect, test, vi } from "vite-plus/test";
 import { purgeExpired } from "./db/purge.repo";
-import sessionRepo from "./db/session.repo";
+import * as sessionRepo from "./db/session.repo";
 import { startPurging } from "./purge";
 
 vi.mock("./db/purge.repo", () => ({ purgeExpired: vi.fn(async () => ({})) }));
 vi.mock("./db/session.repo", () => ({
-  default: { hashStoredTokens: vi.fn().mockRejectedValue(new Error("too many SQL variables")) },
+  hashStoredTokens: vi.fn().mockRejectedValue(new Error("too many SQL variables")),
 }));
 
 test("sessions that can't be hashed leave the purge on its daily schedule", async () => {

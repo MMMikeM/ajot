@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import contactRepo, { contactResponseSchema } from "../db/contact.repo";
+import * as contactRepo from "../db/contact.repo";
 import { sendReachChanges } from "./reach";
 import { sendContactChanges } from "./contact-changes";
 import { authed, authedRoute } from "../middleware";
@@ -9,7 +9,7 @@ export const contactRoutes = authed()
     authedRoute({
       method: "get",
       path: "/",
-      responses: { 200: z.array(contactResponseSchema) },
+      responses: { 200: z.array(contactRepo.responseSchema) },
     }),
     async (c) => c.json(await contactRepo.list(c.get("userId")), 200),
   )
