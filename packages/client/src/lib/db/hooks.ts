@@ -63,25 +63,22 @@ export const moveToList = (task: Task, mode: Placement["mode"], categoryId: stri
   else if (mode === "share") fileShare(task.id, categoryId);
 };
 
-/** Deletes the tasks and their subtasks in one transaction, so one Undo restores them all. */
-export const deleteTasks = (ids: string[]) => {
-  console.log(`[mutation] deleteTasks ids=${ids.join(",")}`);
-  const roots = new Set(ids);
-  // Parents first, so Undo re-inserts them before their subtasks
+/** Deletes the task and its subtasks in one transaction, so one Undo restores them all. */
+export const deleteTask = (id: string) => {
+  console.log(`[mutation] deleteTask id=${id}`);
+  // The parent first, so Undo re-inserts it before its subtasks
   const deleted = [...(tasksCollection.state?.values() ?? [])]
-    .filter((t) => roots.has(t.id) || (t.parentId !== null && roots.has(t.parentId)))
-    .sort((a, b) => Number(roots.has(b.id)) - Number(roots.has(a.id)));
-  const deletedIds = new Set(deleted.map((t) => t.id));
+    .filter((t) => t.id === id || t.parentId === id)
+    .sort((a, b) => Number(b.id === id) - Number(a.id === id));
   const tx = createOfflineTransaction({
     mutationFnName: "deleteTask",
-    metadata: { taskIds: ids } satisfies TaskDeleteMetadata,
+    // Still a list: an outbox saved before Clear was removed can hold several
+    metadata: { taskIds: [id] } satisfies TaskDeleteMetadata,
   });
-  tx.mutate(() => tasksCollection.delete([...deletedIds]));
+  tx.mutate(() => tasksCollection.delete(deleted.map((t) => t.id)));
   console.log("[mutation] optimistic applied, tx queued");
   return () => restoreTasks(deleted);
 };
-
-export const deleteTask = (id: string) => deleteTasks([id]);
 
 // A row read from a collection also carries its virtual $ fields, which the notes API rejects
 const noteRow = ({ id, userId, title, content, taskId, createdAt }: Note): Note => ({

@@ -1,7 +1,7 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { mockApi } from "./helpers/mock-api";
 
-// Clearing a list: the cleared state, its settle-in, and how done checkboxes recede.
+// Finishing a list: the cleared state, its settle-in, and how done checkboxes recede.
 
 test.use({ serviceWorkers: "block" });
 
@@ -149,45 +149,6 @@ test("with reduced motion the Done count changes without moving", async ({ page 
 
   await expect(doneToggle(page, 3)).toBeVisible();
   expect(await started.jsonValue()).not.toContain("done-count-land");
-});
-
-test("clearing an all-done list settles the resting phrase in, and Undo doesn't drop the count", async ({
-  page,
-}) => {
-  await openInbox(page, doneTasks);
-  await doneToggle(page, 2).click();
-
-  await page.getByRole("button", { name: "Clear done tasks" }).click();
-
-  const hint = page.getByText(/to begin/);
-  await expect(hint).toBeVisible();
-  expect(await runningAnimations(hint)).toContain("cleared-settle");
-  const started = await recordAnimationStarts(page);
-
-  await page
-    .getByRole("dialog", { name: /cleared 2 done tasks/i })
-    .getByRole("button", { name: "Undo" })
-    .click();
-  await expect(doneToggle(page, 2)).toBeVisible();
-  expect(await started.jsonValue()).not.toContain("done-count-land");
-});
-
-test("undoing a Clear brings All done. back without settling it in again", async ({ page }) => {
-  await openInbox(page, doneTasks);
-  await doneToggle(page, 2).click();
-  await page.getByRole("button", { name: "Clear done tasks" }).click();
-  // Past the resting phrase's own settle, so only what Undo starts is recorded
-  await expect(page.getByText(/to begin/)).toHaveCSS("opacity", "1");
-  const started = await recordAnimationStarts(page);
-
-  await page
-    .getByRole("dialog", { name: /cleared 2 done tasks/i })
-    .getByRole("button", { name: "Undo" })
-    .click();
-
-  await expect(clearedHeadline(page)).toBeVisible();
-  await expect(clearedHeadline(page)).toHaveCSS("opacity", "1");
-  expect(await started.jsonValue()).not.toContain("cleared-settle");
 });
 
 test("a task whose subtasks are all done reads as ready to tick, in the list and its sheet", async ({
