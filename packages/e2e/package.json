@@ -9,6 +9,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.64.1",
+    "aws4fetch": "1.0.20",
     "tsx": "^4.23.15",
     "vite-plus": "catalog:"
   }
