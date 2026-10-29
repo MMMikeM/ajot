@@ -24,7 +24,6 @@ import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
 import { holders } from "~/lib/task-holders";
 import { SectionLabel } from "~/components/ui/section-label";
 import { AddRow, DetailRow } from "~/components/task/detail-row";
-import { formatDueDate } from "~/lib/due-date";
 import { pushUndoToast, quoted } from "~/lib/undo-toast";
 
 /**
@@ -274,16 +273,30 @@ const DeleteItemButton = ({ label, onClick }: { label: string; onClick: () => vo
 );
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+const dayFormat = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const otherYearDayFormat = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
 
-/** When a note was written, in the device's zone: "Today, 18:02", "Oct 25, 09:14". */
-const formatWritten = (createdAt: string) => {
-  const at = new Date(createdAt);
+const writtenOn = (at: Date) => {
   const day = Temporal.PlainDate.from({
     year: at.getFullYear(),
     month: at.getMonth() + 1,
     day: at.getDate(),
   });
-  return `${formatDueDate(day.toString()).label}, ${timeFormat.format(at)}`;
+  const today = Temporal.Now.plainDateISO();
+  const daysAgo = today.since(day, { largestUnit: "day" }).days;
+  if (daysAgo === 0) return "Today";
+  if (daysAgo === 1) return "Yesterday";
+  return (day.year === today.year ? dayFormat : otherYearDayFormat).format(at);
+};
+
+/** When a note was written, in the device's zone: "Today, 18:02", "Yesterday, 21:40", "Oct 25, 09:14". */
+const formatWritten = (createdAt: string) => {
+  const at = new Date(createdAt);
+  return `${writtenOn(at)}, ${timeFormat.format(at)}`;
 };
 
 const NoteItem = ({ note }: { note: Note }) => {
