@@ -1,8 +1,13 @@
+import { createHash } from "node:crypto";
 import { Hash } from "@smithy/hash-node";
 import { HttpRequest } from "@smithy/protocol-http";
 import { SignatureV4 } from "@smithy/signature-v4";
 
 const UPLOAD_URL_SECONDS = 15 * 60;
+
+// A presigned URL is the credential, so any origin may use one
+const BROWSER_CORS =
+  "<CORSConfiguration><CORSRule><AllowedOrigin>*</AllowedOrigin><AllowedMethod>GET</AllowedMethod><AllowedMethod>PUT</AllowedMethod><AllowedMethod>HEAD</AllowedMethod><AllowedHeader>*</AllowedHeader><MaxAgeSeconds>3600</MaxAgeSeconds></CORSRule></CORSConfiguration>";
 const DOWNLOAD_URL_SECONDS = 60 * 60;
 
 export const fileKey = (id: string) => `a/${id}`;
@@ -85,6 +90,19 @@ export const storageFrom = (env: Record<string, string | undefined>) => {
   };
 
   return {
+    /** Lets pages upload and download with presigned URLs, which cross origins. */
+    allowBrowsers: async () => {
+      // S3 refuses a CORS configuration without its MD5
+      const md5 = createHash("md5").update(BROWSER_CORS).digest("base64");
+      const signed = await signer.sign(request("PUT", "", { "content-md5": md5 }, { cors: "" }));
+      const res = await fetch(urlOf(signed), {
+        method: "PUT",
+        headers: signed.headers,
+        body: BROWSER_CORS,
+      });
+      if (!res.ok)
+        throw new Error(`setting the bucket's CORS answered ${res.status}: ${await res.text()}`);
+    },
     /** The browser must send both headers with these values. */
     presignPut: (key: string, size: number, contentType: string) =>
       presign("PUT", key, UPLOAD_URL_SECONDS, {

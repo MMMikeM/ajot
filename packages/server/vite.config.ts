@@ -12,7 +12,11 @@ export default defineConfig({
     },
   },
   pack: {
-    entry: { index: "src/index.ts", "reset-password": "src/reset-password.ts" },
+    entry: {
+      index: "src/index.ts",
+      "reset-password": "src/reset-password.ts",
+      "bucket-setup": "src/bucket-setup.ts",
+    },
     format: ["esm"],
     platform: "node",
     target: "node24",
