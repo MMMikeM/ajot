@@ -11,8 +11,8 @@ import { notAfterNow, stampsNotAfterNow } from "./stamps";
 export type NoteInsert = typeof notes.$inferInsert;
 export type NoteSelect = typeof notes.$inferSelect;
 
-export const noteSelectSchema = createSelectSchema(notes, { id: limitedId }).pick({ id: true });
-export const noteResponseSchema = createSelectSchema(notes);
+export const selectSchema = createSelectSchema(notes, { id: limitedId }).pick({ id: true });
+export const responseSchema = createSelectSchema(notes);
 const limitedFields = {
   id: limitedId,
   userId: limitedId,
@@ -20,7 +20,7 @@ const limitedFields = {
   title: limited("A note's title", MAX_TITLE),
   content: limited("A note", MAX_TEXT),
 };
-export const noteInsertSchema = createInsertSchema(notes, {
+export const insertSchema = createInsertSchema(notes, {
   ...limitedFields,
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
@@ -29,7 +29,7 @@ export const noteInsertSchema = createInsertSchema(notes, {
   .strict();
 // The fields a client may change. An edit sends only what changed, so it can leave out taskId,
 // but it can't clear it.
-export const noteUpdateSchema = createUpdateSchema(notes, {
+export const updateSchema = createUpdateSchema(notes, {
   ...limitedFields,
   updatedAt: isoDatetime,
 })
@@ -38,7 +38,7 @@ export const noteUpdateSchema = createUpdateSchema(notes, {
   .strict();
 
 // A deleted task's notes wait, hidden, for it to come back
-const list = async (userId: string) =>
+export const list = async (userId: string) =>
   db.query.notes.findMany({
     where: { userId, task: { deletedAt: { isNull: true } } },
     orderBy: { createdAt: "desc" },
@@ -46,7 +46,7 @@ const list = async (userId: string) =>
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
 // An id another note already has updates nothing, so someone else's note isn't sent back.
-const insert = async (data: NoteInsert) => {
+export const insert = async (data: NoteInsert) => {
   const [row] = await db
     .insert(notes)
     .values(stampsNotAfterNow(data, ["updatedAt"]))
@@ -60,11 +60,11 @@ const insert = async (data: NoteInsert) => {
   return row;
 };
 
-const findOwn = async (id: string, userId: string) =>
+export const findOwn = async (id: string, userId: string) =>
   db.query.notes.findFirst({ where: { id, userId }, columns: { taskId: true } });
 
 // Someone else's note reads as missing, as with a stale write, so its id can't be probed
-const update = async (
+export const update = async (
   id: string,
   userId: string,
   updatedAt: string,
@@ -80,7 +80,7 @@ const update = async (
   return row;
 };
 
-const remove = async (id: string, userId: string) => {
+export const remove = async (id: string, userId: string) => {
   const [row] = await db
     .delete(notes)
     .where(and(eq(notes.id, id), eq(notes.userId, userId)))
@@ -88,5 +88,3 @@ const remove = async (id: string, userId: string) => {
   if (!row) throw new NotFoundError("note", id);
   return row;
 };
-
-export default { list, findOwn, insert, update, remove };

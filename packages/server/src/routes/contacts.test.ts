@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import contactRepo from "../db/contact.repo";
-import inviteTokenRepo from "../db/invite-token.repo";
+import * as contactRepo from "../db/contact.repo";
+import * as inviteTokenRepo from "../db/invite-token.repo";
 import { broadcastPerUser } from "../broadcast";
 import { contactRoutes } from "./contacts";
 import { inviteRoutes } from "./invites";
@@ -12,10 +12,14 @@ vi.mock("../auth", () => ({
 vi.mock("../db/client", () => ({ db: {}, inTransaction: vi.fn() }));
 vi.mock("../db/contact.repo", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  default: { remove: vi.fn(), restore: vi.fn(), listByIds: vi.fn() },
+  remove: vi.fn(),
+  restore: vi.fn(),
+  listByIds: vi.fn(),
 }));
 vi.mock("../db/invite-token.repo", () => ({
-  default: { claim: vi.fn(), release: vi.fn(), consume: vi.fn() },
+  claim: vi.fn(),
+  release: vi.fn(),
+  consume: vi.fn(),
 }));
 vi.mock("../notify", () => ({ sendNotification: vi.fn(), getUserName: vi.fn(async () => "Bob") }));
 vi.mock("./reach", () => ({ sendReachChanges: vi.fn() }));

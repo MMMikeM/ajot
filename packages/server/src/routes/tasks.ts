@@ -1,23 +1,15 @@
 import { z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
 import { BadRequestError, ForbiddenError, ONLY_CONTACTS } from "../db/errors";
-import taskRepo, {
-  taskInsertSchema,
-  taskUpdateSchema,
-  taskSelectSchema,
-  taskShareSelectSchema,
-  taskResponseSchema,
-  taskShareResponseSchema,
-  taskListItemSchema,
-} from "../db/task.repo";
-import contactRepo from "../db/contact.repo";
-import categoryRepo from "../db/category.repo";
+import * as taskRepo from "../db/task.repo";
+import * as contactRepo from "../db/contact.repo";
+import * as categoryRepo from "../db/category.repo";
 import { authed, authedRoute } from "../middleware";
 import { broadcast, broadcastAll } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
-import notificationQueueRepo from "../db/notification-queue.repo";
+import * as notificationQueueRepo from "../db/notification-queue.repo";
 import { jsonBody } from "./crud";
-import reachRepo from "../db/reach.repo";
+import * as reachRepo from "../db/reach.repo";
 import { audienceOf, markTaskEdited, requireTask } from "./task-users";
 import { sendReachChanges } from "./reach";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
@@ -30,7 +22,7 @@ const shareSchema = z.object({
   permission: z.enum(["view", "edit"]).default("edit"),
 });
 
-const sendSchema = taskInsertSchema
+const sendSchema = taskRepo.insertSchema
   .pick({ id: true, title: true, description: true, createdAt: true, updatedAt: true })
   .extend({ recipientId: z.string().max(MAX_ID) });
 
@@ -69,7 +61,7 @@ export const taskRoutes = authed()
     authedRoute({
       method: "get",
       path: "/",
-      responses: { 200: z.array(taskListItemSchema) },
+      responses: { 200: z.array(taskRepo.listItemSchema) },
     }),
     async (c) => c.json(await taskRepo.list(c.get("userId")), 200),
   )
@@ -77,8 +69,8 @@ export const taskRoutes = authed()
     authedRoute({
       method: "post",
       path: "/",
-      request: jsonBody(taskInsertSchema),
-      responses: { 200: taskResponseSchema, 400: true, 403: true, 404: true, 409: true },
+      request: jsonBody(taskRepo.insertSchema),
+      responses: { 200: taskRepo.responseSchema, 400: true, 403: true, 404: true, 409: true },
     }),
     async (c) => {
       const data = c.req.valid("json");
@@ -111,8 +103,8 @@ export const taskRoutes = authed()
     authedRoute({
       method: "put",
       path: "/",
-      request: jsonBody(taskUpdateSchema),
-      responses: { 200: taskResponseSchema, 400: true, 403: true, 404: true, 409: true },
+      request: jsonBody(taskRepo.updateSchema),
+      responses: { 200: taskRepo.responseSchema, 400: true, 403: true, 404: true, 409: true },
     }),
     async (c) => {
       const { id, updatedAt, ...fields } = c.req.valid("json");
@@ -205,8 +197,8 @@ export const taskRoutes = authed()
     authedRoute({
       method: "delete",
       path: "/",
-      request: jsonBody(taskSelectSchema),
-      responses: { 200: taskResponseSchema, 403: true, 404: true },
+      request: jsonBody(taskRepo.selectSchema),
+      responses: { 200: taskRepo.responseSchema, 403: true, 404: true },
     }),
     async (c) => {
       const { id } = c.req.valid("json");
@@ -232,7 +224,13 @@ export const taskRoutes = authed()
       method: "post",
       path: "/send",
       request: jsonBody(sendSchema),
-      responses: { 200: taskResponseSchema, 400: true, 404: true, 409: true, 429: true },
+      responses: {
+        200: taskRepo.responseSchema,
+        400: true,
+        404: true,
+        409: true,
+        429: true,
+      },
     }),
     async (c) => {
       const { recipientId, ...data } = c.req.valid("json");
@@ -267,7 +265,7 @@ export const taskRoutes = authed()
       method: "post",
       path: "/share",
       request: jsonBody(shareSchema),
-      responses: { 200: taskShareResponseSchema, 400: true, 403: true, 404: true, 429: true },
+      responses: { 200: taskRepo.shareResponseSchema, 400: true, 403: true, 404: true, 429: true },
     }),
     async (c) => {
       const data = c.req.valid("json");
@@ -311,8 +309,8 @@ export const taskRoutes = authed()
     authedRoute({
       method: "delete",
       path: "/share",
-      request: jsonBody(taskShareSelectSchema),
-      responses: { 200: taskShareResponseSchema, 403: true, 404: true },
+      request: jsonBody(taskRepo.shareSelectSchema),
+      responses: { 200: taskRepo.shareResponseSchema, 403: true, 404: true },
     }),
     async (c) => {
       const share = await taskRepo.findShare(c.req.valid("json").id);
@@ -329,7 +327,7 @@ export const taskRoutes = authed()
       method: "put",
       path: "/share",
       request: jsonBody(shareCategorySchema),
-      responses: { 200: taskShareResponseSchema, 403: true, 404: true },
+      responses: { 200: taskRepo.shareResponseSchema, 403: true, 404: true },
     }),
     async (c) => {
       const { taskId, categoryId } = c.req.valid("json");

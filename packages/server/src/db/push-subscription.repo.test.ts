@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { beforeEach, expect, test, vi } from "vite-plus/test";
 import { db } from "./client";
-import pushSubscriptionRepo from "./push-subscription.repo";
+import * as pushSubscriptionRepo from "./push-subscription.repo";
 import { pushSubscriptions, users } from "./schema";
 
 // vi.mock runs before this file's imports, so the database it builds can only be imported there

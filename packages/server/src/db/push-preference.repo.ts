@@ -5,14 +5,14 @@ import { db } from "./client";
 import { pushPreferences } from "./schema";
 import { DEFAULT_PUSH_PREFERENCES, deviceKey, type DevicePreferences } from "../push-plan";
 
-export const pushPreferencesSchema = createInsertSchema(pushPreferences, {
+export const preferencesSchema = createInsertSchema(pushPreferences, {
   muted: z.array(z.enum(PUSH_TRIGGERS)).max(100),
   urgent: z.boolean(),
 }).pick({ muted: true, urgent: true });
 
-export type PushPreferences = z.infer<typeof pushPreferencesSchema>;
+export type PushPreferences = z.infer<typeof preferencesSchema>;
 
-const find = async (userId: string, deviceId: string): Promise<PushPreferences> => {
+export const find = async (userId: string, deviceId: string): Promise<PushPreferences> => {
   const row = await db.query.pushPreferences.findFirst({
     where: { userId, deviceId },
     columns: { muted: true, urgent: true },
@@ -20,7 +20,7 @@ const find = async (userId: string, deviceId: string): Promise<PushPreferences> 
   return row ?? DEFAULT_PUSH_PREFERENCES;
 };
 
-const save = async (userId: string, deviceId: string, preferences: PushPreferences) => {
+export const save = async (userId: string, deviceId: string, preferences: PushPreferences) => {
   await db
     .insert(pushPreferences)
     .values({ userId, deviceId, ...preferences })
@@ -30,7 +30,7 @@ const save = async (userId: string, deviceId: string, preferences: PushPreferenc
     });
 };
 
-const findForUsers = async (userIds: string[]) => {
+export const findForUsers = async (userIds: string[]) => {
   if (userIds.length === 0) return new Map<string, DevicePreferences>();
   const rows = await db.query.pushPreferences.findMany({ where: { userId: { in: userIds } } });
   return new Map(
@@ -40,5 +40,3 @@ const findForUsers = async (userIds: string[]) => {
     ]),
   );
 };
-
-export default { find, save, findForUsers };

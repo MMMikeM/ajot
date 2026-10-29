@@ -1,5 +1,5 @@
 import { purgeExpired } from "./db/purge.repo";
-import sessionRepo from "./db/session.repo";
+import * as sessionRepo from "./db/session.repo";
 
 const DAY_MS = 24 * 3_600_000;
 // Timers stop while Fly has the machine suspended, and it may be awake only minutes at a time,

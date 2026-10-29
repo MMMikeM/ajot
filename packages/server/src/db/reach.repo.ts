@@ -66,7 +66,7 @@ const membersOf = async (q: Reader, listIds: string[]) =>
   );
 
 /** Before a write that changes who reaches what, inside its transaction when it has one. */
-const read = async (
+export const read = async (
   { taskIds = [], listIds = [] }: { taskIds?: string[]; listIds?: string[] },
   q: Reader = db,
 ): Promise<Reach> => {
@@ -80,10 +80,8 @@ const read = async (
 };
 
 /** The same tasks and lists after the write, including any it moved out of those lists. */
-const readAgain = async ({ taskIds, listIds }: Reach): Promise<Reach> => {
+export const readAgain = async ({ taskIds, listIds }: Reach): Promise<Reach> => {
   const rowIds = await liveTaskIds(db, tasksAndSubtasks(taskIds));
   const [tasks, lists] = await Promise.all([accessTo(db, rowIds), membersOf(db, listIds)]);
   return { taskIds, listIds, tasks, lists };
 };
-
-export default { read, readAgain };

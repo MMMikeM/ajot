@@ -1,17 +1,22 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import inviteTokenRepo from "./db/invite-token.repo";
-import userRepo from "./db/user.repo";
+import * as inviteTokenRepo from "./db/invite-token.repo";
+import * as userRepo from "./db/user.repo";
 import { login, signup } from "./auth-service";
 import { hashPassword, verifyPassword } from "./password";
 
 vi.mock("./db/user.repo", () => ({
-  default: { exists: vi.fn(), count: vi.fn(), findWithPassword: vi.fn(), insert: vi.fn() },
+  exists: vi.fn(),
+  count: vi.fn(),
+  findWithPassword: vi.fn(),
+  insert: vi.fn(),
 }));
 vi.mock("./db/invite-token.repo", () => ({
-  default: { claim: vi.fn(), release: vi.fn(), consume: vi.fn() },
+  claim: vi.fn(),
+  release: vi.fn(),
+  consume: vi.fn(),
 }));
-vi.mock("./db/session.repo", () => ({ default: { insert: vi.fn(async () => "token") } }));
-vi.mock("./db/category.repo", () => ({ default: { insert: vi.fn() } }));
+vi.mock("./db/session.repo", () => ({ insert: vi.fn(async () => "token") }));
+vi.mock("./db/category.repo", () => ({ insert: vi.fn() }));
 vi.mock("./password", () => ({
   hashPassword: vi.fn(async () => "a hash"),
   verifyPassword: vi.fn(async () => false),

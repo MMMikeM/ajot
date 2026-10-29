@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import taskRepo from "../db/task.repo";
-import contactRepo from "../db/contact.repo";
-import categoryCollaboratorRepo from "../db/category-collaborator.repo";
+import * as taskRepo from "../db/task.repo";
+import * as contactRepo from "../db/contact.repo";
+import * as categoryCollaboratorRepo from "../db/category-collaborator.repo";
 import { broadcast } from "../broadcast";
 import { sendNotification } from "../notify";
 import { sendReachChanges } from "./reach";
@@ -16,20 +16,19 @@ vi.mock("../auth", () => ({
 vi.mock("../db/client", () => ({ db: {}, inTransaction: vi.fn() }));
 vi.mock("../db/task.repo", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  default: {
-    insert: vi.fn(),
-    insertSent: vi.fn(),
-    insertShare: vi.fn(),
-    nextSortOrder: vi.fn(async () => "a0"),
-    findListItem: vi.fn(),
-  },
+  insert: vi.fn(),
+  insertSent: vi.fn(),
+  insertShare: vi.fn(),
+  nextSortOrder: vi.fn(async () => "a0"),
+  findListItem: vi.fn(),
 }));
 vi.mock("../db/contact.repo", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  default: { exists: vi.fn(async () => true), findContactUser: vi.fn() },
+  exists: vi.fn(async () => true),
+  findContactUser: vi.fn(),
 }));
-vi.mock("../db/category-collaborator.repo", () => ({ default: { add: vi.fn() } }));
-vi.mock("../db/reach.repo", () => ({ default: { read: vi.fn(async () => ({})) } }));
+vi.mock("../db/category-collaborator.repo", () => ({ add: vi.fn() }));
+vi.mock("../db/reach.repo", () => ({ read: vi.fn(async () => ({})) }));
 vi.mock("./task-users", () => ({
   requireTask: vi.fn(),
   requireList: vi.fn(),

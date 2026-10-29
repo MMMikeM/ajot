@@ -1,5 +1,5 @@
 import { OpenAPIHono, z } from "@hono/zod-openapi";
-import userRepo from "../db/user.repo";
+import * as userRepo from "../db/user.repo";
 import { route } from "./crud";
 
 const configSchema = z.object({

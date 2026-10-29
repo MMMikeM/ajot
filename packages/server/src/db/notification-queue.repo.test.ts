@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { db } from "./client";
-import notificationQueueRepo, { DIGEST_CLAIM_CHUNK } from "./notification-queue.repo";
+import * as notificationQueueRepo from "./notification-queue.repo";
 import { notificationQueue, tasks, users } from "./schema";
 
 // vi.mock runs before this file's imports, so the database it builds can only be imported there
@@ -166,7 +166,10 @@ describe("claiming the day's digests", () => {
   });
 
   test("claims everyone across several statements", async () => {
-    const many = Array.from({ length: DIGEST_CLAIM_CHUNK * 2 + 1 }, (_, i) => `user-${i}`);
+    const many = Array.from(
+      { length: notificationQueueRepo.DIGEST_CLAIM_CHUNK * 2 + 1 },
+      (_, i) => `user-${i}`,
+    );
     await db
       .insert(users)
       .values(many.map((id) => ({ id, name: id, username: id, passwordHash: "x" })));

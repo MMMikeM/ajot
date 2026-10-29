@@ -4,30 +4,30 @@ import { db, inTransaction } from "./client";
 import { categoryCollaborators, contacts, removedContacts } from "./schema";
 import { now } from "@newtab-todo/shared/iso";
 import { NotFoundError } from "./errors";
-import { userPublicSchema } from "./user.repo";
-import categoryCollaboratorRepo from "./category-collaborator.repo";
+import * as userRepo from "./user.repo";
+import * as categoryCollaboratorRepo from "./category-collaborator.repo";
 import { undoableSince } from "./undo-window";
-import reachRepo from "./reach.repo";
+import * as reachRepo from "./reach.repo";
 
-export const contactResponseSchema = createSelectSchema(contacts).extend({
-  contactUser: userPublicSchema,
+export const responseSchema = createSelectSchema(contacts).extend({
+  contactUser: userRepo.publicSchema,
 });
 
 const withContactUser = {
   contactUser: { columns: { id: true, name: true, username: true, avatarUrl: true } },
 } as const;
 
-const list = async (userId: string) =>
+export const list = async (userId: string) =>
   db.query.contacts.findMany({ where: { userId }, with: withContactUser });
 
 export type ContactWithUser = Awaited<ReturnType<typeof list>>[number];
 
-const listByIds = async (ids: string[]): Promise<ContactWithUser[]> => {
+export const listByIds = async (ids: string[]): Promise<ContactWithUser[]> => {
   if (ids.length === 0) return [];
   return db.query.contacts.findMany({ where: { id: { in: ids } }, with: withContactUser });
 };
 
-const exists = async (userId: string, contactUserId: string): Promise<boolean> => {
+export const exists = async (userId: string, contactUserId: string): Promise<boolean> => {
   const row = await db.query.contacts.findFirst({
     where: { userId, contactUserId },
     columns: { id: true },
@@ -35,7 +35,7 @@ const exists = async (userId: string, contactUserId: string): Promise<boolean> =
   return !!row;
 };
 
-const findContactUser = async (userId: string, username: string) => {
+export const findContactUser = async (userId: string, username: string) => {
   const row = await db.query.contacts.findFirst({
     where: { userId, contactUser: { username } },
     with: withContactUser,
@@ -45,7 +45,7 @@ const findContactUser = async (userId: string, username: string) => {
 
 // One transaction: deleting only one direction would leave one user still seeing the other.
 // Sharing a list needs a contact, so each leaves the lists the other shared with them.
-const remove = async (id: string, userId: string) => {
+export const remove = async (id: string, userId: string) => {
   const contact = await db.query.contacts.findFirst({ where: { id, userId } });
   if (!contact) throw new NotFoundError("contact", id);
   const otherId = contact.contactUserId;
@@ -96,7 +96,7 @@ const remove = async (id: string, userId: string) => {
 };
 
 /** A replay after a lost response finds the contact already back and changes nothing. */
-const restore = async (id: string, userId: string) =>
+export const restore = async (id: string, userId: string) =>
   inTransaction(async (tx) => {
     const record = await tx.query.removedContacts.findFirst({
       where: { id, userId, removedAt: { gte: undoableSince() } },
@@ -142,5 +142,3 @@ const restore = async (id: string, userId: string) =>
     await tx.delete(removedContacts).where(eq(removedContacts.id, id));
     return { contact, restored, before, changed };
   });
-
-export default { list, listByIds, exists, findContactUser, remove, restore };
