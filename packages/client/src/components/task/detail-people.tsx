@@ -5,7 +5,7 @@ import type { Task } from "~/lib/types";
 import { useContacts, moveToList, updateTask } from "~/lib/db/hooks";
 import { listChoices } from "~/lib/effective-category";
 import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
-import { holders, type CategoriesById } from "~/lib/task-holders";
+import { holders, ownerNameOf, type CategoriesById } from "~/lib/task-holders";
 import { shareTask, removeTaskShare } from "~/lib/actions";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import {
@@ -54,14 +54,14 @@ type Filing = ReturnType<typeof useListFiling>;
 /** Where a top-level task sits, opening the lists it can move to. Plain text when it can't move. */
 export const ListChip = ({ filing }: { filing: Filing }) => {
   const { categoryId, category, choices, move } = filing;
-  if (categoryId === undefined || (categoryId && !category)) return null;
+  if (categoryId === undefined) return null;
 
   const name = category?.name ?? "Inbox";
   const dot = <ColorDot color={category ? (category.color ?? undefined) : INBOX_COLOR} />;
 
   if (choices.length === 0)
     return (
-      <fieldset aria-label="List" className={cn(crumb, "min-w-0")}>
+      <fieldset aria-label="List" className={crumb}>
         {dot}
         <span dir="auto" className="truncate">
           {name}
@@ -111,12 +111,18 @@ export const ListChip = ({ filing }: { filing: Filing }) => {
 };
 
 /** A subtask's way back up: the task it sits under, whose sheet it opens. */
-export const ParentCrumb = ({ parent, onOpen }: { parent?: Task; onOpen: () => void }) => {
+export const ParentCrumb = ({
+  parent,
+  onOpen,
+}: {
+  parent?: Task;
+  onOpen: (taskId: string) => void;
+}) => {
   if (!parent) return null;
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={() => onOpen(parent.id)}
       className={cn(
         crumb,
         "cursor-pointer rounded-md text-hint outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 touch:active:text-foreground",
@@ -197,7 +203,7 @@ export const SharingField = ({
     </AddRow>
   );
 
-  if (shares.length === 0 && !adding) return offer || null;
+  if (shares.length === 0 && !adding) return offer;
 
   return (
     <>
@@ -226,20 +232,24 @@ export const SharingField = ({
   );
 };
 
+const listFormat = new Intl.ListFormat(undefined, { type: "conjunction" });
+
 /** Who else a subtask reaches: everyone who can see the task it sits under, besides the viewer. */
 export const SubtaskSharing = ({ parent, userId }: { parent: Task; userId: string }) => {
   const lists = useCategoriesById();
-  const people = peopleOnTask(parent, lists).filter((p) => p.id !== userId);
-  if (people.length === 0) return null;
+  const owner = { id: parent.userId, name: ownerNameOf(parent, lists) ?? "" };
+  const names = [owner, ...peopleOnTask(parent, lists)]
+    .filter((p) => p.id !== userId)
+    .map((p) => p.name.trim())
+    .filter(Boolean);
+  if (names.length === 0) return null;
 
-  const names = new Intl.ListFormat(undefined, { type: "conjunction" }).formatToParts(
-    people.map((p) => p.name.trim().split(/\s+/)[0]!),
-  );
+  const parts = listFormat.formatToParts(names);
   return (
     <DetailRow icon={<Users />}>
       <p className="py-2 text-sm text-hint touch:py-3 touch:text-base">
         With{" "}
-        {names.map((part, i) =>
+        {parts.map((part, i) =>
           part.type === "element" ? <bdi key={i}>{part.value}</bdi> : part.value,
         )}
         , like the task it’s in

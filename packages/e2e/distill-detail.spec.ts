@@ -60,7 +60,6 @@ test("an empty task offers each field where it would live, and each line opens i
   await page.keyboard.type("Closes at 6");
   await page.keyboard.press("Enter");
   await expect(sheet.getByText("Closes at 6")).toBeVisible();
-  // Stamped with when it was written
   await expect(sheet.getByRole("group", { name: "Notes" }).locator("time")).toHaveText(/^Today, /);
 
   await openListPicker(sheet);
@@ -163,7 +162,6 @@ test("each Delete in the sheet says what it removes", async ({ page }) => {
   const sheet = page.locator('[data-slot="drawer-content"]');
   await expect(sheet.getByText("Window seat")).toBeVisible({ timeout: 15000 });
 
-  // A bare trash can in the header, named for screen readers and on hover
   const deleteTask = sheet.getByRole("button", { name: "Delete task", exact: true });
   await expect(deleteTask).toHaveText("");
   await expect(deleteTask).toHaveAttribute("title", "Delete task");
@@ -363,14 +361,51 @@ test("a subtask's header trash deletes it, with Undo", async ({ page }) => {
 test("a subtask of a shared task says who else has it", async ({ page }) => {
   const data = await mockApi(page);
   const flights = data.tasks[0]!;
-  flights.shares = [{ ...(data.tasks[3]!.shares[0] as object), taskId: flights.id }];
+  flights.shares = [
+    { ...(data.tasks[3]!.shares[0] as object), id: "s-flights", taskId: flights.id },
+  ];
   const fares = data.tasks.find((t) => t.title === "Compare Tuesday and Wednesday fares")!;
   await page.goto(`/task/${fares.id}`, { waitUntil: "domcontentloaded" });
   const sheet = page.getByRole("dialog", { name: fares.title, exact: true });
 
-  await expect(sheet.getByText("With Sarah, like the task it’s in")).toBeVisible({
+  await expect(sheet.getByText("With Sarah Murray, like the task it’s in")).toBeVisible({
     timeout: 15000,
   });
   await expect(sheet.getByRole("button", { name: /^Share/ })).toHaveCount(0);
   await expect(sheet.getByRole("button", { name: "Assign" })).toHaveCount(0);
+});
+
+test("a subtask of a task shared with you names its owner", async ({ page }) => {
+  const data = await mockApi(page);
+  const sarah = { id: "u-sarah", name: "Sarah Murray" };
+  const flights = data.tasks[0]!;
+  const fares = data.tasks.find((t) => t.title === "Compare Tuesday and Wednesday fares")!;
+  for (const t of [flights, fares]) Object.assign(t, { userId: sarah.id, user: sarah });
+  const shareToMe = data.tasks.find((t) => t.title === "Pick a restaurant for Friday")!.shares[0];
+  flights.shares = [{ ...(shareToMe as object), id: "s-flights", taskId: flights.id }];
+  await page.goto(`/task/${fares.id}`, { waitUntil: "domcontentloaded" });
+  const sheet = page.getByRole("dialog", { name: fares.title, exact: true });
+
+  await expect(sheet.getByText("With Sarah Murray, like the task it’s in")).toBeVisible({
+    timeout: 15000,
+  });
+});
+
+test("a view-only share offers notes and nothing else to change", async ({ page }) => {
+  const data = await mockApi(page);
+  const restaurant = data.tasks.find((t) => t.title === "Pick a restaurant for Friday")!;
+  restaurant.dueDate = "2026-11-06";
+  restaurant.shares = restaurant.shares.map((s) => ({ ...(s as object), permission: "view" }));
+  await page.goto(`/task/${restaurant.id}`, { waitUntil: "domcontentloaded" });
+  const sheet = page.getByRole("dialog", { name: restaurant.title, exact: true });
+
+  await expect(sheet.getByRole("textbox", { name: "Title" })).toHaveAttribute("readonly", "", {
+    timeout: 15000,
+  });
+  await expect(sheet.getByText(/Nov 6/)).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Clear" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: /^Due date/ })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Add a date" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Add a subtask" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Add a note" })).toBeVisible();
 });

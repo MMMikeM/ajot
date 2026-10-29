@@ -1,6 +1,8 @@
 import { type ReactNode } from "react";
 import { cn } from "~/lib/utils";
 
+const gutter = "flex w-4 shrink-0 items-center justify-center touch:w-4.5 [&_svg]:size-4";
+
 /**
  * One line of the sheet. The gutter lines up with the title's checkbox, so icons hang
  * under it and every value starts where the title text does.
@@ -21,10 +23,7 @@ export const DetailRow = ({
     role={label ? "group" : undefined}
     aria-label={label}
   >
-    <span
-      aria-hidden
-      className="flex h-9 w-4 shrink-0 items-center justify-center text-hint touch:h-11 touch:w-4.5 [&_svg]:size-4"
-    >
+    <span aria-hidden className={cn(gutter, "h-9 text-hint touch:h-11")}>
       {icon}
     </span>
     <div className="flex min-w-0 flex-1 flex-col">{children}</div>
@@ -49,10 +48,7 @@ export const AddRow = ({
     onClick={onClick}
     className="flex h-9 w-full cursor-pointer items-center gap-3 rounded-md text-left text-sm text-hint outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 touch:h-11 touch:text-base touch:active:text-foreground"
   >
-    <span
-      aria-hidden
-      className="flex w-4 shrink-0 items-center justify-center touch:w-4.5 [&_svg]:size-4"
-    >
+    <span aria-hidden className={gutter}>
       {icon}
     </span>
     {children}

@@ -172,7 +172,7 @@ const TaskDetailContent = ({
           {isTopLevel ? (
             <ListChip filing={filing} />
           ) : (
-            <ParentCrumb parent={parent} onOpen={() => parent && onOpenTask(parent.id)} />
+            <ParentCrumb parent={parent} onOpen={onOpenTask} />
           )}
           {canDeleteTask(held, userId) && (
             <Button
@@ -212,6 +212,7 @@ const TaskDetailContent = ({
               ref={autoGrow}
               data-slot={TITLE_SLOT}
               aria-label="Title"
+              readOnly={!canEdit}
               rows={1}
               maxLength={MAX_TITLE}
               enterKeyHint="done"
@@ -289,6 +290,7 @@ const TaskDetailContent = ({
           {task.dueDate ? (
             <DueDateRow
               dueDate={task.dueDate}
+              canEdit={canEdit}
               onPick={() => dateRef.current?.showPicker()}
               onClear={() => updateTask(task.id, { dueDate: null })}
             />
@@ -343,14 +345,22 @@ const TaskDetailContent = ({
 
 const DueDateRow = ({
   dueDate,
+  canEdit,
   onPick,
   onClear,
 }: {
   dueDate: string;
+  canEdit: boolean;
   onPick: () => void;
   onClear: () => void;
 }) => {
   const label = formatDueDateTime(dueDate);
+  if (!canEdit)
+    return (
+      <DetailRow icon={<CalendarDays />}>
+        <p className="text-sm leading-9 text-date touch:text-base touch:leading-11">{label}</p>
+      </DetailRow>
+    );
   return (
     <DetailRow icon={<CalendarDays />}>
       <div className="flex items-center">
