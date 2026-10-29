@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { storageFrom } from "./storage";
+import { encodeRfc3986, storageFrom } from "./storage";
 
 const env = {
   AWS_ACCESS_KEY_ID: "key",
@@ -18,6 +18,11 @@ test("an upload URL is path-style, lasts 15 minutes and holds the PUT to its siz
   expect(`${url.origin}${url.pathname}`).toBe("https://fly.storage.tigris.dev/ajot/a/1");
   expect(url.searchParams.get("X-Amz-Expires")).toBe("900");
   expect(url.searchParams.get("X-Amz-SignedHeaders")).toBe("content-length;content-type;host");
+  expect([...url.searchParams.keys()].filter((name) => /checksum/i.test(name))).toEqual([]);
+});
+
+test("a name is escaped as RFC 3986 asks, which encodeURIComponent alone doesn't", () => {
+  expect(encodeRfc3986("Mike's notes (v2)!*.pdf")).toBe("Mike%27s%20notes%20%28v2%29%21%2A.pdf");
 });
 
 test("a download URL carries the disposition it was signed with", async () => {
