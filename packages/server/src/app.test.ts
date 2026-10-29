@@ -33,6 +33,15 @@ test("the page and the API carry the Content Security Policy", async () => {
   expect(await (await app.request("/task/abc")).text()).toBe("<!doctype html>");
 });
 
+test("a request for a route the API doesn't have is logged, with a slash too many included", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  for (const path of ["/api/no-such-route", "/api/config/"]) {
+    const res = await app.request(path, { method: "POST" });
+    expect(res.status, path).toBe(404);
+    expect(warn).toHaveBeenLastCalledWith(`[404] no route for POST ${path}`);
+  }
+});
+
 test("input a route refuses is answered with a message the client can show", async () => {
   const res = await signUp({ username: "ab", password: "long enough", name: "Al" });
 

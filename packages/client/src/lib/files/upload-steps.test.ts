@@ -1,3 +1,4 @@
+import { now } from "@newtab-todo/shared/iso";
 import { describe, expect, test } from "vite-plus/test";
 import type { Upload } from "~/lib/files/store";
 import {
@@ -18,8 +19,8 @@ const upload = (fields: Partial<Upload> = {}): Upload => ({
     size: 10,
     thumbhash: null,
     hasThumb: false,
-    createdAt: "2026-10-29T00:00:00.000Z",
-    updatedAt: "2026-10-29T00:00:00.000Z",
+    createdAt: now(),
+    updatedAt: now(),
   },
   uploaderId: "u1",
   posted: false,
