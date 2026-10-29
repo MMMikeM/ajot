@@ -2,45 +2,56 @@ import { test, expect } from "./fixtures";
 import { mockApi } from "./helpers/mock-api";
 import type { Page } from "@playwright/test";
 
-// Needs the build's service worker, so it runs with the prerender suite, which allows it. A new
-// deploy's worker taking over is stood in for by the event it fires on the page.
+// Needs the build's service worker, so it runs with the prerender suite, which allows it
 
 const openControlled = async (page: Page) => {
   await mockApi(page);
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForSelector("[data-task-id]");
-  // The first worker claiming the page fires the same event, which mustn't reload it
   await page.waitForFunction(() => !!navigator.serviceWorker.controller);
 };
 
-const newWorkerTakesOver = (page: Page) =>
-  page.evaluate(() => navigator.serviceWorker.dispatchEvent(new Event("controllerchange")));
+// What a newer deploy's worker answers when the page asks its build
+const newerWorkerAnswers = (page: Page) =>
+  page.evaluate(() =>
+    navigator.serviceWorker.dispatchEvent(
+      new MessageEvent("message", { data: { type: "BUILD_VERSION", version: "a-newer-build" } }),
+    ),
+  );
 
-test("a page left on the list reloads as soon as a new build takes over", async ({ page }) => {
+const updateToast = (page: Page) => page.getByText("Ajot has been updated.");
+
+test("a worker of the page's own build taking over offers nothing", async ({ page }) => {
+  await openControlled(page);
+  // The real worker answers with this build's version
+  await page.evaluate(() => navigator.serviceWorker.dispatchEvent(new Event("controllerchange")));
+  await page.waitForTimeout(500);
+  await expect(updateToast(page)).toHaveCount(0);
+});
+
+test("a newer build offers a reload, which waits for the user", async ({ page }) => {
   await openControlled(page);
   let loads = 0;
   page.on("load", () => loads++);
-  await page.waitForTimeout(500);
-  expect(loads, "the first worker's claim reloaded the page").toBe(0);
+  await newerWorkerAnswers(page);
+  await expect(updateToast(page)).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(loads, "reloaded without being asked").toBe(0);
 
   const reloaded = page.waitForEvent("load");
-  await newWorkerTakesOver(page);
+  await page.getByRole("button", { name: "Reload" }).click();
   await reloaded;
 });
 
-test("text being typed holds the reload until the field is empty", async ({ page }) => {
+test("a newer build reloads a page that's been put away", async ({ page }) => {
   await openControlled(page);
-  const input = page.getByPlaceholder("What needs doing?");
-  await input.fill("half a thought");
-  let loads = 0;
-  page.on("load", () => loads++);
-
-  await newWorkerTakesOver(page);
-  await page.waitForTimeout(2500);
-  expect(loads, "reloaded with text in the capture input").toBe(0);
-  await expect(input).toHaveValue("half a thought");
+  await newerWorkerAnswers(page);
+  await expect(updateToast(page)).toBeVisible();
 
   const reloaded = page.waitForEvent("load");
-  await input.fill("");
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
   await reloaded;
 });

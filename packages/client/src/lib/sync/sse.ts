@@ -30,6 +30,7 @@ import { shareSessionWithWorker } from "~/lib/sync/worker-session";
 import { checkForUpdate } from "~/lib/sync/register-sw";
 
 let es: EventSource | null = null;
+let streamWasOpen = false;
 
 // Firefox's persistent MV2 background page holds the SSE connection for every tab. Chrome's MV3
 // service worker can't hold an EventSource, so each Chrome tab connects itself.
@@ -160,8 +161,9 @@ const connectSSE = () => {
     ownSyncState.opened();
     sseBackoff.reset();
     refetchAll();
-    // The stream drops when a deploy restarts the server, so reopening is the first sign of one
-    checkForUpdate();
+    // A deploy restarts the server, which drops the stream, so its reopening is the first sign of one
+    if (streamWasOpen) checkForUpdate();
+    streamWasOpen = true;
   });
   source.addEventListener("error", () => {
     if (es !== source) return;

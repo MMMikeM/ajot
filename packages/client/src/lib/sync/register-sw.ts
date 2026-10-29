@@ -1,34 +1,32 @@
+import { MSG_BUILD_VERSION } from "@newtab-todo/shared/constants";
+import { toastManager } from "~/lib/undo-toast";
 const UPDATE_POLL_MS = 60 * 60 * 1000;
 // As often as the browser allows; Chrome decides from how much the app is used, hours apart
 const PREWARM_EVERY_MS = 15 * 60 * 1000;
 
-const RECHECK_MS = 1000;
-const TEXT_FIELDS =
-  "textarea, input:not([type]), input[type=text], input[type=search], input[type=email], input[type=url], input[type=password]";
-
-// A field can't say whether its text is saved, so any that holds some keeps the page: the capture
-// input mid-thought, a search, the sign-in form, and an open sheet, whose title is a field
-const holdsText = () =>
-  [...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(TEXT_FIELDS)].some(
-    (field) => !field.readOnly && !field.disabled && field.value !== "",
-  );
+let offered = false;
 
 /**
- * A new deploy's worker has taken over, and this page still runs the build before it, which may no
- * longer match the server: reload now, or the moment no field holds text a reload would lose.
+ * A newer build's worker has taken over, and this page, on the build before it, may no longer match
+ * the server. Reloading is the user's call while they're looking, since it would lose whatever
+ * they're in the middle of; once the page is hidden there's nothing on screen to lose.
  */
-const reloadForUpdate = () => {
-  if (!holdsText()) return location.reload();
-  const recheck = setInterval(() => {
-    if (holdsText()) return;
-    clearInterval(recheck);
-    location.reload();
-  }, RECHECK_MS);
+const offerReload = () => {
+  if (offered) return;
+  offered = true;
+  toastManager.add({
+    title: "Ajot has been updated.",
+    timeout: 0,
+    data: { action: { label: "Reload", onPress: () => location.reload() } },
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") location.reload();
+  });
 };
 
 /** A deploy restarts the server, so whatever notices that asks for the new build straight away. */
 export const checkForUpdate = () => {
-  if (!("serviceWorker" in navigator)) return;
+  if (!("serviceWorker" in navigator) || location.protocol.endsWith("-extension:")) return;
   navigator.serviceWorker
     .getRegistration()
     .then((reg) => reg?.update())
@@ -61,14 +59,13 @@ export const registerServiceWorker = () => {
     return console.log("[sw] skipped: extension context");
   if (!("serviceWorker" in navigator)) return console.log("[sw] skipped: no serviceWorker API");
 
-  // The first worker to claim a page changes its controller too, and that page is already current
-  let current = !navigator.serviceWorker.controller;
+  // Any worker taking over, the first included, is asked its build: only a different one is news
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (current) {
-      current = false;
-      return;
-    }
-    reloadForUpdate();
+    navigator.serviceWorker.controller?.postMessage({ type: MSG_BUILD_VERSION });
+  });
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    const reply = event.data as { type?: string; version?: string } | null;
+    if (reply?.type === MSG_BUILD_VERSION && reply.version !== __BUILD_VERSION__) offerReload();
   });
 
   console.log("[sw] calling register(/sw.js)");
