@@ -154,8 +154,7 @@ test("a task shared with every contact still offers an invite", async ({ page })
   await row(page, "Write a thank-you")
     .getByRole("button", { name: /^Write a thank-you/ })
     .click();
-  await page.getByRole("button", { name: /^Add$/ }).click();
-  await page.getByRole("button", { name: /^Share$/ }).click();
+  await page.getByRole("button", { name: "Share with someone else" }).click();
   await expect(page.getByText("Shared with all your contacts.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Invite someone new" })).toBeVisible();
 });

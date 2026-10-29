@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Request } from "@playwright/test";
-import { startsWith } from "./helpers/app";
+import { startsWith, tapAddLine } from "./helpers/app";
 import { mockApi } from "./helpers/mock-api";
 
 // A field stops at the length the server takes (shared/field-limits.ts), so a long paste is cut
@@ -44,13 +44,8 @@ test("a task's title and description stop at their limits, and save what was kep
   await openList(page);
   const sheet = await openDetail(page, "Pick up dry cleaning");
 
-  await sheet.getByRole("button", { name: "Add", exact: true }).click();
-  await sheet
-    .getByRole("group", { name: "Add to task" })
-    .getByRole("button", { name: "Description" })
-    .click();
-  const description = sheet.getByRole("textbox", { name: "Description" });
-  await expect(description).toBeFocused();
+  const description = sheet.getByRole("textbox", { name: "Details" });
+  await description.click();
   await page.keyboard.insertText("d".repeat(MAX_TEXT + 10));
   expect((await description.inputValue()).length).toBe(MAX_TEXT);
 
@@ -71,11 +66,7 @@ test("a new note stops at its limit, and its title is the start of it", async ({
   const created = sent(page, "POST", "/api/notes");
   await openList(page);
   const sheet = await openDetail(page, "Pick up dry cleaning");
-  await sheet.getByRole("button", { name: "Add", exact: true }).click();
-  await sheet
-    .getByRole("group", { name: "Add to task" })
-    .getByRole("button", { name: "Note" })
-    .click();
+  await tapAddLine(sheet, "Add a note");
 
   const note = sheet.getByRole("textbox", { name: "New note" });
   await expect(note).toBeFocused();

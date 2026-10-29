@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { UserRound, Users } from "lucide-react";
+import { CornerLeftUp, UserPlus, UserRound, Users } from "lucide-react";
 import { grants } from "@newtab-todo/shared/task-access";
 import type { Task } from "~/lib/types";
 import { useContacts, moveToList, updateTask } from "~/lib/db/hooks";
@@ -16,11 +16,12 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { ColorDot } from "~/components/ui/color-dot";
+import { cn } from "~/lib/utils";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { TogglePill } from "~/components/ui/toggle-pill";
-import { DetailRow } from "~/components/task/detail-row";
+import { AddRow, DetailRow } from "~/components/task/detail-row";
 import { InviteButton } from "~/components/InviteButton";
 import { INBOX_COLOR } from "~/lib/constants";
 
@@ -28,6 +29,9 @@ const INBOX_VALUE = "__inbox__";
 
 const rowTrigger =
   "h-9 w-full min-w-0 justify-between border-0 py-0 text-sm hover:text-foreground touch:h-11 touch:text-base";
+
+// The sheet's header line: where the task sits, quieter than anything in it
+const crumb = "flex h-9 min-w-0 items-center gap-2 text-sm text-muted-foreground touch:h-11";
 
 type Person = { id: string; name: string };
 
@@ -38,6 +42,7 @@ export const useListFiling = (task: Task) => {
   const { mode, categoryId, choices } = listChoices(task, userId, lists);
   return {
     mode,
+    categoryId,
     category: categoryId ? lists.get(categoryId) : undefined,
     choices,
     move: (id: string | null) => moveToList(task, mode, id),
@@ -46,19 +51,22 @@ export const useListFiling = (task: Task) => {
 
 type Filing = ReturnType<typeof useListFiling>;
 
-export const ListField = ({ filing, choosing }: { filing: Filing; choosing: boolean }) => {
-  const { category, choices, move } = filing;
-  if (!category && !choosing) return null;
+/** Where a top-level task sits, opening the lists it can move to. Plain text when it can't move. */
+export const ListChip = ({ filing }: { filing: Filing }) => {
+  const { categoryId, category, choices, move } = filing;
+  if (categoryId === undefined || (categoryId && !category)) return null;
 
-  const icon = <ColorDot color={category ? (category.color ?? undefined) : INBOX_COLOR} />;
+  const name = category?.name ?? "Inbox";
+  const dot = <ColorDot color={category ? (category.color ?? undefined) : INBOX_COLOR} />;
 
   if (choices.length === 0)
     return (
-      <DetailRow icon={icon} label="List">
-        <span dir="auto" className="truncate text-sm leading-9 touch:text-base touch:leading-11">
-          {category?.name}
+      <fieldset aria-label="List" className={cn(crumb, "min-w-0")}>
+        {dot}
+        <span dir="auto" className="truncate">
+          {name}
         </span>
-      </DetailRow>
+      </fieldset>
     );
 
   const items = [
@@ -67,33 +75,58 @@ export const ListField = ({ filing, choosing }: { filing: Filing; choosing: bool
   ];
 
   return (
-    <DetailRow icon={icon} label="List">
-      <Select
-        value={category?.id ?? INBOX_VALUE}
-        defaultOpen={choosing && !category}
-        onValueChange={(v) => {
-          const id = v as string;
-          move(id === INBOX_VALUE ? null : id);
-        }}
-        items={items}
+    <Select
+      value={category?.id ?? INBOX_VALUE}
+      onValueChange={(v) => {
+        const id = v as string;
+        move(id === INBOX_VALUE ? null : id);
+      }}
+      items={items}
+    >
+      <SelectTrigger
+        variant="underline"
+        aria-label="List"
+        className={cn(
+          crumb,
+          "rounded-md border-0 py-0 font-medium text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:text-foreground",
+        )}
       >
-        <SelectTrigger variant="underline" aria-label="List" className={rowTrigger}>
-          <SelectValue className="truncate" />
-        </SelectTrigger>
-        <SelectContent>
-          {items.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
-              <span className="flex min-w-0 items-center gap-2.5">
-                <ColorDot color={item.color} />
-                <span dir="auto" className="truncate">
-                  {item.label}
-                </span>
+        {dot}
+        <SelectValue className="truncate" />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            <span className="flex min-w-0 items-center gap-2.5">
+              <ColorDot color={item.color} />
+              <span dir="auto" className="truncate">
+                {item.label}
               </span>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </DetailRow>
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+};
+
+/** A subtask's way back up: the task it sits under, whose sheet it opens. */
+export const ParentCrumb = ({ parent, onOpen }: { parent?: Task; onOpen: () => void }) => {
+  if (!parent) return null;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        crumb,
+        "cursor-pointer rounded-md text-hint outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 touch:active:text-foreground",
+      )}
+    >
+      <CornerLeftUp aria-hidden className="size-4 shrink-0" />
+      <span className="truncate">
+        Subtask of <bdi className="font-medium text-muted-foreground">{parent.title}</bdi>
+      </span>
+    </button>
   );
 };
 
@@ -138,10 +171,12 @@ export const SharingField = ({
   task,
   sharing,
   adding,
+  onAdd,
 }: {
   task: Task;
   sharing: Sharing;
   adding: boolean;
+  onAdd: () => void;
 }) => {
   const { isOwner, sharedList, userId } = sharing;
   // Someone it was shared with sees who else has it, never themselves
@@ -150,34 +185,65 @@ export const SharingField = ({
   if (sharedList)
     return (
       <DetailRow icon={<Users />} label="Sharing">
-        <p className="py-2 text-sm text-hint touch:py-3">
+        <p className="py-2 text-sm text-hint touch:py-3 touch:text-base">
           Everyone in <span dir="auto">{sharedList.name}</span> can see this
         </p>
       </DetailRow>
     );
 
-  if (shares.length === 0 && !adding) return null;
+  const offer = isOwner && !adding && (
+    <AddRow icon={<UserPlus />} onClick={onAdd}>
+      {shares.length > 0 ? "Share with someone else" : "Share"}
+    </AddRow>
+  );
+
+  if (shares.length === 0 && !adding) return offer || null;
 
   return (
-    <DetailRow icon={<Users />} label="Shared with">
-      {shares.map((share) => (
-        <ListRow key={share.id} size="sm" className="-mx-2 min-h-9 touch:min-h-11">
-          <InitialsAvatar
-            name={share.sharedWithUser.name}
-            userId={share.sharedWithUserId}
-            size="sm"
-          />
-          <span dir="auto" className="min-w-0 flex-1 truncate text-sm">
-            {share.sharedWithUser.name}
-          </span>
-          {isOwner && (
-            <RevealGroup>
-              <RevealButton onClick={() => removeTaskShare(share.id)}>Remove</RevealButton>
-            </RevealGroup>
-          )}
-        </ListRow>
-      ))}
-      {isOwner && adding && <AddShare taskId={task.id} sharing={sharing} />}
+    <>
+      <DetailRow icon={<Users />} label="Shared with">
+        {shares.map((share) => (
+          <ListRow key={share.id} size="sm" className="-mx-2 min-h-9 touch:min-h-11">
+            <InitialsAvatar
+              name={share.sharedWithUser.name}
+              userId={share.sharedWithUserId}
+              size="sm"
+            />
+            <span dir="auto" className="min-w-0 flex-1 truncate text-sm touch:text-base">
+              {share.sharedWithUser.name}
+            </span>
+            {isOwner && (
+              <RevealGroup>
+                <RevealButton onClick={() => removeTaskShare(share.id)}>Remove</RevealButton>
+              </RevealGroup>
+            )}
+          </ListRow>
+        ))}
+        {isOwner && adding && <AddShare taskId={task.id} sharing={sharing} />}
+      </DetailRow>
+      {offer}
+    </>
+  );
+};
+
+/** Who else a subtask reaches: everyone who can see the task it sits under, besides the viewer. */
+export const SubtaskSharing = ({ parent, userId }: { parent: Task; userId: string }) => {
+  const lists = useCategoriesById();
+  const people = peopleOnTask(parent, lists).filter((p) => p.id !== userId);
+  if (people.length === 0) return null;
+
+  const names = new Intl.ListFormat(undefined, { type: "conjunction" }).formatToParts(
+    people.map((p) => p.name.trim().split(/\s+/)[0]!),
+  );
+  return (
+    <DetailRow icon={<Users />}>
+      <p className="py-2 text-sm text-hint touch:py-3 touch:text-base">
+        With{" "}
+        {names.map((part, i) =>
+          part.type === "element" ? <bdi key={i}>{part.value}</bdi> : part.value,
+        )}
+        , like the task it’s in
+      </p>
     </DetailRow>
   );
 };
@@ -241,12 +307,23 @@ export const AssigneeField = ({
   task,
   sharing,
   choosing,
+  onChoose,
 }: {
   task: Task;
   sharing: Sharing;
   choosing: boolean;
+  onChoose: () => void;
 }) => {
-  if (task.parentId || (!task.assigneeId && !choosing)) return null;
+  if (task.parentId) return null;
+
+  if (!task.assigneeId && !choosing) {
+    const canAssign = sharing.isOwner && sharing.others.length > 0;
+    return canAssign ? (
+      <AddRow icon={<UserRound />} onClick={onChoose}>
+        Assign
+      </AddRow>
+    ) : null;
+  }
 
   if (!sharing.isOwner) {
     const name = task.assigneeId === sharing.userId ? "you" : task.assignee?.name;

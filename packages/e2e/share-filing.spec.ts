@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
-import { addField, startsWith } from "./helpers/app";
+import { openListPicker, startsWith } from "./helpers/app";
 import type { AuthResult } from "./helpers/auth";
 import {
   addCollaborator,
@@ -30,7 +30,7 @@ test("a task shared with you, filed offline, reaches the server once back online
   await page.getByRole("button", { name: startsWith(title) }).click();
   const sheet = page.getByRole("dialog", { name: title, exact: true });
   await page.context().setOffline(true);
-  await addField(sheet, "List");
+  await openListPicker(sheet);
   await page.getByRole("option", { name: listName }).click();
   await expect(sheet.getByRole("combobox", { name: "List" })).toHaveText(listName);
 
@@ -81,7 +81,7 @@ const sidebarLists = async (page: Page) =>
 
 /** Opens the sheet's List picker, and reads what it offers besides the Inbox. */
 const offeredLists = async (page: Page, sheet: Locator) => {
-  await addField(sheet, "List");
+  await openListPicker(sheet);
   await expect(page.getByRole("option").first()).toBeVisible();
   return (await page.getByRole("option").allTextContents()).filter((o) => o !== "Inbox").sort();
 };
