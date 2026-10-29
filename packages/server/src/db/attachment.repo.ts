@@ -8,7 +8,7 @@ import { attachments, taskAccess } from "./schema";
 import { limited, limitedId } from "./field-limits";
 import { stampsNotAfterNow } from "./stamps";
 
-export type AttachmentInsert = typeof attachments.$inferInsert;
+export type Insert = typeof attachments.$inferInsert;
 export type Attachment = Omit<typeof attachments.$inferSelect, "purgedAt">;
 
 const { purgedAt: _purgedAt, ...sentColumns } = getColumns(attachments);
@@ -84,7 +84,7 @@ export const uploadedOf = async (taskIds: string[]) =>
       });
 
 /** Undefined when the id is taken: the caller reads it to tell a retry from a clash. */
-export const insert = async (data: AttachmentInsert) => {
+export const insert = async (data: Insert) => {
   const [row] = await db
     .insert(attachments)
     .values(stampsNotAfterNow(data, ["createdAt", "updatedAt"]))
@@ -102,7 +102,7 @@ export const usageFor = async (uploaderId: string) => {
   return row?.bytes ?? 0;
 };
 
-export const update = async (id: string, fields: Partial<AttachmentInsert>) => {
+export const update = async (id: string, fields: Partial<Insert>) => {
   const [row] = await db
     .update(attachments)
     .set(fields)
