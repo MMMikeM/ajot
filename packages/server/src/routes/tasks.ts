@@ -11,6 +11,7 @@ import { sendNotification, getUserName } from "../notify";
 import * as notificationQueueRepo from "../db/notification-queue.repo";
 import { jsonBody } from "./crud";
 import * as reachRepo from "../db/reach.repo";
+import attachmentRepo from "../db/attachment.repo";
 import { audienceOf, markTaskEdited, requireTask } from "./task-users";
 import { sendReachChanges } from "./reach";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
@@ -131,7 +132,23 @@ export const taskRoutes = authed()
         const result = await taskRepo.restore(id, updatedAt);
         // Read again: a task whose list was deleted came back to the Inbox, away from the
         // list's collaborators
-        broadcast(c, "tasks", "insert", await taskRepo.findListItem(id), await audienceOf(id));
+        const [row, restoredTo, restoredAttachments] = await Promise.all([
+          taskRepo.findListItem(id),
+          audienceOf(id),
+          attachmentRepo.uploadedOf([id]),
+        ]);
+        broadcastAll(
+          c,
+          [
+            { model: "tasks", action: "insert", data: row },
+            ...restoredAttachments.map((data) => ({
+              model: "attachments" as const,
+              action: "insert" as const,
+              data,
+            })),
+          ],
+          restoredTo,
+        );
         return c.json(result, 200);
       }
 
