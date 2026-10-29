@@ -7,10 +7,7 @@ import { Toast } from "@base-ui/react/toast";
  */
 export type NamedTitle = { before: string; name: string; after?: string };
 
-/** A button beside the title, for a toast that offers something other than Undo. */
-type ToastAction = { label: string; onPress: () => void };
-
-export type ToastData = { onUndo?: () => void; named?: NamedTitle; action?: ToastAction };
+export type ToastData = { onUndo?: () => void; named?: NamedTitle };
 
 export const toastManager = Toast.createToastManager<ToastData>();
 

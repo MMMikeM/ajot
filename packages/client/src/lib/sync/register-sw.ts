@@ -1,10 +1,13 @@
 import { MSG_BUILD_VERSION } from "@newtab-todo/shared/constants";
-import { toastManager } from "~/lib/undo-toast";
+import { createExternalStore } from "~/lib/external-store";
 const UPDATE_POLL_MS = 60 * 60 * 1000;
 // As often as the browser allows; Chrome decides from how much the app is used, hours apart
 const PREWARM_EVERY_MS = 15 * 60 * 1000;
 
-let offered = false;
+const updateReady = createExternalStore(false);
+
+/** A newer build has taken over this page, which the banner asks the user to reload for. */
+export const useUpdateReady = updateReady.useStore;
 
 /**
  * A newer build's worker has taken over, and this page, on the build before it, may no longer match
@@ -12,13 +15,8 @@ let offered = false;
  * they're in the middle of; once the page is hidden there's nothing on screen to lose.
  */
 const offerReload = () => {
-  if (offered) return;
-  offered = true;
-  toastManager.add({
-    title: "Ajot has been updated.",
-    timeout: 0,
-    data: { action: { label: "Reload", onPress: () => location.reload() } },
-  });
+  if (updateReady.get()) return;
+  updateReady.set(true);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") location.reload();
   });

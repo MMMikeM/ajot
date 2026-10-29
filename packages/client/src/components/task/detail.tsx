@@ -79,7 +79,10 @@ function TaskDetail({
     >
       {/* On touch its top leaves room for the toast viewport, which moves above an open sheet */}
       <DrawerContent
-        className={cn("max-h-[calc(100dvh-env(safe-area-inset-top,0px)-4.5rem)]", dockedSheet)}
+        className={cn(
+          "max-h-[calc(100dvh-max(env(safe-area-inset-top,0px),var(--banner-h,0px))-4.5rem)]",
+          dockedSheet,
+        )}
       >
         <DrawerHeader className="sr-only">
           <DrawerTitle>{task.title}</DrawerTitle>

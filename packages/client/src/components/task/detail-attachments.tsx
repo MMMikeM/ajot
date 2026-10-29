@@ -172,7 +172,7 @@ const Viewer = ({
           className="fixed inset-0 z-50 bg-[oklch(0.1_0.012_262)] transition-opacity duration-200 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0"
         />
         <Dialog.Popup
-          className="fixed inset-0 z-50 flex flex-col pt-[env(safe-area-inset-top)] pb-[max(0.75rem,env(safe-area-inset-bottom))] text-foreground transition-opacity duration-200 outline-none data-[ending-style]:opacity-0 data-[starting-style]:opacity-0"
+          className="fixed inset-0 z-50 flex flex-col pt-[max(env(safe-area-inset-top,0px),var(--banner-h,0px))] pb-[max(0.75rem,env(safe-area-inset-bottom))] text-foreground transition-opacity duration-200 outline-none data-[ending-style]:opacity-0 data-[starting-style]:opacity-0"
           onKeyDown={(e) => {
             if (e.key === "ArrowLeft") step(-1);
             if (e.key === "ArrowRight") step(1);

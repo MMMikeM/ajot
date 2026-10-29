@@ -241,7 +241,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
       <nav
         aria-label="Lists"
         data-testid="category-sidebar"
-        className="fixed top-(--sheet-inset) left-(--panel-left) z-10 hidden h-[calc(100dvh-2*var(--sheet-inset))] w-(--sidebar-w) flex-col overflow-y-auto px-2 py-8 desk:flex"
+        className="fixed top-[calc(var(--sheet-inset)+var(--banner-h,0px))] left-(--panel-left) z-10 hidden h-[calc(100dvh-2*var(--sheet-inset)-var(--banner-h,0px))] w-(--sidebar-w) flex-col overflow-y-auto px-2 py-8 desk:flex"
       >
         <Link
           to="/search"
