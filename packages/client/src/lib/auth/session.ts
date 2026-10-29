@@ -2,6 +2,7 @@ import { getSignedIn, setSignedIn, type CurrentUser, type SignedIn } from "~/lib
 import { getBuildTarget } from "~/lib/build-target";
 import { ext } from "~/lib/ext";
 import { clearSavedLists } from "~/lib/snapshot-store";
+import { forgetSavedFiles } from "~/lib/files/store";
 import { MSG_TOKEN_CHANGED, TOKEN_KEY, USER_ID_KEY } from "@newtab-todo/shared/constants";
 
 // The extension's backgrounds can't read localStorage, so they get a copy, in one write: Chrome's
@@ -30,8 +31,11 @@ export const signIn = (token: string, user: CurrentUser) => setSession({ token, 
 
 /** Edits still queued wait, out of sight, for the account to sign back in (lib/db/offline.ts). */
 export const clearSession = () => {
+  const userId = getSignedIn().user?.id;
   setSession({ token: null, user: null });
   clearSavedLists().catch(console.error);
+  // As the lists go: the next person at this device shouldn't open the account's files
+  if (userId) forgetSavedFiles(userId).catch(console.error);
 };
 
 const expiredListeners = new Set<() => void>();

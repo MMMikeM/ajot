@@ -15,6 +15,18 @@ export type SavedBlob = {
   /** An upload not yet confirmed holds its bytes: they may exist nowhere else. */
   pinned: boolean;
   savedAt: number;
+  /** When it was last shown, for which full files go first over the budget. */
+  usedAt?: number;
+  /** When a list from the server last held its attachment. */
+  seenAt?: number;
+};
+
+/** A saved blob without its bytes, for deciding what to keep. */
+export type BlobMeta = Omit<SavedBlob, "blob"> & {
+  key: string;
+  id: string;
+  variant: Variant;
+  size: number;
 };
 
 /** The row as `POST /api/attachments` takes it. */
@@ -224,3 +236,59 @@ export const saveBlob = (id: string, variant: Variant, blob: Blob, userId: strin
       blobKey(id, variant),
     );
   });
+
+// Every key in the blobs store is a string, from blobKey
+const keyOf = (cursor: IDBCursor) => (typeof cursor.key === "string" ? cursor.key : "");
+
+/** Every saved blob's metadata; the bytes stay on disk. */
+export const readBlobMetas = () =>
+  inTransaction("readonly", (tx) => {
+    const metas: BlobMeta[] = [];
+    const request = tx.objectStore(BLOBS).openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      const key = keyOf(cursor);
+      const { blob, ...meta } = cursor.value as SavedBlob;
+      const [id = "", variant] = key.split(":");
+      metas.push({ ...meta, key, id, variant: variant as Variant, size: blob.size });
+      cursor.continue();
+    };
+    return () => metas;
+  });
+
+/** Changes or deletes each saved blob as `change` says, in one transaction. */
+const updateBlobs = (change: (key: string, saved: SavedBlob) => SavedBlob | "delete" | undefined) =>
+  write((tx) => {
+    const request = tx.objectStore(BLOBS).openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      const next = change(keyOf(cursor), cursor.value as SavedBlob);
+      if (next === "delete") cursor.delete();
+      else if (next) cursor.update(next);
+      cursor.continue();
+    };
+  });
+
+/** Stamps the blobs of attachments a list from the server just held. */
+export const markSeen = (ids: ReadonlySet<string>, at: number) =>
+  updateBlobs((key, saved) => (ids.has(key.split(":")[0]!) ? { ...saved, seenAt: at } : undefined));
+
+export const markUsed = (id: string, variant: Variant, at: number) =>
+  write((tx) => {
+    const blobs = tx.objectStore(BLOBS);
+    const key = blobKey(id, variant);
+    const request = blobs.get(key);
+    request.onsuccess = () => {
+      const saved = request.result as SavedBlob | undefined;
+      if (saved) blobs.put({ ...saved, usedAt: at }, key);
+    };
+  });
+
+export const deleteBlobs = (keys: ReadonlySet<string>) =>
+  updateBlobs((key) => (keys.has(key) ? "delete" : undefined));
+
+/** At sign-out: the account's saved files go, but not uploads still waiting to be sent. */
+export const forgetSavedFiles = (userId: string) =>
+  updateBlobs((_key, saved) => (saved.userId === userId && !saved.pinned ? "delete" : undefined));

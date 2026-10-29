@@ -10,6 +10,9 @@ import { getBuildTarget } from "../build-target";
 import { markStartup } from "~/lib/startup-timing";
 import { restoreSnapshot } from "~/lib/db/snapshot";
 import { SNAPSHOT_KEYS } from "~/lib/snapshot-store";
+import { getSignedInUserId } from "~/lib/auth/current-user";
+import { getServerUrl } from "~/lib/server-url";
+import { syncFiles } from "~/lib/files/file-job";
 
 const openSnapshot = async () => {
   markStartup("snapshot-read-start");
@@ -110,13 +113,19 @@ async function makeCollections() {
         id: "attachments",
         queryKey: ["attachments"] as const,
         queryFn: async () => {
-          if (!getAuthToken()) return [];
+          const token = getAuthToken();
+          if (!token) return [];
+          const fetchedAt = Date.now();
           const res = await routes.attachments();
           // Wider than this server's types: one from before attachments answers 404
           const status: number = res.status;
           if (status === 401 || status === 404) return [];
           if (!res.ok) throw new ApiError(status, "/api/attachments");
-          return res.json();
+          const rows = await res.json();
+          // A fresh list: save the thumbnails it shows and let go of what it no longer does
+          const session = { token, serverUrl: getServerUrl(), userId: getSignedInUserId() };
+          void syncFiles({ session, rows, fetchedAt });
+          return rows;
         },
         queryClient,
         getKey: (item) => item.id,
