@@ -1,4 +1,3 @@
-// Applies the migrations in packages/server/drizzle to the database in TURSO_*
 import { fileURLToPath } from "node:url";
 import { connect } from "@tursodatabase/serverless";
 import { drizzle } from "drizzle-orm/tursodatabase-serverless";

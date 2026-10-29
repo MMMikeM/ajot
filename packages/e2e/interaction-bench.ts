@@ -1,11 +1,6 @@
 /**
  * Times everyday interactions against a production build and mocked data, and looks for jank
- * around them. For each step it prints:
- *   - INP: the slowest Event Timing entry, input to next paint, which is what INP reports
- *   - CLS: layout shift the user didn't cause, as Core Web Vitals counts it
- *   - long frames: animation frames over 50ms (the Long Animation Frames API)
- * Then the elements that shifted and the scripts behind the long frames, so a number points
- * somewhere.
+ * around them.
  *
  * Usage (with `vp preview` serving packages/client/dist):
  *   BASE_URL=http://localhost:4174 npx tsx interaction-bench.ts [--runs=5] [--cpu=4] [--tasks=150] [--mobile]
@@ -89,7 +84,6 @@ const OBSERVERS = `
   }).observe({ type: "long-animation-frame", buffered: true });
 `;
 
-/** Runs `act`, waits for what it set off to settle, then returns what happened meanwhile. */
 const step = async (page: Page, act: () => Promise<unknown>, settleMs = 300): Promise<Sample> => {
   await page.evaluate(
     "window.__bench.events = []; window.__bench.shifts = []; window.__bench.frames = []",
@@ -102,7 +96,7 @@ const step = async (page: Page, act: () => Promise<unknown>, settleMs = 300): Pr
 };
 
 // A locator's click() runs Playwright's actionability and hit-target checks in the page, which
-// Event Timing would count as input delay. Find the point first, then send a bare click.
+// Event Timing would count as input delay
 const tap = async (page: Page, locator: Locator) => {
   // Centred: on a phone the undo toast floats over the bottom of the list
   await locator.evaluate((el) => el.scrollIntoView({ block: "center" }));

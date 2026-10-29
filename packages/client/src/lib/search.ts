@@ -11,7 +11,6 @@ export type SearchHit = {
   title: Highlighted;
   /** Why it matched, when its title didn't */
   snippet?: Highlighted & { from: "description" | "note" };
-  /** For a subtask, the task it sits under */
   parent?: Task;
   /** The list it's in: a subtask is in its parent's */
   listId: string | null;
@@ -33,7 +32,6 @@ const NO_RESULTS: SearchResults = { groups: [], done: [], exact: false };
 const SNIPPET_BEFORE = 24;
 const SNIPPET_LENGTH = 90;
 
-/** One line around the first match, with its ranges moved to match. */
 const snippetOf = (text: string, ranges: HighlightRanges): Highlighted => {
   const flat = text.replace(/\s/g, " ");
   const first = ranges[0]?.[0] ?? 0;
@@ -73,8 +71,7 @@ export const searchTasks = ({
 
   const byId = new Map(tasks.map((t) => [t.id, t]));
   const lists = categoriesById(categories);
-  // Only what the lists show: a subtask files under its parent, and a task in none of this
-  // user's lists is left out, as the lists leave it out
+  // Only what the lists show: a task in none of this user's lists is left out
   const listOf = new Map<string, string | null>();
   for (const task of tasks) {
     const top = task.parentId ? byId.get(task.parentId) : task;

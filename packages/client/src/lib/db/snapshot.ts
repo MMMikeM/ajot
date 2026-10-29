@@ -44,7 +44,6 @@ export const restoreSnapshot = async (queryClient: QueryClient, keys: readonly s
     if (event.type !== "updated" || event.action.type !== "success") return;
     const [key, ...rest] = event.query.queryKey;
     if (rest.length > 0 || typeof key !== "string" || !keys.includes(key)) return;
-    // Live sync can update a list several times in a row; save the last of them
     clearTimeout(pending.get(key)?.timer);
     pending.set(key, {
       timer: setTimeout(() => save(key), SAVE_DELAY_MS),

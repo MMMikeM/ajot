@@ -92,11 +92,9 @@ test("finds tasks across every list, grouped by list, with what matched", async 
   for (const list of ["Inbox", "Work", "Home", "Done"])
     await expect(page.getByRole("region", { name: list })).toBeVisible();
   await expect(result(page, "Renew passport").locator("mark")).toHaveText("passport");
-  // A description match shows the line it matched in
   await expect(result(page, "Plan the Lisbon offsite")).toContainText(
     "Bring your passport for the visa check",
   );
-  // A subtask's note, with the task the subtask sits under
   const fares = result(page, "Compare Tuesday and Wednesday fares");
   await expect(fares).toContainText("Sam's passport runs out in March");
   await expect(fares).toContainText("in Book flights for the October trip");

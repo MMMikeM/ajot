@@ -44,7 +44,6 @@ const readPendingInvite = () => {
 // The PWA belongs to its server; the extension has to be told which server to use
 const choosesServer = getBuildTarget() === "extension";
 
-/** Points the extension at the server typed in, once it has answered as one of these servers. */
 const connectToServer = async (input: string) => {
   const serverUrl = normalizeServerUrl(input);
   let config: ServerConfig;
@@ -188,7 +187,7 @@ const AuthView = () => {
                     onBlur={field.handleBlur}
                     maxLength={MAX_NAME}
                     autoComplete="name"
-                    // eslint-disable-next-line jsx-a11y/no-autofocus
+                    // eslint-disable-next-line jsx-a11y/no-autofocus -- first field of the page's only form
                     autoFocus
                   />
                 </FormField>
@@ -204,7 +203,7 @@ const AuthView = () => {
                   onChange={(e) => field.handleChange(e.target.value)}
                   onBlur={field.handleBlur}
                   maxLength={mode === "login" ? MAX_USERNAME : MAX_NEW_USERNAME}
-                  // eslint-disable-next-line jsx-a11y/no-autofocus
+                  // eslint-disable-next-line jsx-a11y/no-autofocus -- first field of the page's only form
                   autoFocus={mode === "login"}
                   autoCapitalize="none"
                   autoCorrect="off"

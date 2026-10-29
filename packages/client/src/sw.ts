@@ -119,7 +119,7 @@ self.addEventListener("notificationclick", (event: NotificationEvent) => {
           if (!focused.focused) continue;
           if (await focused.navigate(url)) return;
         } catch {
-          // Try the next window, else open one
+          continue;
         }
       }
       await self.clients.openWindow(url);

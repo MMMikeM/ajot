@@ -4,10 +4,7 @@ import type { Env } from "hono";
 export const errorSchema = z.object({ error: z.string() });
 export const okSchema = z.object({ ok: z.literal(true) });
 
-/**
- * Input a route's schema refuses, answered in errorSchema's shape like any other refusal, so the
- * client can show it: the first issue's message, which schemas a person can trip word for them.
- */
+/** The client shows the first issue's message, so a schema a person can trip words it for them. */
 export const rejectInvalidInput: Hook<unknown, Env, string, unknown> = (result, c) => {
   if (result.success) return;
   const { issues } = result.error;

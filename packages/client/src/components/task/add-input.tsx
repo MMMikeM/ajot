@@ -5,8 +5,7 @@ import { MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
-// On touch devices (PWA mobile), skip autofocus — opening the keyboard on mount
-// is jarring and prevents the layout from settling before the user interacts.
+// No autofocus on touch: opening the keyboard on mount is jarring and stops the layout settling
 const IS_TOUCH =
   typeof window !== "undefined" &&
   typeof window.matchMedia === "function" &&

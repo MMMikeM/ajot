@@ -6,9 +6,8 @@ import { integer, sqliteView, text } from "drizzle-orm/sqlite-core";
 import type { AccessPath } from "@newtab-todo/shared/task-access";
 
 /**
- * Who's in a list: its owner and its collaborators, while it isn't deleted. `UNION ALL`, not
- * `UNION`: de-duplicating would stop a filter on the list or the user reaching inside, so the
- * whole view would be built for every lookup.
+ * `UNION ALL`, not `UNION`: de-duplicating would stop a filter on the list or the user reaching
+ * inside, so the whole view would be built for every lookup.
  */
 export const listMembers = sqliteView("list_members", {
   listId: text("list_id").notNull(),
@@ -21,7 +20,6 @@ const listMembersQuery = sql`
   SELECT cc.category_id AS list_id, cc.user_id FROM category_collaborators cc
   JOIN categories c ON c.id = cc.category_id AND c.deleted_at IS NULL`;
 
-// Each path in shared/task-access.ts, as rows of (the task holding it, who, how far)
 const holderAccess = {
   owner: sql`SELECT id AS holder_id, user_id, 1 AS can_edit, 1 AS can_delete FROM tasks`,
   share: sql`SELECT task_id AS holder_id, shared_with_user_id AS user_id,
@@ -30,7 +28,6 @@ const holderAccess = {
     FROM tasks t JOIN list_members m ON m.list_id = t.category_id`,
 } satisfies Record<AccessPath, SQL>;
 
-// A task reached through a path it holds, and a subtask through one its parent holds
 const reachedDirectly = (path: SQL) =>
   sql`SELECT h.holder_id AS task_id, h.user_id, h.can_edit, h.can_delete FROM (${path}) h`;
 const reachedThroughParent = (path: SQL) =>

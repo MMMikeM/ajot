@@ -10,8 +10,8 @@ const isExtension = getBuildTarget() === "extension";
 
 let serverUrl = isExtension ? (localStorage.getItem(SERVER_URL_KEY) ?? "") : "";
 
-// Installs from before the server was a setting still hold a token for the old built-in one.
-// Signing out keeps their queued edits for the next sign-in instead of sending them nowhere.
+// A token with no server set is for the old built-in one. Signing out keeps its queued edits for
+// the next sign-in instead of sending them nowhere.
 if (isExtension && !serverUrl && getAuthToken()) clearSession();
 
 export const getServerUrl = () => serverUrl;

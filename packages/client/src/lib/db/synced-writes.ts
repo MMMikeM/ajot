@@ -39,10 +39,9 @@ export const writeAccepted = async (edit: {
 };
 
 /**
- * Refetches without waiting. A mutation function must never await a refetch: once the device
- * reconnects or the page is shown with edits queued, the executor holds every collection's fetched
- * rows until its queue drains (`deferDataRefresh`), and the queue waits on that mutation function,
- * so neither settled and every later edit stayed queued until a reload.
+ * A mutation function must never await a refetch: once the device reconnects or the page is shown
+ * with edits queued, the executor holds every collection's fetched rows until its queue drains
+ * (`deferDataRefresh`), and the queue waits on that mutation function, so neither settles.
  */
 export const refetchLater = (...collections: AnyCollection[]) => {
   for (const collection of collections) collection.utils.refetch().catch(console.error);

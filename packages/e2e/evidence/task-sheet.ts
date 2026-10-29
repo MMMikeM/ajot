@@ -180,7 +180,6 @@ const clearAndUndo = async (page: Page, prefix: string) => {
 
 const browser = await chromium.launch();
 
-// Phone first
 await fresh(browser, phone, async (page) => {
   await openTask(page, "Book flights");
   await shot(page, "phone-01-sheet-top");

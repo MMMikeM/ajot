@@ -1,17 +1,11 @@
 /**
  * Who can reach a task, and how far. The server reads the `task_access` view in
- * `server/src/db/schema.ts`, which is built from one SQL fragment per path below; this is the
+ * `server/src/db/views.ts`, which is built from one SQL fragment per path below; this is the
  * same rule in JS, for checks a page makes offline. `task-access.test.ts` runs both on the same
  * rows, and both are keyed by `AccessPath`, so a path added to one fails to compile until the
  * other has it too.
  */
-export type AccessPath =
-  /** The task's owner */
-  | "owner"
-  /** Whoever it's shared with, to view or to edit */
-  | "share"
-  /** The owner and collaborators of the list it's in */
-  | "list";
+export type AccessPath = "owner" | "share" | "list";
 
 export type Grant = { userId: string; canEdit: boolean; canDelete: boolean };
 
@@ -25,7 +19,7 @@ type Holder = {
 
 export type TaskWithHolders = Holder & { parent?: Holder | null };
 
-/** Who's in a list: its owner and its collaborators. The server's `list_members` view. */
+/** The server's `list_members` view. */
 export const listMemberIds = (list: List) => [
   list.userId,
   ...list.collaborators.map((c) => c.userId),
@@ -49,7 +43,6 @@ const grantsByPath = {
       : [],
 } satisfies Record<AccessPath, (holder: Holder) => Grant[]>;
 
-/** Each person's widest reach, from grants that may hold several for one person. */
 export const widest = <G extends Grant>(grants: G[]): G[] => {
   const byUser = new Map<string, G>();
   for (const grant of grants) {
@@ -63,7 +56,7 @@ export const widest = <G extends Grant>(grants: G[]): G[] => {
   return [...byUser.values()];
 };
 
-/** Each person's widest reach. A subtask has no shares or list of its own: it goes with its parent's. */
+/** A subtask has no shares or list of its own: it goes with its parent's. */
 export const grants = (task: TaskWithHolders): Grant[] =>
   widest(
     (task.parent ? [task, task.parent] : [task]).flatMap((holder) =>
@@ -78,10 +71,7 @@ export const canDeleteTask = (task: TaskWithHolders, userId: string) =>
 export const canEditTask = (task: TaskWithHolders, userId: string) =>
   grants(task).some((grant) => grant.userId === userId && grant.canEdit);
 
-/**
- * Where `userId` may put a task, as its owner or as someone it's shared with: the Inbox (`null`),
- * or any list they're in. The server's `categoryRepo.canUse`.
- */
+/** The server's `categoryRepo.canUse`. */
 const canFileIn = (list: List | null, userId: string) =>
   list === null || listMemberIds(list).includes(userId);
 

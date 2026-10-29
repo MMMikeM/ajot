@@ -2,9 +2,6 @@ import { test, expect, type BrowserContext, type Page, type Route } from "@playw
 import { createCategory } from "./helpers/app";
 import { mockApi, mockData } from "./helpers/mock-api";
 
-// What the outbox holds for an account as accounts change on one device, and what each tab reads
-// of it, against mocked /api.
-
 test.use({ serviceWorkers: "block" });
 
 const MIKE = { id: "u-mike", name: "Mike Murray", username: "mike" };
@@ -22,7 +19,6 @@ const signInFirst = (context: BrowserContext, account: Account) =>
     localStorage.setItem("newtab-todo-user-info", ${JSON.stringify(JSON.stringify(account))});
   })()`);
 
-/** Each POST to `path` the server took, by title or name. While `refusing`, it turns them away. */
 const posts = async (page: Page, path: "/api/tasks" | "/api/categories") => {
   const state = { refusing: true, sent: [] as string[] };
   await page.route(`**${path}`, (route) => {
@@ -278,7 +274,6 @@ test.describe("saved lists", () => {
 });
 
 test.describe("reading the outbox", () => {
-  /** Each read of a queued transaction from the journal, counted in the page. */
   const countJournalReads = (page: Page) =>
     page.addInitScript(`(() => {
       window.journalReads = 0;

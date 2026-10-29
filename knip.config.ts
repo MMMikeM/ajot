@@ -40,7 +40,6 @@ export default {
   drizzle: false,
   ignoreExportsUsedInFile: true,
   ignoreDependencies: [
-    // Vite plugins / build tools — used in config files, not detectable as normal imports
     "@tailwindcss/node", // peer dep of @tailwindcss/vite, invoked internally
     "lightningcss", // Vite CSS pipeline peer dep, version-pinned here
     "@swc/core", // dependency-cruiser's TypeScript parser (options.parser), loaded at runtime

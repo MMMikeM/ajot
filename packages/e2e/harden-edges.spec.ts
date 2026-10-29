@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { mockApi, noteOn } from "./helpers/mock-api";
 import { expectTapTarget } from "./helpers/touch";
 
-// Edge cases in the list chrome, against the dev server with /api mocked
+// Edge cases in the list chrome, with /api mocked
 
 // A production build registers sw.js, which would answer /api before the mocks see it
 test.use({ serviceWorkers: "block" });

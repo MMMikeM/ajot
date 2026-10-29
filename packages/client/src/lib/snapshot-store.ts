@@ -1,6 +1,5 @@
-// Each list's last server response, in IndexedDB. A tab restores it on startup (lib/db/snapshot.ts);
-// the extension backgrounds also write it with no tab open (lib/sync/prewarm.ts), so it lives
-// outside lib/db, which they can't import.
+// The extension backgrounds write it with no tab open (lib/sync/prewarm.ts), so it lives outside
+// lib/db, which they can't import.
 const DB_NAME = "newtab-todo-snapshot";
 const STORE = "queries";
 
@@ -44,7 +43,6 @@ export const readSnapshot = (db: IDBDatabase, keys: readonly string[]) =>
     store.transaction.onerror = () => reject(store.transaction.error);
   });
 
-/** An entry saved as undefined is removed. */
 export const writeSnapshot = (db: IDBDatabase, entries: Iterable<readonly [string, unknown]>) =>
   new Promise<void>((resolve, reject) => {
     const store = db.transaction(STORE, "readwrite").objectStore(STORE);
@@ -57,8 +55,8 @@ export const writeSnapshot = (db: IDBDatabase, entries: Iterable<readonly [strin
   });
 
 /**
- * Saves one list, and the account it's for. The other lists, if they were saved for another
- * account, go with it: a page opened as this one would otherwise show them as its own.
+ * The other lists, if they were saved for another account, go with it: a page opened as this one
+ * would otherwise show them as its own.
  */
 export const writeListFor = (
   db: IDBDatabase,
@@ -98,7 +96,6 @@ export const saveSnapshot = async (entries: Iterable<readonly [string, unknown]>
 export const clearSavedLists = () =>
   saveSnapshot([...SNAPSHOT_KEYS, OWNER_KEY].map((key) => [key, undefined] as const));
 
-/** For a reader that keeps no connection open, like the PWA's service worker. */
 export const loadSnapshotEntry = async (key: string) => {
   const db = await openSnapshotDb();
   try {

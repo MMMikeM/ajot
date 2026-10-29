@@ -7,16 +7,11 @@ import { now } from "@newtab-todo/shared/iso";
 import reachRepo from "./reach.repo";
 import { undoableSince } from "./undo-window";
 
-/** Someone in a list, as a collaborator row names them. */
 type Membership = { categoryId: string; userId: string };
 
-/** What someone leaving a list took out of it, so an Undo can put it back. */
 type Leaving = Membership & { movedTaskIds: string[]; unfiledTaskIds: string[] };
 
-/**
- * Adding someone afresh drops the Undo of their removal, which would move their tasks again.
- * Undefined when they were already in the list.
- */
+/** Adding someone afresh drops the Undo of their removal, which would move their tasks again. */
 const add = async (categoryId: string, userId: string) => {
   await db
     .delete(removedCollaborators)
@@ -86,8 +81,8 @@ const listFor = (cases: { when: SQL | undefined; categoryId: string }[]) =>
   )} END`;
 
 /**
- * Undoes leave for someone back in the lists. A task or share changed since stays where it went:
- * moved back only from the Inbox, refiled only if still unfiled. The ids of the tasks it changed.
+ * A task or share changed since leave stays where it went: moved back only from the Inbox,
+ * refiled only if still unfiled.
  */
 const rejoin = async (tx: Transaction, leavings: Leaving[]) => {
   const moved = leavings.flatMap((l) => l.movedTaskIds.map((id) => ({ ...l, id })));
@@ -125,9 +120,8 @@ const rejoin = async (tx: Transaction, leavings: Leaving[]) => {
 };
 
 /**
- * With who reached the list and its tasks before, for the broadcast. `keepForUndo` records what it
- * changed for restore: only for the owner removing someone, since Undo putting a leaver's tasks
- * back would undo their own choice.
+ * `keepForUndo` only for the owner removing someone, since Undo putting a leaver's tasks back
+ * would undo their own choice.
  */
 const remove = async (categoryId: string, userId: string, { keepForUndo = false } = {}) =>
   inTransaction(async (tx) => {
@@ -165,11 +159,6 @@ const remove = async (categoryId: string, userId: string, { keepForUndo = false 
     return { before, left: left! };
   });
 
-/**
- * Undoes the owner's remove: the person is back in the list with their original row, and so is
- * what leaving took out of it, as far as rejoin finds it unchanged. Returns who reached the list
- * and those tasks before, and the ids of the tasks it changed.
- */
 const restore = async (categoryId: string, userId: string) =>
   inTransaction(async (tx) => {
     const record = await tx.query.removedCollaborators.findFirst({

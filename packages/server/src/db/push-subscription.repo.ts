@@ -18,8 +18,7 @@ const upsert = async (data: PushSubscriptionInsert) => {
     .onConflictDoUpdate({ target: pushSubscriptions.endpoint, set: data });
 };
 
-// Only the user's own
-const remove = async (endpoint: string, userId: string) => {
+const removeOwn = async (endpoint: string, userId: string) => {
   await db
     .delete(pushSubscriptions)
     .where(and(eq(pushSubscriptions.endpoint, endpoint), eq(pushSubscriptions.userId, userId)));
@@ -40,4 +39,4 @@ const findForUsers = async (userIds: string[], kind?: PushSubscriptionKind) => {
 const findByKind = async (kind: PushSubscriptionKind) =>
   db.query.pushSubscriptions.findMany({ where: { kind } });
 
-export default { upsert, remove, removeMany, findForUsers, findByKind };
+export default { upsert, removeOwn, removeMany, findForUsers, findByKind };

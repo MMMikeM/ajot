@@ -1,19 +1,11 @@
 import type { Page, Request } from "@playwright/test";
 
 export type SyncTracker = {
-  /**
-   * Waits until all in-flight mutating API requests have completed.
-   * Throws if the wait exceeds `timeout` ms.
-   */
-  waitForSync: (timeout?: number) => Promise<void>;
-  /**
-   * Throws if any tracked request got a 4xx/5xx or a network error. The syncTracker
-   * fixture calls it in teardown.
-   */
+  waitForSync: (timeoutMs?: number) => Promise<void>;
   assertNoFailures: () => void;
 };
 
-/** Only non-GET `/api/*` requests count, so the SSE stream never holds waitForSync open. */
+/** GETs don't count, so the SSE stream never holds waitForSync open. */
 export const createSyncTracker = (page: Page): SyncTracker => {
   const inflight = new Set<Request>();
   const failures: { url: string; status: number }[] = [];
@@ -40,16 +32,15 @@ export const createSyncTracker = (page: Page): SyncTracker => {
   });
 
   return {
-    waitForSync: async (timeout = 5000) => {
-      // Yield one tick so the browser has a chance to fire the request event
-      // before we start polling the inflight set.
+    waitForSync: async (timeoutMs = 5000) => {
+      // A request the page just started may not have fired its request event yet
       await new Promise<void>((r) => setTimeout(r, 50));
 
-      const deadline = Date.now() + timeout;
+      const deadline = Date.now() + timeoutMs;
       while (inflight.size > 0) {
         if (Date.now() > deadline) {
           const pending = [...inflight].map((r) => r.url()).join(", ");
-          throw new Error(`waitForSync timed out after ${timeout} ms. Still pending: ${pending}`);
+          throw new Error(`waitForSync timed out after ${timeoutMs} ms. Still pending: ${pending}`);
         }
         await new Promise<void>((r) => setTimeout(r, 50));
       }

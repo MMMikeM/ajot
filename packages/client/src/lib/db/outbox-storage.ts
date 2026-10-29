@@ -29,8 +29,8 @@ type StoredTransaction = { metadata?: unknown };
 export type OutboxStorage = StorageAdapter & {
   /**
    * Saves an edit for another tab, the leader, to send: in localStorage alone, as it's called. Its
-   * IndexedDB write could commit after the leader had sent the edit and removed it, which queued it
-   * to be sent again. Resolves false if it didn't fit there and had to wait for IndexedDB.
+   * IndexedDB write could commit after the leader had sent the edit and removed it, which would
+   * queue it to be sent again. Resolves false if it didn't fit there and had to wait for IndexedDB.
    */
   keep: (key: string, value: string) => Promise<boolean>;
 };
@@ -38,7 +38,7 @@ export type OutboxStorage = StorageAdapter & {
 /**
  * The outbox in IndexedDB, each write also kept in localStorage until IndexedDB has committed it.
  * A page that unloads aborts its IndexedDB transactions still in flight, so a change made just
- * before a reload or a closed tab was lost; a localStorage write has landed by the time `set`
+ * before a reload or a closed tab would be lost; a localStorage write has landed by the time `set`
  * returns its promise. Without IndexedDB, localStorage holds the outbox on its own, as the
  * library's own fallback does. A transaction `isVisible` turns down stays stored but isn't
  * listed, so the executor neither shows nor sends it.

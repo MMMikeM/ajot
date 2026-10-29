@@ -1,7 +1,6 @@
 import { defineConfig } from "vite-plus";
 
 // Lint and fmt apply to every package from here: package configs can't override them.
-// The app build config is packages/client/vite.config.ts.
 
 const manualMemoHooks = {
   name: "react",

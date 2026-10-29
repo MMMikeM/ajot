@@ -3,7 +3,7 @@ import { startsWith, tapAddLine } from "./helpers/app";
 import { mockApi } from "./helpers/mock-api";
 
 // A field stops at the length the server takes (shared/field-limits.ts), so a long paste is cut
-// there rather than refused, which would drop the whole edit. Against the dev server, /api mocked.
+// there rather than refused, which would drop the whole edit. /api is mocked.
 
 test.use({ serviceWorkers: "block" });
 

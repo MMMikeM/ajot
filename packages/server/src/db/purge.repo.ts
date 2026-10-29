@@ -25,10 +25,9 @@ const child = alias(tasks, "child");
 const sharedTask = alias(tasks, "shared_task");
 
 /**
- * A task deleted over KEEP_DELETED_DAYS ago, with its notes, shares and reminders, which the
- * foreign keys cascade to. Not while a subtask under it was deleted more recently, which the
- * parent's delete would cascade to. A live one can't be under a deleted parent
- * (live_subtask_has_live_parent).
+ * Its notes, shares and reminders go with it, by the foreign keys' cascade. Not while a subtask
+ * under it was deleted more recently, which the cascade would take early. A live one can't be
+ * under a deleted parent (live_subtask_has_live_parent).
  */
 const purgeTasks = (database: Database, cutoff: string) =>
   database.all<{ id: string }>(sql`DELETE FROM ${tasks}
@@ -38,9 +37,8 @@ const purgeTasks = (database: Database, cutoff: string) =>
     RETURNING ${tasks.id}`);
 
 /**
- * A list deleted over KEEP_DELETED_DAYS ago, with its collaborators and what its Undo kept, once
- * the tasks deleted with it have gone. Not while a live task or share is still filed in it, which
- * the foreign keys would move to the Inbox unannounced.
+ * Not while a live task or share is still filed in it, which the foreign keys would move to the
+ * Inbox unannounced.
  */
 const purgeLists = (database: Database, cutoff: string) =>
   database.all<{ id: string }>(sql`DELETE FROM ${categories}
@@ -52,7 +50,6 @@ const purgeLists = (database: Database, cutoff: string) =>
         WHERE ${taskShares.categoryId} = ${categories.id} AND ${sharedTask.deletedAt} IS NULL)
     RETURNING ${categories.id}`);
 
-/** Undo records past their hour, which the next removal would drop anyway, if there is one. */
 const purgeUndoRecords = async (database: Database, since: string) => {
   const contacts = await database.all<{ id: string }>(sql`DELETE FROM ${removedContacts}
     WHERE ${removedContacts.removedAt} < ${since} RETURNING ${removedContacts.id}`);
@@ -61,24 +58,19 @@ const purgeUndoRecords = async (database: Database, since: string) => {
   return { contacts: contacts.length, collaborators: collaborators.length };
 };
 
-/** Sessions past their expiry, which sign no one in again. */
 const purgeSessions = (database: Database) =>
   database.all<{ id: string }>(sql`DELETE FROM ${sessions}
     WHERE ${sessions.expiresAt} < ${now()} RETURNING ${sessions.id}`);
 
-/**
- * Invites used or expired over KEEP_DELETED_DAYS ago. Kept until then, so a signup that fails can
- * still release the invite it claimed.
- */
+/** Kept KEEP_DELETED_DAYS after use, so a signup that fails can release the invite it claimed. */
 const purgeInvites = (database: Database, cutoff: string) =>
   database.all<{ id: string }>(sql`DELETE FROM ${inviteTokens}
     WHERE ${inviteTokens.usedAt} < ${cutoff} OR ${inviteTokens.expiresAt} < ${cutoff}
     RETURNING ${inviteTokens.id}`);
 
 /**
- * Notifications sent over KEEP_SENT_DAYS ago, and ones due over KEEP_DELETED_DAYS ago and never
- * sent, which no run of the cron will send in time to matter. Every one due is marked sent when
- * it's processed, delivered or not.
+ * An unsent one due over KEEP_DELETED_DAYS ago no run of the cron will send in time to matter.
+ * Every one due is marked sent when it's processed, delivered or not.
  */
 const purgeNotifications = (database: Database, cutoff: string) =>
   database.all<{ id: string }>(sql`DELETE FROM ${notificationQueue}
@@ -86,7 +78,7 @@ const purgeNotifications = (database: Database, cutoff: string) =>
       OR (${notificationQueue.sentAt} IS NULL AND ${notificationQueue.scheduledFor} < ${cutoff})
     RETURNING ${notificationQueue.id}`);
 
-/** How many of each were purged. Tasks go first, so a list's go before the list is checked. */
+/** Tasks go first, so a list's go before the list is checked. */
 export const purgeExpired = async (database: Database = db) => {
   const cutoff = hoursFromNow(-KEEP_DELETED_DAYS * 24);
   const purgedTasks = await purgeTasks(database, cutoff);

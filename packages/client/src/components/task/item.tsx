@@ -145,16 +145,15 @@ function TaskRow({
   const [completing, setCompleting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const completeTimer = useRef<number | undefined>(undefined);
-  // The row stays completing while it leaves after the tick is saved, so this says it was
-  const tickSaved = useRef(false);
+  const tickAlreadySaved = useRef(false);
   useEffect(() => () => window.clearTimeout(completeTimer.current), []);
   // A page being closed or put away gets no more timers, so a tick still lingering saves now
   useEffect(() => {
     if (!completing) return;
     const saveIfHidden = () => {
-      if (document.visibilityState !== "hidden" || tickSaved.current) return;
+      if (document.visibilityState !== "hidden" || tickAlreadySaved.current) return;
       window.clearTimeout(completeTimer.current);
-      tickSaved.current = true;
+      tickAlreadySaved.current = true;
       onToggle(task);
     };
     document.addEventListener("visibilitychange", saveIfHidden);
@@ -189,11 +188,11 @@ function TaskRow({
       return;
     }
     setCompleting(true);
-    tickSaved.current = false;
+    tickAlreadySaved.current = false;
     completeTimer.current = window.setTimeout(() => {
       setLeaving(true);
       completeTimer.current = window.setTimeout(() => {
-        tickSaved.current = true;
+        tickAlreadySaved.current = true;
         onToggle(task);
       }, COMPLETE_LEAVE_MS);
     }, COMPLETE_LINGER_MS);
@@ -521,7 +520,7 @@ function TaskRow({
             placeholder="New subtask"
             // Phones keep the primitive's 16px so iOS doesn't zoom on focus
             className="md:h-7 md:text-xs"
-            // eslint-disable-next-line jsx-a11y/no-autofocus
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- inline add form, user just chose Add subtask
             autoFocus
             onBlur={() => {
               if (!subtaskTitle.trim()) setAddingSubtask(false);

@@ -14,10 +14,6 @@ export const ext = ((globalThis as { browser?: typeof browser }).browser ??
 const getStored = async (key: string) =>
   ((await ext.storage.local.get(key)) as Record<string, string | undefined>)[key];
 
-/**
- * Signed in to the server the user chose, as the background scripts see it. Both are needed:
- * without a server, there's nowhere to sync to.
- */
 export const getStoredSession = async () => {
   const [token, serverUrl, userId] = await Promise.all([
     getStored(TOKEN_KEY),

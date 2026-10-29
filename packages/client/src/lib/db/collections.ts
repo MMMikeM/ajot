@@ -9,10 +9,6 @@ import { markStartup } from "~/lib/startup-timing";
 import { restoreSnapshot } from "~/lib/db/snapshot";
 import { SNAPSHOT_KEYS } from "~/lib/snapshot-store";
 
-// Guard: IndexedDB requires browser APIs — not available in Node.js (SSR prerender).
-// Lazy route components that consume these collections suspend in SSR before rendering,
-// so null exports are safe. See packages/client/src/routes/CLAUDE.md.
-
 const openSnapshot = async () => {
   markStartup("snapshot-read-start");
   try {
@@ -107,8 +103,7 @@ async function makeCollections() {
   };
 }
 
-// makeCollections() returns null values on the server path (SSR prerender).
-// This module is client-only — no server-path code ever imports it.
+// Null in the SSR prerender, which has no IndexedDB: the routes that read them never render there
 const collections = await makeCollections();
 export const tasksCollection = collections.tasksCollection!;
 export const categoriesCollection = collections.categoriesCollection!;

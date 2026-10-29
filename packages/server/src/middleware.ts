@@ -24,10 +24,6 @@ type WithAuth<R extends ShorthandRoute> = Omit<R, "responses"> & {
   responses: Omit<{ 401: true }, keyof R["responses"]> & R["responses"];
 };
 
-/**
- * A route on an `authed()` router: it also answers the middleware's 401, before its handler runs,
- * unless it declares a 401 of its own.
- */
 export const authedRoute = <const R extends ShorthandRoute>(spec: R) =>
   route({ ...spec, responses: { 401: true, ...spec.responses } }) as unknown as NoInfer<
     RouteOf<WithAuth<R>>

@@ -6,6 +6,8 @@ import { apiRequest } from "./helpers/api";
 // Sidebar or sheet is chosen by pointer type (`touch:` is pointer:coarse), which the
 // mobile project (iPhone 14) emulates.
 
+const APP_SHELL_MAIN_CLASS = "max-w-sm";
+
 test.beforeEach(async ({ page, user1Auth }) => {
   // Tasks first: the server won't delete a category that still has tasks
   const tasks = await apiRequest<{ id: string; parentId: string | null }[]>(
@@ -139,8 +141,6 @@ test("desktop: category options popover Rename item is not obscured by main cont
   const renameBtn = page.getByRole("button", { name: "Rename", exact: true });
   await expect(renameBtn).toBeVisible({ timeout: 3000 });
 
-  // elementFromPoint at the center of the Rename button must resolve to an
-  // element inside the popover — not the AppShell content behind it.
   const box = await renameBtn.boundingBox();
   if (!box) throw new Error("Rename button has no bounding box");
 
@@ -148,7 +148,7 @@ test("desktop: category options popover Rename item is not obscured by main cont
   const cy = box.y + box.height / 2;
 
   const topElement = await page.evaluate(
-    ([x, y]) => {
+    ([x, y, mainClass]) => {
       const el = document.elementFromPoint(x, y);
       let cur: Element | null = el;
       while (cur) {
@@ -156,13 +156,12 @@ test("desktop: category options popover Rename item is not obscured by main cont
         if (cur.getAttribute("data-slot") === "button") return "popover";
         if (cur.textContent?.trim() === "Rename") return "popover";
         if (cur.getAttribute("data-testid") === "category-sidebar") return "popover";
-        // AppShell main content wrapper
-        if (cur.classList.contains("max-w-sm")) return "main-content";
+        if (cur.classList.contains(mainClass)) return "main-content";
         cur = cur.parentElement;
       }
       return "unknown";
     },
-    [cx, cy] as [number, number],
+    [cx, cy, APP_SHELL_MAIN_CLASS] as [number, number, string],
   );
 
   expect(topElement).toBe("popover");
@@ -200,7 +199,7 @@ test("desktop: clicking Delete in category options removes the category", async 
   // Exact: "DeleteMe" and each task's "Delete task" are buttons too
   const deleteBtn = page.getByRole("button", { name: "Delete", exact: true });
   await expect(deleteBtn).toBeVisible({ timeout: 3000 });
-  // Same floating-ui/CDP issue as Rename above — use element.click()
+  // Same floating-ui/CDP issue as Rename above
   await deleteBtn.evaluate((el) => (el as HTMLElement).click());
 
   await expect(page.getByTestId("category-sidebar").getByText("DeleteMe")).toHaveCount(0, {
@@ -213,7 +212,6 @@ test("mobile: tapping header trigger opens sheet", async ({ page, isMobile }) =>
 
   await page.getByTestId("category-nav-trigger").tap();
 
-  // Sheet is open — the Add list button is always present
   await expect(page.getByRole("button", { name: "Add list" })).toBeVisible({ timeout: 3000 });
 });
 
@@ -260,7 +258,6 @@ test("mobile: tapping input chip opens the category sheet", async ({ page, isMob
 
   await page.getByTestId("category-input-chip").tap();
 
-  // Sheet is open — the Add list button is always present
   await expect(page.getByRole("button", { name: "Add list" })).toBeVisible({ timeout: 3000 });
 });
 
@@ -270,7 +267,6 @@ test("mobile: header trigger and input chip stay visible while scrolling", async
 }) => {
   test.skip(!isMobile, "mobile only");
 
-  // Add enough tasks to make the list scrollable
   for (let i = 1; i <= 8; i++) {
     await page.fill("#add-task-input", `Task ${i}`);
     await page.keyboard.press("Enter");

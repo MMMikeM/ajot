@@ -5,14 +5,11 @@ import { notificationQueue, tasks, users } from "./schema";
 
 /**
  * Sets the task's unsent reminder to the due date the task holds as this runs, so two edits at
- * once leave it on the date the task ends up with. Does nothing for a task with no due date.
+ * once leave it on the date the task ends up with.
  */
 const scheduleReminder = (taskId: string) => upsertReminder(taskId, sql``);
 
-/**
- * A new task's reminder, as scheduleReminder, unless it has had one: a create retried after its
- * reminder went out would send it again.
- */
+/** Unless the task has had one: a create retried after its reminder went out would send it again. */
 const scheduleFirstReminder = (taskId: string) =>
   upsertReminder(
     taskId,
@@ -28,7 +25,6 @@ const upsertReminder = async (taskId: string, unless: SQL) => {
     DO UPDATE SET scheduled_for = excluded.scheduled_for`);
 };
 
-/** Drops the task's unsent reminder if, as this runs, the task has no due date. */
 const cancelReminder = async (taskId: string) => {
   await db
     .delete(notificationQueue)
@@ -42,10 +38,7 @@ const cancelReminder = async (taskId: string) => {
     );
 };
 
-/**
- * Marks every reminder due by `at` sent, and returns them with their task if it's still to do:
- * the ones to send. Runs at the same time each mark a reminder only once, so only one sends it.
- */
+/** Runs at the same time each mark a reminder only once, so only one sends it. */
 const claimDueReminders = async (at: string) => {
   const claimed = await db
     .update(notificationQueue)
@@ -75,10 +68,7 @@ const claimDueReminders = async (at: string) => {
   });
 };
 
-/**
- * Unmarks reminders claimed at `at`, so the next run sends them. One whose task has a new reminder
- * since stays marked: the new one is the task's unsent reminder now.
- */
+/** One whose task has a new reminder since stays marked: the new one is its unsent reminder now. */
 const releaseReminders = async (ids: string[], at: string) => {
   if (ids.length === 0) return;
   await db.run(sql`UPDATE OR IGNORE ${notificationQueue} SET sent_at = NULL
@@ -89,9 +79,8 @@ const releaseReminders = async (ids: string[], at: string) => {
 export const DIGEST_CLAIM_CHUNK = 200;
 
 /**
- * Records a digest for `day` sent at `at` for each of these users who has none that day, and
- * returns those it recorded: the ones to send it to. Runs at the same time record each user's only
- * once. A user deleted since they were read is passed over.
+ * Records a digest for `day` for each of these users who has none that day. Runs at the same time
+ * record each user's only once. A user deleted since they were read is passed over.
  */
 const claimDigests = async (userIds: string[], day: string, at: string) => {
   const claimed: { id: string; userId: string }[] = [];
@@ -113,7 +102,6 @@ const claimDigests = async (userIds: string[], day: string, at: string) => {
   return claimed;
 };
 
-/** Drops these digest records, so the next run that day sends those users theirs. */
 const releaseDigests = async (ids: string[]) => {
   if (ids.length === 0) return;
   await db.delete(notificationQueue).where(inArray(notificationQueue.id, ids));

@@ -2,11 +2,9 @@ export const TOKEN_KEY = "newtab-todo-token";
 export const SERVER_URL_KEY = "newtab-todo-server-url";
 export const USER_ID_KEY = "newtab-todo-user-id";
 
-// Inbox has no user-assigned colour — use warm off-white to distinguish it from categories
 export const INBOX_COLOR = "oklch(0.90 0.008 80)";
 
-// Warm-toned palette — chosen to stand out against the app's blue-black oklch(0.165 0.02 262) background.
-// Lower chroma than standard palettes; all work as text on dark bg and as bg with white text.
+// All work as text on the dark background and as a background with white text
 export const CATEGORY_COLORS = [
   { name: "Rust", value: "oklch(0.58 0.17 25)" },
   { name: "Amber", value: "oklch(0.68 0.16 58)" },

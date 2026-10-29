@@ -80,8 +80,8 @@ export const refreshPushSubscription = async () => {
 };
 
 /**
- * Stops this device's pushes, and asks the server to drop its subscription. `headers` sign the
- * request: signing out passes the session it's about to end, which the server still has to accept.
+ * `headers` sign the request: signing out passes the session it's about to end, which the server
+ * still has to accept.
  */
 export const unregisterPushSubscription = async (headers = apiHeaders()): Promise<void> => {
   if (!ownsSubscription()) return;
@@ -105,7 +105,6 @@ export const unregisterPushSubscription = async (headers = apiHeaders()): Promis
 export const isPushSubscribed = async (): Promise<boolean> =>
   ownsSubscription() && !!(await findSubscription());
 
-/** Why this device can't turn push on, if it can't. */
 export const pushBlocker = (): "unsupported" | "denied" | null => {
   if (!("PushManager" in window) || !("Notification" in window)) return "unsupported";
   return Notification.permission === "denied" ? "denied" : null;
