@@ -6,6 +6,9 @@ export type Fetcher = typeof fetch;
 /** Where a context reaches the server, and as whom. serverUrl is "" for the PWA's own origin. */
 export type ApiSession = { serverUrl: string; token?: string | null };
 
+/** What a context with no page of its own is handed: a background, the worker, the upload queue. */
+export type SignedInSession = ApiSession & { token: string; userId: string | null };
+
 /**
  * The server's routes, typed from the server itself, so a path or body it doesn't take fails to
  * compile. Holds no page state, so the extension backgrounds and the PWA's worker use it too, with
@@ -13,22 +16,27 @@ export type ApiSession = { serverUrl: string; token?: string | null };
  */
 export const apiClient = ({ serverUrl, token }: ApiSession, fetcher: Fetcher = fetch) =>
   hc<AppType>(serverUrl, {
-    // Called unbound, a browser's fetch throws "Illegal invocation"
-    fetch: (input: RequestInfo | URL, init?: RequestInit) => fetcher(input, init),
+    fetch: fetcher,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 
-type Reply = { ok: boolean; status: number };
+export type Reply = { ok: boolean; status: number; json(): Promise<unknown> };
 
 export class ApiError extends Error {
-  constructor(readonly status: number) {
-    super(`The server answered ${status}`);
+  constructor(
+    readonly status: number,
+    what = "The server",
+  ) {
+    super(`${what} answered ${status}`);
   }
 }
 
-/** The response, narrowed to the route's success types; any other answer throws `ApiError`. */
-export const succeeded = async <R extends Reply>(request: Promise<R>) => {
+/**
+ * The response, narrowed to the route's success types; any other answer throws `ApiError`, which
+ * names the request as `what` says.
+ */
+export const succeeded = async <R extends Reply>(request: Promise<R>, what?: string) => {
   const res = await request;
-  if (!res.ok) throw new ApiError(res.status);
+  if (!res.ok) throw new ApiError(res.status, what);
   return res as Extract<R, { ok: true }>;
 };

@@ -80,7 +80,17 @@ export default defineConfig({
     overrides: [
       {
         files: ["packages/client/src/**"],
-        rules: { "no-restricted-globals": ["error", rawFetch] },
+        rules: {
+          "no-restricted-globals": ["error", rawFetch],
+          "no-restricted-properties": [
+            "error",
+            ...["globalThis", "self", "window"].map((object) => ({
+              object,
+              property: "fetch",
+              message: rawFetch.message,
+            })),
+          ],
+        },
       },
       // The typed clients' own requests, and the bucket's, which isn't one of the server's routes
       {
@@ -89,7 +99,7 @@ export default defineConfig({
           "packages/client/src/lib/api.ts",
           "packages/client/src/lib/files/bucket.ts",
         ],
-        rules: { "no-restricted-globals": ["off"] },
+        rules: { "no-restricted-globals": ["off"], "no-restricted-properties": ["off"] },
       },
       // shadcn writes arbitrary values into the primitives, and a regenerate brings them back
       {

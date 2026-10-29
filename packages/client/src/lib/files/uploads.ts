@@ -1,5 +1,5 @@
 import { servedType } from "@newtab-todo/shared/attachments";
-import { apiClient, type Fetcher } from "~/lib/api-client";
+import { apiClient, type Fetcher, type Reply, type SignedInSession } from "~/lib/api-client";
 import { putToBucket } from "~/lib/files/bucket";
 import { changeUpload, readBlobs, readUploads, type Upload } from "~/lib/files/store";
 import {
@@ -11,8 +11,7 @@ import {
   type Step,
 } from "~/lib/files/upload-steps";
 
-/** serverUrl is "" for the PWA, which calls its own origin. */
-export type FilesSession = { token: string; serverUrl: string; userId: string | null };
+export type FilesSession = SignedInSession;
 
 export type DrainDeps = {
   /** The global one when left out. */
@@ -36,8 +35,6 @@ const defaults = (): DrainDeps => ({
   now: Date.now,
 });
 
-type Reply = { ok: boolean; status: number; json(): Promise<unknown> };
-
 const errorOf = async (res: Reply) => {
   try {
     const body = (await res.json()) as { error?: unknown };
@@ -58,6 +55,8 @@ const answerOf = async <R extends Reply>(request: Promise<R>): Promise<Answer & 
 
 const attachmentsApi = ({ fetch }: DrainDeps, session: FilesSession) =>
   apiClient(session, fetch).api.attachments;
+
+type AttachmentsApi = ReturnType<typeof attachmentsApi>;
 
 /** Applies the answer to the entry as it is now; undefined when the entry is gone. */
 const settle = async (deps: DrainDeps, id: string, request: Request, answer: Answer) => {
@@ -80,7 +79,7 @@ const goesOn = (next: Awaited<ReturnType<typeof settle>>, deps: DrainDeps): next
 const put = (deps: DrainDeps, url: string, blob: Blob, contentType: string) =>
   answerOf(putToBucket(url, blob, contentType, deps.fetch));
 
-const sendBytes = async (deps: DrainDeps, session: FilesSession, upload: Upload) => {
+const sendBytes = async (deps: DrainDeps, api: AttachmentsApi, upload: Upload) => {
   const { id, hasThumb, mimeType } = upload.row;
   const { file, thumb } = await readBlobs(id);
   if (!file || (hasThumb && !thumb)) {
@@ -90,7 +89,6 @@ const sendBytes = async (deps: DrainDeps, session: FilesSession, upload: Upload)
     }));
     return undefined;
   }
-  const api = attachmentsApi(deps, session);
   const urls = await answerOf(
     api["upload-url"].$post({ json: { id, ...(hasThumb && { thumbSize: thumb!.blob.size }) } }),
   );
@@ -113,9 +111,8 @@ const sendBytes = async (deps: DrainDeps, session: FilesSession, upload: Upload)
   return next;
 };
 
-const run = async (deps: DrainDeps, session: FilesSession, upload: Upload, step: Step) => {
+const run = async (deps: DrainDeps, api: AttachmentsApi, upload: Upload, step: Step) => {
   const { id } = upload.row;
-  const api = attachmentsApi(deps, session);
   switch (step) {
     case "drop":
       await changeUpload(id, (current) =>
@@ -129,7 +126,7 @@ const run = async (deps: DrainDeps, session: FilesSession, upload: Upload, step:
     case "restore":
       return settle(deps, id, "restore", await answerOf(api.$put({ json: { id } })));
     case "upload":
-      return sendBytes(deps, session, upload);
+      return sendBytes(deps, api, upload);
   }
 };
 
@@ -143,6 +140,7 @@ export const drainUploads = (session: FilesSession, given: Partial<DrainDeps> = 
   return deps.locks.request(LOCK, async (): Promise<number | undefined> => {
     // Another account's uploads, or anyone's while the user is unknown, wait for that account
     if (!session.userId) return undefined;
+    const api = attachmentsApi(deps, session);
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const uploads = (await readUploads()).filter((u) => u.uploaderId === session.userId);
       const now = deps.now();
@@ -155,7 +153,7 @@ export const drainUploads = (session: FilesSession, given: Partial<DrainDeps> = 
         return times.length > 0 ? Math.min(...times) : undefined;
       }
       for (const { upload, step } of due)
-        if ((await run(deps, session, upload, step)) === "signed-out") return undefined;
+        if ((await run(deps, api, upload, step)) === "signed-out") return undefined;
     }
     return undefined;
   });

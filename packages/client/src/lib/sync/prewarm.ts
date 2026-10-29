@@ -9,28 +9,29 @@ import {
   writeSnapshot,
 } from "~/lib/snapshot-store";
 import { applyRows } from "~/lib/sync/saved-rows";
-import { ApiError, apiClient } from "~/lib/api-client";
+import { ApiError, apiClient, type Reply, type SignedInSession } from "~/lib/api-client";
 
-/** serverUrl is "" for the PWA, which calls its own origin. */
-export type PrewarmSession = { token: string; serverUrl: string; userId: string | null };
+export type PrewarmSession = SignedInSession;
+
+type SnapshotKey = (typeof SNAPSHOT_KEYS)[number];
 
 type GetSession = () => Promise<PrewarmSession | null>;
 
-type Reply = { ok: boolean; status: number; json(): Promise<unknown> };
-
 // A list saved for a page opened offline, and the route it comes from
-const listRoutes = ({ api }: ReturnType<typeof apiClient>) =>
-  ({
-    tasks: () => api.tasks.$get(),
-    categories: () => api.categories.$get(),
-    notes: () => api.notes.$get(),
-    contacts: () => api.contacts.$get(),
-    attachments: () => api.attachments.$get(),
-  }) satisfies Record<(typeof SNAPSHOT_KEYS)[number], () => Promise<Reply>>;
+const listRoutes = ({
+  api,
+}: ReturnType<typeof apiClient>): Record<SnapshotKey, () => Promise<Reply>> => ({
+  tasks: () => api.tasks.$get(),
+  categories: () => api.categories.$get(),
+  notes: () => api.notes.$get(),
+  contacts: () => api.contacts.$get(),
+  attachments: () => api.attachments.$get(),
+});
 
-const fetchList = async (session: PrewarmSession, key: (typeof SNAPSHOT_KEYS)[number]) => {
-  const res = await listRoutes(apiClient(session))[key]();
-  if (!res.ok) throw new ApiError(res.status);
+// Its own check, not `succeeded`: the five routes' answers differ, and only json() is wanted
+const fetchList = async (routes: ReturnType<typeof listRoutes>, key: SnapshotKey) => {
+  const res = await routes[key]();
+  if (!res.ok) throw new ApiError(res.status, `/api/${key}`);
   return [key, await res.json()] as const;
 };
 
@@ -56,7 +57,8 @@ const saveRows = async (getSession: GetSession, rows: PushRows) => {
 const prewarmOnce = async (getSession: GetSession) => {
   const session = await getSession();
   if (!session) return;
-  const results = await Promise.allSettled(SNAPSHOT_KEYS.map((key) => fetchList(session, key)));
+  const routes = listRoutes(apiClient(session));
+  const results = await Promise.allSettled(SNAPSHOT_KEYS.map((key) => fetchList(routes, key)));
   // Signed out or into another account meanwhile: the next tab must not open on these lists
   if (!sameSession(await getSession(), session)) return;
   const lists = results.flatMap((result) => {

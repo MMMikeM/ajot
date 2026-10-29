@@ -11,4 +11,4 @@ export const putToBucket = (
   fetcher: Fetcher = fetch,
 ) => fetcher(url, { method: "PUT", headers: { "Content-Type": contentType }, body: blob });
 
-export const getFromBucket = (url: string) => fetch(url);
+export const getFromBucket = (url: string, fetcher: Fetcher = fetch) => fetcher(url);
