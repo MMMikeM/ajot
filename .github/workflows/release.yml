@@ -67,9 +67,16 @@ jobs:
             --upload-source-code="ajot-$VERSION-source.zip" \
             --artifacts-dir=signed
           mv signed/*.xpi "ajot-$VERSION-firefox.xpi"
+          # What an installed copy checks, at the manifest's update_url (the latest release's)
+          jq -n --arg version "$VERSION" \
+            --arg link "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/ajot-$VERSION-firefox.xpi" \
+            '{addons: {"@ajot": {updates: [{version: $version, update_link: $link}]}}}' > updates.json
 
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
-        run: gh release create "$GITHUB_REF_NAME" ajot-"$VERSION"-* --generate-notes
+        run: |
+          files=(ajot-"$VERSION"-*)
+          [ -f updates.json ] && files+=(updates.json)
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" --generate-notes

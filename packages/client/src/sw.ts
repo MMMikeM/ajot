@@ -6,14 +6,18 @@ import { NetworkFirst, CacheFirst } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
 import { toNotification, type PushMessage } from "@newtab-todo/shared/push-payload";
 import { MSG_BUILD_VERSION, MSG_SYNC_ALL } from "@newtab-todo/shared/constants";
-import { createPrewarm } from "~/lib/sync/prewarm";
+import { createPrewarm, filesRunOf } from "~/lib/sync/prewarm";
+import { syncFiles } from "~/lib/files/file-job";
 import { readWorkerSession } from "~/lib/sync/worker-session";
 import { createUploadSender } from "~/lib/files/sender";
 import { retryWaitingNow } from "~/lib/files/store";
 
 declare let self: ServiceWorkerGlobalScope;
 
-const prewarm = createPrewarm(readWorkerSession);
+const prewarmLists = createPrewarm(readWorkerSession);
+// The files after the lists, outside prewarm's queue, so a later push's rows never wait on bytes
+const prewarm = (rows?: Parameters<typeof prewarmLists>[0]) =>
+  prewarmLists(rows).then((run) => (run ? syncFiles(filesRunOf(run)) : undefined));
 
 // A push gives the worker about 30 s, so a bigger file waits for a Background Sync or a page; a
 // sync, which the browser fires once the device is online, can take minutes
