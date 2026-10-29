@@ -1,7 +1,9 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
-import { AwsClient } from "aws4fetch";
+import { Hash } from "@smithy/hash-node";
+import { HttpRequest } from "@smithy/protocol-http";
+import { SignatureV4 } from "@smithy/signature-v4";
 import { API_PORT } from "./helpers/stack";
 
 // Pinned, so a new image can't change the database or the bucket under the suite
@@ -58,27 +60,42 @@ const [dbUrl, s3Url] = await Promise.all([
 ]);
 
 // As the bucket's setup in docs/self-hosting.md: a presigned URL is the credential, so any origin
-const s3 = new AwsClient({
-  accessKeyId: S3.key,
-  secretAccessKey: S3.secret,
+const signer = new SignatureV4({
   service: "s3",
   region: S3.region,
+  credentials: { accessKeyId: S3.key, secretAccessKey: S3.secret },
+  sha256: Hash.bind(null, "sha256"),
 });
-const cors = `<CORSConfiguration><CORSRule><AllowedOrigin>*</AllowedOrigin><AllowedMethod>GET</AllowedMethod><AllowedMethod>PUT</AllowedMethod><AllowedMethod>HEAD</AllowedMethod><AllowedHeader>*</AllowedHeader><MaxAgeSeconds>3600</MaxAgeSeconds></CORSRule></CORSConfiguration>`;
-for (const [path, init] of [
-  ["", { method: "PUT" }],
-  [
-    "?cors",
-    {
+const bucketUrl = new URL(`${s3Url}/${S3.bucket}`);
+const putToBucket = async (query: Record<string, string>, body = "") => {
+  const signed = await signer.sign(
+    new HttpRequest({
       method: "PUT",
-      body: cors,
-      headers: { "content-md5": createHash("md5").update(cors).digest("base64") },
-    },
-  ],
-] as const) {
-  const res = await s3.fetch(`${s3Url}/${S3.bucket}${path}`, init);
+      protocol: bucketUrl.protocol,
+      hostname: bucketUrl.hostname,
+      port: Number(bucketUrl.port),
+      path: bucketUrl.pathname,
+      query,
+      body,
+      headers: {
+        host: bucketUrl.host,
+        ...(body && { "content-md5": createHash("md5").update(body).digest("base64") }),
+      },
+    }),
+  );
+  const search = new URLSearchParams(query).toString();
+  const res = await fetch(`${bucketUrl}${search && `?${search}`}`, {
+    method: "PUT",
+    headers: signed.headers,
+    body: body || undefined,
+  });
   if (!res.ok) throw new Error(`Setting up the bucket answered ${res.status}: ${await res.text()}`);
-}
+};
+await putToBucket({});
+await putToBucket(
+  { cors: "" },
+  `<CORSConfiguration><CORSRule><AllowedOrigin>*</AllowedOrigin><AllowedMethod>GET</AllowedMethod><AllowedMethod>PUT</AllowedMethod><AllowedMethod>HEAD</AllowedMethod><AllowedHeader>*</AllowedHeader><MaxAgeSeconds>3600</MaxAgeSeconds></CORSRule></CORSConfiguration>`,
+);
 
 const env = {
   ...process.env,

@@ -33,13 +33,13 @@ vi.mock("../broadcast", () => ({
   broadcastAll: vi.fn(),
   broadcastPerUser: vi.fn(),
 }));
-vi.mock("../storage", () => ({
-  fileKey: (id: string) => `a/${id}`,
-  thumbKey: (id: string) => `t/${id}`,
+vi.mock("../storage", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   storage: {
     presignPut: async (key: string, size: number, type: string) => `put ${key} ${size} ${type}`,
     presignGet: async (key: string, disposition: string) => `get ${key} ${disposition}`,
     sizeOf: async (key: string) => bucket.get(key),
+    copy: async (from: string, to: string) => void bucket.set(to, bucket.get(from)!),
     remove: async (key: string) => void bucket.delete(key),
   },
 }));
@@ -95,7 +95,7 @@ const as = (userId: string) => {
 
 const uploaded = async (userId: string, id: string, fields: { size?: number } = {}) => {
   expect((await as(userId).add(id, fields)).status).toBe(200);
-  bucket.set(`a/${id}`, fields.size ?? 1000);
+  bucket.set(`u/a/${id}`, fields.size ?? 1000);
   expect((await as(userId).complete(id)).status).toBe(200);
 };
 
@@ -153,14 +153,14 @@ describe("uploading", () => {
   test("an upload URL holds the PUT to the row's size, as a download for a type that doesn't open in a tab", async () => {
     await as("bob").add("page", { name: "page.html", mimeType: "text/html", size: 5 });
     expect(await (await as("bob").uploadUrl("page")).json()).toEqual({
-      file: "put a/page 5 application/octet-stream",
+      file: "put u/a/page 5 application/octet-stream",
     });
   });
 
   test("an upload URL is the uploader's alone, and not for a row already uploaded", async () => {
     await as("bob").add("b1");
     expect((await as("alice").uploadUrl("b1")).status).toBe(404);
-    bucket.set("a/b1", 1000);
+    bucket.set("u/a/b1", 1000);
     await as("bob").complete("b1");
     expect((await as("bob").uploadUrl("b1")).status).toBe(409);
   });
@@ -168,17 +168,34 @@ describe("uploading", () => {
   test("a row with a thumbnail needs its size, which the thumbnail's URL is signed to", async () => {
     await as("bob").add("b1", { hasThumb: true });
     expect((await as("bob").uploadUrl("b1")).status).toBe(400);
-    expect((await (await as("bob").uploadUrl("b1", 20_000)).json()).thumb).toBe(
-      "put t/b1 20000 image/jpeg",
+    expect((await body<{ thumb?: string }>(as("bob").uploadUrl("b1", 20_000))).thumb).toBe(
+      "put u/t/b1 20000 image/jpeg",
     );
+  });
+
+  test("a row without a thumbnail gets no thumbnail URL, whatever size it asks for", async () => {
+    await as("bob").add("b1");
+    expect(
+      (await body<{ thumb?: string }>(as("bob").uploadUrl("b1", 20_000))).thumb,
+    ).toBeUndefined();
+  });
+
+  test("/complete serves a copy of what it checked, so a later PUT to the upload URL changes nothing", async () => {
+    await uploaded("bob", "b1");
+    expect([...bucket.keys()]).toEqual(["a/b1"]);
+  });
+
+  test("an id that isn't plain letters, digits, - or _ is refused, since it's part of a bucket key", async () => {
+    for (const id of ["b1#x", "../b1", "b1?x", "b 1"])
+      expect((await as("bob").add(id)).status, id).toBe(400);
   });
 
   test("bytes that aren't the size it claimed are deleted, and /complete is 400", async () => {
     await as("bob").add("b1");
     expect((await as("bob").complete("b1")).status).toBe(400);
-    bucket.set("a/b1", 999);
+    bucket.set("u/a/b1", 999);
     expect((await as("bob").complete("b1")).status).toBe(400);
-    expect(bucket.has("a/b1")).toBe(false);
+    expect(bucket.size).toBe(0);
     expect(await as("alice").list()).toEqual([]);
   });
 
@@ -213,8 +230,8 @@ describe("deleting", () => {
 describe("download URLs", () => {
   test("only for attachments the asker sees, in a tab only for the allowlisted types", async () => {
     await uploaded("bob", "photo");
-    await as("bob").add("page", { name: "page.html", mimeType: "text/html", size: 5 });
-    bucket.set("a/page", 5);
+    await as("bob").add("page", { name: "page's.html", mimeType: "text/html", size: 5 });
+    bucket.set("u/a/page", 5);
     await as("bob").complete("page");
     const urls = async (userId: string) =>
       Object.fromEntries(
@@ -225,7 +242,7 @@ describe("download URLs", () => {
       );
     expect(await urls("carol")).toEqual({
       photo: "get a/photo inline; filename*=UTF-8''photo.jpg",
-      page: "get a/page attachment; filename*=UTF-8''page.html",
+      page: "get a/page attachment; filename*=UTF-8''page%27s.html",
     });
     expect(await urls("dave")).toEqual({});
   });
@@ -268,4 +285,17 @@ test("a restored task comes back with its attachments", async () => {
     ["tasks", "gone"],
     ["attachments", "kept"],
   ]);
+});
+
+test("a task someone reaches two ways lists its attachments once", async () => {
+  await uploaded("bob", "b1");
+  sqlite.exec(`INSERT INTO categories (id, user_id, name) VALUES ('home', 'alice', 'Home');
+    UPDATE tasks SET category_id = 'home' WHERE id = 'shared'`);
+  try {
+    expect(await as("alice").list()).toEqual(["b1"]);
+    expect(await body<unknown[]>(as("alice").urls(["b1"]))).toHaveLength(1);
+  } finally {
+    sqlite.exec(`UPDATE tasks SET category_id = NULL WHERE id = 'shared';
+      DELETE FROM categories WHERE id = 'home'`);
+  }
 });

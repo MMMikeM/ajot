@@ -22,11 +22,12 @@ import {
 import { authed, authedRoute } from "../middleware";
 import { broadcast } from "../broadcast";
 import { limitAttaching } from "../rate-limit";
-import { fileKey, storage, thumbKey } from "../storage";
+import { encodeRfc3986, fileKey, stagedKey, storage, thumbKey } from "../storage";
 import {
   ATTACHMENT_QUOTA_BYTES,
   MAX_ATTACHMENT_BYTES,
   MAX_THUMB_BYTES,
+  MB,
 } from "../attachment-limits";
 import { jsonBody } from "./crud";
 import { requireTask } from "./task-users";
@@ -35,7 +36,6 @@ const ATTACHMENTS_OFF = "This server doesn't take attachments.";
 const ATTACHMENT_DELETED = "That file was deleted.";
 const TASK_DELETED = "That task was deleted.";
 const NOT_UPLOADED = "The file didn't finish uploading. Try again.";
-const MB = 1024 * 1024;
 
 const uploadUrlRequestSchema = attachmentIdSchema
   .extend({ thumbSize: z.number().int().positive().max(MAX_THUMB_BYTES).optional() })
@@ -50,7 +50,9 @@ const audienceFor = (row: Attachment, audience: string[]) =>
   row.uploadedAt ? audience : [row.uploaderId];
 
 const disposition = (row: Attachment) =>
-  `${opensInTab(row.mimeType) ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(row.name)}`;
+  `${opensInTab(row.mimeType) ? "inline" : "attachment"}; filename*=UTF-8''${encodeRfc3986(row.name)}`;
+
+const sent = ({ purgedAt: _purgedAt, ...row }: Attachment & { purgedAt: string | null }) => row;
 
 const findOwnUnfinished = async (id: string, userId: string) => {
   const row = await attachmentRepo.find(id);
@@ -73,7 +75,7 @@ const deleteOrRestore = async (c: Context, id: string, deletedAt: string | null)
   const { task, mine, audience } = await requireTask(row.taskId, userId, "see", { deleted: true });
   if (!canDeleteAttachment(row, mine))
     throw new ForbiddenError("Only whoever added it or the task's owner can do that.");
-  if (!row.deletedAt === !deletedAt) return row;
+  if (!row.deletedAt === !deletedAt) return sent(row);
   const result = await attachmentRepo.update(id, { deletedAt, updatedAt: now() });
   if (!result) throw new GoneError(ATTACHMENT_DELETED);
   if (!task.deletedAt)
@@ -103,7 +105,6 @@ export const attachmentRoutes = authed()
       request: jsonBody(attachmentInsertSchema),
       responses: {
         200: attachmentResponseSchema,
-        400: true,
         403: true,
         404: true,
         409: true,
@@ -120,7 +121,7 @@ export const attachmentRoutes = authed()
       // A retry after a lost response gets its row back, unless it was deleted meanwhile
       if (taken?.uploaderId === userId) {
         if (taken.deletedAt) throw new GoneError(ATTACHMENT_DELETED);
-        return c.json(taken, 200);
+        return c.json(sent(taken), 200);
       }
       if (taken) throw new IdTakenError("attachment", data.id);
       if (data.size > MAX_ATTACHMENT_BYTES)
@@ -158,15 +159,7 @@ export const attachmentRoutes = authed()
       method: "post",
       path: "/upload-url",
       request: jsonBody(uploadUrlRequestSchema),
-      responses: {
-        200: uploadUrlsSchema,
-        400: true,
-        403: true,
-        404: true,
-        409: true,
-        410: true,
-        429: true,
-      },
+      responses: { 200: uploadUrlsSchema, 400: true, 403: true, 404: true, 409: true, 410: true },
     }),
     async (c) => {
       const { id, thumbSize } = c.req.valid("json");
@@ -177,10 +170,11 @@ export const attachmentRoutes = authed()
       if (row.uploadedAt) throw new ConflictError("That file is already uploaded.");
       if (row.hasThumb && !thumbSize) throw new BadRequestError(NOT_UPLOADED);
       await requireLiveTask(row.taskId, userId);
-      limitAttaching(userId);
       const [file, thumb] = await Promise.all([
-        storage.presignPut(fileKey(id), row.size, servedType(row.mimeType)),
-        thumbSize ? storage.presignPut(thumbKey(id), thumbSize, "image/jpeg") : undefined,
+        storage.presignPut(stagedKey(fileKey(id)), row.size, servedType(row.mimeType)),
+        row.hasThumb && thumbSize
+          ? storage.presignPut(stagedKey(thumbKey(id)), thumbSize, "image/jpeg")
+          : undefined,
       ]);
       return c.json({ file, thumb }, 200);
     },
@@ -197,25 +191,31 @@ export const attachmentRoutes = authed()
       const userId = c.get("userId");
       if (!storage) throw new ForbiddenError(ATTACHMENTS_OFF);
       const row = await findOwnUnfinished(id, userId);
-      if (row.uploadedAt) return c.json(row, 200);
+      if (row.uploadedAt) return c.json(sent(row), 200);
       const { audience } = await requireLiveTask(row.taskId, userId);
+      const file = fileKey(id);
+      const thumb = thumbKey(id);
       const [fileSize, thumbSize] = await Promise.all([
-        storage.sizeOf(fileKey(id)),
-        row.hasThumb ? storage.sizeOf(thumbKey(id)) : 0,
+        storage.sizeOf(stagedKey(file)),
+        row.hasThumb ? storage.sizeOf(stagedKey(thumb)) : 0,
       ]);
       // The signed length should make a mismatch impossible; one that gets through is deleted
       // rather than counted at the size it claimed
       if (fileSize !== row.size) {
-        if (fileSize !== undefined) await storage.remove(fileKey(id));
+        if (fileSize !== undefined) await storage.remove(stagedKey(file));
         throw new BadRequestError(NOT_UPLOADED);
       }
       if (thumbSize === undefined || thumbSize > MAX_THUMB_BYTES) {
-        if (thumbSize !== undefined) await storage.remove(thumbKey(id));
+        if (thumbSize !== undefined) await storage.remove(stagedKey(thumb));
         throw new BadRequestError(NOT_UPLOADED);
       }
+      const keys = row.hasThumb ? [file, thumb] : [file];
+      const { copy, remove } = storage;
+      await Promise.all(keys.map((key) => copy(stagedKey(key), key)));
       const result = await attachmentRepo.update(id, { uploadedAt: now(), updatedAt: now() });
       if (!result) throw new GoneError(ATTACHMENT_DELETED);
       broadcast(c, "attachments", "insert", result, audience);
+      await Promise.all(keys.map((key) => remove(stagedKey(key))));
       return c.json(result, 200);
     },
   )

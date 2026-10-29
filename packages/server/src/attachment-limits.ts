@@ -1,6 +1,6 @@
 import { MAX_FILE_BYTES } from "@newtab-todo/shared/field-limits";
 
-const MB = 1024 * 1024;
+export const MB = 1024 * 1024;
 
 export const MAX_ATTACHMENT_BYTES = Math.min(
   (Number(process.env.ATTACHMENT_MAX_MB) || 25) * MB,

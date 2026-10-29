@@ -1,9 +1,10 @@
-import { and, eq, getColumns, inArray, isNotNull, isNull, or, sum } from "drizzle-orm";
+import { and, eq, getColumns, inArray, isNull, sum } from "drizzle-orm";
+import type { z } from "@hono/zod-openapi";
 import { createInsertSchema, createSelectSchema } from "drizzle-orm/zod";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { MAX_FILE_NAME, MAX_SHORT } from "@newtab-todo/shared/field-limits";
 import { db } from "./client";
-import { attachments, taskAccess, tasks } from "./schema";
+import { attachments, taskAccess } from "./schema";
 import { limited, limitedId } from "./field-limits";
 import { stampsNotAfterNow } from "./stamps";
 
@@ -13,8 +14,11 @@ export type Attachment = Omit<typeof attachments.$inferSelect, "purgedAt">;
 const { purgedAt: _purgedAt, ...sentColumns } = getColumns(attachments);
 
 export const attachmentResponseSchema = createSelectSchema(attachments).omit({ purgedAt: true });
+// Its id is in its bucket keys, so nothing in it may change the URL they're part of
+const keySafeId = (schema: z.ZodString) => limitedId(schema).regex(/^[A-Za-z0-9_-]+$/);
+
 export const attachmentInsertSchema = createInsertSchema(attachments, {
-  id: limitedId,
+  id: keySafeId,
   taskId: limitedId,
   name: limited("A file's name", MAX_FILE_NAME),
   mimeType: (schema) => schema.max(MAX_SHORT),
@@ -36,36 +40,34 @@ export const attachmentInsertSchema = createInsertSchema(attachments, {
   })
   .required({ id: true, createdAt: true, updatedAt: true })
   .strict();
-export const attachmentIdSchema = createSelectSchema(attachments, { id: limitedId }).pick({
+export const attachmentIdSchema = createSelectSchema(attachments, { id: keySafeId }).pick({
   id: true,
 });
 
-const shownTo = (userId: string) =>
-  and(
-    eq(taskAccess.userId, userId),
-    isNull(tasks.deletedAt),
-    isNull(attachments.deletedAt),
-    or(isNotNull(attachments.uploadedAt), eq(attachments.uploaderId, userId)),
-  );
+/** Everyone who sees the task sees one once it's uploaded; until then, only its uploader. */
+const visibleTo = (userId: string, ids?: string[]) =>
+  db.query.attachments.findMany({
+    where: {
+      ...(ids && { id: { in: ids } }),
+      deletedAt: { isNull: true },
+      task: { deletedAt: { isNull: true } },
+      OR: [{ uploadedAt: { isNotNull: true } }, { uploaderId: userId }],
+      RAW: (row) =>
+        inArray(
+          row.taskId,
+          db
+            .select({ id: taskAccess.taskId })
+            .from(taskAccess)
+            .where(eq(taskAccess.userId, userId)),
+        ),
+    },
+    columns: { purgedAt: false },
+  });
 
-/** Everyone sees one once it's uploaded; until then, only its uploader. */
-const list = async (userId: string) =>
-  db
-    .select(sentColumns)
-    .from(attachments)
-    .innerJoin(taskAccess, eq(taskAccess.taskId, attachments.taskId))
-    .innerJoin(tasks, eq(tasks.id, attachments.taskId))
-    .where(shownTo(userId));
+const list = async (userId: string) => visibleTo(userId);
 
 const listByIds = async (ids: string[], userId: string) =>
-  ids.length === 0
-    ? []
-    : db
-        .select(sentColumns)
-        .from(attachments)
-        .innerJoin(taskAccess, eq(taskAccess.taskId, attachments.taskId))
-        .innerJoin(tasks, eq(tasks.id, attachments.taskId))
-        .where(and(inArray(attachments.id, ids), shownTo(userId)));
+  ids.length === 0 ? [] : visibleTo(userId, ids);
 
 const find = async (id: string) => db.query.attachments.findFirst({ where: { id } });
 
