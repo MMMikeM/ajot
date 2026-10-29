@@ -1,8 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
-import { addField, startsWith } from "./helpers/app";
+import { openListPicker, startsWith, tapAddLine } from "./helpers/app";
 import { mockApi, noteOn } from "./helpers/mock-api";
 
-// The task detail sheet shows only what a task has, against the dev server with /api mocked
+// The task detail sheet: what a task has, and a quiet line to add what it hasn't, where it would
+// live. Against the dev server with /api mocked
 
 test.use({ serviceWorkers: "block" });
 
@@ -22,54 +23,51 @@ const openDetail = async (page: Page, title: string) => {
 
 const toast = (page: Page) => page.locator("[data-toast-undo]");
 
-test("an empty task shows no empty fields, and Add reaches each of them", async ({ page }) => {
+test("an empty task offers each field where it would live, and each line opens it", async ({
+  page,
+}) => {
   const sheet = await openDetail(page, "Pick up dry cleaning");
 
   await expect(sheet.getByRole("textbox", { name: "Title" })).toBeVisible();
-  for (const name of ["Description", "New subtask", "New note"])
+  await expect(sheet.getByRole("textbox", { name: "Details" })).toHaveAttribute(
+    "placeholder",
+    "Add details",
+  );
+  for (const name of ["New subtask", "New note"])
     await expect(sheet.getByRole("textbox", { name })).toHaveCount(0);
   await expect(sheet.getByRole("button", { name: /^Due date/ })).toHaveCount(0);
-  await expect(sheet.getByRole("combobox", { name: "List" })).toHaveCount(0);
   await expect(sheet.getByRole("radiogroup", { name: "Assignee" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Add", exact: true })).toHaveCount(0);
+  await expect(sheet.getByRole("group", { name: "Add to task" })).toHaveCount(0);
+  for (const line of ["Add a date", "Share", "Add a subtask", "Add a note"])
+    await expect(sheet.getByRole("button", { name: line, exact: true })).toBeVisible();
+  // Nobody else can see it, so there's no one to assign it to
+  await expect(sheet.getByRole("button", { name: "Assign", exact: true })).toHaveCount(0);
 
-  const add = sheet.getByRole("button", { name: "Add", exact: true });
-  const offers = sheet.getByRole("group", { name: "Add to task" });
-  await add.click();
-  await expect(offers.getByRole("button")).toHaveText([
-    "Date",
-    "Description",
-    "Subtask",
-    "Note",
-    "List",
-    "Share",
-  ]);
-
-  await offers.getByRole("button", { name: "Description" }).click();
-  await expect(sheet.getByRole("textbox", { name: "Description" })).toBeFocused();
+  await sheet.getByRole("textbox", { name: "Details" }).click();
   await page.keyboard.type("Ticket is in the car");
 
-  await add.click();
-  await offers.getByRole("button", { name: "Subtask" }).click();
+  await tapAddLine(sheet, "Add a subtask");
   await expect(sheet.getByRole("textbox", { name: "New subtask" })).toBeFocused();
+  await expect(sheet.getByRole("button", { name: "Add a subtask" })).toHaveCount(0);
   await page.keyboard.type("Find the ticket");
   await page.keyboard.press("Enter");
   await expect(sheet.getByRole("checkbox", { name: "Find the ticket" })).toBeVisible();
+  await expect(sheet.getByRole("group", { name: "Subtasks" })).toContainText("0 of 1");
 
-  await add.click();
-  await offers.getByRole("button", { name: "Note" }).click();
+  await tapAddLine(sheet, "Add a note");
   await expect(sheet.getByRole("textbox", { name: "New note" })).toBeFocused();
   await page.keyboard.type("Closes at 6");
   await page.keyboard.press("Enter");
   await expect(sheet.getByText("Closes at 6")).toBeVisible();
+  // Stamped with when it was written
+  await expect(sheet.getByRole("group", { name: "Notes" }).locator("time")).toHaveText(/^Today, /);
 
-  await add.click();
-  await expect(offers.getByRole("button")).toHaveText(["Date", "Subtask", "Note", "List", "Share"]);
-  await offers.getByRole("button", { name: "List" }).click();
+  await openListPicker(sheet);
   await page.getByRole("option", { name: "Work" }).click();
   await expect(sheet.getByRole("combobox", { name: "List" })).toHaveText(/Work/);
 
-  await add.click();
-  await offers.getByRole("button", { name: "Share" }).click();
+  await tapAddLine(sheet, "Share");
   // The share itself arrives over SSE, which the mocks don't send
   const share = page.waitForRequest((r) => r.url().endsWith("/api/tasks/share"));
   await page.getByRole("option", { name: "Sarah Murray" }).click();
@@ -87,21 +85,15 @@ test("a task shared with you names its owner and offers no assignee pills", asyn
   await expect(sheet.getByRole("group", { name: "Shared with" })).toHaveCount(0);
   await expect(sheet.getByText("Mike Murray")).toHaveCount(0);
 
-  await sheet.getByRole("button", { name: "Add", exact: true }).click();
-  const offers = sheet.getByRole("group", { name: "Add to task" });
-  await expect(offers.getByRole("button", { name: "Share" })).toHaveCount(0);
-  await expect(offers.getByRole("button", { name: "Assignee" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: /^Share/ })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Assign", exact: true })).toHaveCount(0);
 });
 
 test("the owner of a shared task can assign it", async ({ page }) => {
   const sheet = await openDetail(page, "Write a thank-you note to Anna");
   await expect(sheet.getByRole("group", { name: "Shared with" })).toContainText("Sarah Murray");
 
-  await sheet.getByRole("button", { name: "Add", exact: true }).click();
-  await sheet
-    .getByRole("group", { name: "Add to task" })
-    .getByRole("button", { name: "Assignee" })
-    .click();
+  await tapAddLine(sheet, "Assign");
   const pills = sheet.getByRole("radiogroup", { name: "Assignee" });
   await expect(pills.getByRole("radio")).toHaveText(["Unassigned", "You", "Sarah Murray"]);
   await pills.getByRole("radio", { name: "Sarah Murray" }).click();
@@ -151,11 +143,7 @@ test("deleting a subtask or a note offers Undo", async ({ page }) => {
     sheet.getByRole("checkbox", { name: "Compare Tuesday and Wednesday fares" }),
   ).toBeVisible();
 
-  await sheet.getByRole("button", { name: "Add", exact: true }).click();
-  await sheet
-    .getByRole("group", { name: "Add to task" })
-    .getByRole("button", { name: "Note" })
-    .click();
+  await tapAddLine(sheet, "Add a note");
   await page.keyboard.type("Window seat");
   await page.keyboard.press("Enter");
   const note = sheet.locator(".group\\/row", { hasText: "Window seat" });
@@ -175,9 +163,10 @@ test("each Delete in the sheet says what it removes", async ({ page }) => {
   const sheet = page.locator('[data-slot="drawer-content"]');
   await expect(sheet.getByText("Window seat")).toBeVisible({ timeout: 15000 });
 
-  await expect(sheet.getByRole("button", { name: "Delete task", exact: true })).toHaveText(
-    "Delete task",
-  );
+  // A bare trash can in the header, named for screen readers and on hover
+  const deleteTask = sheet.getByRole("button", { name: "Delete task", exact: true });
+  await expect(deleteTask).toHaveText("");
+  await expect(deleteTask).toHaveAttribute("title", "Delete task");
   await expect(
     sheet.getByRole("group", { name: "Subtasks" }).getByRole("button", { name: "Delete subtask" }),
   ).toHaveCount(2);
@@ -202,18 +191,6 @@ test("a note edits in place when its text is clicked", async ({ page }) => {
   await expect(sheet.getByRole("button", { name: "Edit note: Aisle seat" })).toBeVisible();
 });
 
-test("the open Add toggle says it cancels", async ({ page }) => {
-  const sheet = await openDetail(page, "Pick up dry cleaning");
-  const offers = sheet.getByRole("group", { name: "Add to task" });
-  await sheet.getByRole("button", { name: "Add", exact: true }).click();
-  const cancel = sheet.getByRole("button", { name: "Cancel", exact: true });
-  await expect(offers).toBeVisible();
-
-  await cancel.click();
-  await expect(offers).toHaveCount(0);
-  await expect(sheet.getByRole("button", { name: "Add", exact: true })).toBeVisible();
-});
-
 test("the list picker shows every list, in the sidebar's order", async ({ page }) => {
   const data = await mockApi(page);
   for (const [i, name] of ["Garden", "Reading", "Errands", "Birthday party"].entries())
@@ -229,7 +206,7 @@ test("the list picker shows every list, in the sidebar's order", async ({ page }
     .getByRole("button", { name: startsWith("Pick up dry cleaning") })
     .click();
   const sheet = page.getByRole("dialog", { name: "Pick up dry cleaning", exact: true });
-  await addField(sheet, "List");
+  await openListPicker(sheet);
 
   const options = page.getByRole("option");
   await expect(options).toHaveText([
@@ -312,4 +289,88 @@ test("a subtask's title edits in place: Enter saves it, Escape keeps the old one
   await expect(sheet).toBeVisible();
   await expect(sheet.getByRole("button", { name: "Edit Compare the midweek fares" })).toBeVisible();
   expect(saved).toHaveLength(1);
+});
+
+test("the header names the task's list, and moves it from there", async ({ page }) => {
+  const sheet = await openDetail(page, "Pick up dry cleaning");
+  const list = sheet.getByRole("combobox", { name: "List" });
+  await expect(list).toHaveText("Inbox");
+
+  await list.click();
+  await page.getByRole("option", { name: "Work" }).click();
+  await expect(list).toHaveText("Work");
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect(row(page, "Pick up dry cleaning")).toHaveCount(0);
+});
+
+test("a task that isn't yours to move names its list as plain text", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page
+    .getByRole("group", { name: "Shared with me" })
+    .getByRole("button", { name: /^Groceries/ })
+    .click();
+  await row(page, "Eggs").getByRole("button", { name: "Eggs", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Eggs", exact: true });
+
+  await expect(sheet.getByRole("group", { name: "List" })).toHaveText("Groceries");
+  await expect(sheet.getByRole("combobox", { name: "List" })).toHaveCount(0);
+});
+
+test("a subtask's sheet says what it's a subtask of, and opens that task", async ({ page }) => {
+  const data = await mockApi(page);
+  const flights = data.tasks[0]!;
+  const fares = data.tasks.find((t) => t.title === "Compare Tuesday and Wednesday fares")!;
+  await page.goto(`/task/${fares.id}`, { waitUntil: "domcontentloaded" });
+  const sheet = page.getByRole("dialog", { name: fares.title, exact: true });
+  await expect(sheet).toBeVisible({ timeout: 15000 });
+
+  // A subtask follows its parent's list, and has no subtasks of its own
+  await expect(sheet.getByRole("combobox", { name: "List" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Add a subtask" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Delete subtask" })).toBeVisible();
+
+  await sheet.getByRole("button", { name: `Subtask of ${flights.title}` }).click();
+  await page.waitForURL(`**/task/${flights.id}`);
+  const parent = page.getByRole("dialog", { name: flights.title, exact: true });
+  await expect(parent.getByRole("textbox", { name: "Details" })).toHaveValue(flights.description!);
+  // In place of the subtask's sheet, so closing lands on the list
+  await page.keyboard.press("Escape");
+  await expect(parent).toHaveCount(0);
+  await page.waitForURL((url) => url.pathname === "/");
+});
+
+test("a subtask's header trash deletes it, with Undo", async ({ page }) => {
+  const data = await mockApi(page);
+  const fares = data.tasks.find((t) => t.title === "Compare Tuesday and Wednesday fares")!;
+  await page.goto(`/task/${fares.id}`, { waitUntil: "domcontentloaded" });
+  const sheet = page.getByRole("dialog", { name: fares.title, exact: true });
+
+  await sheet.getByRole("button", { name: "Delete subtask" }).click({ timeout: 15000 });
+  await expect(sheet).toHaveCount(0);
+  await expect(toast(page)).toContainText(`“${fares.title}” deleted`);
+  await toast(page).getByRole("button", { name: "Undo" }).click();
+  await row(page, "Book flights")
+    .getByRole("button", { name: startsWith("Book flights") })
+    .first()
+    .click();
+  await expect(
+    page.locator('[data-slot="drawer-content"]').getByRole("checkbox", { name: fares.title }),
+  ).toBeVisible();
+});
+
+test("a subtask of a shared task says who else has it", async ({ page }) => {
+  const data = await mockApi(page);
+  const flights = data.tasks[0]!;
+  flights.shares = [{ ...(data.tasks[3]!.shares[0] as object), taskId: flights.id }];
+  const fares = data.tasks.find((t) => t.title === "Compare Tuesday and Wednesday fares")!;
+  await page.goto(`/task/${fares.id}`, { waitUntil: "domcontentloaded" });
+  const sheet = page.getByRole("dialog", { name: fares.title, exact: true });
+
+  await expect(sheet.getByText("With Sarah, like the task it’s in")).toBeVisible({
+    timeout: 15000,
+  });
+  await expect(sheet.getByRole("button", { name: /^Share/ })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Assign" })).toHaveCount(0);
 });

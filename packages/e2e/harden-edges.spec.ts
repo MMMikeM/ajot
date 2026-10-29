@@ -74,6 +74,7 @@ test("a long URL or list name keeps the task sheet's controls on screen", async 
   const sheetRight = await sheet.evaluate((el) => el.getBoundingClientRect().right);
   const controls = [
     sheet.getByRole("combobox", { name: "List" }),
+    sheet.getByRole("button", { name: "Delete task" }),
     sheet.getByRole("group", { name: "Subtasks" }).getByRole("button", { name: "Delete" }),
     sheet.getByRole("group", { name: "Notes" }).getByRole("button", { name: "Edit" }),
     sheet.getByRole("group", { name: "Notes" }).getByRole("button", { name: "Delete" }),
@@ -96,7 +97,9 @@ test("on a 320px phone a note keeps most of its row", async ({ page }, testInfo)
   const notes = page.locator('[data-slot="drawer-content"]').getByRole("group", { name: "Notes" });
   const text = notes.getByRole("button", { name: /^Edit note/ });
   await expect(text).toBeVisible({ timeout: 15000 });
-  const rowBox = (await text.locator("xpath=..").boundingBox())!;
+  const rowBox = (await text
+    .locator("xpath=ancestor::*[contains(@class, 'group/row')][1]")
+    .boundingBox())!;
   const textBox = (await text.boundingBox())!;
   expect(textBox.width / rowBox.width).toBeGreaterThan(0.75);
 

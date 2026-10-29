@@ -154,6 +154,16 @@ test("a task's checkbox and date, and the detail sheet's checkboxes, take a 44px
   for (const checkbox of await checkboxes.all()) await expectTapTarget(checkbox);
 });
 
+test("the detail sheet's header and add lines take a 44px tap", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "the touch targets");
+  await openList(page);
+  const sheet = await openSheet(page, "Pick up dry cleaning");
+  await expectTapTarget(sheet.getByRole("combobox", { name: "List" }));
+  await expectTapTarget(sheet.getByRole("button", { name: "Delete task" }));
+  for (const line of ["Add a date", "Share", "Add a subtask", "Add a note"])
+    await expectTapTarget(sheet.getByRole("button", { name: line, exact: true }));
+});
+
 test("a search result's checkbox takes a 44px tap, a subtask's too", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile", "the touch targets");
   await mockApi(page);

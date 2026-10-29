@@ -1,17 +1,6 @@
 import { useRef, useState, type RefObject } from "react";
 import { flushSync } from "react-dom";
-import {
-  AlignLeft,
-  CalendarDays,
-  ListChecks,
-  ListPlus,
-  Plus,
-  StickyNote,
-  Trash2,
-  UserPlus,
-  UserRound,
-  type LucideIcon,
-} from "lucide-react";
+import { CalendarDays, Trash2 } from "lucide-react";
 import type { Task } from "~/lib/types";
 import { useNotes, updateTask } from "~/lib/db/hooks";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
@@ -29,18 +18,20 @@ import { MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { cn } from "~/lib/utils";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 import { dockedSheet } from "~/components/docked-sheet";
-import { canDeleteTask } from "@newtab-todo/shared/task-access";
+import { canDeleteTask, canEditTask } from "@newtab-todo/shared/task-access";
 import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
 import { holders, ownerNameOf } from "~/lib/task-holders";
 import { isReadyToTick } from "~/lib/ready-to-tick";
 import { useTasks } from "~/lib/db/hooks";
 import { useTaskActions } from "~/components/task/use-actions";
-import { DetailRow, type DetailPiece } from "~/components/task/detail-row";
+import { AddRow, DetailRow } from "~/components/task/detail-row";
 import { Notes, Subtasks } from "~/components/task/detail-items";
 import {
   AssigneeField,
-  ListField,
+  ListChip,
+  ParentCrumb,
   SharingField,
+  SubtaskSharing,
   useListFiling,
   useSharing,
 } from "~/components/task/detail-people";
@@ -67,17 +58,19 @@ const autoGrow = (el: HTMLTextAreaElement | null) => {
   el.style.height = `${el.scrollHeight}px`;
 };
 
-// Underlined only while editing, so the title and description read as text, not a form
+// Underlined only while editing, so the title and details read as text, not a form
 const quietField = "border-transparent focus-visible:border-hint";
 
 function TaskDetail({
   taskId,
   open,
   onClose,
+  onOpenTask,
 }: {
   taskId: string | null;
   open: boolean;
   onClose: () => void;
+  onOpenTask: (taskId: string) => void;
 }) {
   const { data: allTasks, isLoading: tasksLoading } = useTasks();
 
@@ -102,49 +95,52 @@ function TaskDetail({
           <DrawerTitle>{task.title}</DrawerTitle>
           <DrawerDescription>Task details</DrawerDescription>
         </DrawerHeader>
+        {/* Keyed: the parent's crumb swaps the task under a sheet that stays open, and the drafts
+            of the one it came from must not save onto the next */}
         <TaskDetailContent
+          key={task.id}
           task={task}
           parent={allTasks?.find((t) => t.id === task.parentId)}
           // From the live collection, not task.subtasks: that embedded copy only refreshes
           // on a server refetch, so ticking or deleting a subtask here looked like a no-op
           subtasks={(allTasks ?? []).filter((t) => t.parentId === task.id)}
           onClose={onClose}
+          onOpenTask={onOpenTask}
         />
       </DrawerContent>
     </Drawer>
   );
 }
 
-type Offer = { key: DetailPiece | "date"; label: string; icon: LucideIcon };
+type Piece = "subtask" | "note" | "share" | "assignee";
 
 const TaskDetailContent = ({
   task,
   parent,
   subtasks,
   onClose,
+  onOpenTask,
 }: {
   task: Task;
   parent?: Task;
   subtasks: Task[];
   onClose: () => void;
+  onOpenTask: (taskId: string) => void;
 }) => {
   const userId = useOptimisticUserId();
   const { handleToggle, handleDelete } = useTaskActions();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
-  const [revealed, setRevealed] = useState<ReadonlySet<DetailPiece>>(new Set());
-  const [offering, setOffering] = useState(false);
+  const [revealed, setRevealed] = useState<ReadonlySet<Piece>>(new Set());
   // Rows shown when the sheet opened stay until it closes: unassigning would otherwise remove
   // the row under the pointer, as hiding an added field on blur did
   const [openedAssigned] = useState(() => !!task.assigneeId);
   const isDone = task.status === "done";
   const isTopLevel = !task.parentId;
   const dateRef = useRef<HTMLInputElement>(null);
-  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const subtaskRef = useRef<HTMLInputElement>(null);
   const noteRef = useRef<HTMLInputElement>(null);
-  const focusOnReveal: Partial<Record<DetailPiece, RefObject<HTMLElement | null>>> = {
-    description: descriptionRef,
+  const focusOnReveal: Partial<Record<Piece, RefObject<HTMLElement | null>>> = {
     subtask: subtaskRef,
     note: noteRef,
   };
@@ -160,209 +156,187 @@ const TaskDetailContent = ({
   const sharing = useSharing(task);
   const lists = useCategoriesById();
   const ownerName = ownerNameOf(task, lists);
+  const held = holders(task, lists, parent);
+  const canEdit = canEditTask(held, userId);
 
-  // Synchronous, so the field is focused inside the tap and a phone raises its keyboard.
-  // A revealed field stays until the sheet closes: hiding it on blur shifted the sheet
-  // under the pointer, so the press that blurred it landed on something else.
-  const reveal = (piece: DetailPiece) => {
-    flushSync(() => {
-      setRevealed((current) => new Set(current).add(piece));
-      setOffering(false);
-    });
+  // Synchronous, so the field is focused inside the tap and a phone raises its keyboard
+  const reveal = (piece: Piece) => {
+    flushSync(() => setRevealed((current) => new Set(current).add(piece)));
     focusOnReveal[piece]?.current?.focus();
   };
 
-  // From the saved value too: clearing the draft must not unmount the field mid-edit, before
-  // its blur saves the empty description
-  const showDescription = !!task.description || description !== "" || revealed.has("description");
-  const canAssign = sharing.isOwner && isTopLevel && !task.assigneeId && sharing.others.length > 0;
-
-  const offers = [
-    !task.dueDate && { key: "date", label: "Date", icon: CalendarDays },
-    !showDescription && { key: "description", label: "Description", icon: AlignLeft },
-    isTopLevel && { key: "subtask", label: "Subtask", icon: ListChecks },
-    { key: "note", label: "Note", icon: StickyNote },
-    // Subtasks follow their parent's list
-    isTopLevel &&
-      !filing.category &&
-      filing.choices.length > 0 &&
-      !revealed.has("list") && { key: "list", label: "List", icon: ListPlus },
-    sharing.isOwner &&
-      isTopLevel &&
-      !sharing.sharedList &&
-      !revealed.has("share") && { key: "share", label: "Share", icon: UserPlus },
-    canAssign &&
-      !revealed.has("assignee") && { key: "assignee", label: "Assignee", icon: UserRound },
-  ].filter((offer): offer is Offer => !!offer);
-
-  const choose = (key: Offer["key"]) => {
-    if (key !== "date") return reveal(key);
-    setOffering(false);
-    dateRef.current?.showPicker();
-  };
-
   return (
-    <div className="relative mx-auto flex w-full max-w-2xl flex-col gap-5 px-6 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] touch:px-5">
-      {/* A textarea so long titles wrap; Enter commits like a single-line field */}
-      <div className="flex items-start gap-3">
-        <Checkbox
-          checked={isDone}
-          onCheckedChange={() => handleToggle(task)}
-          aria-label="Mark done"
-          className={cn(
-            "mt-3 touch:mt-2.75 touch:size-4.5 touch:after:-inset-y-3.5 touch:after:-right-3 touch:after:-left-4",
-            isReadyToTick(task, subtasks) && "border-primary",
+    <div className="relative mx-auto flex w-full max-w-2xl flex-col gap-3 px-6 pt-1 pb-[max(1rem,env(safe-area-inset-bottom))] touch:gap-2 touch:px-5">
+      <div className="flex flex-col">
+        <div className="flex items-center gap-3">
+          {isTopLevel ? (
+            <ListChip filing={filing} />
+          ) : (
+            <ParentCrumb parent={parent} onOpen={() => parent && onOpenTask(parent.id)} />
           )}
-        />
-        {/* Bare control + aria-label: a raw <textarea> doesn't register with Base UI's
-            Field, so a FieldLabel wouldn't be associated with it */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Textarea
-            ref={autoGrow}
-            data-slot={TITLE_SLOT}
-            aria-label="Title"
-            rows={1}
-            maxLength={MAX_TITLE}
-            enterKeyHint="done"
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value.replace(/\n/g, " "));
-              autoGrow(e.target);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                e.currentTarget.blur();
-              }
-            }}
-            onBlur={() => {
-              const trimmed = title.trim();
-              if (trimmed && trimmed !== task.title) updateTask(task.id, { title: trimmed });
-            }}
-            className={cn(
-              "py-2 text-lg leading-snug font-semibold md:text-lg",
-              quietField,
-              isDone && "text-muted-foreground line-through",
-            )}
-          />
-          {!sharing.isOwner && ownerName && (
-            <p className="text-sm text-hint">
-              <span dir="auto">{ownerName}</span>’s task
-            </p>
-          )}
-          {sharing.isOwner && task.sentBy && (
-            <p className="text-sm text-hint">
-              Sent by <span dir="auto">{task.sentBy.name}</span>
-            </p>
+          {canDeleteTask(held, userId) && (
+            <Button
+              variant="subtle"
+              intent="destructive"
+              size="default"
+              icon
+              bleed="end"
+              aria-label={isTopLevel ? "Delete task" : "Delete subtask"}
+              title={isTopLevel ? "Delete task" : "Delete subtask"}
+              onClick={() => {
+                handleDelete(task);
+                onClose();
+              }}
+              className="ml-auto"
+            >
+              <Trash2 className="touch:size-4.5" />
+            </Button>
           )}
         </div>
-      </div>
 
-      {showDescription && (
-        <DetailRow className="-mt-3">
-          <Textarea
-            ref={(el) => {
-              descriptionRef.current = el;
-              autoGrow(el);
-            }}
-            aria-label="Description"
-            value={description}
-            maxLength={MAX_TEXT}
-            onChange={(e) => {
-              setDescription(e.target.value);
-              autoGrow(e.target);
-            }}
-            onBlur={() => {
-              const val = description.trim() || null;
-              if (val !== (task.description ?? null)) updateTask(task.id, { description: val });
-            }}
-            placeholder="Description"
-            rows={1}
-            className={cn("py-1.5 text-muted-foreground", quietField)}
+        {/* A textarea so long titles wrap; Enter commits like a single-line field */}
+        <div className="flex items-start gap-3">
+          <Checkbox
+            checked={isDone}
+            onCheckedChange={() => handleToggle(task)}
+            aria-label="Mark done"
+            className={cn(
+              "mt-3 touch:mt-2.75 touch:size-4.5 touch:after:-inset-y-3.5 touch:after:-right-3 touch:after:-left-4",
+              isReadyToTick(task, subtasks) && "border-primary",
+            )}
           />
-        </DetailRow>
-      )}
+          {/* Bare control + aria-label: a raw <textarea> doesn't register with Base UI's
+              Field, so a FieldLabel wouldn't be associated with it */}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <Textarea
+              ref={autoGrow}
+              data-slot={TITLE_SLOT}
+              aria-label="Title"
+              rows={1}
+              maxLength={MAX_TITLE}
+              enterKeyHint="done"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value.replace(/\n/g, " "));
+                autoGrow(e.target);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                }
+              }}
+              onBlur={() => {
+                const trimmed = title.trim();
+                if (trimmed && trimmed !== task.title) updateTask(task.id, { title: trimmed });
+              }}
+              className={cn(
+                "py-2 text-lg leading-snug font-semibold md:text-lg",
+                quietField,
+                isDone && "text-muted-foreground line-through",
+              )}
+            />
+            {!sharing.isOwner && ownerName && (
+              <p className="text-sm text-hint">
+                <span dir="auto">{ownerName}</span>’s task
+              </p>
+            )}
+            {sharing.isOwner && task.sentBy && (
+              <p className="text-sm text-hint">
+                Sent by <span dir="auto">{task.sentBy.name}</span>
+              </p>
+            )}
+          </div>
+        </div>
 
-      {/* Hidden native picker: the browser supplies the date UI. Absolute, so it takes no
-          gap in the column; the picker opens where it sits, by the date line. */}
-      <input
-        ref={dateRef}
-        type="datetime-local"
-        step="1800"
-        value={task.dueDate ?? ""}
-        tabIndex={-1}
-        aria-hidden
-        onChange={(e) => updateTask(task.id, { dueDate: e.target.value || null })}
-        className="invisible absolute size-0"
-      />
+        {(canEdit || !!task.description) && (
+          <DetailRow>
+            <Textarea
+              ref={autoGrow}
+              aria-label="Details"
+              value={description}
+              maxLength={MAX_TEXT}
+              readOnly={!canEdit}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                autoGrow(e.target);
+              }}
+              onBlur={() => {
+                const val = description.trim() || null;
+                if (val !== (task.description ?? null)) updateTask(task.id, { description: val });
+              }}
+              placeholder="Add details"
+              rows={1}
+              className={cn("py-1.5 text-muted-foreground", quietField)}
+            />
+          </DetailRow>
+        )}
 
-      <div className="flex flex-col empty:hidden">
-        {task.dueDate && (
-          <DueDateRow
-            dueDate={task.dueDate}
-            onPick={() => dateRef.current?.showPicker()}
-            onClear={() => updateTask(task.id, { dueDate: null })}
-          />
-        )}
-        {isTopLevel && <ListField filing={filing} choosing={revealed.has("list")} />}
-        {isTopLevel && (
-          <SharingField task={task} sharing={sharing} adding={revealed.has("share")} />
-        )}
-        <AssigneeField
-          task={task}
-          sharing={sharing}
-          choosing={revealed.has("assignee") || openedAssigned}
+        {/* Hidden native picker: the browser supplies the date UI. Absolute, so it takes no
+            gap in the column; the picker opens where it sits, by the date line. */}
+        <input
+          ref={dateRef}
+          type="datetime-local"
+          step="1800"
+          value={task.dueDate ?? ""}
+          tabIndex={-1}
+          aria-hidden
+          onChange={(e) => updateTask(task.id, { dueDate: e.target.value || null })}
+          className="invisible absolute size-0"
         />
+
+        <div className="flex flex-col empty:hidden">
+          {task.dueDate ? (
+            <DueDateRow
+              dueDate={task.dueDate}
+              onPick={() => dateRef.current?.showPicker()}
+              onClear={() => updateTask(task.id, { dueDate: null })}
+            />
+          ) : (
+            canEdit && (
+              <AddRow icon={<CalendarDays />} onClick={() => dateRef.current?.showPicker()}>
+                Add a date
+              </AddRow>
+            )
+          )}
+          {isTopLevel ? (
+            <SharingField
+              task={task}
+              sharing={sharing}
+              adding={revealed.has("share")}
+              onAdd={() => reveal("share")}
+            />
+          ) : (
+            parent && <SubtaskSharing parent={parent} userId={userId} />
+          )}
+          <AssigneeField
+            task={task}
+            sharing={sharing}
+            choosing={revealed.has("assignee") || openedAssigned}
+            onChoose={() => reveal("assignee")}
+          />
+        </div>
       </div>
 
       {isTopLevel && (
         <Subtasks
           task={task}
           subtasks={subtasks}
+          canAdd={canEdit}
           adding={revealed.has("subtask")}
+          onAdd={() => reveal("subtask")}
           inputRef={subtaskRef}
           onToggle={handleToggle}
         />
       )}
 
-      <Notes taskId={task.id} notes={notes} adding={revealed.has("note")} inputRef={noteRef} />
-
-      <div className="flex flex-col gap-1">
-        {offering && (
-          <fieldset
-            aria-label="Add to task"
-            className="-ml-3 flex min-w-0 flex-wrap gap-x-1 touch:-ml-3.5"
-          >
-            {offers.map(({ key, label, icon: Icon }) => (
-              <Button key={key} variant="subtle" size="sm" onClick={() => choose(key)}>
-                <Icon />
-                {label}
-              </Button>
-            ))}
-          </fieldset>
-        )}
-        <div className="flex items-center justify-between">
-          <Button variant="subtle" size="sm" onClick={() => setOffering((o) => !o)} bleed="start">
-            <Plus className={cn("transition-transform", offering && "rotate-45")} />
-            {offering ? "Cancel" : "Add"}
-          </Button>
-          {canDeleteTask(holders(task, lists, parent), userId) && (
-            <Button
-              variant="subtle"
-              intent="destructive"
-              size="sm"
-              bleed="end"
-              onClick={() => {
-                handleDelete(task);
-                onClose();
-              }}
-            >
-              <Trash2 />
-              {isTopLevel ? "Delete task" : "Delete subtask"}
-            </Button>
-          )}
-        </div>
-      </div>
+      <Notes
+        taskId={task.id}
+        notes={notes}
+        adding={revealed.has("note")}
+        onAdd={() => reveal("note")}
+        inputRef={noteRef}
+      />
     </div>
   );
 };
