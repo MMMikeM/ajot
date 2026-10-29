@@ -1,5 +1,5 @@
 import { apiHeaders, client } from "~/lib/api";
-import { apiClient } from "~/lib/api-client";
+import { apiClient, errorOf } from "~/lib/api-client";
 import { getAuthToken } from "~/lib/auth/token";
 import { clearSession } from "~/lib/auth/session";
 import { getServerUrl } from "~/lib/server-url";
@@ -15,10 +15,8 @@ const reach = <T>(request: Promise<T>) =>
     throw new Error(UNREACHABLE);
   });
 
-const errorFrom = async (res: Response, fallback: string) => {
-  const body = (await res.json().catch(() => ({}))) as { error?: string };
-  return new Error(body.error ?? fallback);
-};
+const errorFrom = async (res: Response, fallback: string) =>
+  new Error((await errorOf(res)) ?? fallback);
 
 export const createInvite = async (): Promise<{ token: string; expiresAt: string }> => {
   const res = await reach(client.api.invites.$post());

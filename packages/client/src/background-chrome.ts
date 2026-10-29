@@ -13,20 +13,18 @@ import {
 } from "@newtab-todo/shared/push-payload";
 import { MSG_TOKEN_CHANGED, SERVER_URL_KEY, TOKEN_KEY } from "@newtab-todo/shared/constants";
 import { ext, getStoredSession, notifyTabs } from "~/lib/ext";
+import { apiClient, type SignedInSession } from "~/lib/api-client";
 import { fetchServerConfig } from "~/lib/server-config";
 import { setupContextMenu } from "~/lib/context-menu";
 import { prewarmPeriodically, prewarmSnapshot } from "~/lib/sync/prewarm-extension";
 
 declare let self: ServiceWorkerGlobalScope;
 
-type Session = NonNullable<Awaited<ReturnType<typeof getStoredSession>>>;
-
-const upload = async (subscription: PushSubscription, { token, serverUrl }: Session) => {
-  const ok = await sendSubscriptionToServer(
-    subscription,
-    `${serverUrl}/api/push/subscribe?kind=extension`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
+const upload = async (subscription: PushSubscription, session: SignedInSession) => {
+  const url = apiClient(session).api.push.subscribe.$url({ query: { kind: "extension" } });
+  const ok = await sendSubscriptionToServer(subscription, url.href, {
+    headers: { Authorization: `Bearer ${session.token}` },
+  });
   if (!ok) throw new Error("subscription upload failed");
 };
 

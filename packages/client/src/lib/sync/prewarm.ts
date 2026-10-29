@@ -9,33 +9,18 @@ import {
   writeSnapshot,
 } from "~/lib/snapshot-store";
 import { applyRows } from "~/lib/sync/saved-rows";
-import { ApiError, apiClient, type Reply, type SignedInSession } from "~/lib/api-client";
+import { ApiError, apiClient, type SignedInSession } from "~/lib/api-client";
+import { listRoutes, type ListKey } from "~/lib/list-routes";
 
-export type PrewarmSession = SignedInSession;
+type GetSession = () => Promise<SignedInSession | null>;
 
-type SnapshotKey = (typeof SNAPSHOT_KEYS)[number];
-
-type GetSession = () => Promise<PrewarmSession | null>;
-
-// A list saved for a page opened offline, and the route it comes from
-const listRoutes = ({
-  api,
-}: ReturnType<typeof apiClient>): Record<SnapshotKey, () => Promise<Reply>> => ({
-  tasks: () => api.tasks.$get(),
-  categories: () => api.categories.$get(),
-  notes: () => api.notes.$get(),
-  contacts: () => api.contacts.$get(),
-  attachments: () => api.attachments.$get(),
-});
-
-// Its own check, not `succeeded`: the five routes' answers differ, and only json() is wanted
-const fetchList = async (routes: ReturnType<typeof listRoutes>, key: SnapshotKey) => {
+const fetchList = async (routes: ReturnType<typeof listRoutes>, key: ListKey) => {
   const res = await routes[key]();
   if (!res.ok) throw new ApiError(res.status, `/api/${key}`);
-  return [key, await res.json()] as const;
+  return [key, (await res.json()) as unknown] as const;
 };
 
-const sameSession = (a: PrewarmSession | null, b: PrewarmSession) =>
+const sameSession = (a: SignedInSession | null, b: SignedInSession) =>
   a?.token === b.token && a.serverUrl === b.serverUrl;
 
 // Rows from another account (a device signed out while offline, still subscribed) never land

@@ -4,6 +4,7 @@ import {
   USER_ID_KEY,
   MSG_SYNC_ALL,
 } from "@newtab-todo/shared/constants";
+import type { SignedInSession } from "~/lib/api-client";
 
 // Firefox exposes the WebExtension API as `browser`; Chrome only as `chrome`, whose MV3 calls
 // return promises for everything this app uses (runtime messaging, storage.local). Undefined
@@ -14,7 +15,7 @@ export const ext = ((globalThis as { browser?: typeof browser }).browser ??
 const getStored = async (key: string) =>
   ((await ext.storage.local.get(key)) as Record<string, string | undefined>)[key];
 
-export const getStoredSession = async () => {
+export const getStoredSession = async (): Promise<SignedInSession | null> => {
   const [token, serverUrl, userId] = await Promise.all([
     getStored(TOKEN_KEY),
     getStored(SERVER_URL_KEY),

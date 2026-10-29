@@ -1,5 +1,12 @@
 import { servedType } from "@newtab-todo/shared/attachments";
-import { apiClient, type Fetcher, type Reply, type SignedInSession } from "~/lib/api-client";
+import {
+  apiClient,
+  errorOf,
+  type ApiClient,
+  type Fetcher,
+  type Reply,
+  type SignedInSession,
+} from "~/lib/api-client";
 import { putToBucket } from "~/lib/files/bucket";
 import { changeUpload, readBlobs, readUploads, type Upload } from "~/lib/files/store";
 import {
@@ -10,8 +17,6 @@ import {
   type Request,
   type Step,
 } from "~/lib/files/upload-steps";
-
-export type FilesSession = SignedInSession;
 
 export type DrainDeps = {
   /** The global one when left out. */
@@ -35,15 +40,6 @@ const defaults = (): DrainDeps => ({
   now: Date.now,
 });
 
-const errorOf = async (res: Reply) => {
-  try {
-    const body = (await res.json()) as { error?: unknown };
-    return typeof body.error === "string" ? body.error : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
 const answerOf = async <R extends Reply>(request: Promise<R>): Promise<Answer & { res?: R }> => {
   try {
     const res = await request;
@@ -53,10 +49,7 @@ const answerOf = async <R extends Reply>(request: Promise<R>): Promise<Answer & 
   }
 };
 
-const attachmentsApi = ({ fetch }: DrainDeps, session: FilesSession) =>
-  apiClient(session, fetch).api.attachments;
-
-type AttachmentsApi = ReturnType<typeof attachmentsApi>;
+type AttachmentsApi = ApiClient["api"]["attachments"];
 
 /** Applies the answer to the entry as it is now; undefined when the entry is gone. */
 const settle = async (deps: DrainDeps, id: string, request: Request, answer: Answer) => {
@@ -135,12 +128,12 @@ const run = async (deps: DrainDeps, api: AttachmentsApi, upload: Upload, step: S
  * is due. Resolves with when the next retry is due, so the caller can come back then; undefined
  * when nothing waits on time, or the session has expired.
  */
-export const drainUploads = (session: FilesSession, given: Partial<DrainDeps> = {}) => {
+export const drainUploads = (session: SignedInSession, given: Partial<DrainDeps> = {}) => {
   const deps = { ...defaults(), ...given };
   return deps.locks.request(LOCK, async (): Promise<number | undefined> => {
     // Another account's uploads, or anyone's while the user is unknown, wait for that account
     if (!session.userId) return undefined;
-    const api = attachmentsApi(deps, session);
+    const api = apiClient(session, { fetch: deps.fetch }).api.attachments;
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const uploads = (await readUploads()).filter((u) => u.uploaderId === session.userId);
       const now = deps.now();
