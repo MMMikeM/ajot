@@ -13,16 +13,20 @@ on:
 permissions:
   contents: read
 
-# A new push to a pull request stops its last run. On main a run waits for the one before it
-# instead, so a deploy or migration is never stopped halfway.
+# A new push to a pull request stops its last run. On main a newer run stops the older one's
+# build, tests and image job by job instead, since stopping a whole run would stop a deploy or
+# migration halfway; the deploy job never is, and an older run skips it (latest, below).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'push' && github.run_id || '' }}
+  cancel-in-progress: true
 
 jobs:
   # The client and extensions, built once: every e2e job tests this build and the deploy ships it
   build:
     runs-on: ubuntu-24.04
+    concurrency:
+      group: build-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -82,6 +86,9 @@ jobs:
           - name: builds
             run: pnpm exec playwright test -c playwright.prerender.config.ts && pnpm exec playwright test -c playwright.background.config.ts
     name: e2e (${{ matrix.name }})
+    concurrency:
+      group: e2e-${{ github.ref }}-${{ matrix.name }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
@@ -119,6 +126,9 @@ jobs:
   # requests build it too, so a broken Dockerfile shows before the merge.
   server-image:
     runs-on: ubuntu-26.04
+    concurrency:
+      group: server-image-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
@@ -135,10 +145,32 @@ jobs:
           docker build --target server -t registry.fly.io/ajot:server-${{ github.sha }} .
           docker push registry.fly.io/ajot:server-${{ github.sha }}
 
-  deploy:
+  # An older run can pass its tests before a newer one has started its own, which would deploy
+  # the older commit and then the newer one
+  latest:
     needs: [e2e, server-image]
     if: github.event_name == 'push'
     runs-on: ubuntu-26.04
+    outputs:
+      is-head: ${{ steps.head.outputs.is-head }}
+    steps:
+      # If GitHub can't say, it deploys, as every run did before
+      - id: head
+        run: |
+          head=$(curl -sf -H "Accept: application/vnd.github.sha" -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/commits/main") || head=${{ github.sha }}
+          echo "is-head=$([ "$head" = "${{ github.sha }}" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  deploy:
+    needs: latest
+    if: needs.latest.outputs.is-head == 'true'
+    runs-on: ubuntu-26.04
+    # One at a time, and never stopped: a newer one waits for it
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
