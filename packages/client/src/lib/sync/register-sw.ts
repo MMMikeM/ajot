@@ -1,6 +1,35 @@
+import { MSG_BUILD_VERSION } from "@newtab-todo/shared/constants";
+import { createExternalStore } from "~/lib/external-store";
 const UPDATE_POLL_MS = 60 * 60 * 1000;
 // As often as the browser allows; Chrome decides from how much the app is used, hours apart
 const PREWARM_EVERY_MS = 15 * 60 * 1000;
+
+const updateReady = createExternalStore(false);
+
+/** A newer build has taken over this page, which the banner asks the user to reload for. */
+export const useUpdateReady = updateReady.useStore;
+
+/**
+ * A newer build's worker has taken over, and this page, on the build before it, may no longer match
+ * the server. Reloading is the user's call while they're looking, since it would lose whatever
+ * they're in the middle of; once the page is hidden there's nothing on screen to lose.
+ */
+const offerReload = () => {
+  if (updateReady.get()) return;
+  updateReady.set(true);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") location.reload();
+  });
+};
+
+/** A deploy restarts the server, so whatever notices that asks for the new build straight away. */
+export const checkForUpdate = () => {
+  if (!("serviceWorker" in navigator) || location.protocol.endsWith("-extension:")) return;
+  navigator.serviceWorker
+    .getRegistration()
+    .then((reg) => reg?.update())
+    .catch((err) => console.warn("[sw] update check failed:", err));
+};
 
 type PeriodicSyncRegistration = ServiceWorkerRegistration & {
   periodicSync?: { register: (tag: string, options: { minInterval: number }) => Promise<void> };
@@ -28,18 +57,13 @@ export const registerServiceWorker = () => {
     return console.log("[sw] skipped: extension context");
   if (!("serviceWorker" in navigator)) return console.log("[sw] skipped: no serviceWorker API");
 
-  // Pick up the new worker, but never reload the page while the user is looking at it
+  // Any worker taking over, the first included, is asked its build: only a different one is news
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (document.visibilityState === "hidden") {
-      window.location.reload();
-      return;
-    }
-    const reloadOnHide = () => {
-      if (document.visibilityState === "hidden") {
-        window.location.reload();
-      }
-    };
-    document.addEventListener("visibilitychange", reloadOnHide);
+    navigator.serviceWorker.controller?.postMessage({ type: MSG_BUILD_VERSION });
+  });
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    const reply = event.data as { type?: string; version?: string } | null;
+    if (reply?.type === MSG_BUILD_VERSION && reply.version !== __BUILD_VERSION__) offerReload();
   });
 
   console.log("[sw] calling register(/sw.js)");
@@ -49,15 +73,10 @@ export const registerServiceWorker = () => {
       console.log("[sw] registered:", reg.scope, reg);
       registerPeriodicPrewarm(reg).catch((err) => console.warn("[sw] periodic sync:", err));
 
-      // Fallback: deploy pushes are the primary update signal
-      setInterval(() => {
-        reg.update().catch((err) => console.warn("[sw] update check failed:", err));
-      }, UPDATE_POLL_MS);
-
+      // Fallbacks for when the stream can't reopen, such as a server without one
+      setInterval(checkForUpdate, UPDATE_POLL_MS);
       document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible") {
-          reg.update().catch((err) => console.warn("[sw] update check failed:", err));
-        }
+        if (document.visibilityState === "visible") checkForUpdate();
       });
     })
     .catch((err) => console.error("[sw] registration failed:", err));
