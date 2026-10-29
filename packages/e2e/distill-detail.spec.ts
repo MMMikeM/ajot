@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { openListPicker, startsWith, tapAddLine } from "./helpers/app";
-import { mockApi, noteOn } from "./helpers/mock-api";
+import { MOCK_ME, MOCK_SARAH, mockApi, noteOn, shareWith } from "./helpers/mock-api";
 
 // The task detail sheet: what a task has, and a quiet line to add what it hasn't, where it would
 // live. Against the dev server with /api mocked
@@ -361,9 +361,7 @@ test("a subtask's header trash deletes it, with Undo", async ({ page }) => {
 test("a subtask of a shared task says who else has it", async ({ page }) => {
   const data = await mockApi(page);
   const flights = data.tasks[0]!;
-  flights.shares = [
-    { ...(data.tasks[3]!.shares[0] as object), id: "s-flights", taskId: flights.id },
-  ];
+  flights.shares = [shareWith(flights.id, MOCK_SARAH)];
   const fares = data.tasks.find((t) => t.title === "Compare Tuesday and Wednesday fares")!;
   await page.goto(`/task/${fares.id}`, { waitUntil: "domcontentloaded" });
   const sheet = page.getByRole("dialog", { name: fares.title, exact: true });
@@ -377,12 +375,10 @@ test("a subtask of a shared task says who else has it", async ({ page }) => {
 
 test("a subtask of a task shared with you names its owner", async ({ page }) => {
   const data = await mockApi(page);
-  const sarah = { id: "u-sarah", name: "Sarah Murray" };
   const flights = data.tasks[0]!;
   const fares = data.tasks.find((t) => t.title === "Compare Tuesday and Wednesday fares")!;
-  for (const t of [flights, fares]) Object.assign(t, { userId: sarah.id, user: sarah });
-  const shareToMe = data.tasks.find((t) => t.title === "Pick a restaurant for Friday")!.shares[0];
-  flights.shares = [{ ...(shareToMe as object), id: "s-flights", taskId: flights.id }];
+  for (const t of [flights, fares]) Object.assign(t, { userId: MOCK_SARAH.id, user: MOCK_SARAH });
+  flights.shares = [shareWith(flights.id, MOCK_ME)];
   await page.goto(`/task/${fares.id}`, { waitUntil: "domcontentloaded" });
   const sheet = page.getByRole("dialog", { name: fares.title, exact: true });
 
