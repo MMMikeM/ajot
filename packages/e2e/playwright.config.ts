@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { API_PORT, BASE_URL, CLIENT_PORT } from "./helpers/stack";
+import { API_PORT, BASE_URL, CLIENT_PORT, S3_URL } from "./helpers/stack";
 
 // Where the touch layout or gestures behave differently from desktop. The rest test behaviour
 // that's the same at any size, so they run on desktop only.
@@ -56,10 +56,11 @@ export default defineConfig({
           command: `exec node_modules/.bin/vp preview --port ${CLIENT_PORT} --strictPort`,
           cwd: "../client",
           url: BASE_URL,
-          env: { ...process.env, SERVER_URL: `http://localhost:${API_PORT}` } as Record<
-            string,
-            string
-          >,
+          env: {
+            ...process.env,
+            SERVER_URL: `http://localhost:${API_PORT}`,
+            AWS_ENDPOINT_URL_S3: S3_URL,
+          } as Record<string, string>,
           reuseExistingServer: false,
         },
       ],
