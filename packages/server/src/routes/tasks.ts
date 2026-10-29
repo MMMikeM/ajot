@@ -11,7 +11,7 @@ import { sendNotification, getUserName } from "../notify";
 import * as notificationQueueRepo from "../db/notification-queue.repo";
 import { jsonBody } from "./crud";
 import * as reachRepo from "../db/reach.repo";
-import attachmentRepo from "../db/attachment.repo";
+import * as attachmentRepo from "../db/attachment.repo";
 import { audienceOf, markTaskEdited, requireTask } from "./task-users";
 import { sendReachChanges } from "./reach";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
