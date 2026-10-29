@@ -5,7 +5,7 @@ import { registerRoute, NavigationRoute } from "workbox-routing";
 import { NetworkFirst, CacheFirst } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
 import { toNotification, type PushMessage } from "@newtab-todo/shared/push-payload";
-import { MSG_SYNC_ALL } from "@newtab-todo/shared/constants";
+import { MSG_BUILD_VERSION, MSG_SYNC_ALL } from "@newtab-todo/shared/constants";
 import { createPrewarm } from "~/lib/sync/prewarm";
 import { readWorkerSession } from "~/lib/sync/worker-session";
 
@@ -64,6 +64,12 @@ registerRoute(
 );
 
 self.addEventListener("install", () => self.skipWaiting());
+// A page offers a reload when the worker that took it over is a newer build than its own
+self.addEventListener("message", (event: ExtendableMessageEvent) => {
+  if ((event.data as { type?: string } | null)?.type === MSG_BUILD_VERSION)
+    event.source?.postMessage({ type: MSG_BUILD_VERSION, version: __BUILD_VERSION__ });
+});
+
 self.addEventListener("activate", (event: ExtendableEvent) => {
   console.log(`[sw] activated: ${__BUILD_VERSION__}`);
   event.waitUntil(self.clients.claim());
