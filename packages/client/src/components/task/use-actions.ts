@@ -1,6 +1,6 @@
 import { flushSync } from "react-dom";
 import { compareSortOrder } from "@newtab-todo/shared/sort-order";
-import { updateTask, deleteTask, deleteTasks } from "~/lib/db/hooks";
+import { updateTask, deleteTask } from "~/lib/db/hooks";
 import { tasksCollection } from "~/lib/db/collections";
 import { addTask } from "~/lib/db/add-task";
 import { pushUndoToast as pushUndo, quoted } from "~/lib/undo-toast";
@@ -61,17 +61,11 @@ export const useTaskActions = () => {
       .filter((t) => t.parentId === taskId)
       .sort((a, b) => compareSortOrder(a.sortOrder, b.sortOrder));
 
-  const handleClearDone = (tasks: Task[]) => {
-    const undo = deleteTasks(tasks.map((t) => t.id));
-    pushUndo(`Cleared ${tasks.length} done ${tasks.length === 1 ? "task" : "tasks"}`, undo);
-  };
-
   return {
     handleToggle,
     handleDelete,
     handleSetDueDate,
     handleAddSubtask,
     getSubtasks,
-    handleClearDone,
   };
 };
