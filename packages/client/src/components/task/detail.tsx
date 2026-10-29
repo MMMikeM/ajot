@@ -313,14 +313,14 @@ const DueDateRow = ({
 }) => {
   const label = formatDueDateTime(dueDate);
   return (
-    <DetailRow icon={<CalendarDays />}>
+    <DetailRow icon={<CalendarDays />} content={canEdit ? "stack" : "line"}>
       {canEdit ? (
         <div className="flex items-center">
           <button
             type="button"
             onClick={onPick}
             aria-label={`Due date: ${label}`}
-            className={cn(lineButton, "h-9 flex-1 text-sm text-date touch:h-11 touch:text-base")}
+            className={cn(lineButton, "h-9 flex-1 text-date touch:h-11")}
           >
             {label}
           </button>
@@ -329,7 +329,7 @@ const DueDateRow = ({
           </Button>
         </div>
       ) : (
-        <p className="text-sm leading-9 text-date touch:text-base touch:leading-11">{label}</p>
+        <span className="text-date">{label}</span>
       )}
     </DetailRow>
   );

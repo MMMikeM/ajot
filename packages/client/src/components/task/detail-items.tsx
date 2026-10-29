@@ -16,7 +16,6 @@ import { getCurrentUserId, useOptimisticUserId } from "~/lib/auth/current-user";
 import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { Input, Textarea } from "~/components/ui/field";
 import { MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
-import { ListRow } from "~/components/ui/list-row";
 import { RevealButton, RevealGroup } from "~/components/ui/reveal-button";
 import { cn } from "~/lib/utils";
 import { canDeleteTask, canEditTask } from "@newtab-todo/shared/task-access";
@@ -24,7 +23,7 @@ import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
 import { holders } from "~/lib/task-holders";
 import { SectionLabel } from "~/components/ui/section-label";
 import { formatDay } from "~/lib/due-date";
-import { AddRow, DetailRow } from "~/components/task/detail-row";
+import { AddRow, DetailRow, ItemRow, rowText } from "~/components/task/detail-row";
 import { pushUndoToast, quoted } from "~/lib/undo-toast";
 
 /**
@@ -119,7 +118,7 @@ const useInlineEdit = (value: string, save: (value: string) => void) => {
 };
 
 // touch:py-1.5 centres the first line on the h-9 touch buttons
-const itemTextClass = "min-w-0 flex-1 py-1 text-sm touch:py-1.5 touch:text-base";
+const itemTextClass = cn("min-w-0 flex-1 py-1 touch:py-1.5", rowText);
 
 const EditTrigger = ({ className, ...props }: Omit<ComponentProps<"button">, "type">) => (
   <button
@@ -211,11 +210,7 @@ export const Subtasks = ({
               const isDone = sub.status === "done";
               const held = holders(sub, lists, task);
               return (
-                <ListRow
-                  key={sub.id}
-                  size="sm"
-                  className="-mx-2 min-h-9 items-start touch:min-h-11"
-                >
+                <ItemRow key={sub.id} className="items-start">
                   {/* Checkbox, title and Delete centre on the title's first line. The target ends
                     where the gap does and reaches left into the gutter, off the title. */}
                   <Checkbox
@@ -238,7 +233,7 @@ export const Subtasks = ({
                       />
                     </RevealGroup>
                   )}
-                </ListRow>
+                </ItemRow>
               );
             })}
           </DetailRow>
@@ -309,7 +304,7 @@ const NoteItem = ({ note }: { note: Note }) => {
 
   return (
     <DetailRow icon={<StickyNote />}>
-      <ListRow size="sm" className="-mx-2 min-h-9 items-start touch:min-h-11">
+      <ItemRow className="items-start">
         <div className="flex min-w-0 flex-1 flex-col pb-1">
           <EditTrigger
             aria-label={`Edit note: ${text}`}
@@ -328,7 +323,7 @@ const NoteItem = ({ note }: { note: Note }) => {
             onClick={() => pushUndoToast(quoted(text, " deleted", "Note "), deleteNote(note.id))}
           />
         </RevealGroup>
-      </ListRow>
+      </ItemRow>
     </DetailRow>
   );
 };
