@@ -40,6 +40,77 @@ export const dispatchPeriodicSync = (context: BrowserContext, origin: string, ta
     await cdp.send("ServiceWorker.dispatchPeriodicSyncEvent", { origin, registrationId, tag });
   });
 
+export const dispatchSync = (context: BrowserContext, origin: string, tag: string) =>
+  wakeWorker(context, origin, async (cdp, registrationId) => {
+    await cdp.send("ServiceWorker.dispatchSyncEvent", {
+      origin,
+      registrationId,
+      tag,
+      lastChance: false,
+    });
+  });
+
+/** A text file queued for `taskId` as a page that then closed leaves it, in `ajot-files`. */
+export const queueUpload = (
+  worker: Worker,
+  {
+    id,
+    taskId,
+    uploaderId,
+    text,
+  }: { id: string; taskId: string; uploaderId: string; text: string },
+) =>
+  worker.evaluate(
+    ({ id, taskId, uploaderId, text }) =>
+      new Promise<void>((done, fail) => {
+        const open = indexedDB.open("ajot-files", 1);
+        // As lib/files/store.ts creates it
+        open.onupgradeneeded = () => {
+          open.result.createObjectStore("blobs");
+          open.result.createObjectStore("uploads");
+        };
+        open.onerror = () => fail(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction(["blobs", "uploads"], "readwrite");
+          const blob = new Blob([text], { type: "text/plain" });
+          const at = new Date().toISOString();
+          tx.objectStore("blobs").put(
+            { blob, userId: uploaderId, pinned: true, savedAt: Date.now() },
+            `${id}:file`,
+          );
+          tx.objectStore("uploads").put(
+            {
+              row: {
+                id,
+                taskId,
+                name: "note.txt",
+                mimeType: "text/plain",
+                size: blob.size,
+                thumbhash: null,
+                hasThumb: false,
+                createdAt: at,
+                updatedAt: at,
+              },
+              uploaderId,
+              posted: false,
+              serverDeleted: false,
+              attempts: 0,
+              retryAt: 0,
+              sizeMismatches: 0,
+            },
+            id,
+          );
+          tx.oncomplete = () => {
+            db.close();
+            done();
+          };
+          tx.onerror = () => fail(tx.error);
+        };
+      }),
+    { id, taskId, uploaderId, text },
+  );
+
 export const savedTitles = (worker: Worker) =>
   worker.evaluate(
     () =>

@@ -25,6 +25,8 @@ export type DrainDeps = {
   now: () => number;
   /** The row `/complete` answered with, for a page to show before its broadcast arrives. */
   onUploaded?: (row: unknown) => void;
+  /** Which entries this context may send; the rest wait for one that can. */
+  only?: (upload: Upload) => boolean;
 };
 
 const LOCK = "ajot-uploads";
@@ -135,7 +137,9 @@ export const drainUploads = (session: SignedInSession, given: Partial<DrainDeps>
     if (!session.userId) return undefined;
     const api = apiClient(session, { fetch: deps.fetch }).api.attachments;
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const uploads = (await readUploads()).filter((u) => u.uploaderId === session.userId);
+      const uploads = (await readUploads()).filter(
+        (u) => u.uploaderId === session.userId && (deps.only?.(u) ?? true),
+      );
       const now = deps.now();
       const due = uploads.flatMap((upload) => {
         const step = nextStep(upload, now);

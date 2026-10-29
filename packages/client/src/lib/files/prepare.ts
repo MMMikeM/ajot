@@ -35,22 +35,36 @@ export const fitWithin = (width: number, height: number, side: number) => {
   };
 };
 
+/** What a transparent image's thumbnail is drawn over: the page's background. */
+export const PAGE_BACKGROUND = "oklch(0.165 0.02 262)";
+
+// A worker has no Image, so it decodes the whole picture to measure it: only what the context menu
+// saves from a page goes through here, not a 48 MP photo
+const measureByDecoding = async (file: Blob) => {
+  const bitmap = await createImageBitmap(file);
+  const { width, height } = bitmap;
+  bitmap.close();
+  return { width, height };
+};
+
 // Reads the header without decoding the pixels, which for a 48 MP photo would take ~190 MB; it
 // also tells whether this browser can decode the type at all
 const dimensionsOf = (file: Blob) =>
-  new Promise<{ width: number; height: number }>((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve({ width: image.naturalWidth, height: image.naturalHeight });
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error(`can't decode ${file.type}`));
-    };
-    image.src = url;
-  });
+  typeof Image === "undefined"
+    ? measureByDecoding(file)
+    : new Promise<{ width: number; height: number }>((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve({ width: image.naturalWidth, height: image.naturalHeight });
+        };
+        image.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error(`can't decode ${file.type}`));
+        };
+        image.src = url;
+      });
 
 const resizeTo = (size: { width: number; height: number }) =>
   ({ resizeWidth: size.width, resizeHeight: size.height, resizeQuality: "high" }) as const;
@@ -58,34 +72,41 @@ const resizeTo = (size: { width: number; height: number }) =>
 const decode = (file: Blob, size: { width: number; height: number }) =>
   createImageBitmap(file, { imageOrientation: "from-image", ...resizeTo(size) });
 
-// iOS 16.0–16.3 has OffscreenCanvas without convertToBlob
+type Context2D = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
+
+// A JPEG has no transparency, which would otherwise turn black
+const draw = (context: Context2D, bitmap: ImageBitmap, background?: string) => {
+  if (background) {
+    context.fillStyle = background;
+    context.fillRect(0, 0, bitmap.width, bitmap.height);
+  }
+  context.drawImage(bitmap, 0, 0);
+};
+
+// iOS 16.0–16.3 has OffscreenCanvas without convertToBlob; a worker has no document
 const encode = async (
   bitmap: ImageBitmap,
   quality: number,
   background?: string,
 ): Promise<Blob | undefined> => {
   const { width, height } = bitmap;
-  const offscreen =
-    typeof OffscreenCanvas !== "undefined" && "convertToBlob" in OffscreenCanvas.prototype;
-  const canvas = offscreen ? new OffscreenCanvas(width, height) : document.createElement("canvas");
+  if (typeof OffscreenCanvas !== "undefined" && "convertToBlob" in OffscreenCanvas.prototype) {
+    const canvas = new OffscreenCanvas(width, height);
+    const context = canvas.getContext("2d");
+    if (!context) return undefined;
+    draw(context, bitmap, background);
+    return canvas.convertToBlob({ type: "image/jpeg", quality });
+  }
+  if (typeof document === "undefined") return undefined;
+  const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  const context = canvas.getContext("2d") as
-    | OffscreenCanvasRenderingContext2D
-    | CanvasRenderingContext2D
-    | null;
+  const context = canvas.getContext("2d");
   if (!context) return undefined;
-  // A JPEG has no transparency, which would otherwise turn black
-  if (background) {
-    context.fillStyle = background;
-    context.fillRect(0, 0, width, height);
-  }
-  context.drawImage(bitmap, 0, 0);
-  if (canvas instanceof HTMLCanvasElement)
-    return new Promise((resolve) =>
-      canvas.toBlob((blob) => resolve(blob ?? undefined), "image/jpeg", quality),
-    );
-  return canvas.convertToBlob({ type: "image/jpeg", quality });
+  draw(context, bitmap, background);
+  return new Promise((resolve) =>
+    canvas.toBlob((blob) => resolve(blob ?? undefined), "image/jpeg", quality),
+  );
 };
 
 const asJpegName = (name: string) => `${name.replace(/\.[^./]+$/, "")}.jpg`;
@@ -93,10 +114,10 @@ const asJpegName = (name: string) => `${name.replace(/\.[^./]+$/, "")}.jpg`;
 /**
  * What goes up for a file the user chose: photos only re-encoded when they're over 2560 px or
  * carry EXIF, so screenshots stay sharp, transparency survives and a GIF keeps moving. A HEIC
- * always is, where the browser can decode it, so every other browser can show it. Runs in a page,
- * which has Image. Never rejects: a file it can't read goes up as it is, with no thumbnail.
+ * always is, where the browser can decode it, so every other browser can show it. Never rejects:
+ * a file it can't read goes up as it is, with no thumbnail.
  */
-export const prepareFile = async (file: File, background: string): Promise<Prepared> => {
+export const prepareFile = async (file: File, background = PAGE_BACKGROUND): Promise<Prepared> => {
   const mimeType = file.type || "application/octet-stream";
   const asIs: Prepared = { file, name: file.name, mimeType };
   if (!IMAGE_TYPES.includes(mimeType)) return asIs;

@@ -8,10 +8,20 @@ import { toNotification, type PushMessage } from "@newtab-todo/shared/push-paylo
 import { MSG_BUILD_VERSION, MSG_SYNC_ALL } from "@newtab-todo/shared/constants";
 import { createPrewarm } from "~/lib/sync/prewarm";
 import { readWorkerSession } from "~/lib/sync/worker-session";
+import { createUploadSender } from "~/lib/files/sender";
+import { retryWaitingNow } from "~/lib/files/store";
 
 declare let self: ServiceWorkerGlobalScope;
 
 const prewarm = createPrewarm(readWorkerSession);
+
+// A push gives the worker about 30 s, so a bigger file waits for a Background Sync or a page; a
+// sync, which the browser fires once the device is online, can take minutes
+const MAX_PUSH_UPLOAD_BYTES = 5 * 1024 * 1024;
+const sendSmallUploads = createUploadSender(readWorkerSession, {
+  only: (upload) => upload.row.size <= MAX_PUSH_UPLOAD_BYTES,
+});
+const sendUploads = createUploadSender(readWorkerSession);
 
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
@@ -98,8 +108,18 @@ self.addEventListener("push", (event: PushEvent) => {
         }
       }),
       prewarm(payload.rows),
+      sendSmallUploads(),
     ]),
   );
+});
+
+type SyncEvent = ExtendableEvent & { tag: string };
+
+// Registered by lib/attachments/queue.ts each time a page queues a file
+self.addEventListener("sync", (event) => {
+  const sync = event as SyncEvent;
+  if (sync.tag === "ajot-uploads")
+    sync.waitUntil(retryWaitingNow().catch(console.error).then(sendUploads));
 });
 
 type PeriodicSyncEvent = ExtendableEvent & { tag: string };

@@ -1,51 +1,47 @@
-import { nanoid } from "nanoid";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
 import { getSignedInUserId } from "~/lib/auth/current-user";
 import { getServerUrl } from "~/lib/server-url";
+import { getBuildTarget } from "~/lib/build-target";
 import { attachmentsCollection } from "~/lib/db/collections";
-import { addUpload, retryWaitingNow, subscribeUploads } from "~/lib/files/store";
-import { prepareFile } from "~/lib/files/prepare";
-import { drainUploads } from "~/lib/files/uploads";
+import { retryWaitingNow, subscribeUploads } from "~/lib/files/store";
+import { queueFile, type Refusal } from "~/lib/files/attach";
+import { createUploadSender } from "~/lib/files/sender";
 import { refreshAttachmentsConfig } from "~/lib/attachments/config";
 import type { Attachment } from "~/lib/types";
-import { now } from "~/lib/utils";
 
-let running = false;
-let again = false;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-// The uploader's page shows it uploaded at once, rather than when its broadcast comes back
-const showUploaded = (row: unknown) =>
-  void attachmentsCollection.utils.writeUpsert(row as Attachment).catch(console.error);
-
 /** Sends what's waiting; a call during a run makes it run again once it's done. */
-export const sendUploads = async () => {
-  const token = getAuthToken();
-  if (!token) return;
-  if (running) {
-    again = true;
-    return;
-  }
-  running = true;
-  clearTimeout(retryTimer);
-  try {
-    do {
-      again = false;
-      const retryAt = await drainUploads(
-        { token, serverUrl: getServerUrl(), userId: getSignedInUserId() },
-        { onUploaded: showUploaded },
-      );
-      if (retryAt !== undefined)
-        retryTimer = setTimeout(() => void sendUploads(), Math.max(0, retryAt - Date.now()));
-    } while (again);
-  } catch (err) {
-    console.error("[uploads]", err);
-  } finally {
-    running = false;
-  }
+export const sendUploads = createUploadSender(
+  () => {
+    const token = getAuthToken();
+    return token ? { token, serverUrl: getServerUrl(), userId: getSignedInUserId() } : null;
+  },
+  {
+    // The uploader's page shows it uploaded at once, rather than when its broadcast comes back
+    onUploaded: (row) =>
+      void attachmentsCollection.utils.writeUpsert(row as Attachment).catch(console.error),
+    onRetryAt: (at) => {
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => void sendUploads(), Math.max(0, at - Date.now()));
+    },
+  },
+);
+
+type SyncRegistration = ServiceWorkerRegistration & {
+  sync?: { register: (tag: string) => Promise<void> };
 };
 
-export type Refused = { name: string; reason: "empty" | "too-big" | "not-saved" };
+// The PWA's worker sends it once the device is online, even after this page has closed. Chromium
+// only; elsewhere the next open page does.
+const sendFromWorkerWhenOnline = () => {
+  if (getBuildTarget() !== "browser" || !("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.ready
+    .then((reg: SyncRegistration) => reg.sync?.register("ajot-uploads"))
+    .catch(console.error);
+};
+
+export type Refused = { name: string; reason: Refusal };
 
 /**
  * Saves each file on this device and queues it, so it shows at once and survives the tab closing.
@@ -54,48 +50,14 @@ export type Refused = { name: string; reason: "empty" | "too-big" | "not-saved" 
 export const attachFiles = async (taskId: string, files: File[], maxBytes: number) => {
   const uploaderId = getSignedInUserId();
   if (!uploaderId) return [];
-  // What a transparent image's thumbnail is drawn over: the page's colour, which is on <html>
-  const background = getComputedStyle(document.documentElement).backgroundColor;
   const refused: Refused[] = [];
-  for (const chosen of files) {
-    if (chosen.size === 0) {
-      refused.push({ name: chosen.name, reason: "empty" });
+  for (const file of files) {
+    const reason = await queueFile(file, { taskId, uploaderId, maxBytes });
+    if (reason) {
+      refused.push({ name: file.name, reason });
       continue;
     }
-    const prepared = await prepareFile(chosen, background);
-    if (prepared.file.size > maxBytes) {
-      refused.push({ name: chosen.name, reason: "too-big" });
-      continue;
-    }
-    const at = now();
-    try {
-      await addUpload(
-        {
-          row: {
-            id: nanoid(),
-            taskId,
-            name: prepared.name,
-            mimeType: prepared.mimeType,
-            size: prepared.file.size,
-            thumbhash: null,
-            hasThumb: !!prepared.thumb,
-            createdAt: at,
-            updatedAt: at,
-          },
-          uploaderId,
-          posted: false,
-          serverDeleted: false,
-          attempts: 0,
-          retryAt: 0,
-          sizeMismatches: 0,
-        },
-        { file: prepared.file, ...(prepared.thumb && { thumb: prepared.thumb }) },
-      );
-    } catch (err) {
-      console.error("[uploads] couldn't save", err);
-      refused.push({ name: chosen.name, reason: "not-saved" });
-      continue;
-    }
+    sendFromWorkerWhenOnline();
     void sendUploads();
   }
   return refused;
