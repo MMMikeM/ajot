@@ -11,10 +11,22 @@ import { createBackoff } from "~/lib/sync/backoff";
 import { trackSyncState } from "~/lib/sync/sync-state";
 import { getStoredSession, notifyTabs } from "~/lib/ext";
 import { setupContextMenu } from "~/lib/context-menu";
+import { createUploadSender } from "~/lib/files/sender";
+import { retryWaitingNow } from "~/lib/files/store";
 import { prewarmPeriodically, prewarmSnapshot } from "~/lib/sync/prewarm-extension";
 
 // Changes arrive in bursts (a drag); save the lists once after the last of them
 const PREWARM_DELAY_MS = 1000;
+let uploadRetry: ReturnType<typeof setTimeout> | undefined;
+// This page lives as long as the browser, so it sends uploads of any size and waits out a backoff
+const sendUploads = createUploadSender(getStoredSession, {
+  onRetryAt: (at) => {
+    clearTimeout(uploadRetry);
+    uploadRetry = setTimeout(() => void sendUploads(), Math.max(0, at - Date.now()));
+  },
+});
+const sendWaitingNow = () => retryWaitingNow().catch(console.error).then(sendUploads);
+
 let prewarmTimer: ReturnType<typeof setTimeout> | undefined;
 const schedulePrewarm = () => {
   clearTimeout(prewarmTimer);
@@ -110,6 +122,8 @@ const connect = async () => {
     backoff.reset();
     void notifyTabs();
     schedulePrewarm();
+    // Connected again: what waited on the network goes now
+    void sendWaitingNow();
   });
 
   source.onerror = () => {
@@ -152,6 +166,7 @@ addEventListener("online", () => {
 
 connect().catch((err) => console.error("[bg-sse] initial connect error:", err));
 setupContextMenu();
-prewarmPeriodically();
+prewarmPeriodically(() => void sendUploads());
+void sendWaitingNow();
 
 console.log("[bg-sse] persistent background page loaded");
