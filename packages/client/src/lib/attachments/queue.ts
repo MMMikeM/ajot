@@ -3,7 +3,7 @@ import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
 import { getSignedInUserId } from "~/lib/auth/current-user";
 import { getServerUrl } from "~/lib/server-url";
 import { attachmentsCollection } from "~/lib/db/collections";
-import { addUpload, subscribeUploads } from "~/lib/files/store";
+import { addUpload, retryWaitingNow, subscribeUploads } from "~/lib/files/store";
 import { prepareFile } from "~/lib/files/prepare";
 import { drainUploads } from "~/lib/files/uploads";
 import { refreshAttachmentsConfig } from "~/lib/attachments/config";
@@ -101,6 +101,9 @@ export const attachFiles = async (taskId: string, files: File[], maxBytes: numbe
   return refused;
 };
 
+// Opening the app or reconnecting is the chance a backoff was waiting for, however long it had left
+const sendWaitingNow = () => retryWaitingNow().catch(console.error).then(sendUploads);
+
 // After the first paint: most opens have nothing queued, and neither can wait on the lists
 const whenIdle = (run: () => void) =>
   typeof requestIdleCallback === "function" ? requestIdleCallback(run) : setTimeout(run, 0);
@@ -108,12 +111,12 @@ const whenIdle = (run: () => void) =>
 export const initAttachments = () => {
   whenIdle(() => {
     if (getAuthToken()) refreshAttachmentsConfig().catch(console.error);
-    void sendUploads();
+    void sendWaitingNow();
     // Another tab's change, such as one that closed mid-upload, is this tab's to send. Its own
     // drain's changes call this too, which costs one run that finds nothing due.
     subscribeUploads(() => void sendUploads());
   });
-  addEventListener("online", () => void sendUploads());
+  addEventListener("online", () => void sendWaitingNow());
   subscribeAuthToken(() => {
     if (!getAuthToken()) return;
     refreshAttachmentsConfig().catch(console.error);

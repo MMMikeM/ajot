@@ -131,6 +131,28 @@ export const addUpload = async (upload: Upload, blobs: Partial<Record<Variant, B
   announce();
 };
 
+/**
+ * Makes every upload still waiting on its backoff due now: the wait was for a network that has
+ * just come back, or for a page that has just opened.
+ */
+export const retryWaitingNow = async () => {
+  let changed = false;
+  await write((tx) => {
+    const request = tx.objectStore(UPLOADS).openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      const upload = cursor.value as Upload;
+      if (upload.failed === undefined && upload.retryAt > 0) {
+        cursor.update({ ...upload, retryAt: 0 });
+        changed = true;
+      }
+      cursor.continue();
+    };
+  });
+  if (changed) announce();
+};
+
 export const readUploads = () =>
   inTransaction("readonly", (tx) => read<Upload[]>(tx.objectStore(UPLOADS).getAll())).then(
     (uploads) => uploads ?? [],
