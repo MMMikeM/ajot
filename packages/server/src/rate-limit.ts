@@ -118,7 +118,6 @@ export const limitableIp = (c: Context) => {
   return address && !isLoopback(unmapped(address)) ? limitedAs(address) : undefined;
 };
 
-/** The limiters to check: the address's only when there's one to limit by. */
 export const limitsFor = (byIp: Limiter, ip: string | undefined, rest: [Limiter, string][]) =>
   ip ? [[byIp, ip] as [Limiter, string], ...rest] : rest;
 

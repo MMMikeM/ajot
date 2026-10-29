@@ -95,11 +95,11 @@ export const tasks = sqliteTable(
     completedAt: nullableString("completed_at"),
     // Deleting hides a task rather than removing it, so Undo restores it for everyone
     deletedAt: nullableString("deleted_at"),
-    // 1 while not deleted, else null: only for live_subtask_has_live_parent, never sent
+    // Only for live_subtask_has_live_parent, never sent
     live: integer("live").generatedAlwaysAs(sql`CASE WHEN deleted_at IS NULL THEN 1 END`, {
       mode: "virtual",
     }),
-    // 1 or null as it has no parent or has one: only for subtask_has_top_level_parent, never sent
+    // Only for subtask_has_top_level_parent, never sent
     topLevel: integer("top_level").generatedAlwaysAs(sql`CASE WHEN parent_id IS NULL THEN 1 END`, {
       mode: "virtual",
     }),
@@ -130,7 +130,7 @@ export const tasks = sqliteTable(
       columns: [t.parentId, t.hasParent],
       foreignColumns: [t.id, t.topLevel],
     }),
-    // For task_access, looked up by task and by user
+    // For task_access's owner, list and subtask paths: looked up by user, category and parent
     index("tasks_user_idx").on(t.userId),
     index("tasks_category_idx").on(t.categoryId),
     index("tasks_parent_idx").on(t.parentId),

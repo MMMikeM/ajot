@@ -108,9 +108,8 @@ const canSend = (metadata: unknown) => {
   return !account || account === getSignedInUserId();
 };
 
-// No auth token — defer sync until login. A retriable error (not NonRetriableError)
-// keeps the transaction in the IDB outbox and holds the optimistic mutation visible. One queued
-// by another account waits the same way, for that account.
+// A retriable error (not NonRetriableError) keeps the transaction in the IDB outbox and holds the
+// optimistic mutation visible. One queued by another account waits the same way, for that account.
 const assertSignedIn = (metadata: unknown) => {
   if (!getAuthToken()) throw new Error("Not authenticated");
   const account = accountOf(metadata);
@@ -152,7 +151,7 @@ const deleteTaskWithSubtasks = async ({
   }
   for (const m of transaction.mutations)
     if (m.collection !== notesCollection) await writeDeleted(tasksCollection, m.key);
-  // A delete queued before deletes kept notes also unlinked them here; the server no longer does
+  // An outbox saved by an older version can hold note unlinks with the delete; refetch for those
   if (transaction.mutations.some((m) => m.collection === notesCollection))
     refetchLater(notesCollection);
 };

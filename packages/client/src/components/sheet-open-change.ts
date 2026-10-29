@@ -7,7 +7,6 @@ type OnOpenChange = NonNullable<ComponentProps<typeof Drawer.Root>["onOpenChange
 const isToastPress = (event: Event) =>
   event.target instanceof Element && event.target.closest("[data-toast-undo]") !== null;
 
-/** A sheet's onOpenChange that ignores presses on a toast, so Undo doesn't close the sheet under it. */
 export const keepOpenOnToastPress =
   (setOpen: (open: boolean) => void): OnOpenChange =>
   (open, details) => {

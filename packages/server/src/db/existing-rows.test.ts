@@ -42,7 +42,8 @@ const task = (id: string, sortOrder: string | null, more = "") =>
     '2026-01-01T00:00:0${id.length % 10}.000Z', '2026-02-01T00:00:00.000Z'${more})`;
 const ids = (rows: Row[]) => rows.map((row) => row.id);
 const keys = (rows: Row[]) => rows.map((row) => row.sort_order);
-// live, top_level and has_parent are new, and only the database reads them; sent_by_id is new too
+// The migrations add live, top_level, has_parent and sent_by_id, so rows from before lack them;
+// only the database reads the first three
 const without = (rows: Row[], column: string) =>
   rows
     .map(

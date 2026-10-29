@@ -30,7 +30,6 @@ const holderAccess = {
     FROM tasks t JOIN list_members m ON m.list_id = t.category_id`,
 } satisfies Record<AccessPath, SQL>;
 
-// A task reached through a path it holds, and a subtask through one its parent holds
 const reachedDirectly = (path: SQL) =>
   sql`SELECT h.holder_id AS task_id, h.user_id, h.can_edit, h.can_delete FROM (${path}) h`;
 const reachedThroughParent = (path: SQL) =>

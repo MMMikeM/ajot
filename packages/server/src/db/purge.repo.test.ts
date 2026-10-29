@@ -19,7 +19,7 @@ import {
   users,
 } from "./schema";
 
-// Each test hands the purge its own database
+// The client is unused here: purgeExpired is handed this file's own database
 vi.mock("./client", () => ({ db: undefined }));
 
 // The foreign keys decide what a purge takes with it, so it runs against the real migrations,

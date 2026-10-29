@@ -11,13 +11,12 @@ import babel from "@rolldown/plugin-babel";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, searchForWorkspaceRoot(process.cwd()), "");
 
-  // The API server the dev proxy forwards to
-  const serverUrl = env.SERVER_URL || "http://localhost:3000";
+  const apiProxyTarget = env.SERVER_URL || "http://localhost:3000";
 
   return {
     run: {
       tasks: {
-        // Assembles both extensions from the PWA build in dist/. A cache hit saves under a second.
+        // Assembles both extensions from the PWA build in dist/.
         "build:ext": { command: "node build-extension.ts", dependsOn: ["build"], cache: false },
       },
     },
@@ -27,7 +26,7 @@ export default defineConfig(({ mode }) => {
         allow: [searchForWorkspaceRoot(process.cwd())],
       },
       proxy: {
-        "/api": serverUrl,
+        "/api": apiProxyTarget,
       },
       warmup: {
         clientFiles: ["./src/main.tsx", "./src/routes/**/*.tsx"],

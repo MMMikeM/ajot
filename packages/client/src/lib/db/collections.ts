@@ -107,7 +107,6 @@ async function makeCollections() {
   };
 }
 
-// makeCollections() returns null values on the server path (SSR prerender).
 // This module is client-only — no server-path code ever imports it.
 const collections = await makeCollections();
 export const tasksCollection = collections.tasksCollection!;

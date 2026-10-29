@@ -30,7 +30,6 @@ const save = async (userId: string, deviceId: string, preferences: PushPreferenc
     });
 };
 
-/** Each of these users' devices' preferences, keyed by `deviceKey`. */
 const findForUsers = async (userIds: string[]) => {
   if (userIds.length === 0) return new Map<string, DevicePreferences>();
   const rows = await db.query.pushPreferences.findMany({ where: { userId: { in: userIds } } });

@@ -86,7 +86,6 @@ const browser = await chromium.launch();
   await context.close();
 }
 
-// Desktop stills: where focus sits after a few key presses
 {
   const { context, page } = await open(browser, desktop);
   await searchFor(page, "the", true);
@@ -143,7 +142,7 @@ await clip("clip-desktop-search-enter", async (page, timeline) => {
   timeline.show();
   await page.waitForTimeout(900);
   await page.keyboard.press("Enter");
-  // The sheet's chunk loads on first open; before the change nothing opens, so this times out
+  // Waits up to 3s; a build where Enter doesn't open the sheet times out here
   await page
     .waitForSelector('[data-slot="drawer-content"]', { timeout: 3000 })
     .catch(() => undefined);
