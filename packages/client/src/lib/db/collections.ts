@@ -2,6 +2,8 @@ import { createCollection } from "@tanstack/db";
 import { queryCollectionOptions } from "@tanstack/query-db-collection";
 import { queryClient } from "~/lib/db/query-client";
 import { client } from "~/lib/api";
+import { ApiError } from "~/lib/api-client";
+import { listRoutes } from "~/lib/list-routes";
 import { getAuthToken } from "~/lib/auth/token";
 import type { Attachment, Task, Category, Contact, Note } from "~/lib/types";
 import { getBuildTarget } from "../build-target";
@@ -18,6 +20,8 @@ const openSnapshot = async () => {
     console.warn("[db] snapshot unavailable, loading from the server:", err);
   }
 };
+
+const routes = listRoutes(client);
 
 // Signed out, or on a 401 (which signs out), each queryFn returns [] rather than throwing: a
 // query error during the first load puts the collection in an error state that rejects local
@@ -41,7 +45,7 @@ async function makeCollections() {
         queryKey: ["contacts"] as const,
         queryFn: async () => {
           if (!getAuthToken()) return [];
-          const res = await client.api.contacts.$get();
+          const res = await routes.contacts();
           if (res.status === 401) return [];
           if (!res.ok) throw new Error("Failed to fetch contacts");
           return res.json();
@@ -57,7 +61,7 @@ async function makeCollections() {
         queryKey: ["categories"] as const,
         queryFn: async () => {
           if (!getAuthToken()) return [];
-          const res = await client.api.categories.$get();
+          const res = await routes.categories();
           if (res.status === 401) return [];
           if (!res.ok) throw new Error("Failed to fetch categories");
           // Response schema marks user/collaborators nullish (shared with mutation routes),
@@ -75,7 +79,7 @@ async function makeCollections() {
         queryKey: ["tasks"] as const,
         queryFn: async () => {
           if (!getAuthToken()) return [];
-          const res = await client.api.tasks.$get();
+          const res = await routes.tasks();
           if (res.status === 401) return [];
           if (!res.ok) throw new Error("Failed to fetch tasks");
           return res.json();
@@ -91,7 +95,7 @@ async function makeCollections() {
         queryKey: ["notes"] as const,
         queryFn: async () => {
           if (!getAuthToken()) return [];
-          const res = await client.api.notes.$get();
+          const res = await routes.notes();
           if (res.status === 401) return [];
           if (!res.ok) throw new Error("Failed to fetch notes");
           return res.json();
@@ -107,11 +111,11 @@ async function makeCollections() {
         queryKey: ["attachments"] as const,
         queryFn: async () => {
           if (!getAuthToken()) return [];
-          const res = await client.api.attachments.$get();
+          const res = await routes.attachments();
           // Wider than this server's types: one from before attachments answers 404
           const status: number = res.status;
           if (status === 401 || status === 404) return [];
-          if (!res.ok) throw new Error("Failed to fetch attachments");
+          if (!res.ok) throw new ApiError(status, "/api/attachments");
           return res.json();
         },
         queryClient,

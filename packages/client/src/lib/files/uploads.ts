@@ -1,6 +1,13 @@
-import { hc } from "hono/client";
-import type { AppType } from "@newtab-todo/server/app";
 import { servedType } from "@newtab-todo/shared/attachments";
+import {
+  apiClient,
+  errorOf,
+  type ApiClient,
+  type Fetcher,
+  type Reply,
+  type SignedInSession,
+} from "~/lib/api-client";
+import { putToBucket } from "~/lib/files/bucket";
 import { changeUpload, readBlobs, readUploads, type Upload } from "~/lib/files/store";
 import {
   afterAnswer,
@@ -11,11 +18,9 @@ import {
   type Step,
 } from "~/lib/files/upload-steps";
 
-/** serverUrl is "" for the PWA, which calls its own origin. */
-export type FilesSession = { token: string; serverUrl: string; userId: string | null };
-
 export type DrainDeps = {
-  fetch: typeof fetch;
+  /** The global one when left out. */
+  fetch?: Fetcher;
   locks: { request: <T>(name: string, run: () => Promise<T>) => Promise<T> };
   now: () => number;
   /** The row `/complete` answered with, for a page to show before its broadcast arrives. */
@@ -31,21 +36,9 @@ const MAX_ROUNDS = 50;
 const runNow: DrainDeps["locks"] = { request: (_name, run) => run() };
 
 const defaults = (): DrainDeps => ({
-  fetch: (...args) => fetch(...args),
   locks: typeof navigator !== "undefined" && navigator.locks ? navigator.locks : runNow,
   now: Date.now,
 });
-
-type Reply = { ok: boolean; status: number; json(): Promise<unknown> };
-
-const errorOf = async (res: Reply) => {
-  try {
-    const body = (await res.json()) as { error?: unknown };
-    return typeof body.error === "string" ? body.error : undefined;
-  } catch {
-    return undefined;
-  }
-};
 
 const answerOf = async <R extends Reply>(request: Promise<R>): Promise<Answer & { res?: R }> => {
   try {
@@ -56,10 +49,7 @@ const answerOf = async <R extends Reply>(request: Promise<R>): Promise<Answer & 
   }
 };
 
-// The server's own route types, so a path or body it doesn't take fails to compile. Not the page's
-// client in lib/api.ts, which reads the page's session: this runs wherever the session is handed in.
-const attachmentsApi = ({ fetch }: DrainDeps, { serverUrl, token }: FilesSession) =>
-  hc<AppType>(serverUrl, { fetch, headers: { Authorization: `Bearer ${token}` } }).api.attachments;
+type AttachmentsApi = ApiClient["api"]["attachments"];
 
 /** Applies the answer to the entry as it is now; undefined when the entry is gone. */
 const settle = async (deps: DrainDeps, id: string, request: Request, answer: Answer) => {
@@ -79,13 +69,10 @@ const goesOn = (next: Awaited<ReturnType<typeof settle>>, deps: DrainDeps): next
   next.posted &&
   next.retryAt <= deps.now();
 
-// The browser sends each Blob's length as content-length, which the URL signed
 const put = (deps: DrainDeps, url: string, blob: Blob, contentType: string) =>
-  answerOf(
-    deps.fetch(url, { method: "PUT", headers: { "Content-Type": contentType }, body: blob }),
-  );
+  answerOf(putToBucket(url, blob, contentType, deps.fetch));
 
-const sendBytes = async (deps: DrainDeps, session: FilesSession, upload: Upload) => {
+const sendBytes = async (deps: DrainDeps, api: AttachmentsApi, upload: Upload) => {
   const { id, hasThumb, mimeType } = upload.row;
   const { file, thumb } = await readBlobs(id);
   if (!file || (hasThumb && !thumb)) {
@@ -95,7 +82,6 @@ const sendBytes = async (deps: DrainDeps, session: FilesSession, upload: Upload)
     }));
     return undefined;
   }
-  const api = attachmentsApi(deps, session);
   const urls = await answerOf(
     api["upload-url"].$post({ json: { id, ...(hasThumb && { thumbSize: thumb!.blob.size }) } }),
   );
@@ -118,9 +104,8 @@ const sendBytes = async (deps: DrainDeps, session: FilesSession, upload: Upload)
   return next;
 };
 
-const run = async (deps: DrainDeps, session: FilesSession, upload: Upload, step: Step) => {
+const run = async (deps: DrainDeps, api: AttachmentsApi, upload: Upload, step: Step) => {
   const { id } = upload.row;
-  const api = attachmentsApi(deps, session);
   switch (step) {
     case "drop":
       await changeUpload(id, (current) =>
@@ -134,7 +119,7 @@ const run = async (deps: DrainDeps, session: FilesSession, upload: Upload, step:
     case "restore":
       return settle(deps, id, "restore", await answerOf(api.$put({ json: { id } })));
     case "upload":
-      return sendBytes(deps, session, upload);
+      return sendBytes(deps, api, upload);
   }
 };
 
@@ -143,11 +128,12 @@ const run = async (deps: DrainDeps, session: FilesSession, upload: Upload, step:
  * is due. Resolves with when the next retry is due, so the caller can come back then; undefined
  * when nothing waits on time, or the session has expired.
  */
-export const drainUploads = (session: FilesSession, given: Partial<DrainDeps> = {}) => {
+export const drainUploads = (session: SignedInSession, given: Partial<DrainDeps> = {}) => {
   const deps = { ...defaults(), ...given };
   return deps.locks.request(LOCK, async (): Promise<number | undefined> => {
     // Another account's uploads, or anyone's while the user is unknown, wait for that account
     if (!session.userId) return undefined;
+    const api = apiClient(session, { fetch: deps.fetch }).api.attachments;
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const uploads = (await readUploads()).filter((u) => u.uploaderId === session.userId);
       const now = deps.now();
@@ -160,7 +146,7 @@ export const drainUploads = (session: FilesSession, given: Partial<DrainDeps> = 
         return times.length > 0 ? Math.min(...times) : undefined;
       }
       for (const { upload, step } of due)
-        if ((await run(deps, session, upload, step)) === "signed-out") return undefined;
+        if ((await run(deps, api, upload, step)) === "signed-out") return undefined;
     }
     return undefined;
   });

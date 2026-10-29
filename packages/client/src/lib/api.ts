@@ -1,5 +1,4 @@
-import type { AppType } from "@newtab-todo/server/app";
-import { hc } from "hono/client";
+import { apiClient } from "~/lib/api-client";
 import { getAuthToken } from "~/lib/auth/token";
 import { expireSession } from "~/lib/auth/session";
 import { clientId } from "~/lib/client-id";
@@ -32,19 +31,20 @@ const markFirstResponse = (url: string) => {
   markStartup(`server ${path}`);
 };
 
+// What signing can't do: the server the extension sends to can change under the page, and a 401
+// ends the session
 const browserFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const token = getAuthToken();
-  const headers = new Headers(init?.headers);
-  for (const [name, value] of Object.entries(apiHeaders())) headers.set(name, value);
   // Routes are relative; the extension sends them to the server the user chose
   const url = typeof input === "string" && input.startsWith("/") ? getServerUrl() + input : input;
-  const res = await fetch(url, { ...init, headers });
+  const res = await fetch(url, init);
   if (typeof url === "string") markFirstResponse(url);
   // Skip if the user signed in again while this request was in flight
   if (res.status === 401 && token && token === getAuthToken()) expireSession();
   return res;
 };
 
-export const client = hc<AppType>("", {
-  fetch: typeof window === "undefined" ? ssrFetch : browserFetch,
-});
+export const client = apiClient(
+  { serverUrl: "" },
+  { fetch: typeof window === "undefined" ? ssrFetch : browserFetch, headers: apiHeaders },
+);

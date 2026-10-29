@@ -4,6 +4,7 @@ import { compress } from "hono/compress";
 import { secureHeaders } from "hono/secure-headers";
 import { bodyLimit } from "hono/body-limit";
 import { CSP_HEADER, contentSecurityPolicy } from "@newtab-todo/shared/csp";
+import { EVENTS_PATH } from "@newtab-todo/shared/constants";
 import { authRoutes } from "./routes/auth";
 import { taskRoutes } from "./routes/tasks";
 import { categoryRoutes } from "./routes/categories";
@@ -56,7 +57,7 @@ app.onError((err, c) => {
 
 // Buffered compression would keep SSE chunks from flushing to the client
 app.use("*", async (c, next) => {
-  if (c.req.path === "/api/events") return next();
+  if (c.req.path === EVENTS_PATH) return next();
   return compress()(c, next);
 });
 
@@ -114,7 +115,7 @@ const api = app
   .route("/api/notes", noteRoutes)
   .route("/api/attachments", attachmentRoutes)
   .route("/api/push", pushRoutes)
-  .route("/api/events", eventsRoute)
+  .route(EVENTS_PATH, eventsRoute)
   .route("/api/invites", inviteRoutes)
   .route("/api/contacts", contactRoutes)
   .route("/api/notifications", notificationRoutes)
@@ -126,13 +127,14 @@ app.doc("/api/openapi.json", {
   info: { title: "NewTab Todo API", version: "1.0.0" },
 });
 
-// Nothing else shows a request for a route the API doesn't have: a client with a wrong path, or an
-// older one calling a route since removed
+// Nothing else shows a request for a route the API doesn't have: a client with a wrong path, or one
+// newer or older than this server. 501, not 404, which routes answer for a row that isn't there and
+// clients act on: a client retries a 5xx, so an upload waits for a server that has the route.
 app.all("/api/*", (c) => {
-  console.warn(`[404] no route for ${c.req.method} ${c.req.path}`);
-  return c.json(
-    { error: "The server doesn't know that request. Reload to get the latest app." },
-    404,
+  throw new LoggedHTTPException(
+    501,
+    "This server doesn't support that yet, or no longer does. The app or the server may be out of date.",
+    `no route for ${c.req.method} ${c.req.path}`,
   );
 });
 

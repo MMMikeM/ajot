@@ -4,6 +4,7 @@ import {
   subscribe,
 } from "@mmmike/web-push/client";
 import { apiHeaders, client } from "~/lib/api";
+import { apiClient, succeeded } from "~/lib/api-client";
 import { getOrCreateDeviceId } from "~/lib/auth/current-user";
 import { fetchServerConfig } from "~/lib/server-config";
 import { getServerUrl } from "~/lib/server-url";
@@ -12,6 +13,10 @@ import { getBuildTarget } from "~/lib/build-target";
 // Extension tabs never touch push: the Chrome background worker owns the extension's subscription,
 // and a Firefox extension page has no service worker to subscribe with.
 const ownsSubscription = () => getBuildTarget() === "browser";
+
+// For the web-push helpers, which send the request themselves. A typed URL needs an absolute base,
+// and the PWA's server is its own origin.
+const pushRoute = () => apiClient({ serverUrl: getServerUrl() || location.origin }).api.push;
 
 /**
  * The page's worker registration, without waiting for one. The library otherwise waits on
@@ -35,7 +40,7 @@ const findSubscription = async () => {
 };
 
 const uploadSubscription = async (subscription: PushSubscription) => {
-  const ok = await sendSubscriptionToServer(subscription, `${getServerUrl()}/api/push/subscribe`, {
+  const ok = await sendSubscriptionToServer(subscription, pushRoute().subscribe.$url().href, {
     headers: apiHeaders(),
   });
   if (!ok) throw new Error("subscription upload failed");
@@ -91,11 +96,11 @@ export const unregisterPushSubscription = async (headers = apiHeaders()): Promis
     // Nothing waits on the push service, which may never answer: signing out ends the session
     // once the server has dropped the endpoint, and the server needs only that to stop sending
     subscription.unsubscribe().catch(console.error);
-    await removeSubscriptionFromServer(
-      subscription.endpoint,
-      `${getServerUrl()}/api/push/unsubscribe`,
-      { method: "POST", headers, keepalive: true },
-    );
+    await removeSubscriptionFromServer(subscription.endpoint, pushRoute().unsubscribe.$url().href, {
+      method: "POST",
+      headers,
+      keepalive: true,
+    });
     console.log("[push] unregistered");
   } catch (err) {
     console.error("[push] unregister failed:", err);
@@ -113,16 +118,14 @@ export const pushBlocker = (): "unsupported" | "denied" | null => {
 const deviceHeader = () => ({ "x-device-id": getOrCreateDeviceId() });
 
 export const fetchPushPreferences = async () => {
-  const res = await client.api.push.preferences.$get({ header: deviceHeader() });
-  if (!res.ok) throw new Error("Couldn't load notification settings");
+  const res = await succeeded(client.api.push.preferences.$get({ header: deviceHeader() }));
   return res.json();
 };
 
 export type PushPreferences = Awaited<ReturnType<typeof fetchPushPreferences>>;
 
 const putPushPreferences = async (preferences: PushPreferences) => {
-  const res = await client.api.push.preferences.$put({ header: deviceHeader(), json: preferences });
-  if (!res.ok) throw new Error("Couldn't save notification settings");
+  await succeeded(client.api.push.preferences.$put({ header: deviceHeader(), json: preferences }));
 };
 
 // One at a time, so a quick second change can't be overtaken by the first

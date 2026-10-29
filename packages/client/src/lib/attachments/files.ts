@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { client } from "~/lib/api";
+import { getFromBucket } from "~/lib/files/bucket";
 import { getSignedInUserId } from "~/lib/auth/current-user";
 import {
   blobKey,
@@ -62,7 +63,7 @@ const fetchBlob = async (id: string, variant: Variant) => {
   if (!navigator.onLine || !userId) return undefined;
   const url = await urlFor(id, variant);
   if (!url) return undefined;
-  const res = await fetch(url);
+  const res = await getFromBucket(url);
   if (!res.ok) return undefined;
   const blob = await res.blob();
   // Shown all the same when it can't be kept, such as with storage full

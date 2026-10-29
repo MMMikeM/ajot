@@ -4,9 +4,8 @@ import { SERVER_URL_KEY, TOKEN_KEY } from "@newtab-todo/shared/constants";
 import { now } from "@newtab-todo/shared/iso";
 import { MAX_TEXT, MAX_TITLE, cutTo } from "@newtab-todo/shared/field-limits";
 import { ext, getStoredSession } from "~/lib/ext";
-import type { Category, Contact } from "~/lib/types";
+import { ApiError, apiClient, succeeded, type ApiClient } from "~/lib/api-client";
 
-type Session = NonNullable<Awaited<ReturnType<typeof getStoredSession>>>;
 type ClickData = browser.contextMenus.OnClickData;
 type ContextType = browser.contextMenus.ContextType;
 
@@ -70,37 +69,17 @@ const draftFor = (id: DraftId, info: ClickData, tab?: browser.tabs.Tab): Draft =
   }
 };
 
-class RequestError extends Error {
-  constructor(readonly status: number) {
-    super(`HTTP ${status}`);
-  }
-}
-
-const request = async <T>(session: Session, method: string, path: string, body?: unknown) => {
-  const res = await fetch(`${session.serverUrl}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${session.token}`, "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (!res.ok) throw new RequestError(res.status);
-  return (res.status === 204 ? undefined : await res.json()) as T;
-};
-
-const nextSortOrder = async (session: Session) => {
-  const tasks = await request<{ parentId: string | null; sortOrder: string | null }[]>(
-    session,
-    "GET",
-    "/api/tasks",
-  );
+const nextSortOrder = async ({ api }: ApiClient) => {
+  const tasks = await succeeded(api.tasks.$get()).then((res) => res.json());
   return keyAfter(tasks.flatMap((t) => (t.parentId ? [] : [t.sortOrder])));
 };
 
 const INBOX: Destination = { kind: "inbox", target: "", title: "Inbox", done: "Added to Inbox" };
 
-const fetchDestinations = async (session: Session): Promise<Group[]> => {
+const fetchDestinations = async ({ api }: ApiClient): Promise<Group[]> => {
   const [categories, contacts] = await Promise.all([
-    request<Category[]>(session, "GET", "/api/categories"),
-    request<Contact[]>(session, "GET", "/api/contacts"),
+    succeeded(api.categories.$get()).then((res) => res.json()),
+    succeeded(api.contacts.$get()).then((res) => res.json()),
   ]);
   const people = contacts.map((c) => c.contactUser);
   return [
@@ -137,15 +116,16 @@ const notify = (title: string, message: string) =>
     .catch(console.error);
 
 const failureMessage = (err: unknown) => {
-  if (err instanceof RequestError && err.status === 401) return "Sign in to Ajot again.";
-  if (err instanceof RequestError && err.status === 429)
+  if (err instanceof ApiError && err.status === 401) return "Sign in to Ajot again.";
+  if (err instanceof ApiError && err.status === 429)
     return "That's a lot of sharing at once. Try again in a few minutes.";
-  if (err instanceof RequestError) return "The server couldn't save it. Try again.";
+  if (err instanceof ApiError) return "The server couldn't save it. Try again.";
   return "Couldn't reach the server. Check your connection and try again.";
 };
 
 /** Adds the task, then whatever goes with it; returns the parts of that which failed. */
-const addDraft = async (session: Session, draft: Draft, kind: DestinationKind, target: string) => {
+const addDraft = async (client: ApiClient, draft: Draft, kind: DestinationKind, target: string) => {
+  const { api } = client;
   const timestamp = now();
   const base = { id: nanoid(), title: draft.title, createdAt: timestamp, updatedAt: timestamp };
 
@@ -153,48 +133,57 @@ const addDraft = async (session: Session, draft: Draft, kind: DestinationKind, t
   if (kind === "send") {
     const joined = [draft.note, draft.description].filter(Boolean).join("\n\n");
     const description = joined ? cutTo(joined, MAX_TEXT) : null;
-    await request(session, "POST", "/api/tasks/send", {
-      ...base,
-      description,
-      recipientId: target,
-    });
+    await succeeded(api.tasks.send.$post({ json: { ...base, description, recipientId: target } }));
     return [];
   }
 
   // Both schemas require userId; the server replaces it with the token's user
-  const task = await request<{ id: string }>(session, "POST", "/api/tasks", {
-    ...base,
-    userId: "",
-    description: draft.description,
-    categoryId: kind === "list" ? target : null,
-    sortOrder: await nextSortOrder(session),
-  });
+  const task = await succeeded(
+    api.tasks.$post({
+      json: {
+        ...base,
+        userId: "",
+        description: draft.description,
+        categoryId: kind === "list" ? target : null,
+        sortOrder: await nextSortOrder(client),
+        parentId: null,
+        assigneeId: null,
+        dueDate: null,
+        editedAt: null,
+        completedAt: null,
+      },
+    }),
+  ).then((res) => res.json());
 
   const extras: [string, Promise<unknown>][] = [];
   if (kind === "share")
     extras.push([
       "sharing",
-      request(session, "POST", "/api/tasks/share", { taskId: task.id, username: target }),
+      succeeded(api.tasks.share.$post({ json: { taskId: task.id, username: target } })),
     ]);
   if (draft.note)
     extras.push([
       "the note",
-      request(session, "POST", "/api/notes", {
-        id: crypto.randomUUID(),
-        userId: "",
-        taskId: task.id,
-        title: cutTo(draft.note, MAX_TITLE),
-        content: draft.note,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      }),
+      succeeded(
+        api.notes.$post({
+          json: {
+            id: crypto.randomUUID(),
+            userId: "",
+            taskId: task.id,
+            title: cutTo(draft.note, MAX_TITLE),
+            content: draft.note,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          },
+        }),
+      ),
     ]);
   const settled = await Promise.allSettled(extras.map(([, done]) => done));
   return extras.flatMap(([part], i) => (settled[i].status === "rejected" ? [part] : []));
 };
 
-const recordMenuUse = (session: Session, name: string) =>
-  request(session, "POST", "/api/metrics", { name }).catch(console.error);
+const recordMenuUse = ({ api }: ApiClient, name: string) =>
+  succeeded(api.metrics.$post({ json: { name } })).catch(console.error);
 
 let doneLabels = new Map<string, string>();
 
@@ -205,9 +194,10 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
   const draft = withinLimits(draftFor(draftId as DraftId, info, tab));
   const session = await getStoredSession();
   if (!session) return notify("Not added", "Sign in to Ajot to add tasks from the menu.");
+  const client = apiClient(session);
   try {
-    const failed = await addDraft(session, draft, kind as DestinationKind, target);
-    void recordMenuUse(session, `menu:${draftId}:${kind}`);
+    const failed = await addDraft(client, draft, kind as DestinationKind, target);
+    void recordMenuUse(client, `menu:${draftId}:${kind}`);
     const done = doneLabels.get(`${kind}|${target}`) ?? "Added to Ajot";
     await notify(failed.length ? `Added, but ${failed.join(" and ")} failed` : done, draft.title);
   } catch (err) {
@@ -265,7 +255,7 @@ const rebuild = () => {
     .then(async () => {
       const session = await getStoredSession();
       const groups = session
-        ? await fetchDestinations(session).catch((err) => {
+        ? await fetchDestinations(apiClient(session)).catch((err) => {
             console.error("[menu] couldn't load lists and contacts:", err);
             return [{ destinations: [INBOX] }];
           })
