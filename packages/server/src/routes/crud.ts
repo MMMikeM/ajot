@@ -16,6 +16,7 @@ const reasons: Record<number, string> = {
   404: "Not found",
   409: "Conflict",
   410: "Gone",
+  413: "Too large",
   429: "Too many requests",
 };
 

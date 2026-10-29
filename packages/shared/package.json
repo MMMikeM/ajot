@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./attachments": "./src/attachments.ts",
     "./constants": "./src/constants.ts",
     "./field-limits": "./src/field-limits.ts",
     "./iso": "./src/iso.ts",
