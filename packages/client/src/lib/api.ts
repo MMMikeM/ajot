@@ -1,5 +1,4 @@
-import type { AppType } from "@newtab-todo/server/app";
-import { hc } from "hono/client";
+import { apiClient } from "~/lib/api-client";
 import { getAuthToken } from "~/lib/auth/token";
 import { expireSession } from "~/lib/auth/session";
 import { clientId } from "~/lib/client-id";
@@ -45,6 +44,8 @@ const browserFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   return res;
 };
 
-export const client = hc<AppType>("", {
-  fetch: typeof window === "undefined" ? ssrFetch : browserFetch,
-});
+// Signed per request rather than once, since the page's session changes under it
+export const client = apiClient(
+  { serverUrl: "" },
+  typeof window === "undefined" ? ssrFetch : browserFetch,
+);

@@ -34,6 +34,12 @@ const playwrightTest = {
     "Import test from ./fixtures: its pages fail the test on a Content Security Policy violation, which a report-only policy only logs.",
 };
 
+const rawFetch = {
+  name: "fetch",
+  message:
+    "Call the server through apiClient (~/lib/api-client), or a page's client (~/lib/api): their routes are typed from the server, so a wrong path or body fails to compile. The bucket's presigned URLs go through ~/lib/files/bucket.ts.",
+};
+
 // A class ending in a bracket is an arbitrary value or property; variants end in a colon. Values
 // with a function or a list in them (calc, env, max, transition lists) and viewport units have no
 // scale equivalent, so they stay allowed
@@ -72,6 +78,19 @@ export default defineConfig({
       "better-tailwindcss/no-restricted-classes": ["error", { restrict: [arbitraryValues] }],
     },
     overrides: [
+      {
+        files: ["packages/client/src/**"],
+        rules: { "no-restricted-globals": ["error", rawFetch] },
+      },
+      // The typed clients' own requests, and the bucket's, which isn't one of the server's routes
+      {
+        files: [
+          "packages/client/src/lib/api-client.ts",
+          "packages/client/src/lib/api.ts",
+          "packages/client/src/lib/files/bucket.ts",
+        ],
+        rules: { "no-restricted-globals": ["off"] },
+      },
       // shadcn writes arbitrary values into the primitives, and a regenerate brings them back
       {
         files: ["packages/client/src/components/ui/**"],

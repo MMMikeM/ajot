@@ -1,4 +1,5 @@
 import { apiHeaders, client } from "~/lib/api";
+import { apiClient } from "~/lib/api-client";
 import { getAuthToken } from "~/lib/auth/token";
 import { clearSession } from "~/lib/auth/session";
 import { getServerUrl } from "~/lib/server-url";
@@ -128,10 +129,8 @@ export const authenticate = async (
 // Not through `client`, which signs each request with whoever is signed in when it's sent
 const endServerSession = async (token: string) => {
   try {
-    await fetch(`${getServerUrl()}/api/auth/logout`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      keepalive: true,
+    await apiClient({ serverUrl: getServerUrl(), token }).api.auth.logout.$post(undefined, {
+      init: { keepalive: true },
     });
   } catch {
     // Unreachable: the session stays valid on the server, but nothing here holds its token
