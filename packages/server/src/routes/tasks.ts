@@ -2,6 +2,7 @@ import { z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
 import { BadRequestError, ForbiddenError, ONLY_CONTACTS } from "../db/errors";
 import * as taskRepo from "../db/task.repo";
+import * as taskShareRepo from "../db/task-share.repo";
 import * as contactRepo from "../db/contact.repo";
 import * as categoryRepo from "../db/category.repo";
 import { authed, authedRoute } from "../middleware";
@@ -197,7 +198,7 @@ export const taskRoutes = authed()
     authedRoute({
       method: "delete",
       path: "/",
-      request: jsonBody(taskRepo.selectSchema),
+      request: jsonBody(taskRepo.idSchema),
       responses: { 200: taskRepo.responseSchema, 403: true, 404: true },
     }),
     async (c) => {
@@ -265,7 +266,7 @@ export const taskRoutes = authed()
       method: "post",
       path: "/share",
       request: jsonBody(shareSchema),
-      responses: { 200: taskRepo.shareResponseSchema, 400: true, 403: true, 404: true, 429: true },
+      responses: { 200: taskShareRepo.responseSchema, 400: true, 403: true, 404: true, 429: true },
     }),
     async (c) => {
       const data = c.req.valid("json");
@@ -283,7 +284,7 @@ export const taskRoutes = authed()
         share: result,
         added,
         changed,
-      } = await taskRepo.insertShare({
+      } = await taskShareRepo.insert({
         id: createId(),
         taskId: task.id,
         sharedWithUserId: targetUser.id,
@@ -309,15 +310,15 @@ export const taskRoutes = authed()
     authedRoute({
       method: "delete",
       path: "/share",
-      request: jsonBody(taskRepo.shareSelectSchema),
-      responses: { 200: taskRepo.shareResponseSchema, 403: true, 404: true },
+      request: jsonBody(taskShareRepo.idSchema),
+      responses: { 200: taskShareRepo.responseSchema, 403: true, 404: true },
     }),
     async (c) => {
-      const share = await taskRepo.findShare(c.req.valid("json").id);
+      const share = await taskShareRepo.find(c.req.valid("json").id);
       // Someone who can't see the task gets the same 404 as for a share that doesn't exist
       await requireTask(share.taskId, c.get("userId"), "manage");
       const before = await reachRepo.read({ taskIds: [share.taskId] });
-      const result = await taskRepo.removeShare(share.id);
+      const result = await taskShareRepo.remove(share.id);
       await sendReachChanges(c, before, [share.taskId]);
       return c.json(result, 200);
     },
@@ -327,16 +328,16 @@ export const taskRoutes = authed()
       method: "put",
       path: "/share",
       request: jsonBody(shareCategorySchema),
-      responses: { 200: taskRepo.shareResponseSchema, 403: true, 404: true },
+      responses: { 200: taskShareRepo.responseSchema, 403: true, 404: true },
     }),
     async (c) => {
       const { taskId, categoryId } = c.req.valid("json");
       const userId = c.get("userId");
       if (categoryId && !(await categoryRepo.canUse(categoryId, userId)))
         throw new ForbiddenError(NOT_YOUR_LIST);
-      const result = await taskRepo.updateShareCategory(taskId, userId, categoryId);
+      const result = await taskShareRepo.updateCategory(taskId, userId, categoryId);
       // The user's other devices file it too
-      const [{ shares } = { shares: [] }] = await taskRepo.listSharesForTasks([taskId]);
+      const [{ shares } = { shares: [] }] = await taskShareRepo.listForTasks([taskId]);
       broadcast(c, "tasks", "update", { id: taskId, shares }, [userId]);
       return c.json(result, 200);
     },

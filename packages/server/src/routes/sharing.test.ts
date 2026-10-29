@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import * as taskRepo from "../db/task.repo";
+import * as taskShareRepo from "../db/task-share.repo";
 import * as contactRepo from "../db/contact.repo";
 import * as categoryCollaboratorRepo from "../db/category-collaborator.repo";
 import { broadcast } from "../broadcast";
@@ -18,9 +19,12 @@ vi.mock("../db/task.repo", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   insert: vi.fn(),
   insertSent: vi.fn(),
-  insertShare: vi.fn(),
   nextSortOrder: vi.fn(async () => "a0"),
   findListItem: vi.fn(),
+}));
+vi.mock("../db/task-share.repo", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  insert: vi.fn(),
 }));
 vi.mock("../db/contact.repo", async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -77,13 +81,13 @@ describe("sharing a task", () => {
     const res = await shareWith("mallory");
     expect(res.status).toBe(400);
     expect(await res.text()).toBe("Only your contacts can be added.");
-    expect(taskRepo.insertShare).not.toHaveBeenCalled();
+    expect(taskShareRepo.insert).not.toHaveBeenCalled();
     expect(sendNotification).not.toHaveBeenCalled();
   });
 
   test("with a contact shares it and tells them once", async () => {
     vi.mocked(contactRepo.findContactUser).mockResolvedValueOnce(bob);
-    vi.mocked(taskRepo.insertShare).mockResolvedValueOnce({ share, added: true, changed: true });
+    vi.mocked(taskShareRepo.insert).mockResolvedValueOnce({ share, added: true, changed: true });
     const res = await shareWith("Bob");
     expect(res.status).toBe(200);
     expect(contactRepo.findContactUser).toHaveBeenCalledWith("alice", "bob");
@@ -97,7 +101,7 @@ describe("sharing a task", () => {
 
   test("with someone it's already shared with changes nothing and tells no one", async () => {
     vi.mocked(contactRepo.findContactUser).mockResolvedValueOnce(bob);
-    vi.mocked(taskRepo.insertShare).mockResolvedValueOnce({ share, added: false, changed: false });
+    vi.mocked(taskShareRepo.insert).mockResolvedValueOnce({ share, added: false, changed: false });
     const res = await shareWith("bob");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(share);
@@ -108,7 +112,7 @@ describe("sharing a task", () => {
   test("again with another permission changes it, and tells no one it's new", async () => {
     vi.mocked(contactRepo.findContactUser).mockResolvedValueOnce(bob);
     const upgraded = { ...share, permission: "edit" as const };
-    vi.mocked(taskRepo.insertShare).mockResolvedValueOnce({
+    vi.mocked(taskShareRepo.insert).mockResolvedValueOnce({
       share: upgraded,
       added: false,
       changed: true,
@@ -202,7 +206,7 @@ describe("who sent a task", () => {
 describe("sharing too much at once", () => {
   test("is refused until a few minutes have passed", async () => {
     vi.mocked(contactRepo.findContactUser).mockResolvedValue(bob);
-    vi.mocked(taskRepo.insertShare).mockResolvedValue({ share, added: false, changed: false });
+    vi.mocked(taskShareRepo.insert).mockResolvedValue({ share, added: false, changed: false });
     const statuses = [];
     for (let i = 0; i < 30; i++) statuses.push((await shareWith("bob")).status);
     expect(statuses.at(-1)).toBe(429);

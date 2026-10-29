@@ -63,7 +63,7 @@ export const noteRoutes = authed()
     authedRoute({
       method: "delete",
       path: "/",
-      request: jsonBody(noteRepo.selectSchema),
+      request: jsonBody(noteRepo.idSchema),
       responses: { 200: noteRepo.responseSchema, 404: true },
     }),
     async (c) => {

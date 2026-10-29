@@ -5,7 +5,7 @@ import * as categoryRepo from "../db/category.repo";
 import { ForbiddenError, NotFoundError } from "../db/errors";
 import { broadcast } from "../broadcast";
 
-export const audienceFrom = (access: taskRepo.TaskAccessRow[]) =>
+export const audienceFrom = (access: taskRepo.AccessRow[]) =>
   widest(access).map((grant) => grant.userId);
 
 /**
@@ -53,7 +53,7 @@ export const markTaskEdited = async (
   taskId: string,
   userId: string,
   at: string,
-  access?: taskRepo.TaskAccessRow[],
+  access?: taskRepo.AccessRow[],
 ) => {
   try {
     const reach = access ?? (await taskRepo.accessTo([taskId]));

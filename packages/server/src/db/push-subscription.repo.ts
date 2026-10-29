@@ -9,9 +9,9 @@ export const insertSchema = createInsertSchema(pushSubscriptions)
   .omit({ createdAt: true, id: true })
   .required();
 
-export type PushSubscriptionInsert = z.infer<typeof insertSchema>;
+export type Insert = z.infer<typeof insertSchema>;
 
-export const upsert = async (data: PushSubscriptionInsert) => {
+export const upsert = async (data: Insert) => {
   await db
     .insert(pushSubscriptions)
     .values({ id: createId(), ...data })

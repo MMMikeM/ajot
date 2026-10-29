@@ -11,7 +11,7 @@ export const publicSchema = createSelectSchema(users).pick({
   avatarUrl: true,
 });
 
-export type UserInsert = typeof users.$inferInsert;
+export type Insert = typeof users.$inferInsert;
 
 /** Undefined for an account that's gone: what reads a name falls back, rather than refusing. */
 export const findName = async (id: string) =>
@@ -26,7 +26,7 @@ export const exists = async (username: string) =>
 
 export const count = () => db.$count(users);
 
-export const insert = async (data: UserInsert) => {
+export const insert = async (data: Insert) => {
   const [row] = await db.insert(users).values(data).returning();
   if (!row) throw new InsertFailedError("user");
   return row;

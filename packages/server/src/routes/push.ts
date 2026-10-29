@@ -65,7 +65,7 @@ export const pushRoutes = authed()
       method: "get",
       path: "/preferences",
       request: { headers: deviceHeaders },
-      responses: { 200: pushPreferenceRepo.preferencesSchema },
+      responses: { 200: pushPreferenceRepo.schema },
     }),
     async (c) =>
       c.json(
@@ -77,7 +77,7 @@ export const pushRoutes = authed()
     authedRoute({
       method: "put",
       path: "/preferences",
-      request: { headers: deviceHeaders, ...jsonBody(pushPreferenceRepo.preferencesSchema) },
+      request: { headers: deviceHeaders, ...jsonBody(pushPreferenceRepo.schema) },
       responses: { 200: okSchema },
     }),
     async (c) => {

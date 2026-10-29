@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { generateKeyBetween } from "fractional-indexing";
 import { db } from "./client";
 import * as taskRepo from "./task.repo";
+import * as taskShareRepo from "./task-share.repo";
 import { StaleUpdateError } from "./errors";
 import { tasks, users } from "./schema";
 
@@ -154,7 +155,7 @@ describe("sharing again with the same person", () => {
     await addTask("t", "a0");
   });
   const shareWithBob = (id: string, permission: "view" | "edit") =>
-    taskRepo.insertShare({ id, taskId: "t", sharedWithUserId: "bob", permission });
+    taskShareRepo.insert({ id, taskId: "t", sharedWithUserId: "bob", permission });
 
   test("with another permission changes it on the one share", async () => {
     await shareWithBob("first", "view");
