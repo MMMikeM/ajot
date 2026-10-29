@@ -5,7 +5,7 @@ const PORT = 4174;
 
 export default defineConfig({
   ...base,
-  testMatch: ["skeleton.spec.ts", "stale-chunk.spec.ts", "perf.spec.ts"],
+  testMatch: ["skeleton.spec.ts", "stale-chunk.spec.ts", "perf.spec.ts", "update-reload.spec.ts"],
   testIgnore: undefined,
   // These need no accounts, and this preview server has no API to make them on
   globalSetup: undefined,

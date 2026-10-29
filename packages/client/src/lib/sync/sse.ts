@@ -27,6 +27,7 @@ import { offline } from "~/lib/db/offline";
 import { writeDeleted } from "~/lib/db/synced-writes";
 import { trackSyncState, type SyncState } from "~/lib/sync/sync-state";
 import { shareSessionWithWorker } from "~/lib/sync/worker-session";
+import { checkForUpdate } from "~/lib/sync/register-sw";
 
 let es: EventSource | null = null;
 
@@ -159,6 +160,8 @@ const connectSSE = () => {
     ownSyncState.opened();
     sseBackoff.reset();
     refetchAll();
+    // The stream drops when a deploy restarts the server, so reopening is the first sign of one
+    checkForUpdate();
   });
   source.addEventListener("error", () => {
     if (es !== source) return;
