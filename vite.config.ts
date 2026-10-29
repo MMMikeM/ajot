@@ -37,7 +37,7 @@ const playwrightTest = {
 const rawFetch = {
   name: "fetch",
   message:
-    "Call the server through apiClient (~/lib/api-client), or a page's client (~/lib/api): their routes are typed from the server, so a wrong path or body fails to compile. The bucket's presigned URLs go through ~/lib/files/bucket.ts.",
+    "Call the server through apiClient (~/lib/api-client), or a page's client (~/lib/api): their routes are typed from the server, so a wrong path or body fails to compile. The bucket's presigned URLs go through ~/lib/files/bucket.ts, and a page's image through ~/lib/files/remote-image.ts.",
 };
 
 // A class ending in a bracket is an arbitrary value or property; variants end in a colon. Values
@@ -98,6 +98,7 @@ export default defineConfig({
           "packages/client/src/lib/api-client.ts",
           "packages/client/src/lib/api.ts",
           "packages/client/src/lib/files/bucket.ts",
+          "packages/client/src/lib/files/remote-image.ts",
         ],
         rules: { "no-restricted-globals": ["off"], "no-restricted-properties": ["off"] },
       },

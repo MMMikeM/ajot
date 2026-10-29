@@ -4,7 +4,17 @@ import { SERVER_URL_KEY, TOKEN_KEY } from "@newtab-todo/shared/constants";
 import { now } from "@newtab-todo/shared/iso";
 import { MAX_TEXT, MAX_TITLE, cutTo } from "@newtab-todo/shared/field-limits";
 import { ext, getStoredSession } from "~/lib/ext";
-import { ApiError, apiClient, succeeded, type ApiClient } from "~/lib/api-client";
+import {
+  ApiError,
+  apiClient,
+  succeeded,
+  type ApiClient,
+  type SignedInSession,
+} from "~/lib/api-client";
+import { fetchServerConfig } from "~/lib/server-config";
+import { queueFile } from "~/lib/files/attach";
+import { fetchImage } from "~/lib/files/remote-image";
+import { createUploadSender } from "~/lib/files/sender";
 
 type ClickData = browser.contextMenus.OnClickData;
 type ContextType = browser.contextMenus.ContextType;
@@ -16,8 +26,13 @@ const DRAFTS = {
     contexts: ["selection"],
   },
   link: { title: "Add link as a task", contexts: ["link"] },
+  image: { title: "Add image as a task", contexts: ["image"] },
+  "image-link": { title: "Add image link as a task", contexts: ["image"] },
   page: { title: "Add this page as a task", contexts: ["page"] },
 } satisfies Record<string, { title: string; contexts: ContextType[] }>;
+
+// A sent task is its recipient's, which its sender can't attach a file to
+const ATTACHES = new Set<string>(["image"]);
 
 type DraftId = keyof typeof DRAFTS;
 
@@ -27,7 +42,7 @@ type Destination = { kind: DestinationKind; target: string; title: string; done:
 // A titled group is a submenu, so a contact list doesn't make the menu twice as long per person
 type Group = { submenu?: { id: string; title: string }; destinations: Destination[] };
 
-type Draft = { title: string; description: string | null; note?: string };
+type Draft = { title: string; description: string | null; note?: string; image?: string };
 
 const MAX_TITLE_LENGTH = 140;
 
@@ -37,11 +52,23 @@ const toTitle = (text: string) => {
 };
 
 // A page's text or address can run past what the server takes, which would refuse the whole task
-const withinLimits = ({ title, description, note }: Draft): Draft => ({
+const withinLimits = ({ title, description, note, image }: Draft): Draft => ({
   title: cutTo(title, MAX_TITLE),
   description: description && cutTo(description, MAX_TEXT),
   ...(note && { note: cutTo(note, MAX_TEXT) }),
+  ...(image && { image }),
 });
+
+/** The file name in an image's address, for one on the web; a data: image has none. */
+const imageName = (src: string) => {
+  try {
+    const url = new URL(src);
+    if (!url.protocol.startsWith("http")) return "";
+    return decodeURIComponent(url.pathname.split("/").pop() ?? "");
+  } catch {
+    return "";
+  }
+};
 
 const draftFor = (id: DraftId, info: ClickData, tab?: browser.tabs.Tab): Draft => {
   const pageUrl = tab?.url ?? info.pageUrl ?? null;
@@ -64,6 +91,16 @@ const draftFor = (id: DraftId, info: ClickData, tab?: browser.tabs.Tab): Draft =
         title: toTitle(info.linkText || selection) || info.linkUrl || pageTitle,
         description: info.linkUrl ?? null,
       };
+    case "image":
+    case "image-link": {
+      const src = info.srcUrl ?? "";
+      const title = toTitle(imageName(src) || `Image from ${pageTitle}`);
+      // A data: image's address is the image itself, too long for a description
+      const link = src.startsWith("http") ? src : null;
+      return id === "image"
+        ? { title, description: pageUrl, image: src }
+        : { title, description: [link, pageUrl].filter(Boolean).join("\n\n") || null };
+    }
     case "page":
       return { title: pageTitle, description: pageUrl };
   }
@@ -123,8 +160,13 @@ const failureMessage = (err: unknown) => {
   return "Couldn't reach the server. Check your connection and try again.";
 };
 
-/** Adds the task, then whatever goes with it; returns the parts of that which failed. */
-const addDraft = async (client: ApiClient, draft: Draft, kind: DestinationKind, target: string) => {
+/** Adds the task, then whatever goes with it; returns its id and the parts of that which failed. */
+const addDraft = async (
+  client: ApiClient,
+  draft: Draft,
+  kind: DestinationKind,
+  target: string,
+): Promise<{ taskId?: string; failed: string[] }> => {
   const { api } = client;
   const timestamp = now();
   const base = { id: nanoid(), title: draft.title, createdAt: timestamp, updatedAt: timestamp };
@@ -134,7 +176,7 @@ const addDraft = async (client: ApiClient, draft: Draft, kind: DestinationKind, 
     const joined = [draft.note, draft.description].filter(Boolean).join("\n\n");
     const description = joined ? cutTo(joined, MAX_TEXT) : null;
     await succeeded(api.tasks.send.$post({ json: { ...base, description, recipientId: target } }));
-    return [];
+    return { failed: [] };
   }
 
   // Both schemas require userId; the server replaces it with the token's user
@@ -179,7 +221,49 @@ const addDraft = async (client: ApiClient, draft: Draft, kind: DestinationKind, 
       ),
     ]);
   const settled = await Promise.allSettled(extras.map(([, done]) => done));
-  return extras.flatMap(([part], i) => (settled[i].status === "rejected" ? [part] : []));
+  return {
+    taskId: task.id,
+    failed: extras.flatMap(([part], i) => (settled[i].status === "rejected" ? [part] : [])),
+  };
+};
+
+const sendUploads = createUploadSender(getStoredSession);
+
+// Called before anything in the click is awaited: a browser lets an extension ask for a
+// permission only inside the click itself. Already granted, it resolves without asking.
+const askToReadImages = (src: string) =>
+  src.startsWith("data:")
+    ? Promise.resolve(true)
+    : (async () => ext.permissions.request({ origins: ["<all_urls>"] }))().catch((err) => {
+        console.error("[menu] couldn't ask to read images:", err);
+        return false;
+      });
+
+const MB = 1024 * 1024;
+
+type ReadImage = { file: File; maxBytes: number } | { reason: string };
+
+/** The image as a file to attach, or why it can't be, so its link is added instead. */
+const readImage = async (
+  session: SignedInSession,
+  src: string,
+  allowed: Promise<boolean>,
+): Promise<ReadImage> => {
+  // Made by the page itself, so only the page can read it
+  if (src.startsWith("blob:")) return { reason: "That image can only be saved as its link." };
+  if (!(await allowed)) return { reason: "Ajot wasn't allowed to read images from that site." };
+  const { attachments } = await fetchServerConfig(session.serverUrl);
+  if (!attachments) return { reason: "Your server doesn't take attachments." };
+  try {
+    const blob = await fetchImage(src);
+    if (blob.size > attachments.maxBytes)
+      return { reason: `The image is over ${Math.round(attachments.maxBytes / MB)} MB.` };
+    const name = imageName(src) || `image.${blob.type.split("/")[1]?.split("+")[0] || "png"}`;
+    return { file: new File([blob], name, { type: blob.type }), maxBytes: attachments.maxBytes };
+  } catch (err) {
+    console.error("[menu] couldn't read the image:", err);
+    return { reason: "The image couldn't be fetched from its site." };
+  }
 };
 
 const recordMenuUse = ({ api }: ApiClient, name: string) =>
@@ -191,13 +275,29 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
   const menuId = String(info.menuItemId);
   const [draftId, kind, target = ""] = menuId.split("|");
   if (!(draftId in DRAFTS) || !kind) return;
-  const draft = withinLimits(draftFor(draftId as DraftId, info, tab));
+  const id = draftId as DraftId;
+  const allowed = id === "image" && info.srcUrl ? askToReadImages(info.srcUrl) : undefined;
+  let draft = withinLimits(draftFor(id, info, tab));
   const session = await getStoredSession();
   if (!session) return notify("Not added", "Sign in to Ajot to add tasks from the menu.");
   const client = apiClient(session);
   try {
-    const failed = await addDraft(client, draft, kind as DestinationKind, target);
+    const image =
+      draft.image && allowed ? await readImage(session, draft.image, allowed) : undefined;
+    if (image && "reason" in image) draft = withinLimits(draftFor("image-link", info, tab));
+    const { taskId, failed } = await addDraft(client, draft, kind as DestinationKind, target);
+    if (image && "file" in image && taskId && session.userId) {
+      const refusal = await queueFile(image.file, {
+        taskId,
+        uploaderId: session.userId,
+        maxBytes: image.maxBytes,
+      });
+      if (refusal) failed.push("the image");
+      else void sendUploads();
+    }
     void recordMenuUse(client, `menu:${draftId}:${kind}`);
+    if (image && "reason" in image)
+      return await notify("Added the image's link instead", image.reason);
     const done = doneLabels.get(`${kind}|${target}`) ?? "Added to Ajot";
     await notify(failed.length ? `Added, but ${failed.join(" and ")} failed` : done, draft.title);
   } catch (err) {
@@ -218,15 +318,18 @@ const buildMenu = (groups: Group[]) => {
     nonEmpty.flatMap((group) => group.destinations).map((d) => [`${d.kind}|${d.target}`, d.done]),
   );
   for (const [draftId, item] of Object.entries(DRAFTS)) {
+    const offered = ATTACHES.has(draftId)
+      ? nonEmpty.filter((group) => group.destinations.every((d) => d.kind !== "send"))
+      : nonEmpty;
     // Nowhere to choose from: the item itself adds to the Inbox
-    if (nonEmpty.length === 1) {
+    if (offered.length === 1) {
       create({ id: `${draftId}|inbox`, ...item });
       continue;
     }
     create({ id: draftId, ...item });
-    nonEmpty.forEach(({ submenu, destinations }, i) => {
+    offered.forEach(({ submenu, destinations }, i) => {
       const child = { parentId: draftId, contexts: item.contexts };
-      if (separatedFromPrevious(nonEmpty, i))
+      if (separatedFromPrevious(offered, i))
         create({ id: `${draftId}|separator-${i}`, type: "separator", ...child });
       // Outside the "draft|kind|target" ids, so clicking it adds nothing
       const parentId = submenu ? `${draftId}:${submenu.id}` : draftId;
