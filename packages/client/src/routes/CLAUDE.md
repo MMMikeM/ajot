@@ -20,7 +20,7 @@ The `mounted` state + `useEffect` pattern gates lazy components to prevent hydra
 
 ## Layout
 
-Nested routes live in folders, with a layout as the file named after its folder, never `route.tsx`. The list page is the pathless `_list.tsx` layout, so an open task (`/task/$taskId`) sheets over the list without remounting it. The open list stays on the device rather than in the URL; `/list/$listId` switches to one and lands on `/`. Search is the same shape, lazy: `search.lazy.tsx` holds the field, query and results, and `/search/task/$taskId` sheets a task over them, so closing it keeps the query. Both sheets are `TaskSheet`.
+Nested routes live in folders, with a layout as the file named after its folder, never `route.tsx`. The list page is the pathless `_list.tsx` layout, so an open task (`/task/$taskId`) sheets over the list without remounting it. The open list stays on the device rather than in the URL; `/list/$listId` switches to one and lands on `/`. Search is the same shape, lazy: `search.lazy.tsx` holds the field, query and results, and `/search/task/$taskId` sheets a task over them, so closing it keeps the query. Both sheets are `TaskSheet`. `/share` is the installed PWA's share target (the manifest's `share_target`, Android Chromium): it adds what was shared to the Inbox in `beforeLoad` and redirects to its sheet, replacing itself in history so Back can't add it twice.
 
 Layout, heading, input, and settings live in the root `component` — they're shared chrome, not route-specific. Route components render into `<Outlet />`.
 
