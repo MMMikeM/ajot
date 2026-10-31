@@ -37,6 +37,18 @@ test("a line of text alone is the title and nothing else", () => {
   });
 });
 
+test("a file alone is named for itself, several by their count", () => {
+  const named = (...names: string[]) => names.map((name) => ({ name }));
+  expect(taskFromShare({ files: named("IMG_2031.jpg") })).toEqual({
+    title: "IMG_2031.jpg",
+    description: null,
+  });
+  expect(taskFromShare({ files: named("a.pdf", "b.pdf") })?.title).toBe("2 files");
+  expect(taskFromShare({ text: "Receipts for May", files: named("a.pdf") })?.title).toBe(
+    "Receipts for May",
+  );
+});
+
 test("nothing shared adds nothing", () => {
   expect(taskFromShare({ title: " ", text: "" })).toBeUndefined();
 });

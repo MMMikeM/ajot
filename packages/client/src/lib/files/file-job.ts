@@ -2,6 +2,7 @@ import { apiClient, succeeded, type SignedInSession } from "~/lib/api-client";
 import { getFromBucket } from "~/lib/files/bucket";
 import { planEviction } from "~/lib/files/evict-plan";
 import { deleteBlobs, markSeen, readBlobMetas, saveBlob } from "~/lib/files/store";
+import { withLock } from "~/lib/locks";
 
 const LOCK = "ajot-files";
 const MB = 1024 * 1024;
@@ -83,8 +84,5 @@ const runOnce = async (run: FilesRun) => {
  * One context at a time. Never rejects: a failure here must not stop the sync around it.
  */
 export const syncFiles = (run: FilesRun) => {
-  const job = () => runOnce(run).catch((err) => console.error("[files]", err));
-  return typeof navigator !== "undefined" && navigator.locks
-    ? navigator.locks.request(LOCK, job)
-    : job();
+  return withLock(LOCK, () => runOnce(run).catch((err) => console.error("[files]", err)));
 };

@@ -200,3 +200,74 @@ test.describe("settings", () => {
     ).toBeVisible();
   });
 });
+
+test.describe("sharing to the installed app from another app", () => {
+  const PHOTO = {
+    name: "shared.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR4nGO4o6EBRwzEcQDzAxLBI9OCRQAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  };
+
+  // What Android sends for the manifest's share target: a multipart POST, as a navigation
+  const share = async (page: Page, text: string) => {
+    await page.evaluate((text) => {
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = "/share";
+      form.enctype = "multipart/form-data";
+      form.id = "share";
+      const field = Object.assign(document.createElement("input"), { name: "text", value: text });
+      const files = Object.assign(document.createElement("input"), { type: "file", name: "files" });
+      form.append(field, files);
+      document.body.append(form);
+    }, text);
+    await page.setInputFiles("#share input[type=file]", PHOTO);
+    await page.evaluate(() => (document.getElementById("share") as HTMLFormElement).submit());
+    await page.waitForURL(/\/task\//);
+  };
+
+  type Row = { id: string; title: string };
+  type Attachment = { taskId: string; name: string; uploadedAt: string | null };
+
+  const uploadedTo = async (token: string, title: string) => {
+    const tasks = await apiRequest<Row[]>("GET", "/api/tasks", undefined, token);
+    const task = tasks.find((t) => t.title === title);
+    if (!task) return [];
+    const attachments = await apiRequest<Attachment[]>("GET", "/api/attachments", undefined, token);
+    return attachments.filter((a) => a.taskId === task.id && a.uploadedAt).map((a) => a.name);
+  };
+
+  test("becomes a task in the Inbox with the file uploaded, used once", async ({ user1Auth }) => {
+    const title = `Shared ${Date.now()}`;
+    const page = await context.newPage();
+    await page.goto("/");
+    await share(page, `${title} https://a.test/receipt`);
+    await expect(page.getByRole("dialog", { name: title, exact: true })).toBeVisible();
+    await expect.poll(() => uploadedTo(user1Auth.token, title)).toEqual([PHOTO.name]);
+
+    await page.goBack();
+    await expect(page).not.toHaveURL(/\/share/);
+    const tasks = await apiRequest<Row[]>("GET", "/api/tasks", undefined, user1Auth.token);
+    expect(tasks.filter((t) => t.title === title)).toHaveLength(1);
+  });
+
+  test("offline, is kept on the device and uploads once back online", async ({ user1Auth }) => {
+    const title = `Shared offline ${Date.now()}`;
+    const earlier = `Before the flight ${Date.now()}`;
+    await addTask(user1Auth.token, earlier);
+    const page = await context.newPage();
+    await page.goto("/");
+    // As on a phone that has used Ajot before: the lists are saved for opening offline
+    await expect.poll(() => savedTitles(worker)).toContain(earlier);
+    await context.setOffline(true);
+    await share(page, title);
+    await expect(page.getByRole("dialog", { name: title, exact: true })).toBeVisible();
+    await context.setOffline(false);
+    await expect
+      .poll(() => uploadedTo(user1Auth.token, title), { timeout: 20_000 })
+      .toEqual([PHOTO.name]);
+  });
+});
