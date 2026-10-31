@@ -39,7 +39,7 @@ const firefoxManifest = {
   },
   chrome_url_overrides: { newtab: "index.html" },
   content_security_policy: `script-src 'self'; object-src 'self'; ${CONNECT_SRC}`,
-  permissions: ["storage", "notifications", "contextMenus", "activeTab", "alarms"],
+  permissions: ["storage", "notifications", "contextMenus", "activeTab", "alarms", "scripting"],
   // Asked for the first time the context menu attaches an image, to read it from its site
   optional_permissions: ["<all_urls>"],
   background: { scripts: ["background.js"], persistent: true },
@@ -56,7 +56,7 @@ const chromeManifest = {
   content_security_policy: {
     extension_pages: `script-src 'self'; object-src 'self'; ${CONNECT_SRC}`,
   },
-  permissions: ["storage", "notifications", "contextMenus", "activeTab", "alarms"],
+  permissions: ["storage", "notifications", "contextMenus", "activeTab", "alarms", "scripting"],
   // Asked for the first time the context menu attaches an image, to read it from its site
   optional_host_permissions: ["<all_urls>"],
   background: { service_worker: "background.js" },

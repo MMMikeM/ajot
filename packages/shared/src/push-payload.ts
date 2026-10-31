@@ -62,68 +62,83 @@ export const NOTIFICATION_TRIGGERS: Record<
 const overdueCount = (payload: Extract<PushPayload, { type: "overdue-digest" }>) =>
   payload.total ?? payload.tasks.length;
 
-export const toNotification = (
-  payload: PushPayload,
-): { title: string; body: string; url: string } | null => {
+export type ShownNotification = {
+  title: string;
+  body: string;
+  url: string;
+  /** What it's about, so a newer notification about the same thing replaces it */
+  tag: string;
+};
+
+export const toNotification = (payload: PushPayload): ShownNotification | null => {
   switch (payload.type) {
     case "sync":
     case "deploy":
       return null;
     case "changes":
-      return { title: "Ajot", body: "Your lists were updated", url: "/" };
+      return { title: "Ajot", body: "Your lists were updated", url: "/", tag: "changes" };
     case "task-shared":
       return {
         title: payload.fromUser,
         body: `Shared "${payload.taskTitle}" with you`,
         url: `/task/${payload.taskId}`,
+        tag: `task:${payload.taskId}`,
       };
     case "task-sent":
       return {
         title: payload.fromUser,
         body: `Sent you "${payload.taskTitle}"`,
         url: `/task/${payload.taskId}`,
+        tag: `task:${payload.taskId}`,
       };
     case "task-updated":
       return {
         title: payload.fromUser,
         body: `Updated "${payload.taskTitle}": ${payload.changes}`,
         url: `/task/${payload.taskId}`,
+        tag: `task:${payload.taskId}`,
       };
     case "task-assigned":
       return {
         title: payload.fromUser,
         body: `Assigned "${payload.taskTitle}" to you`,
         url: `/task/${payload.taskId}`,
+        tag: `task:${payload.taskId}`,
       };
     case "task-completed":
       return {
         title: payload.byUser,
         body: `Completed "${payload.taskTitle}"`,
         url: `/task/${payload.taskId}`,
+        tag: `task:${payload.taskId}`,
       };
     case "category-shared":
       return {
         title: payload.fromUser,
         body: `Shared the list "${payload.categoryName}" with you`,
         url: `/list/${payload.categoryId}`,
+        tag: `list:${payload.categoryId}`,
       };
     case "contact-accepted":
       return {
         title: "Ajot",
         body: `${payload.contactName} accepted your invite`,
         url: "/people",
+        tag: `contact:${payload.contactName}`,
       };
     case "reminder-due":
       return {
         title: "Reminder",
         body: `"${payload.taskTitle}" is due`,
         url: `/task/${payload.taskId}`,
+        tag: `task:${payload.taskId}`,
       };
     case "overdue-digest":
       return {
         title: "Overdue tasks",
         body: `You have ${overdueCount(payload)} overdue task${overdueCount(payload) === 1 ? "" : "s"}`,
         url: "/",
+        tag: "overdue",
       };
   }
 };

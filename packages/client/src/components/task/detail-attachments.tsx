@@ -78,33 +78,78 @@ const openFile = async (item: AttachmentItem) => {
   else downloadFile(blob, item);
 };
 
+const imageButton =
+  "relative overflow-hidden rounded-lg bg-muted outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
+
+const labelOf = (item: AttachmentItem) => {
+  const status = statusOf(item);
+  return status ? `${item.name}, ${status}` : item.name;
+};
+
 const Tile = ({ item, onOpen }: { item: AttachmentItem; onOpen: () => void }) => {
   const thumb = useAttachmentFile(item.id, "thumb", isUploaded(item));
-  const status = statusOf(item);
   return (
     <button
       type="button"
       onClick={onOpen}
-      aria-label={status ? `${item.name}, ${status}` : item.name}
-      className="relative aspect-square overflow-hidden rounded-lg bg-muted outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      aria-label={labelOf(item)}
+      className={cn(imageButton, "aspect-square")}
     >
       {typeof thumb === "object" && (
         <img src={thumb.url} alt="" draggable={false} className="size-full object-cover" />
       )}
-      {item.state.kind === "failed" && (
-        <span className="absolute inset-0 grid place-items-center bg-destructive-subtle/75 text-destructive">
-          <CircleAlert className="size-5" />
-        </span>
-      )}
-      {isWaiting(item) && (
-        <span
-          aria-hidden
-          className="absolute top-1.5 right-1.5 size-2 rounded-full bg-pending ring-2 ring-popover"
-        />
-      )}
+      <ImageStatus item={item} />
     </button>
   );
 };
+
+/**
+ * A task's only attachment, when it's a picture: at its own shape, a set height that leaves the
+ * task room. The thumbnail shows at once and the full picture replaces it, at the same shape, once
+ * this device has it.
+ */
+const SoleImage = ({ item, onOpen }: { item: AttachmentItem; onOpen: () => void }) => {
+  const uploaded = isUploaded(item);
+  const thumb = useAttachmentFile(item.id, "thumb", uploaded);
+  const full = useAttachmentFile(item.id, "file", uploaded);
+  const shown = typeof full === "object" ? full : typeof thumb === "object" ? thumb : undefined;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={labelOf(item)}
+      className={cn(imageButton, "block w-fit max-w-full")}
+    >
+      {shown ? (
+        <img
+          src={shown.url}
+          alt=""
+          draggable={false}
+          className="block h-52 w-auto max-w-full object-cover"
+        />
+      ) : (
+        <span className="block h-52 w-72 max-w-full" />
+      )}
+      <ImageStatus item={item} />
+    </button>
+  );
+};
+
+const ImageStatus = ({ item }: { item: AttachmentItem }) => (
+  <>
+    {item.state.kind === "failed" && (
+      <span className="absolute inset-0 grid place-items-center bg-destructive-subtle/75 text-destructive">
+        <CircleAlert className="size-5" />
+      </span>
+    )}
+    {isWaiting(item) && (
+      <span
+        aria-hidden
+        className="absolute top-1.5 right-1.5 size-2 rounded-full bg-pending ring-2 ring-popover"
+      />
+    )}
+  </>
+);
 
 const FileItem = ({ item, canDelete }: { item: AttachmentItem; canDelete: boolean }) => {
   const status = statusOf(item);
@@ -351,17 +396,24 @@ export const Attachments = ({
   const images = items.filter((item) => item.hasThumb);
   const files = items.filter((item) => !item.hasThumb);
   const summary = pendingLine(images);
+  const [sole] = images.length === 1 && files.length === 0 ? images : [];
 
   return (
     <fieldset aria-label="Attachments" className="flex min-w-0 flex-col">
       {items.length > 0 && <SectionHeading>Attachments</SectionHeading>}
       {images.length > 0 && (
         <DetailRow>
-          <div className="grid grid-cols-4 gap-1.5 py-1 desk:grid-cols-6">
-            {images.map((item) => (
-              <Tile key={item.id} item={item} onOpen={() => setViewing(item.id)} />
-            ))}
-          </div>
+          {sole ? (
+            <div className="py-1">
+              <SoleImage item={sole} onOpen={() => setViewing(sole.id)} />
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-1.5 py-1 desk:grid-cols-6">
+              {images.map((item) => (
+                <Tile key={item.id} item={item} onOpen={() => setViewing(item.id)} />
+              ))}
+            </div>
+          )}
           {summary && (
             <p className={cn("pb-1 text-xs text-hint", summary.failed && "text-destructive")}>
               {summary.text}

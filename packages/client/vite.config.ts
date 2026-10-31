@@ -69,6 +69,12 @@ export default defineConfig(({ mode }) => {
           description: "A calm, fast task list for daily capture",
           start_url: "/",
           display: "standalone",
+          // Puts Ajot in Android's share sheet once installed (Chromium; Firefox has no share target)
+          share_target: {
+            action: "/share",
+            method: "GET",
+            params: { title: "title", text: "text", url: "url" },
+          },
           orientation: "portrait",
           background_color: "#151a22",
           theme_color: "#151a22",

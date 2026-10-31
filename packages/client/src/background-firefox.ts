@@ -40,7 +40,8 @@ const showNotification = async (payload: PushPayload) => {
   const notification = toNotification(payload);
   // Firefox for Android has no notifications API
   if (!notification || !browser.notifications) return;
-  const id = await browser.notifications.create({
+  // Created again under the same id, a newer one about the same task replaces it
+  const id = await browser.notifications.create(notification.tag, {
     type: "basic",
     iconUrl: browser.runtime.getURL("icons/icon-192.png"),
     title: notification.title,

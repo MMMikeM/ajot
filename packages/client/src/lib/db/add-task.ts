@@ -5,10 +5,12 @@ import { now } from "~/lib/utils";
 import { tasksCollection } from "~/lib/db/collections";
 import { createOfflineTransaction } from "~/lib/db/offline";
 
+/** Returns the new task's id. */
 export const addTask = async (
   title: string,
   categoryId?: string | null,
   parentId?: string | null,
+  description: string | null = null,
 ) => {
   // An insert before the first load settles can leave the collection stuck loading (signed
   // out, its sync never completes), and the sort order below needs the loaded siblings.
@@ -21,10 +23,11 @@ export const addTask = async (
   const sortOrder = keyAfter(siblings.map((t) => t.sortOrder));
 
   const timestamp = now();
+  const id = nanoid();
   const tx = createOfflineTransaction({ mutationFnName: "syncTasks" });
   tx.mutate(() =>
     tasksCollection.insert({
-      id: nanoid(),
+      id,
       userId,
       categoryId: parentId ? null : (categoryId ?? null),
       assigneeId: null,
@@ -32,7 +35,7 @@ export const addTask = async (
       parentId: parentId ?? null,
       title,
       status: "todo",
-      description: null,
+      description,
       dueDate: null,
       sortOrder,
       createdAt: timestamp,
@@ -47,4 +50,5 @@ export const addTask = async (
       user: null,
     }),
   );
+  return id;
 };
