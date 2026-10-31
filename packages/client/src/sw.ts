@@ -40,7 +40,14 @@ const sendSmallUploads = createUploadSender(readWorkerSession, {
 });
 const sendUploads = createUploadSender(readWorkerSession);
 
-precacheAndRoute(self.__WB_MANIFEST);
+// Chrome builds an installed app from the manifest the page fetches, so it comes from the server:
+// served from an older build's cache, it made an install with no share target
+const MANIFEST = "manifest.webmanifest";
+precacheAndRoute(
+  self.__WB_MANIFEST.filter(
+    (entry) => (typeof entry === "string" ? entry : entry.url) !== MANIFEST,
+  ),
+);
 cleanupOutdatedCaches();
 
 registerRoute(
