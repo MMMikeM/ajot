@@ -9,7 +9,33 @@ export type NamedTitle = { before: string; name: string; after?: string };
 
 export type ToastData = { onUndo?: () => void; named?: NamedTitle };
 
-export const toastManager = Toast.createToastManager<ToastData>();
+type ToastManager = ReturnType<typeof Toast.createToastManager<ToastData>>;
+
+/**
+ * Base UI sends a toast only to a provider already listening, and drops it otherwise, as it would
+ * one from a page that loads straight into an action, like the share target. Held until it listens.
+ */
+const holdUntilListening = (manager: ToastManager): ToastManager => {
+  let held: Parameters<ToastManager["add"]>[0][] | undefined = [];
+  return {
+    ...manager,
+    " subscribe": (listener) => {
+      const unsubscribe = manager[" subscribe"](listener);
+      const early = held;
+      held = undefined;
+      for (const options of early ?? []) manager.add(options);
+      return unsubscribe;
+    },
+    add: (options) => {
+      if (!held) return manager.add(options);
+      const id = options.id ?? crypto.randomUUID();
+      held.push({ ...options, id });
+      return id;
+    },
+  };
+};
+
+export const toastManager = holdUntilListening(Toast.createToastManager<ToastData>());
 
 // A thumb has further to travel to the toast than a pointer, and nothing to hover it with
 const undoWindowMs = () => (matchMedia("(pointer: coarse)").matches ? 8000 : 5000);

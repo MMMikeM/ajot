@@ -8,6 +8,7 @@ import { prerender } from "./plugins/prerender";
 import { inlineStylesheet } from "./plugins/inline-stylesheet";
 import babel from "@rolldown/plugin-babel";
 import { CSP_HEADER, contentSecurityPolicy } from "@newtab-todo/shared/csp";
+import { SHARED_TEXT_FIELDS } from "@newtab-todo/shared/share-target";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, searchForWorkspaceRoot(process.cwd()), "");
@@ -69,12 +70,16 @@ export default defineConfig(({ mode }) => {
           description: "A calm, fast task list for daily capture",
           start_url: "/",
           display: "standalone",
-          // Puts Ajot in Android's share sheet once installed (Chromium; Firefox has no share target)
+          // Puts Ajot in Android's share sheet once installed (Chromium; Firefox has no share target).
+          // Posted to the worker, which keeps it on the device: see sw.ts.
           share_target: {
             action: "/share",
-            method: "GET",
-            enctype: "application/x-www-form-urlencoded",
-            params: { title: "title", text: "text", url: "url" },
+            method: "POST",
+            enctype: "multipart/form-data",
+            params: {
+              ...Object.fromEntries(SHARED_TEXT_FIELDS.map((name) => [name, name])),
+              files: [{ name: "files", accept: ["*/*"] }],
+            },
           },
           orientation: "portrait",
           background_color: "#151a22",
