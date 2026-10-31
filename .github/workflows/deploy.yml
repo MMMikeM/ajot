@@ -73,22 +73,30 @@ jobs:
     strategy:
       matrix:
         include:
-          - { name: shard-1, run: pnpm exec playwright test --shard=1/6 }
-          - { name: shard-2, run: pnpm exec playwright test --shard=2/6 }
-          - { name: shard-3, run: pnpm exec playwright test --shard=3/6 }
-          - { name: shard-4, run: pnpm exec playwright test --shard=4/6 }
-          - { name: shard-5, run: pnpm exec playwright test --shard=5/6 }
-          - { name: shard-6, run: pnpm exec playwright test --shard=6/6 }
+          - { name: shard-1, run: pnpm exec playwright test --shard=1/6, browser: --only-shell }
+          - { name: shard-2, run: pnpm exec playwright test --shard=2/6, browser: --only-shell }
+          - { name: shard-3, run: pnpm exec playwright test --shard=3/6, browser: --only-shell }
+          - { name: shard-4, run: pnpm exec playwright test --shard=4/6, browser: --only-shell }
+          - { name: shard-5, run: pnpm exec playwright test --shard=5/6, browser: --only-shell }
+          - { name: shard-6, run: pnpm exec playwright test --shard=6/6, browser: --only-shell }
           # The specs that need a production build (the prerendered skeleton, a stale chunk, load
           # timing), then the extension's background and the PWA's worker saving the lists
+          # Full Chromium: the headless shell can't load the extension
           - name: builds
             run: pnpm exec playwright test -c playwright.prerender.config.ts && pnpm exec playwright test -c playwright.background.config.ts
+            browser: ""
     name: e2e (${{ matrix.name }})
     concurrency:
       group: e2e-${{ github.ref }}-${{ matrix.name }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      # The suite's database and bucket images, pulled while everything else installs rather than
+      # once the tests start; api-stack.ts names them
+      - run: |
+          grep -o '[a-z0-9./-]*@sha256:[0-9a-f]*' packages/e2e/api-stack.ts |
+            nohup xargs -n1 -P2 docker pull --quiet > /dev/null 2>&1 &
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
@@ -104,9 +112,18 @@ jobs:
           name: client-build
           path: packages/client
 
+      - id: playwright
+        run: echo "version=$(pnpm --filter @newtab-todo/e2e exec playwright --version)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium${{ matrix.browser }}
+
       # Without --with-deps: the runner already has Chromium's libraries, and the fonts and virtual
-      # display it adds took 7 minutes when Ubuntu's mirror was slow
-      - run: pnpm --filter @newtab-todo/e2e exec playwright install chromium
+      # display it adds took 7 minutes when Ubuntu's mirror was slow. A cached browser makes this a
+      # check that finds nothing to download.
+      - run: pnpm --filter @newtab-todo/e2e exec playwright install chromium ${{ matrix.browser }}
 
       # Playwright itself rather than `pnpm test:e2e`, whose task would build the client again
       - run: ${{ matrix.run }}
