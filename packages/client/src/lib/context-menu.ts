@@ -15,6 +15,7 @@ import { fetchServerConfig } from "~/lib/server-config";
 import { queueFile } from "~/lib/files/attach";
 import { fetchImage } from "~/lib/files/remote-image";
 import { createUploadSender } from "~/lib/files/sender";
+import { recordMetric, sendPendingMetrics } from "~/lib/metrics";
 
 type ClickData = browser.contextMenus.OnClickData;
 type ContextType = browser.contextMenus.ContextType;
@@ -160,13 +161,37 @@ const failureMessage = (err: unknown) => {
   return "Couldn't reach the server. Check your connection and try again.";
 };
 
+type Step = "sort-order" | "add" | "send" | "config" | "share" | "note" | "image";
+
+/** Which request in a click failed, so its metric can say. */
+class StepFailed extends Error {
+  constructor(
+    readonly step: Step,
+    cause: unknown,
+  ) {
+    super(`${step} failed`, { cause });
+  }
+}
+
+const step = <T>(name: Step, work: Promise<T>) =>
+  work.catch((cause: unknown) => Promise.reject(new StepFailed(name, cause)));
+
+/** A failure's reason as a metric name can carry it: the server's status, or the error's kind. */
+const reasonOf = (err: unknown) => {
+  if (err instanceof ApiError) return String(err.status);
+  const name = err instanceof Error ? err.name.toLowerCase().replace(/[^a-z0-9-]/g, "") : "";
+  return name || "unknown";
+};
+
+type FailedPart = { step: Step; label: string; reason: string };
+
 /** Adds the task, then whatever goes with it; returns its id and the parts of that which failed. */
 const addDraft = async (
   client: ApiClient,
   draft: Draft,
   kind: DestinationKind,
   target: string,
-): Promise<{ taskId?: string; failed: string[] }> => {
+): Promise<{ taskId?: string; failed: FailedPart[] }> => {
   const { api } = client;
   const timestamp = now();
   const base = { id: nanoid(), title: draft.title, createdAt: timestamp, updatedAt: timestamp };
@@ -175,36 +200,45 @@ const addDraft = async (
   if (kind === "send") {
     const joined = [draft.note, draft.description].filter(Boolean).join("\n\n");
     const description = joined ? cutTo(joined, MAX_TEXT) : null;
-    await succeeded(api.tasks.send.$post({ json: { ...base, description, recipientId: target } }));
+    await step(
+      "send",
+      succeeded(api.tasks.send.$post({ json: { ...base, description, recipientId: target } })),
+    );
     return { failed: [] };
   }
 
   // Both schemas require userId; the server replaces it with the token's user
-  const task = await succeeded(
-    api.tasks.$post({
-      json: {
-        ...base,
-        userId: "",
-        description: draft.description,
-        categoryId: kind === "list" ? target : null,
-        sortOrder: await nextSortOrder(client),
-        parentId: null,
-        assigneeId: null,
-        dueDate: null,
-        editedAt: null,
-        completedAt: null,
-      },
-    }),
-  ).then((res) => res.json());
+  const sortOrder = await step("sort-order", nextSortOrder(client));
+  const task = await step(
+    "add",
+    succeeded(
+      api.tasks.$post({
+        json: {
+          ...base,
+          userId: "",
+          description: draft.description,
+          categoryId: kind === "list" ? target : null,
+          sortOrder,
+          parentId: null,
+          assigneeId: null,
+          dueDate: null,
+          editedAt: null,
+          completedAt: null,
+        },
+      }),
+    ).then((res) => res.json()),
+  );
 
-  const extras: [string, Promise<unknown>][] = [];
+  const extras: [Step, string, Promise<unknown>][] = [];
   if (kind === "share")
     extras.push([
+      "share",
       "sharing",
       succeeded(api.tasks.share.$post({ json: { taskId: task.id, username: target } })),
     ]);
   if (draft.note)
     extras.push([
+      "note",
       "the note",
       succeeded(
         api.notes.$post({
@@ -220,10 +254,15 @@ const addDraft = async (
         }),
       ),
     ]);
-  const settled = await Promise.allSettled(extras.map(([, done]) => done));
+  const settled = await Promise.allSettled(extras.map(([, , done]) => done));
   return {
     taskId: task.id,
-    failed: extras.flatMap(([part], i) => (settled[i].status === "rejected" ? [part] : [])),
+    failed: extras.flatMap(([failedStep, label], i) => {
+      const result = settled[i]!;
+      return result.status === "rejected"
+        ? [{ step: failedStep, label, reason: reasonOf(result.reason) }]
+        : [];
+    }),
   };
 };
 
@@ -252,7 +291,7 @@ const readImage = async (
   // Made by the page itself, so only the page can read it
   if (src.startsWith("blob:")) return { reason: "That image can only be saved as its link." };
   if (!(await allowed)) return { reason: "Ajot wasn't allowed to read images from that site." };
-  const { attachments } = await fetchServerConfig(session.serverUrl);
+  const { attachments } = await step("config", fetchServerConfig(session.serverUrl));
   if (!attachments) return { reason: "Your server doesn't take attachments." };
   try {
     const blob = await fetchImage(src);
@@ -266,9 +305,6 @@ const readImage = async (
   }
 };
 
-const recordMenuUse = ({ api }: ApiClient, name: string) =>
-  succeeded(api.metrics.$post({ json: { name } })).catch(console.error);
-
 let doneLabels = new Map<string, string>();
 
 const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
@@ -277,9 +313,16 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
   if (!(draftId in DRAFTS) || !kind) return;
   const id = draftId as DraftId;
   const allowed = id === "image" && info.srcUrl ? askToReadImages(info.srcUrl) : undefined;
+  const where = `${draftId}:${kind}`;
+  // Clicks less the menu: and menu-fail: counts are those that ended with no notification
+  void recordMetric(`menu-click:${where}`, null);
   let draft = withinLimits(draftFor(id, info, tab));
   const session = await getStoredSession();
-  if (!session) return notify("Not added", "Sign in to Ajot to add tasks from the menu.");
+  const count = (name: string) => void recordMetric(name.slice(0, 64), session);
+  if (!session) {
+    count(`menu-fail:${where}:session:signed-out`);
+    return notify("Not added", "Sign in to Ajot to add tasks from the menu.");
+  }
   const client = apiClient(session);
   try {
     const image =
@@ -292,17 +335,21 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
         uploaderId: session.userId,
         maxBytes: image.maxBytes,
       });
-      if (refusal) failed.push("the image");
+      if (refusal) failed.push({ step: "image", label: "the image", reason: refusal });
       else void sendUploads();
     }
-    void recordMenuUse(client, `menu:${draftId}:${kind}`);
+    count(`menu:${where}`);
+    for (const part of failed) count(`menu-part-failed:${where}:${part.step}:${part.reason}`);
     if (image && "reason" in image)
       return await notify("Added the image's link instead", image.reason);
     const done = doneLabels.get(`${kind}|${target}`) ?? "Added to Ajot";
-    await notify(failed.length ? `Added, but ${failed.join(" and ")} failed` : done, draft.title);
+    const parts = failed.map((part) => part.label).join(" and ");
+    await notify(failed.length ? `Added, but ${parts} failed` : done, draft.title);
   } catch (err) {
     console.error("[menu] add failed:", err);
-    await notify("Not added", failureMessage(err));
+    const [failedStep, cause] = err instanceof StepFailed ? [err.step, err.cause] : ["other", err];
+    count(`menu-fail:${where}:${failedStep}:${reasonOf(cause)}`);
+    await notify("Not added", failureMessage(cause));
   }
 };
 
@@ -357,6 +404,7 @@ const rebuild = () => {
   rebuilding = rebuilding
     .then(async () => {
       const session = await getStoredSession();
+      void sendPendingMetrics(session);
       const groups = session
         ? await fetchDestinations(apiClient(session)).catch((err) => {
             console.error("[menu] couldn't load lists and contacts:", err);
