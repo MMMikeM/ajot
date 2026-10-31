@@ -16,6 +16,7 @@ import { queueFile } from "~/lib/files/attach";
 import { fetchImage } from "~/lib/files/remote-image";
 import { createUploadSender } from "~/lib/files/sender";
 import { recordMetric, sendPendingMetrics } from "~/lib/metrics";
+import { showPageToast, type PageToastTone } from "~/lib/page-toast";
 
 type ClickData = browser.contextMenus.OnClickData;
 type ContextType = browser.contextMenus.ContextType;
@@ -152,6 +153,31 @@ const notify = (title: string, message: string) =>
   ext.notifications
     .create({ type: "basic", iconUrl: ext.runtime.getURL("icons/icon-192.png"), title, message })
     .catch(console.error);
+
+/**
+ * On the page the menu was used on, where it's seen; the operating system can hide a notification
+ * without saying so. A page the browser keeps scripts out of (its own, add-on stores) gets one.
+ */
+const tell = async (
+  tab: browser.tabs.Tab | undefined,
+  tone: PageToastTone,
+  title: string,
+  message: string,
+) => {
+  if (tab?.id !== undefined && tab.id >= 0) {
+    try {
+      await ext.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: showPageToast,
+        args: [title, message, tone],
+      });
+      return;
+    } catch (err) {
+      console.warn("[menu] couldn't show it on the page:", err);
+    }
+  }
+  await notify(title, message);
+};
 
 const failureMessage = (err: unknown) => {
   if (err instanceof ApiError && err.status === 401) return "Sign in to Ajot again.";
@@ -321,7 +347,7 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
   const count = (name: string) => void recordMetric(name.slice(0, 64), session);
   if (!session) {
     count(`menu-fail:${where}:session:signed-out`);
-    return notify("Not added", "Sign in to Ajot to add tasks from the menu.");
+    return tell(tab, "failed", "Not added", "Sign in to Ajot to add tasks from the menu.");
   }
   const client = apiClient(session);
   try {
@@ -341,15 +367,15 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
     count(`menu:${where}`);
     for (const part of failed) count(`menu-part-failed:${where}:${part.step}:${part.reason}`);
     if (image && "reason" in image)
-      return await notify("Added the image's link instead", image.reason);
+      return await tell(tab, "done", "Added the image's link instead", image.reason);
     const done = doneLabels.get(`${kind}|${target}`) ?? "Added to Ajot";
     const parts = failed.map((part) => part.label).join(" and ");
-    await notify(failed.length ? `Added, but ${parts} failed` : done, draft.title);
+    await tell(tab, "done", failed.length ? `Added, but ${parts} failed` : done, draft.title);
   } catch (err) {
     console.error("[menu] add failed:", err);
     const [failedStep, cause] = err instanceof StepFailed ? [err.step, err.cause] : ["other", err];
     count(`menu-fail:${where}:${failedStep}:${reasonOf(cause)}`);
-    await notify("Not added", failureMessage(cause));
+    await tell(tab, "failed", "Not added", failureMessage(cause));
   }
 };
 
