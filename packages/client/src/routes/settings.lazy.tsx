@@ -33,6 +33,8 @@ import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { listRowVariants } from "~/components/ui/list-row";
 import { SectionLabel } from "~/components/ui/section-label";
 import { cn } from "~/lib/utils";
+import { loadSnapshotEntry, saveSnapshot } from "~/lib/snapshot-store";
+import { GROUPED_KEY } from "~/lib/notification-group";
 
 export const Route = createLazyFileRoute("/settings")({
   component: SettingsPage,
@@ -200,6 +202,7 @@ const BackgroundUpdates = () => {
                 failed={preferences.isError}
                 onToggle={(trigger, on) => void toggleTrigger(trigger, on)}
               />
+              <GroupNotifications />
             </div>
           )}
         </div>
@@ -222,6 +225,35 @@ const BackgroundUpdates = () => {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+};
+
+// Read by this device's worker on each push, so it's saved here rather than with the server
+const GroupNotifications = () => {
+  const [grouped, setGrouped] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    loadSnapshotEntry(GROUPED_KEY)
+      .then((saved) => setGrouped(saved === true))
+      .catch(() => setGrouped(false));
+  }, []);
+
+  const change = (next: boolean) => {
+    setGrouped(next);
+    saveSnapshot([[GROUPED_KEY, next]]).catch((err) => {
+      console.error("[settings] couldn't save grouping:", err);
+      setGrouped(!next);
+    });
+  };
+
+  return (
+    <CheckRow
+      label="Group notifications into one"
+      detail="Everything you haven't looked at shows in a single notification, newest first, instead of one for each task."
+      checked={!!grouped}
+      disabled={grouped === null}
+      onCheckedChange={change}
+    />
   );
 };
 
