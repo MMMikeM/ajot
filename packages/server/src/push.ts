@@ -7,6 +7,7 @@ import {
   type VapidConfig,
 } from "@mmmike/web-push/send";
 import type { PushMessage } from "@newtab-todo/shared";
+import * as metricRepo from "./db/metric.repo";
 import * as pushPreferenceRepo from "./db/push-preference.repo";
 import { fitted } from "./push-plan";
 import * as pushSubscriptionRepo from "./db/push-subscription.repo";
@@ -33,6 +34,30 @@ const isWorthRetrying = (error: unknown) =>
     ? error.statusCode === 429 || error.statusCode >= 500
     : error instanceof TypeError || (error instanceof Error && error.name === "TimeoutError");
 
+const outcomeOf = (error: unknown) => {
+  if (error instanceof WebPushError) return String(error.statusCode);
+  if (error instanceof InvalidSubscriptionError) return "invalid";
+  return (error instanceof Error && error.name.toLowerCase().replace(/[^a-z0-9-]/g, "")) || "error";
+};
+
+/** What the push services said to each try, set against what the devices count receiving. */
+const countSends = (
+  type: string,
+  delivered: number,
+  gone: string[],
+  failed: { error: unknown }[],
+) => {
+  const counts = new Map<string, number>();
+  const add = (outcome: string, by = 1) => {
+    const name = `push-sent:${type}:${outcome}`.slice(0, 64);
+    counts.set(name, (counts.get(name) ?? 0) + by);
+  };
+  if (delivered > 0) add("ok", delivered);
+  if (gone.length > 0) add("gone", gone.length);
+  for (const { error } of failed) add(outcomeOf(error));
+  metricRepo.add(counts).catch((err) => console.error("[push] couldn't count sends:", err));
+};
+
 const retryAfterMs = (error: unknown) =>
   error instanceof WebPushError ? (error.retryAfterMs ?? 0) : 0;
 
@@ -51,6 +76,7 @@ export const sendPush = async (
     vapid,
     options,
   );
+  countSends(payload.type, delivered, gone, failed);
   const malformed = failed.filter(({ error }) => error instanceof InvalidSubscriptionError);
   const delayMs = RETRY_DELAYS_MS[attempt];
   const registering =

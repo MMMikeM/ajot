@@ -9,15 +9,20 @@ export const countSchema = createSelectSchema(metricCounts);
 
 const utcDay = (date = new Date()) => date.toISOString().slice(0, 10);
 
-export const increment = async (name: string) => {
+/** Adds each count to today's total for its name, in one statement. */
+export const add = async (counts: ReadonlyMap<string, number>) => {
+  if (counts.size === 0) return;
+  const day = utcDay();
   await db
     .insert(metricCounts)
-    .values({ name, day: utcDay(), count: 1 })
+    .values([...counts].map(([name, count]) => ({ name, day, count })))
     .onConflictDoUpdate({
       target: [metricCounts.name, metricCounts.day],
-      set: { count: sql`${metricCounts.count} + 1` },
+      set: { count: sql`${metricCounts.count} + excluded.count` },
     });
 };
+
+export const increment = (name: string) => add(new Map([[name, 1]]));
 
 export const listSince = (days: number) => {
   const since = utcDay(new Date(Date.now() - (days - 1) * 86_400_000));

@@ -11,6 +11,7 @@ import { syncFiles } from "~/lib/files/file-job";
 import { readWorkerSession } from "~/lib/sync/worker-session";
 import { createUploadSender } from "~/lib/files/sender";
 import { retryWaitingNow } from "~/lib/files/store";
+import { apiClient, succeeded } from "~/lib/api-client";
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -89,16 +90,49 @@ self.addEventListener("activate", (event: ExtendableEvent) => {
   event.waitUntil(self.clients.claim());
 });
 
+// Counted against the server's push-sent counts, so a push lost on the way, or arriving while
+// the app is open, shows up in /api/metrics
+const count = async (name: string) => {
+  const session = await readWorkerSession();
+  if (!session) return;
+  await succeeded(apiClient(session).api.metrics.$post({ json: { name } })).catch((err) =>
+    console.error(`[sw] couldn't count ${name}:`, err),
+  );
+};
+
+/** Whether the app was on screen, open behind something else, or not open at all. */
+const stateOf = (windows: readonly WindowClient[]) => {
+  if (windows.some((window) => window.focused)) return "focused";
+  if (windows.some((window) => window.visibilityState === "visible")) return "visible";
+  return windows.length > 0 ? "hidden" : "none";
+};
+
+const openPages = () => self.clients.matchAll({ type: "window", includeUncontrolled: true });
+
+/** Which page a tap landed on, by its path's kind, never the task's id. */
+const landedOn = (client: WindowClient | null) => {
+  if (!client) return "none";
+  const { pathname } = new URL(client.url);
+  if (pathname === "/") return "home";
+  if (pathname.startsWith("/task/")) return "task";
+  if (pathname.endsWith(".js")) return "script";
+  return "other";
+};
+
 // Push: web subscriptions only receive visible notifications; silent sync goes to extensions.
 self.addEventListener("push", (event: PushEvent) => {
   const payload = event.data?.json() as PushMessage | undefined;
   if (!payload?.type) return;
 
+  const received = openPages().then((pages) =>
+    count(`push-received:${payload.type}:${stateOf(pages)}`),
+  );
   const notification = toNotification(payload);
-  if (!notification) return;
+  if (!notification) return event.waitUntil(received);
 
   event.waitUntil(
     Promise.all([
+      received,
       self.registration.showNotification(notification.title, {
         body: notification.body,
         icon: "/icons/icon-192.png",
@@ -139,20 +173,27 @@ self.addEventListener("notificationclick", (event: NotificationEvent) => {
   const path = (event.notification.data as { url?: string })?.url ?? "/";
   const url = new URL(path, self.location.origin).href;
 
-  event.waitUntil(
-    (async () => {
-      for (const client of await self.clients.matchAll({ type: "window" })) {
-        // Firefox for Android can come to the front without switching to the tab, or refuse to.
-        // Unless the tab really has focus, open the task in a window of its own.
-        try {
-          const focused = await client.focus();
-          if (!focused.focused) continue;
-          if (await focused.navigate(url)) return;
-        } catch {
-          continue;
-        }
+  const open = async () => {
+    const windows = await self.clients.matchAll({ type: "window" });
+    const before = stateOf(windows);
+    for (const client of windows) {
+      // Firefox for Android can come to the front without switching to the tab, or refuse to.
+      // Unless the tab really has focus, open the task in a window of its own.
+      try {
+        const focused = await client.focus();
+        if (!focused.focused) continue;
+        const navigated = await focused.navigate(url);
+        if (navigated) return `${before}:navigated-${landedOn(navigated)}`;
+      } catch {
+        continue;
       }
-      await self.clients.openWindow(url);
-    })(),
-  );
+    }
+    try {
+      return `${before}:opened-${landedOn(await self.clients.openWindow(url))}`;
+    } catch (err) {
+      return `${before}:failed-${err instanceof Error ? err.name.toLowerCase() : "error"}`;
+    }
+  };
+
+  event.waitUntil(open().then((outcome) => count(`notification-click:${outcome}`.slice(0, 64))));
 });
