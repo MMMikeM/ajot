@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { CalendarDays, Trash2 } from "lucide-react";
+import { CalendarDays, Link, Trash2 } from "lucide-react";
 import type { Task } from "~/lib/types";
 import { useNotes, updateTask } from "~/lib/db/hooks";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
@@ -16,6 +16,7 @@ import { Textarea } from "~/components/ui/field";
 import { MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { cn } from "~/lib/utils";
 import { formatDueDateTime } from "~/lib/dates";
+import { linksIn } from "~/lib/links";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 import { dockedSheet } from "~/components/docked-sheet";
 import { canDeleteTask, canEditTask, grants } from "@newtab-todo/shared/task-access";
@@ -24,7 +25,7 @@ import { holders, ownerNameOf } from "~/lib/task-holders";
 import { isReadyToTick } from "~/lib/ready-to-tick";
 import { useTasks } from "~/lib/db/hooks";
 import { useTaskActions } from "~/components/task/use-actions";
-import { AddRow, DetailRow, lineButton } from "~/components/task/detail-row";
+import { AddRow, DetailRow, ItemRow, lineButton } from "~/components/task/detail-row";
 import { Notes, Subtasks } from "~/components/task/detail-items";
 import { Attachments } from "~/components/task/detail-attachments";
 import {
@@ -246,6 +247,7 @@ const TaskDetailContent = ({
             />
           </DetailRow>
         )}
+        <LinkRows text={description} />
 
         {/* Hidden native picker: the browser supplies the date UI. Absolute, so it takes no
             gap in the column; the picker opens where it sits, by the date line. */}
@@ -296,6 +298,31 @@ const TaskDetailContent = ({
         grant={grants(held).find((grant) => grant.userId === userId)}
       />
     </div>
+  );
+};
+
+/** The details' web addresses, which can't be followed from inside the field. */
+const LinkRows = ({ text }: { text: string }) => {
+  const links = linksIn(text);
+  if (links.length === 0) return null;
+  return (
+    <DetailRow icon={<Link />} label="Links">
+      {links.map((link) => (
+        <ItemRow key={link.href}>
+          <a
+            href={link.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={link.href}
+            className={cn(lineButton, "min-w-0 flex-1 text-primary")}
+          >
+            <span dir="auto" className="truncate leading-7 touch:leading-8">
+              {link.label}
+            </span>
+          </a>
+        </ItemRow>
+      ))}
+    </DetailRow>
   );
 };
 
