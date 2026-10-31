@@ -8,6 +8,7 @@ import { queueFile, type Refusal } from "~/lib/files/attach";
 import { createUploadSender } from "~/lib/files/sender";
 import { refreshAttachmentsConfig } from "~/lib/attachments/config";
 import type { Attachment } from "~/lib/types";
+import { whenIdle } from "~/lib/when-idle";
 
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -41,7 +42,7 @@ const sendFromWorkerWhenOnline = () => {
     .catch(console.error);
 };
 
-export type Refused = { name: string; reason: Refusal };
+export type Refused = { name: string; reason: Refusal | "signed-out" };
 
 /**
  * Saves each file on this device and queues it, so it shows at once and survives the tab closing.
@@ -49,7 +50,7 @@ export type Refused = { name: string; reason: Refusal };
  */
 export const attachFiles = async (taskId: string, files: File[], maxBytes: number) => {
   const uploaderId = getSignedInUserId();
-  if (!uploaderId) return [];
+  if (!uploaderId) return files.map((file): Refused => ({ name: file.name, reason: "signed-out" }));
   const refused: Refused[] = [];
   for (const file of files) {
     const reason = await queueFile(file, { taskId, uploaderId, maxBytes });
@@ -66,10 +67,6 @@ export const attachFiles = async (taskId: string, files: File[], maxBytes: numbe
 // Opening the app or reconnecting is the chance a backoff was waiting for, however long it had left
 const sendWaitingNow = () => retryWaitingNow().catch(console.error).then(sendUploads);
 
-// After the first paint: most opens have nothing queued, and neither can wait on the lists
-const whenIdle = (run: () => void) =>
-  typeof requestIdleCallback === "function" ? requestIdleCallback(run) : setTimeout(run, 0);
-
 // Asks the browser not to clear this origin's storage under pressure, which would take the saved
 // files and a waiting upload's only copy with it. The extensions' storage isn't cleared that way.
 const keepStorage = () => {
@@ -78,6 +75,7 @@ const keepStorage = () => {
 };
 
 export const initAttachments = () => {
+  // Most opens have nothing queued, and neither can wait on the lists
   whenIdle(() => {
     if (getAuthToken()) {
       refreshAttachmentsConfig().catch(console.error);
