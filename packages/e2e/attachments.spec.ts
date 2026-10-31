@@ -175,17 +175,18 @@ test("someone the task is shared with sees the photo, loaded from the bucket", a
         r.ok(),
     );
   const thumbLoaded = fromBucket("t");
+  // The task's only photo shows large, so its full file comes with the sheet, not the viewer
+  const fileLoaded = fromBucket("a");
   await bobPage.goto(`/task/${task.id}`, { waitUntil: "domcontentloaded" });
   const bobSheet = bobPage.getByRole("dialog", { name: title, exact: true });
   const tile = tileOf(bobSheet, PHOTO.name);
   await expect(tile).toBeVisible({ timeout: 15_000 });
   await thumbLoaded;
+  await fileLoaded;
   await expectImageLoaded(tile.locator("img"));
 
-  const fileLoaded = fromBucket("a");
   await tile.click();
   const viewer = bobPage.getByRole("dialog", { name: PHOTO.name, exact: true });
-  await fileLoaded;
   await expectImageLoaded(viewer.getByRole("img", { name: PHOTO.name }));
 });
 
