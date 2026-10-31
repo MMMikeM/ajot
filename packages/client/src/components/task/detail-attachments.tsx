@@ -13,7 +13,8 @@ import {
 import { opensInTab } from "@newtab-todo/shared/attachments";
 import { canDeleteAttachment, type Grant } from "@newtab-todo/shared/task-access";
 import { useAttachmentsConfig } from "~/lib/attachments/config";
-import { attachFiles, type Refused } from "~/lib/attachments/queue";
+import { attachAndTell } from "~/lib/attachments/attach-and-tell";
+import { formatSize } from "~/lib/attachments/format";
 import {
   downloadFile,
   removeAttachment,
@@ -28,14 +29,6 @@ import { RevealGroup } from "~/components/ui/reveal-button";
 import { AddRow, DetailRow, ItemRow, lineButton } from "~/components/task/detail-row";
 import { DeleteItemButton, SectionHeading } from "~/components/task/detail-items";
 import { cn } from "~/lib/utils";
-
-const sizeFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
-
-const formatSize = (bytes: number) => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${sizeFormat.format(bytes / 1024)} KB`;
-  return `${sizeFormat.format(bytes / (1024 * 1024))} MB`;
-};
 
 const kindOf = ({ name, mimeType }: AttachmentItem) =>
   (name.includes(".") ? name.split(".") : mimeType.split("/")).pop()!.toUpperCase();
@@ -438,10 +431,7 @@ export const Attachments = ({
             onChange={(e) => {
               const chosen = [...(e.target.files ?? [])];
               e.target.value = "";
-              void attachFiles(taskId, chosen, config.maxBytes).then((refused) => {
-                for (const { name, reason } of refused)
-                  toastManager.add({ title: refusedTitle(name, reason, config.maxBytes) });
-              });
+              void attachAndTell(taskId, chosen, config.maxBytes);
             }}
           />
         </>
@@ -455,15 +445,4 @@ export const Attachments = ({
       />
     </fieldset>
   );
-};
-
-const refusedTitle = (name: string, reason: Refused["reason"], maxBytes: number) => {
-  switch (reason) {
-    case "empty":
-      return `“${name}” is empty, so it wasn’t added.`;
-    case "too-big":
-      return `“${name}” is over ${formatSize(maxBytes)}, so it wasn’t added.`;
-    case "not-saved":
-      return `“${name}” couldn’t be saved on this device. It may be out of space.`;
-  }
 };

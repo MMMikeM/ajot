@@ -33,6 +33,22 @@ test("the page and the API carry the Content Security Policy", async () => {
   expect(await (await app.request("/task/abc")).text()).toBe("<!doctype html>");
 });
 
+test("a share no worker answered sends its text on to the page, and its files nowhere", async () => {
+  const form = new FormData();
+  form.set("title", "Local-first software");
+  form.set("text", "Worth reading https://a.test/lf");
+  form.set("files", new File(["x"], "photo.jpg", { type: "image/jpeg" }));
+  form.set("other", "dropped");
+  const res = await app.request("/share", { method: "POST", body: form });
+  expect(res.status).toBe(303);
+  const to = new URL(res.headers.get("location")!, "https://ajot.test");
+  expect(to.pathname).toBe("/share");
+  expect(Object.fromEntries(to.searchParams)).toEqual({
+    title: "Local-first software",
+    text: "Worth reading https://a.test/lf",
+  });
+});
+
 test("a request for a route the API doesn't have is logged and answered 501, not a row's 404", async () => {
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   for (const path of ["/api/no-such-route", "/api/config/"]) {

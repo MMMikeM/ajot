@@ -21,6 +21,7 @@ const store = createExternalStore(load());
 
 /** Null when the server has no bucket, or this device has never heard from it. */
 export const useAttachmentsConfig = store.useStore;
+export const getAttachmentsConfig = store.get;
 
 export const refreshAttachmentsConfig = async () => {
   const { attachments } = await fetchServerConfig(getServerUrl());

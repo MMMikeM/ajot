@@ -17,6 +17,8 @@ import { createUploadSender } from "~/lib/files/sender";
 import { retryWaitingNow } from "~/lib/files/store";
 import { apiClient, succeeded } from "~/lib/api-client";
 import { loadSnapshotEntry } from "~/lib/snapshot-store";
+import { keepShare } from "~/lib/share-store";
+import { SHARED_TEXT_FIELDS, type SharedText } from "@newtab-todo/shared/share-target";
 import {
   addToGroup,
   GROUP_TAG,
@@ -50,18 +52,47 @@ precacheAndRoute(
 );
 cleanupOutdatedCaches();
 
+const SHARE_PATH = "/share";
+
+// The manifest's share target: the worker keeps what came on the device, offline too, and sends
+// the page to add it
+registerRoute(
+  ({ url }) => url.pathname === SHARE_PATH,
+  async ({ request }) => {
+    const text: SharedText = {};
+    try {
+      const form = await request.formData();
+      for (const name of SHARED_TEXT_FIELDS) {
+        const value = form.get(name);
+        if (typeof value === "string") text[name] = value;
+      }
+      const id = crypto.randomUUID();
+      const files = form.getAll("files").filter((value): value is File => value instanceof File);
+      await keepShare(id, text, files);
+      return Response.redirect(`${SHARE_PATH}?id=${id}`, 303);
+    } catch (err) {
+      // Too big to keep, say: the files are lost, but the text still comes in the address
+      console.error("[sw] couldn't keep a share:", err);
+      return Response.redirect(`${SHARE_PATH}?${new URLSearchParams(text)}`, 303);
+    }
+  },
+  "POST",
+);
+
 registerRoute(
   new NavigationRoute(
     new NetworkFirst({
       cacheName: "pages-cache",
       networkTimeoutSeconds: 3,
       plugins: [
+        // Every path is the same app shell, as the server serves index.html for all of them, so
+        // it's kept once rather than once per task or share
+        { cacheKeyWillBeUsed: async () => "/index.html" },
         new ExpirationPlugin({
-          maxEntries: 50,
+          maxEntries: 1,
           maxAgeSeconds: 24 * 60 * 60,
         }),
-        // Offline, a page never opened before (a notification's /task/<id>) has nothing cached.
-        // Every path is the same app shell, as the server serves index.html for all of them.
+        // Before any page was cached, offline
         { handlerDidError: () => matchPrecache("/index.html") },
       ],
     }),

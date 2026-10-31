@@ -22,6 +22,7 @@ import { isAllowedOrigin, parseAllowedOrigins } from "./origins";
 import { rejectInvalidInput } from "./routes/openapi-schemas";
 import { LoggedHTTPException } from "./db/errors";
 import { storage } from "./storage";
+import { SHARED_TEXT_FIELDS } from "@newtab-todo/shared/share-target";
 
 const app = new OpenAPIHono({ defaultHook: rejectInvalidInput });
 
@@ -95,6 +96,22 @@ app.use("*", (c, next) => {
 });
 
 app.options("*", (c) => c.body(null, 204));
+
+// The PWA's share target, when no worker answers it (its site data cleared): the text goes on to
+// the page in the address. Files need the worker, which keeps them on the device, so a share too
+// big to read here just opens the app. Ahead of the limit below, which answers in JSON.
+app.post(
+  "/share",
+  bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.redirect("/", 303) }),
+  async (c) => {
+    const body = await c.req.parseBody().catch(() => ({}));
+    const text = new URLSearchParams();
+    for (const [name, value] of Object.entries(body))
+      if (SHARED_TEXT_FIELDS.some((field) => field === name) && typeof value === "string")
+        text.set(name, value);
+    return c.redirect(`/share?${text}`, 303);
+  },
+);
 
 // After CORS, so an extension is shown this answer rather than a CORS failure
 app.use(
