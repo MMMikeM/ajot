@@ -4,7 +4,11 @@ import { cleanupOutdatedCaches, matchPrecache, precacheAndRoute } from "workbox-
 import { registerRoute, NavigationRoute } from "workbox-routing";
 import { NetworkFirst, CacheFirst } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
-import { toNotification, type PushMessage } from "@newtab-todo/shared/push-payload";
+import {
+  toNotification,
+  type PushMessage,
+  type ShownNotification,
+} from "@newtab-todo/shared/push-payload";
 import { MSG_BUILD_VERSION, MSG_SYNC_ALL } from "@newtab-todo/shared/constants";
 import { createPrewarm, filesRunOf } from "~/lib/sync/prewarm";
 import { syncFiles } from "~/lib/files/file-job";
@@ -12,6 +16,14 @@ import { readWorkerSession } from "~/lib/sync/worker-session";
 import { createUploadSender } from "~/lib/files/sender";
 import { retryWaitingNow } from "~/lib/files/store";
 import { apiClient, succeeded } from "~/lib/api-client";
+import { loadSnapshotEntry } from "~/lib/snapshot-store";
+import {
+  addToGroup,
+  GROUP_TAG,
+  GROUPED_KEY,
+  type Group,
+  type ReplacingOptions,
+} from "~/lib/notification-group";
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -119,6 +131,35 @@ const landedOn = (client: WindowClient | null) => {
   return "other";
 };
 
+const ICON = "/icons/icon-192.png";
+
+/**
+ * One notification per thing it's about, the newest replacing the last, or with grouping on in
+ * Settings, one for everything. "Your lists were updated" makes no sound; anything else replacing
+ * an older notification still alerts.
+ */
+const show = async (notification: ShownNotification) => {
+  const sound: ReplacingOptions =
+    notification.tag === "changes" ? { silent: true } : { renotify: true };
+  if ((await loadSnapshotEntry(GROUPED_KEY)) !== true)
+    return self.registration.showNotification(notification.title, {
+      body: notification.body,
+      icon: ICON,
+      tag: notification.tag,
+      data: { url: notification.url },
+      ...sound,
+    });
+  const [open] = await self.registration.getNotifications({ tag: GROUP_TAG });
+  const grouped = addToGroup((open?.data as { group?: Group } | undefined)?.group, notification);
+  return self.registration.showNotification(grouped.title, {
+    body: grouped.body,
+    icon: ICON,
+    tag: GROUP_TAG,
+    data: { url: grouped.url, group: grouped.group },
+    ...sound,
+  });
+};
+
 // Push: web subscriptions only receive visible notifications; silent sync goes to extensions.
 self.addEventListener("push", (event: PushEvent) => {
   const payload = event.data?.json() as PushMessage | undefined;
@@ -133,13 +174,7 @@ self.addEventListener("push", (event: PushEvent) => {
   event.waitUntil(
     Promise.all([
       received,
-      self.registration.showNotification(notification.title, {
-        body: notification.body,
-        icon: "/icons/icon-192.png",
-        data: { url: notification.url },
-        // Sent for every change, so it stays one notification and makes no sound
-        ...(payload.type === "changes" && { tag: "changes", silent: true }),
-      }),
+      show(notification),
       self.clients.matchAll().then((clients) => {
         for (const client of clients) {
           client.postMessage({ type: MSG_SYNC_ALL });

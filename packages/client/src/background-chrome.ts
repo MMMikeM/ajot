@@ -19,6 +19,7 @@ import { setupContextMenu } from "~/lib/context-menu";
 import { createUploadSender } from "~/lib/files/sender";
 import { retryWaitingNow } from "~/lib/files/store";
 import { prewarmPeriodically, prewarmSnapshot } from "~/lib/sync/prewarm-extension";
+import type { ReplacingOptions } from "~/lib/notification-group";
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -62,11 +63,15 @@ const queueReconcile = () => {
 const showNotification = (payload: PushPayload) => {
   const notification = toNotification(payload);
   if (!notification) return Promise.resolve();
-  return self.registration.showNotification(notification.title, {
+  // A newer one about the same task replaces it, and still alerts
+  const options: ReplacingOptions = {
     body: notification.body,
     icon: ext.runtime.getURL("icons/icon-192.png"),
+    tag: notification.tag,
+    renotify: true,
     data: { url: notification.url },
-  });
+  };
+  return self.registration.showNotification(notification.title, options);
 };
 
 // This worker dies about 30 s after it goes idle, and a slower PUT with it: a bigger file waits for
