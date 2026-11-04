@@ -18,6 +18,8 @@ export default {
         "src/background-firefox.ts",
         "src/background-chrome.ts",
         "src/entry-server.tsx",
+        // build-extension.ts builds it from popup.html
+        "src/popup.tsx",
         "src/routes/**/*.tsx",
       ],
       project: ["src/**/*.{ts,tsx,css}"],

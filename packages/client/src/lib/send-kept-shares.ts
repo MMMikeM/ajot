@@ -211,9 +211,11 @@ export const keepAndSend = (
   id: string,
   kept: KeptShare,
   files: File[],
+  onKept?: () => void,
 ) =>
   withLock(shareLockName(id), async () => {
     await keepShare(id, kept, files);
+    onKept?.();
     return sendOnce(session, id).catch(
       (error: unknown): SendOutcome => ({ status: "waiting", step: "add", error }),
     );

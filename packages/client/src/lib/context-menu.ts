@@ -21,6 +21,7 @@ import {
 } from "~/lib/share-store";
 import { keepAndSend, reasonOf, sendKeptShares, type SendOutcome } from "~/lib/send-kept-shares";
 import type { SharedText } from "@newtab-todo/shared/share-target";
+import { isPopupAdd, type PopupAdd, type PopupReply } from "~/lib/popup-message";
 
 type ClickData = browser.contextMenus.OnClickData;
 type ContextType = browser.contextMenus.ContextType;
@@ -276,9 +277,16 @@ const keptImage = async (src: string, allowed: Promise<boolean>) => {
  * Keeps what was clicked on the device and opens the app's share page on it, which adds it to the
  * Inbox in the app's own store, offline too, and opens its sheet to edit, share or send.
  */
-const openInAjot = async (info: ClickData, tab?: browser.tabs.Tab) => {
-  const { from, text, image } = shareFor(info, tab);
-  const allowed = image ? askToReadImages(image) : undefined;
+type OpenRequest = {
+  from: string;
+  text: SharedText;
+  image?: string;
+  allowed?: Promise<boolean>;
+  tab?: browser.tabs.Tab;
+  onKept?: () => void;
+};
+
+const keepAndOpen = async ({ from, text, image, allowed, tab, onKept }: OpenRequest) => {
   const where = `open:${from}`;
   const count = (name: string, session: SignedInSession | null) =>
     void recordMetric(name.slice(0, 64), session);
@@ -288,6 +296,7 @@ const openInAjot = async (info: ClickData, tab?: browser.tabs.Tab) => {
     const file = image && allowed ? await keptImage(image, allowed) : undefined;
     const imageLink = image && !file && image.startsWith("http") ? image : undefined;
     await keepShare(id, imageLink ? { ...text, text: imageLink } : text, file ? [file] : []);
+    onKept?.();
   } catch (err) {
     console.error("[menu] couldn't keep it:", err);
     count(`menu-fail:${where}:keep:${reasonOf(err)}`, null);
@@ -308,6 +317,12 @@ const openInAjot = async (info: ClickData, tab?: browser.tabs.Tab) => {
   void getStoredSession()
     .then((session) => count(`menu:${where}`, session))
     .catch(console.error);
+};
+
+const openInAjot = (info: ClickData, tab?: browser.tabs.Tab) => {
+  const { from, text, image } = shareFor(info, tab);
+  const allowed = image ? askToReadImages(image) : undefined;
+  return keepAndOpen({ from, text, image, allowed, tab });
 };
 
 let doneLabels = new Map<string, string>();
@@ -361,15 +376,40 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
     count(`menu-fail:${where}:session:signed-out`);
     return tell(tab, "failed", "Not added", "Sign in to Ajot to add tasks from the menu.");
   }
-  const to = destinationOf(kind as DestinationKind, target);
-  const shareId = crypto.randomUUID();
   const image =
     draft.image && allowed ? await readImage(session, draft.image, allowed) : undefined;
   if (image && "reason" in image) draft = withinLimits(draftFor("image-link", info, tab));
+  return addAndTell({
+    session,
+    draft,
+    to: destinationOf(kind as DestinationKind, target),
+    where,
+    done: doneLabels.get(`${kind}|${target}`) ?? "Added to Ajot",
+    tab,
+    image,
+  });
+};
+
+type AddRequest = {
+  session: SignedInSession;
+  draft: Draft;
+  to: ShareDestination;
+  /** Where the add came from, for its metrics. */
+  where: string;
+  done: string;
+  tab?: browser.tabs.Tab;
+  image?: ReadImage;
+  onKept?: () => void;
+};
+
+/** Keeps the add, sends it, and says on the page how that went. */
+const addAndTell = async ({ session, draft, to, where, done, tab, image, onKept }: AddRequest) => {
+  const count = (name: string) => void recordMetric(name.slice(0, 64), session);
   const files = image && "file" in image ? [image.file] : [];
+  const kept = keptFrom(draft, to, session.userId);
   let outcome: SendOutcome;
   try {
-    outcome = await keepAndSend(session, shareId, keptFrom(draft, to, session.userId), files);
+    outcome = await keepAndSend(session, crypto.randomUUID(), kept, files, onKept);
   } catch (err) {
     console.error("[menu] couldn't keep it:", err);
     count(`menu-fail:${where}:keep:${reasonOf(err)}`);
@@ -383,7 +423,6 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
       if (image && "file" in image) void sendUploads();
       if (image && "reason" in image)
         return tell(tab, "done", "Added the image's link instead", image.reason);
-      const done = doneLabels.get(`${kind}|${target}`) ?? "Added to Ajot";
       const title = outcome.failed.length ? `Added, but ${partsFailed(outcome)} failed` : done;
       return tell(tab, "done", title, draft.title);
     }
@@ -397,6 +436,35 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
       return tell(tab, "failed", "Not added", failureMessage(outcome.error));
     case "skipped":
       return undefined;
+  }
+};
+
+const tabById = (tabId: number | undefined) =>
+  tabId === undefined ? Promise.resolve(undefined) : ext.tabs.get(tabId).catch(() => undefined);
+
+/** The toolbar popup's add, answered as soon as it's kept so the popup can close. */
+const addFromPopup = async (message: PopupAdd, reply: (answer: PopupReply) => void) => {
+  let replied = false;
+  const answer = (kept: boolean) => {
+    if (replied) return;
+    replied = true;
+    reply({ kept });
+  };
+  try {
+    const tab = await tabById(message.tabId);
+    const draft = withinLimits({ title: message.title, description: message.description });
+    if (message.open) {
+      const text = { title: draft.title, ...(draft.description && { text: draft.description }) };
+      return await keepAndOpen({ from: "popup", text, tab, onKept: () => answer(true) });
+    }
+    const session = await getStoredSession();
+    if (!session) return;
+    const where = `popup:${message.to.kind}`;
+    void recordMetric(`menu-click:${where}`, null);
+    const { to, done } = message;
+    await addAndTell({ session, draft, to, done, where, tab, onKept: () => answer(true) });
+  } finally {
+    answer(false);
   }
 };
 
@@ -494,7 +562,13 @@ const rebuild = () => {
 /** Never throws: a failure here must not stop the background's sync. */
 export const setupContextMenu = () => {
   try {
-    // Firefox for Android has no context menus
+    // True keeps the reply open past this call, in Chrome and Firefox alike
+    ext.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
+      if (sender.id !== ext.runtime.id || !isPopupAdd(message)) return undefined;
+      void addFromPopup(message, sendResponse).catch(console.error);
+      return true;
+    });
+    // Firefox for Android has no context menus, though it has the popup
     if (!ext.contextMenus) return;
     ext.contextMenus.onClicked.addListener((info, tab) => void handleClick(info, tab));
     // On the storage write itself: a sign-in's runtime message can arrive before it lands
