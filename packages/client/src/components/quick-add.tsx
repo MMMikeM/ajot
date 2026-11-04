@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { SquareArrowOutUpRight } from "lucide-react";
+import { Check, ImagePlus, SquareArrowOutUpRight } from "lucide-react";
 import { MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { Button } from "~/components/ui/button";
 import { ColorDot } from "~/components/ui/color-dot";
 import { Textarea } from "~/components/ui/field";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
+import { TogglePill } from "~/components/ui/toggle-pill";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "~/components/ui/select";
 import { autoGrow } from "~/lib/auto-grow";
 import { INBOX_COLOR } from "~/lib/constants";
 import { ext, getStoredSession } from "~/lib/ext";
 import { MSG_POPUP_ADD, type PopupAdd, type PopupReply } from "~/lib/popup-message";
 import { titleWithoutSite } from "~/lib/page-title";
+import { mayReadImages, readPageMeta } from "~/lib/page-meta";
 import type { ShareDestination } from "~/lib/share-store";
 import { OWNER_KEY, openSnapshotDb, readSnapshot } from "~/lib/snapshot-store";
 import type { Category, Contact } from "~/lib/types";
@@ -180,6 +182,7 @@ export function QuickAdd() {
   const [choice, setChoice] = useState<Choice>(INBOX);
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [picture, setPicture] = useState<{ src: string; attach: boolean }>();
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -187,7 +190,16 @@ export function QuickAdd() {
       const [session, current] = await Promise.all([getStoredSession(), activeTab()]);
       setSignedIn(!!session);
       setTab(current);
-      setTitle(titleWithoutSite(current.title, current.url) || current.url);
+      const tabTitle = titleWithoutSite(current.title, current.url) || current.url;
+      setTitle(tabTitle);
+      // The page's own title replaces the tab's once it's read, unless it's been typed over
+      void readPageMeta(current.id).then(async (meta) => {
+        if (meta.title || meta.siteName) {
+          const own = titleWithoutSite(meta.title || current.title, current.url, meta.siteName);
+          if (own) setTitle((typed) => (typed === tabTitle ? own : typed));
+        }
+        if (meta.image) setPicture({ src: meta.image, attach: await mayReadImages() });
+      });
       setDetails(current.url);
       // After the title renders: the caret at its end, ready to add to it or press Enter
       requestAnimationFrame(() => {
@@ -218,6 +230,7 @@ export function QuickAdd() {
       title: trimmed,
       description: details.trim() || null,
       to: choice.to,
+      picture: picture?.attach && choice.to.kind !== "send" ? picture.src : null,
       done: choice.done,
       open,
     };
@@ -229,6 +242,16 @@ export function QuickAdd() {
     }
     setFailed(true);
     setSending(false);
+  };
+
+  const togglePicture = () => {
+    if (!picture) return;
+    if (picture.attach) return setPicture({ ...picture, attach: false });
+    // Asked inside the click: a browser lets an extension ask for a permission only then
+    void ext.permissions
+      .request({ origins: ["<all_urls>"] })
+      .then((granted) => granted && setPicture({ ...picture, attach: true }))
+      .catch((err: unknown) => console.error("[popup] couldn't ask to read images:", err));
   };
 
   const submit = (event: FormEvent) => {
@@ -293,6 +316,21 @@ export function QuickAdd() {
           onKeyDown={(e) => submitOnEnter(e, true)}
           className="max-h-36 border-transparent py-1.5 text-sm wrap-anywhere text-muted-foreground md:text-sm"
         />
+
+        {picture && choice.to.kind !== "send" && (
+          <div className="mt-3 flex items-center gap-3">
+            <img
+              src={picture.src}
+              alt=""
+              onError={() => setPicture(undefined)}
+              className="size-10 shrink-0 rounded-md bg-muted object-cover"
+            />
+            <TogglePill selected={picture.attach} aria-pressed={picture.attach} onClick={togglePicture}>
+              {picture.attach ? <Check data-icon="inline-start" /> : <ImagePlus data-icon="inline-start" />}
+              Attach picture
+            </TogglePill>
+          </div>
+        )}
 
         {failed && (
           <p role="alert" className="mt-2 text-sm text-destructive">
