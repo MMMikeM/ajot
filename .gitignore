@@ -25,3 +25,5 @@ packages/e2e/screenshots/
 .worktrees/
 .impeccable/
 .evidence/
+# A downloaded binary for one platform; the launcher fetches it when missing
+.claude/skills/impeccable/scripts/bin/
