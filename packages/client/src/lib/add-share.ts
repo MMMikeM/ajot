@@ -5,16 +5,22 @@ import { attachFiles } from "~/lib/attachments/queue";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
 import { getBuildTarget } from "~/lib/build-target";
 import { addTask } from "~/lib/db/add-task";
-import { tasksCollection } from "~/lib/db/collections";
+import { notesCollection, tasksCollection } from "~/lib/db/collections";
+import { addNote } from "~/lib/db/hooks";
+import { getCurrentUserId, getSignedInUserId } from "~/lib/auth/current-user";
 import { withLock } from "~/lib/locks";
 import {
   forgetShare,
   forgetSharedFile,
   keptShareIds,
+  onKeptShare,
   readShare,
+  setShareAdded,
   setShareTask,
+  shareLockName,
+  type KeptShare,
 } from "~/lib/share-store";
-import { taskFromShare } from "~/lib/shared-page";
+import { shareIdIn, taskOfKept } from "~/lib/shared-page";
 import { whenIdle } from "~/lib/when-idle";
 
 // The server's limit, asked for if this device hasn't heard it; offline, the server refuses what's
@@ -25,18 +31,32 @@ const maxBytes = async () => {
   return getAttachmentsConfig()?.maxBytes ?? Number.POSITIVE_INFINITY;
 };
 
+/** Only the extension's background can share or send a task, and only for the account that asked. */
+const isThisPagesToAdd = ({ to, userId }: KeptShare) =>
+  to?.kind !== "share" && to?.kind !== "send" && (!userId || userId === getSignedInUserId());
+
 const addOnce = async (id: string) => {
   const kept = await readShare(id);
-  if (!kept) return undefined;
-  const task = taskFromShare({ ...kept.text, files: kept.files.map(({ file }) => file) });
+  if (!kept || !isThisPagesToAdd(kept.text)) return undefined;
+  const task = taskOfKept(kept.text, kept.files.map(({ file }) => file));
   if (!task) {
     await forgetShare(id);
     return undefined;
   }
+  const { to, note } = kept.text;
   const taskId = kept.text.taskId ?? nanoid();
   if (!kept.text.taskId) await setShareTask(id, kept.text, taskId);
   await tasksCollection.stateWhenReady();
-  if (!tasksCollection.has(taskId)) await addTask(task.title, null, null, task.description, taskId);
+  if (!kept.text.added && !tasksCollection.has(taskId)) {
+    const categoryId = to?.kind === "list" ? to.categoryId : null;
+    await addTask(task.title, categoryId, null, task.description, taskId);
+    await setShareAdded(id, kept.text, taskId);
+  }
+  if (note) {
+    await notesCollection.stateWhenReady();
+    if (!notesCollection.has(note.id))
+      addNote({ userId: getCurrentUserId(), taskId, content: note.content }, note.id);
+  }
 
   const limit = kept.files.length > 0 ? await maxBytes() : 0;
   for (const { file, key } of kept.files) {
@@ -54,21 +74,24 @@ const addOnce = async (id: string) => {
  * Adds a share the worker kept: its task in the Inbox, then its files, then forgets it. One page
  * at a time, so two can't add it twice; a page closed partway through leaves the rest for the next.
  */
-export const addShare = (id: string) => withLock(`ajot-share-${id}`, () => addOnce(id));
+export const addShare = (id: string) => withLock(shareLockName(id), () => addOnce(id));
 
 // The share page adds its own share, and must find it there to open its task
-const ownShare = () =>
-  location.pathname === "/share" ? new URLSearchParams(location.search).get("id") : null;
+const ownShare = () => shareIdIn(location, getBuildTarget() === "extension");
 
 const addLeftoverShares = async () => {
   for (const id of await keptShareIds())
     if (id !== ownShare()) await addShare(id).catch(console.error);
 };
 
-/** Finishes any share a page closed before adding, or that waited for a sign-in. */
+/**
+ * Finishes any share a page closed before adding, or that waited for a sign-in, and adds what the
+ * extension's menu saved while the server couldn't be reached.
+ */
 export const initShares = () => {
-  if (getBuildTarget() !== "browser") return;
+  if (getBuildTarget() === "server") return;
   whenIdle(() => void addLeftoverShares().catch(console.error));
+  onKeptShare(() => void addLeftoverShares().catch(console.error));
   subscribeAuthToken(() => {
     if (getAuthToken()) void addLeftoverShares().catch(console.error);
   });

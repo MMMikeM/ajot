@@ -221,8 +221,7 @@ const restoreCategory = (
 type NewNote = Pick<Note, "userId" | "taskId"> & { content: string };
 
 /** A note's title is the start of its text, which is all a person writes. */
-export const addNote = (fields: NewNote) => {
-  const id = crypto.randomUUID();
+export const addNote = (fields: NewNote, id: string = crypto.randomUUID()) => {
   console.log(`[mutation] addNote id=${id}`, fields);
   const tx = createOfflineTransaction({ mutationFnName: "syncNotes" });
   const title = cutTo(fields.content, MAX_TITLE);

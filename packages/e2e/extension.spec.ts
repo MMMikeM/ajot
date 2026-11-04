@@ -1,7 +1,7 @@
 import { chromium, type BrowserContext, type Worker } from "@playwright/test";
 import { resolve } from "node:path";
 import { test, expect } from "./fixtures";
-import { apiRequest, uploadImage } from "./helpers/api";
+import { addList, apiRequest, uploadImage } from "./helpers/api";
 import type { AuthResult } from "./helpers/auth";
 import { deliverPush, queueUpload, savedTitles } from "./helpers/background";
 import { API_PORT } from "./helpers/stack";
@@ -46,12 +46,13 @@ const signInBackground = (auth: AuthResult) =>
       chrome.storage.local.set({
         "newtab-todo-token": session.token,
         "newtab-todo-server-url": session.serverUrl,
+        "newtab-todo-user-id": session.userId,
       }),
-    { token: auth.token, serverUrl: SERVER_URL },
+    { token: auth.token, serverUrl: SERVER_URL, userId: auth.userId },
   );
 
 /** A new tab in flight mode, so it can only show what was saved. */
-const openInFlightMode = async (auth: AuthResult) => {
+const openInFlightMode = async (auth: AuthResult, path = "index.html") => {
   await context.setOffline(true);
   // What signIn() sets, before the first load: signed out, the tab would save empty lists
   await context.addInitScript(
@@ -65,7 +66,7 @@ const openInFlightMode = async (auth: AuthResult) => {
     { ...auth, serverUrl: SERVER_URL },
   );
   const page = await context.newPage();
-  await page.goto(`${extensionUrl}/index.html`);
+  await page.goto(`${extensionUrl}/${path}`);
   return page;
 };
 
@@ -176,4 +177,218 @@ test("the extension's background saves an attachment's thumbnail, which a tab of
   const tile = page.getByRole("button", { name: "pixel.png" });
   await expect(tile.locator("img")).toHaveJSProperty("complete", true);
   expect(await tile.locator("img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1);
+});
+
+type KeptShare = {
+  title?: string;
+  text?: string;
+  url?: string;
+  to?: { kind: string; [target: string]: string };
+  note?: { id: string; content: string };
+  userId?: string;
+};
+
+/** What the context menu keeps: before it opens the share page, or before it sends a one-click add. */
+const keepShare = (id: string, text: KeptShare) =>
+  background.evaluate(
+    ({ id, text }) =>
+      new Promise<void>((done, fail) => {
+        const open = indexedDB.open("ajot-shares", 1);
+        open.onupgradeneeded = () => open.result.createObjectStore("shares");
+        open.onsuccess = () => {
+          const tx = open.result.transaction("shares", "readwrite");
+          tx.objectStore("shares").put(text, id);
+          tx.oncomplete = () => (open.result.close(), done());
+          tx.onerror = () => fail(tx.error);
+        };
+        open.onerror = () => fail(open.error);
+      }),
+    { id, text },
+  );
+
+type Row = { title: string; description: string | null; categoryId: string | null };
+
+const serverTask = async (token: string, title: string) =>
+  (await apiRequest<Row[]>("GET", "/api/tasks", undefined, token)).find((t) => t.title === title);
+
+test.describe("what the context menu opens in Ajot", () => {
+  // As in use: the background has saved the lists a tab opens on offline
+  test.beforeEach(async ({ user1Auth }) => {
+    await signInBackground(user1Auth);
+    await expect.poll(() => savedTitles(background)).not.toBeNull();
+  });
+
+  test("becomes a task with its sheet open, offline, and syncs once online", async ({
+    user1Auth,
+  }) => {
+    const title = `Opened from a page ${Date.now()}`;
+    const id = crypto.randomUUID();
+    await keepShare(id, { title, url: "https://a.test/product?variant=1" });
+
+    const page = await openInFlightMode(user1Auth, `index.html#/share?id=${id}`);
+    const sheet = page.getByRole("dialog", { name: title, exact: true });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole("link", { name: "a.test/product?variant=1" })).toBeVisible();
+
+    await context.setOffline(false);
+    await expect
+      .poll(async () => (await serverTask(user1Auth.token, title))?.description)
+      .toBe("https://a.test/product?variant=1");
+  });
+
+  test("left behind by a tab closed before it opened, is added by the next", async ({
+    user1Auth,
+  }) => {
+    const title = `Kept, never opened ${Date.now()}`;
+    await keepShare(crypto.randomUUID(), { title, url: "https://a.test/" });
+
+    const page = await openInFlightMode(user1Auth);
+    await expect(page.getByText(title)).toBeVisible();
+  });
+});
+
+const keptShareIds = () =>
+  background.evaluate(
+    () =>
+      new Promise<string[]>((done, fail) => {
+        const open = indexedDB.open("ajot-shares", 1);
+        open.onupgradeneeded = () => open.result.createObjectStore("shares");
+        open.onsuccess = () => {
+          const keys = open.result.transaction("shares").objectStore("shares").getAllKeys();
+          keys.onsuccess = () => (open.result.close(), done(keys.result as string[]));
+          keys.onerror = () => fail(keys.error);
+        };
+      }),
+  );
+
+test.describe("a one-click add from the menu that couldn't reach the server", () => {
+  test.beforeEach(async ({ user1Auth }) => {
+    await signInBackground(user1Auth);
+    await expect.poll(() => savedTitles(background)).not.toBeNull();
+  });
+
+  test("shows in the Inbox of a tab opened offline, and syncs from it", async ({ user1Auth }) => {
+    const title = `Added from the menu offline ${Date.now()}`;
+    await keepShare(crypto.randomUUID(), {
+      title,
+      text: "https://a.test/walker",
+      to: { kind: "inbox" },
+      userId: user1Auth.userId,
+    });
+
+    const page = await openInFlightMode(user1Auth);
+    await expect(page.getByText(title)).toBeVisible();
+
+    await context.setOffline(false);
+    await expect
+      .poll(async () => (await serverTask(user1Auth.token, title))?.description)
+      .toBe("https://a.test/walker");
+  });
+
+  test("to a list, is added to that list by a tab opened offline", async ({ user1Auth }) => {
+    const list = await addList(user1Auth.token, `Wishlist ${Date.now()}`);
+    const title = `Filed from the menu offline ${Date.now()}`;
+    await keepShare(crypto.randomUUID(), {
+      title,
+      to: { kind: "list", categoryId: list.id },
+      userId: user1Auth.userId,
+    });
+
+    await openInFlightMode(user1Auth);
+    await context.setOffline(false);
+    await expect
+      .poll(async () => (await serverTask(user1Auth.token, title))?.categoryId)
+      .toBe(list.id);
+  });
+
+  test("is shared, with its note, by the background with no tab open", async ({
+    user1Auth,
+    user2Auth,
+  }) => {
+    const title = `Shared from the menu later ${Date.now()}`;
+    const note = { id: crypto.randomUUID(), content: `Size 2 ${Date.now()}` };
+    await keepShare(crypto.randomUUID(), {
+      title,
+      text: "https://a.test/bike",
+      to: { kind: "share", username: user2Auth.username },
+      note,
+      userId: user1Auth.userId,
+    });
+    const othersId = crypto.randomUUID();
+    const othersTitle = `Another account's ${Date.now()}`;
+    await keepShare(othersId, { title: othersTitle, to: { kind: "inbox" }, userId: "someone-else" });
+
+    await deliverPush(context, extensionUrl, { type: "sync" });
+    await expect.poll(() => serverTask(user2Auth.token, title)).toBeDefined();
+    const notes = await apiRequest<{ id: string; content: string }[]>(
+      "GET",
+      "/api/notes",
+      undefined,
+      user1Auth.token,
+    );
+    expect(notes.find((n) => n.id === note.id)?.content).toBe(note.content);
+
+    expect(await serverTask(user1Auth.token, othersTitle)).toBeUndefined();
+    expect(await keptShareIds()).toEqual([othersId]);
+  });
+});
+
+test.describe("the toolbar popup", () => {
+  const PAGE = {
+    title: "PINOLINO Fiete Children's Walker with Brake System : Amazon.de: Baby Products",
+    url: "https://www.amazon.de/-/en/PINOLINO-Childrens-Walker/dp/B0821HZLRV/",
+  };
+
+  /** The popup as the toolbar opens it, over a page in the tab. */
+  const openPopup = async () => {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 360, height: 304 });
+    // Opened as a tab, its active tab would be itself, and there's no page to read
+    const picture = `${extensionUrl}/icons/icon-192.png`;
+    await page.addInitScript(({ tab, picture }) => {
+      const { chrome } = globalThis as unknown as {
+        chrome: { tabs: { query: unknown }; scripting: { executeScript: unknown } };
+      };
+      chrome.tabs.query = async () => [{ id: 1, ...tab }];
+      chrome.scripting.executeScript = async () => [
+        { result: { siteName: "Amazon.de", image: picture } },
+      ];
+    }, { tab: PAGE, picture });
+    await page.goto(`${extensionUrl}/popup.html`);
+    return page;
+  };
+
+  test("adds the page to the list picked", async ({ user1Auth }) => {
+    const list = await addList(user1Auth.token, "Gifts");
+    await signInBackground(user1Auth);
+    await expect.poll(() => savedTitles(background)).not.toBeNull();
+
+    const popup = await openPopup();
+    const title = popup.getByRole("textbox", { name: "Title" });
+    // The store's name and department go: the address in the details says where it's from
+    await expect(title).toHaveValue("PINOLINO Fiete Children's Walker with Brake System");
+    await expect(popup.getByRole("textbox", { name: "Details" })).toHaveValue(PAGE.url);
+    // Images aren't readable yet, so the page's picture waits to be asked for
+    await expect(popup.getByRole("button", { name: "Attach picture" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    await popup.screenshot({ path: test.info().outputPath("popup.png") });
+
+    await popup.getByRole("combobox", { name: "Where it goes" }).click();
+    const option = popup.getByRole("option", { name: "Gifts", exact: true });
+    await expect(option).toBeVisible();
+    await popup.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+    await popup.screenshot({ path: test.info().outputPath("popup-picker.png") });
+    await option.click();
+    await title.fill("Walker for Leo");
+    await popup.getByRole("button", { name: "Add", exact: true }).click();
+
+    await expect
+      .poll(async () => {
+        const task = await serverTask(user1Auth.token, "Walker for Leo");
+        return task && { categoryId: task.categoryId, description: task.description };
+      })
+      .toEqual({ categoryId: list.id, description: PAGE.url });
+  });
 });

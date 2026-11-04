@@ -174,8 +174,9 @@ export const insert = async (data: Insert) => {
   return row;
 };
 
-// A task sent to someone, which they own. Nothing retries a send with the same id, so any id
-// already taken is a conflict, and the sender never gets back a task of the recipient's.
+// A task sent to someone, which they own. Any id already taken is a conflict, so the sender never
+// gets back a task of the recipient's; the extension's menu, which retries a send with the same id,
+// takes that conflict as its earlier try having landed.
 export const insertSent = async (data: Insert) => {
   const [row] = await db
     .insert(tasks)

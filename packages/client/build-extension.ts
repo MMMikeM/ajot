@@ -1,5 +1,7 @@
 // Starts from the PWA build in dist/, so it must run after `pnpm build`.
 import { build } from "vite";
+import tailwindcss from "@tailwindcss/vite";
+import viteReact from "@vitejs/plugin-react";
 import { readFileSync, writeFileSync, cpSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -43,6 +45,7 @@ const firefoxManifest = {
   // Asked for the first time the context menu attaches an image, to read it from its site
   optional_permissions: ["<all_urls>"],
   background: { scripts: ["background.js"], persistent: true },
+  browser_action: { default_popup: "popup.html", default_title: "Add this page to Ajot", default_icon: icons },
 };
 
 const chromeManifest = {
@@ -60,6 +63,7 @@ const chromeManifest = {
   // Asked for the first time the context menu attaches an image, to read it from its site
   optional_host_permissions: ["<all_urls>"],
   background: { service_worker: "background.js" },
+  action: { default_popup: "popup.html", default_title: "Add this page to Ajot", default_icon: icons },
 };
 
 const patchHtml = (outDir: string) => {
@@ -138,6 +142,22 @@ const assemble = async (target: Target) => {
     logLevel: "warn",
   });
   console.log(`  Built ${target.backgroundEntry} → background.js`);
+
+  // The toolbar popup: a page of its own, so it loads none of the app's lists, sync or router
+  await build({
+    configFile: false,
+    root: ROOT,
+    publicDir: false,
+    plugins: [tailwindcss(), viteReact()],
+    resolve: { alias: { "~": join(ROOT, "src") } },
+    build: {
+      outDir,
+      emptyOutDir: false,
+      rollupOptions: { input: join(ROOT, "popup.html") },
+    },
+    logLevel: "warn",
+  });
+  console.log("  Built popup.html");
 
   patchHtml(outDir);
 

@@ -1,7 +1,4 @@
-import { nanoid } from "nanoid";
-import { keyAfter } from "@newtab-todo/shared/sort-order";
 import { SERVER_URL_KEY, TOKEN_KEY } from "@newtab-todo/shared/constants";
-import { now } from "@newtab-todo/shared/iso";
 import { MAX_TEXT, MAX_TITLE, cutTo } from "@newtab-todo/shared/field-limits";
 import { ext, getStoredSession } from "~/lib/ext";
 import {
@@ -12,11 +9,21 @@ import {
   type SignedInSession,
 } from "~/lib/api-client";
 import { fetchServerConfig } from "~/lib/server-config";
-import { queueFile } from "~/lib/files/attach";
 import { fetchImage } from "~/lib/files/remote-image";
 import { createUploadSender } from "~/lib/files/sender";
 import { recordMetric, sendPendingMetrics } from "~/lib/metrics";
 import { showPageToast, type PageToastTone } from "~/lib/page-toast";
+import {
+  announceKeptShare,
+  keepShare,
+  type KeptShare,
+  type ShareDestination,
+} from "~/lib/share-store";
+import { keepAndSend, reasonOf, sendKeptShares, type SendOutcome } from "~/lib/send-kept-shares";
+import type { SharedText } from "@newtab-todo/shared/share-target";
+import { isPopupAdd, type PopupAdd, type PopupReply } from "~/lib/popup-message";
+import { titleWithoutSite } from "~/lib/page-title";
+import { mayReadImages, readPageMeta, withinMs, type PageMeta } from "~/lib/page-meta";
 
 type ClickData = browser.contextMenus.OnClickData;
 type ContextType = browser.contextMenus.ContextType;
@@ -32,6 +39,12 @@ const DRAFTS = {
   "image-link": { title: "Add image link as a task", contexts: ["image"] },
   page: { title: "Add this page as a task", contexts: ["page"] },
 } satisfies Record<string, { title: string; contexts: ContextType[] }>;
+
+const OPEN = {
+  id: "open",
+  title: "Add and open in Ajot…",
+  contexts: ["page", "link", "selection", "image"],
+} satisfies { id: string; title: string; contexts: ContextType[] };
 
 // A sent task is its recipient's, which its sender can't attach a file to
 const ATTACHES = new Set<string>(["image"]);
@@ -72,9 +85,20 @@ const imageName = (src: string) => {
   }
 };
 
-const draftFor = (id: DraftId, info: ClickData, tab?: browser.tabs.Tab): Draft => {
+/** The page's title as a task's: its own (Open Graph) or the tab's, without the site's name. */
+const pageTitleOf = (title: string, url: string | null, meta: PageMeta) => {
+  const own = meta.title || title;
+  return (url ? titleWithoutSite(own, url, meta.siteName) : own) || url || "";
+};
+
+const draftFor = (
+  id: DraftId,
+  info: ClickData,
+  tab?: browser.tabs.Tab,
+  meta: PageMeta = {},
+): Draft => {
   const pageUrl = tab?.url ?? info.pageUrl ?? null;
-  const pageTitle = toTitle(tab?.title || pageUrl || "Untitled page");
+  const pageTitle = toTitle(pageTitleOf(tab?.title ?? "", pageUrl, meta) || "Untitled page");
   const selection = info.selectionText ?? "";
   switch (id) {
     case "selection": {
@@ -106,11 +130,6 @@ const draftFor = (id: DraftId, info: ClickData, tab?: browser.tabs.Tab): Draft =
     case "page":
       return { title: pageTitle, description: pageUrl };
   }
-};
-
-const nextSortOrder = async ({ api }: ApiClient) => {
-  const tasks = await succeeded(api.tasks.$get()).then((res) => res.json());
-  return keyAfter(tasks.flatMap((t) => (t.parentId ? [] : [t.sortOrder])));
 };
 
 const INBOX: Destination = { kind: "inbox", target: "", title: "Inbox", done: "Added to Inbox" };
@@ -187,111 +206,6 @@ const failureMessage = (err: unknown) => {
   return "Couldn't reach the server. Check your connection and try again.";
 };
 
-type Step = "sort-order" | "add" | "send" | "config" | "share" | "note" | "image";
-
-/** Which request in a click failed, so its metric can say. */
-class StepFailed extends Error {
-  constructor(
-    readonly step: Step,
-    cause: unknown,
-  ) {
-    super(`${step} failed`, { cause });
-  }
-}
-
-const step = <T>(name: Step, work: Promise<T>) =>
-  work.catch((cause: unknown) => Promise.reject(new StepFailed(name, cause)));
-
-/** A failure's reason as a metric name can carry it: the server's status, or the error's kind. */
-const reasonOf = (err: unknown) => {
-  if (err instanceof ApiError) return String(err.status);
-  const name = err instanceof Error ? err.name.toLowerCase().replace(/[^a-z0-9-]/g, "") : "";
-  return name || "unknown";
-};
-
-type FailedPart = { step: Step; label: string; reason: string };
-
-/** Adds the task, then whatever goes with it; returns its id and the parts of that which failed. */
-const addDraft = async (
-  client: ApiClient,
-  draft: Draft,
-  kind: DestinationKind,
-  target: string,
-): Promise<{ taskId?: string; failed: FailedPart[] }> => {
-  const { api } = client;
-  const timestamp = now();
-  const base = { id: nanoid(), title: draft.title, createdAt: timestamp, updatedAt: timestamp };
-
-  // A note belongs to whoever wrote it, so a recipient would never see one: it goes inline
-  if (kind === "send") {
-    const joined = [draft.note, draft.description].filter(Boolean).join("\n\n");
-    const description = joined ? cutTo(joined, MAX_TEXT) : null;
-    await step(
-      "send",
-      succeeded(api.tasks.send.$post({ json: { ...base, description, recipientId: target } })),
-    );
-    return { failed: [] };
-  }
-
-  // Both schemas require userId; the server replaces it with the token's user
-  const sortOrder = await step("sort-order", nextSortOrder(client));
-  const task = await step(
-    "add",
-    succeeded(
-      api.tasks.$post({
-        json: {
-          ...base,
-          userId: "",
-          description: draft.description,
-          categoryId: kind === "list" ? target : null,
-          sortOrder,
-          parentId: null,
-          assigneeId: null,
-          dueDate: null,
-          editedAt: null,
-          completedAt: null,
-        },
-      }),
-    ).then((res) => res.json()),
-  );
-
-  const extras: [Step, string, Promise<unknown>][] = [];
-  if (kind === "share")
-    extras.push([
-      "share",
-      "sharing",
-      succeeded(api.tasks.share.$post({ json: { taskId: task.id, username: target } })),
-    ]);
-  if (draft.note)
-    extras.push([
-      "note",
-      "the note",
-      succeeded(
-        api.notes.$post({
-          json: {
-            id: crypto.randomUUID(),
-            userId: "",
-            taskId: task.id,
-            title: cutTo(draft.note, MAX_TITLE),
-            content: draft.note,
-            createdAt: timestamp,
-            updatedAt: timestamp,
-          },
-        }),
-      ),
-    ]);
-  const settled = await Promise.allSettled(extras.map(([, , done]) => done));
-  return {
-    taskId: task.id,
-    failed: extras.flatMap(([failedStep, label], i) => {
-      const result = settled[i]!;
-      return result.status === "rejected"
-        ? [{ step: failedStep, label, reason: reasonOf(result.reason) }]
-        : [];
-    }),
-  };
-};
-
 const sendUploads = createUploadSender(getStoredSession);
 
 // Called before anything in the click is awaited: a browser lets an extension ask for a
@@ -306,7 +220,12 @@ const askToReadImages = (src: string) =>
 
 const MB = 1024 * 1024;
 
-type ReadImage = { file: File; maxBytes: number } | { reason: string };
+const imageFile = (src: string, blob: Blob) => {
+  const name = imageName(src) || `image.${blob.type.split("/")[1]?.split("+")[0] || "png"}`;
+  return new File([blob], name, { type: blob.type });
+};
+
+type ReadImage = { file: File } | { reason: string };
 
 /** The image as a file to attach, or why it can't be, so its link is added instead. */
 const readImage = async (
@@ -317,24 +236,172 @@ const readImage = async (
   // Made by the page itself, so only the page can read it
   if (src.startsWith("blob:")) return { reason: "That image can only be saved as its link." };
   if (!(await allowed)) return { reason: "Ajot wasn't allowed to read images from that site." };
-  const { attachments } = await step("config", fetchServerConfig(session.serverUrl));
-  if (!attachments) return { reason: "Your server doesn't take attachments." };
+  // Unanswered, the limit is checked once the share is sent
+  const attachments = await fetchServerConfig(session.serverUrl).then(
+    (config) => config.attachments,
+    () => undefined,
+  );
+  if (attachments === null) return { reason: "Your server doesn't take attachments." };
   try {
     const blob = await fetchImage(src);
-    if (blob.size > attachments.maxBytes)
+    if (attachments && blob.size > attachments.maxBytes)
       return { reason: `The image is over ${Math.round(attachments.maxBytes / MB)} MB.` };
-    const name = imageName(src) || `image.${blob.type.split("/")[1]?.split("+")[0] || "png"}`;
-    return { file: new File([blob], name, { type: blob.type }), maxBytes: attachments.maxBytes };
+    return { file: imageFile(src, blob) };
   } catch (err) {
     console.error("[menu] couldn't read the image:", err);
     return { reason: "The image couldn't be fetched from its site." };
   }
 };
 
+/** What the app's share page adds and opens: the link, image, selection or page clicked. */
+const shareFor = (
+  info: ClickData,
+  tab?: browser.tabs.Tab,
+  meta: PageMeta = {},
+): { from: string; text: SharedText; image?: string } => {
+  const url = tab?.url ?? info.pageUrl ?? "";
+  const title = pageTitleOf(tab?.title ?? "", url, meta);
+  if (info.linkUrl)
+    return {
+      from: "link",
+      text: { title: info.linkText || info.selectionText || "", url: info.linkUrl },
+    };
+  if (info.mediaType === "image" && info.srcUrl) {
+    const src = info.srcUrl;
+    const imageTitle = imageName(src) || `Image from ${title || url}`;
+    return { from: "image", text: { title: imageTitle, url }, image: src };
+  }
+  if (info.selectionText)
+    return { from: "selection", text: { title, text: info.selectionText, url } };
+  return { from: "page", text: { title, url } };
+};
+
+/** The image to attach, or undefined when it can't be read, so its link is kept instead. */
+const keptImage = async (src: string, allowed: Promise<boolean>) => {
+  if (src.startsWith("blob:") || !(await allowed)) return undefined;
+  try {
+    return imageFile(src, await fetchImage(src));
+  } catch (err) {
+    console.error("[menu] couldn't read the image:", err);
+    return undefined;
+  }
+};
+
+/**
+ * Keeps what was clicked on the device and opens the app's share page on it, which adds it to the
+ * Inbox in the app's own store, offline too, and opens its sheet to edit, share or send.
+ */
+type OpenRequest = {
+  from: string;
+  text: SharedText;
+  image?: string;
+  allowed?: Promise<boolean>;
+  tab?: browser.tabs.Tab;
+  onKept?: () => void;
+};
+
+const keepAndOpen = async ({ from, text, image, allowed, tab, onKept }: OpenRequest) => {
+  const where = `open:${from}`;
+  const count = (name: string, session: SignedInSession | null) =>
+    void recordMetric(name.slice(0, 64), session);
+  count(`menu-click:${where}`, null);
+  const id = crypto.randomUUID();
+  try {
+    const reading = image && allowed ? keptImage(image, allowed) : Promise.resolve(undefined);
+    // A clicked image is what's being added; the page's own picture mustn't hold up the save
+    const file = from === "image" ? await reading : await withinMs(PICTURE_MS, reading, undefined);
+    // A picture the page shows of itself is left out; an image clicked on is kept as its link
+    const imageLink = from === "image" && image?.startsWith("http") && !file ? image : undefined;
+    await keepShare(id, imageLink ? { ...text, text: imageLink } : text, file ? [file] : []);
+    onKept?.();
+  } catch (err) {
+    console.error("[menu] couldn't keep it:", err);
+    count(`menu-fail:${where}:keep:${reasonOf(err)}`, null);
+    return tell(tab, "failed", "Not added", "Ajot couldn't save it on this device. Try again.");
+  }
+  // Kept, so from here a failure mustn't say "Not added": the next Ajot tab adds it
+  try {
+    const besideTab = tab && tab.id !== undefined && tab.id >= 0 && !tab.incognito;
+    await ext.tabs.create({
+      url: ext.runtime.getURL(`index.html#/share?id=${id}`),
+      ...(besideTab && { index: tab.index + 1, openerTabId: tab.id, windowId: tab.windowId }),
+    });
+  } catch (err) {
+    console.error("[menu] couldn't open Ajot:", err);
+    count(`menu-fail:${where}:tab:${reasonOf(err)}`, null);
+    return tell(tab, "done", "Saved for Ajot", "It'll be in your Inbox when you next open Ajot.");
+  }
+  void getStoredSession()
+    .then((session) => count(`menu:${where}`, session))
+    .catch(console.error);
+};
+
+const openInAjot = async (info: ClickData, tab?: browser.tabs.Tab) => {
+  const clickedImage = info.mediaType === "image" && !info.linkUrl ? info.srcUrl : undefined;
+  const allowed = clickedImage ? askToReadImages(clickedImage) : undefined;
+  const meta = info.linkUrl || clickedImage ? {} : await readPageMeta(tab?.id);
+  const { from, text, image } = shareFor(info, tab, meta);
+  if (image) return keepAndOpen({ from, text, image, allowed, tab });
+  const picture = await pagePicture(meta);
+  return keepAndOpen({ from, text, image: picture, allowed: Promise.resolve(true), tab });
+};
+
+// The drafts that are the page itself, so its picture can go with them
+const PAGE_DRAFTS = new Set<DraftId>(["page", "selection-as-note"]);
+
+/** The page's picture, if images may already be read: adding a page never asks to. */
+const pagePicture = async (meta: PageMeta) =>
+  meta.image && (await mayReadImages()) ? meta.image : undefined;
+
+// The save waits for the picture, so a slow site mustn't hold it up
+const PICTURE_MS = 3000;
+
+/** The page's picture as a file to attach; left out if it can't be read in time. */
+const pagePictureFile = async (session: SignedInSession, src: string | undefined) => {
+  if (!src) return undefined;
+  const picture = await withinMs(PICTURE_MS, readImage(session, src, Promise.resolve(true)), {
+    reason: "slow",
+  });
+  return "file" in picture ? picture : undefined;
+};
+
 let doneLabels = new Map<string, string>();
+
+const destinationOf = (kind: DestinationKind, target: string): ShareDestination => {
+  switch (kind) {
+    case "inbox":
+      return { kind };
+    case "list":
+      return { kind, categoryId: target };
+    case "share":
+      return { kind, username: target };
+    case "send":
+      return { kind, recipientId: target };
+  }
+};
+
+const keptFrom = (draft: Draft, to: ShareDestination, userId: string | null): KeptShare => ({
+  title: draft.title,
+  ...(draft.description && { text: draft.description }),
+  to,
+  ...(draft.note && { note: { id: crypto.randomUUID(), content: draft.note } }),
+  ...(userId && { userId }),
+});
+
+const waitingTitle = (to: ShareDestination, error: unknown) => {
+  if (error instanceof ApiError && error.status === 401) return "Saved. Sign in to Ajot to add it";
+  if (error instanceof ApiError) return "Saved. Ajot adds it once the server answers";
+  if (to.kind === "share") return "Saved. Ajot shares it once you're online";
+  if (to.kind === "send") return "Saved. Ajot sends it once you're online";
+  return "Saved. Ajot adds it once you're online";
+};
+
+const partsFailed = (outcome: Extract<SendOutcome, { status: "sent" }>) =>
+  outcome.failed.map((part) => part.label).join(" and ");
 
 const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
   const menuId = String(info.menuItemId);
+  if (menuId === OPEN.id) return openInAjot(info, tab);
   const [draftId, kind, target = ""] = menuId.split("|");
   if (!(draftId in DRAFTS) || !kind) return;
   const id = draftId as DraftId;
@@ -342,40 +409,134 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
   const where = `${draftId}:${kind}`;
   // Clicks less the menu: and menu-fail: counts are those that ended with no notification
   void recordMetric(`menu-click:${where}`, null);
-  let draft = withinLimits(draftFor(id, info, tab));
+  const meta = PAGE_DRAFTS.has(id) ? await readPageMeta(tab?.id) : {};
+  let draft = withinLimits(draftFor(id, info, tab, meta));
   const session = await getStoredSession();
   const count = (name: string) => void recordMetric(name.slice(0, 64), session);
   if (!session) {
     count(`menu-fail:${where}:session:signed-out`);
     return tell(tab, "failed", "Not added", "Sign in to Ajot to add tasks from the menu.");
   }
-  const client = apiClient(session);
+  let image: ReadImage | undefined;
+  if (draft.image && allowed) {
+    image = await readImage(session, draft.image, allowed);
+    if ("reason" in image) draft = withinLimits(draftFor("image-link", info, tab));
+  } else if (kind !== "send") {
+    image = await pagePictureFile(session, await pagePicture(meta));
+  }
+  return addAndTell({
+    session,
+    draft,
+    to: destinationOf(kind as DestinationKind, target),
+    where,
+    done: doneLabels.get(`${kind}|${target}`) ?? "Added to Ajot",
+    tab,
+    image,
+  });
+};
+
+type AddRequest = {
+  session: SignedInSession;
+  draft: Draft;
+  to: ShareDestination;
+  /** Where the add came from, for its metrics. */
+  where: string;
+  done: string;
+  tab?: browser.tabs.Tab;
+  image?: ReadImage;
+  onKept?: () => void;
+};
+
+/** Keeps the add, sends it, and says on the page how that went. */
+const addAndTell = async ({ session, draft, to, where, done, tab, image, onKept }: AddRequest) => {
+  const count = (name: string) => void recordMetric(name.slice(0, 64), session);
+  const files = image && "file" in image ? [image.file] : [];
+  const kept = keptFrom(draft, to, session.userId);
+  let outcome: SendOutcome;
   try {
-    const image =
-      draft.image && allowed ? await readImage(session, draft.image, allowed) : undefined;
-    if (image && "reason" in image) draft = withinLimits(draftFor("image-link", info, tab));
-    const { taskId, failed } = await addDraft(client, draft, kind as DestinationKind, target);
-    if (image && "file" in image && taskId && session.userId) {
-      const refusal = await queueFile(image.file, {
-        taskId,
-        uploaderId: session.userId,
-        maxBytes: image.maxBytes,
-      });
-      if (refusal) failed.push({ step: "image", label: "the image", reason: refusal });
-      else void sendUploads();
-    }
-    count(`menu:${where}`);
-    for (const part of failed) count(`menu-part-failed:${where}:${part.step}:${part.reason}`);
-    if (image && "reason" in image)
-      return await tell(tab, "done", "Added the image's link instead", image.reason);
-    const done = doneLabels.get(`${kind}|${target}`) ?? "Added to Ajot";
-    const parts = failed.map((part) => part.label).join(" and ");
-    await tell(tab, "done", failed.length ? `Added, but ${parts} failed` : done, draft.title);
+    outcome = await keepAndSend(session, crypto.randomUUID(), kept, files, onKept);
   } catch (err) {
-    console.error("[menu] add failed:", err);
-    const [failedStep, cause] = err instanceof StepFailed ? [err.step, err.cause] : ["other", err];
-    count(`menu-fail:${where}:${failedStep}:${reasonOf(cause)}`);
-    await tell(tab, "failed", "Not added", failureMessage(cause));
+    console.error("[menu] couldn't keep it:", err);
+    count(`menu-fail:${where}:keep:${reasonOf(err)}`);
+    return tell(tab, "failed", "Not added", "Ajot couldn't save it on this device. Try again.");
+  }
+  switch (outcome.status) {
+    case "sent": {
+      count(`menu:${where}`);
+      for (const part of outcome.failed)
+        count(`menu-part-failed:${where}:${part.step}:${part.reason}`);
+      if (image && "file" in image) void sendUploads();
+      if (image && "reason" in image)
+        return tell(tab, "done", "Added the image's link instead", image.reason);
+      const title = outcome.failed.length ? `Added, but ${partsFailed(outcome)} failed` : done;
+      return tell(tab, "done", title, draft.title);
+    }
+    case "waiting":
+      count(`menu-queued:${where}:${outcome.step}:${reasonOf(outcome.error)}`);
+      // An open Ajot tab adds it to its own lists, so it shows there while the server can't
+      if (to.kind === "inbox" || to.kind === "list") announceKeptShare();
+      return tell(tab, "done", waitingTitle(to, outcome.error), draft.title);
+    case "refused":
+      count(`menu-fail:${where}:${outcome.step}:${reasonOf(outcome.error)}`);
+      return tell(tab, "failed", "Not added", failureMessage(outcome.error));
+    case "skipped":
+      return undefined;
+  }
+};
+
+const tabById = (tabId: number | undefined) =>
+  tabId === undefined ? Promise.resolve(undefined) : ext.tabs.get(tabId).catch(() => undefined);
+
+/** The toolbar popup's add, answered as soon as it's kept so the popup can close. */
+const addFromPopup = async (message: PopupAdd, reply: (answer: PopupReply) => void) => {
+  let replied = false;
+  const answer = (kept: boolean) => {
+    if (replied) return;
+    replied = true;
+    reply({ kept });
+  };
+  try {
+    const tab = await tabById(message.tabId);
+    const draft = withinLimits({ title: message.title, description: message.description });
+    const picture = message.picture ?? undefined;
+    if (message.open) {
+      const text = { title: draft.title, ...(draft.description && { text: draft.description }) };
+      const allowed = mayReadImages();
+      const onKept = () => answer(true);
+      return await keepAndOpen({ from: "popup", text, image: picture, allowed, tab, onKept });
+    }
+    const session = await getStoredSession();
+    if (!session) return;
+    const where = `popup:${message.to.kind}`;
+    void recordMetric(`menu-click:${where}`, null);
+    const { to, done } = message;
+    const image = to.kind === "send" ? undefined : await pagePictureFile(session, picture);
+    await addAndTell({ session, draft, to, done, where, tab, image, onKept: () => answer(true) });
+  } finally {
+    answer(false);
+  }
+};
+
+/**
+ * Sends what the menu saved while the server couldn't be reached, at each of a background's
+ * wakes; says so only for what the server refuses, which nothing will add.
+ */
+export const sendMenuShares = async () => {
+  const session = await getStoredSession();
+  if (!session) return;
+  for (const { outcome } of await sendKeptShares(session)) {
+    if (outcome.status === "sent") {
+      void recordMetric("menu-retry:sent", session);
+      if (outcome.failed.length)
+        await notify(`Added, but ${partsFailed(outcome)} failed`, outcome.title);
+    }
+    if (outcome.status === "refused") {
+      void recordMetric(
+        `menu-retry:refused:${outcome.step}:${reasonOf(outcome.error)}`.slice(0, 64),
+        session,
+      );
+      await notify(`Not added: ${outcome.title}`, failureMessage(outcome.error));
+    }
   }
 };
 
@@ -416,6 +577,8 @@ const buildMenu = (groups: Group[]) => {
         });
     });
   }
+  create({ id: `${OPEN.id}-separator`, type: "separator", contexts: OPEN.contexts });
+  create(OPEN);
 };
 
 // Firefox can update a menu as it opens; Chrome can't, so its lists and contacts are as of the
@@ -448,7 +611,13 @@ const rebuild = () => {
 /** Never throws: a failure here must not stop the background's sync. */
 export const setupContextMenu = () => {
   try {
-    // Firefox for Android has no context menus
+    // True keeps the reply open past this call, in Chrome and Firefox alike
+    ext.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
+      if (sender.id !== ext.runtime.id || !isPopupAdd(message)) return undefined;
+      void addFromPopup(message, sendResponse).catch(console.error);
+      return true;
+    });
+    // Firefox for Android has no context menus, though it has the popup
     if (!ext.contextMenus) return;
     ext.contextMenus.onClicked.addListener((info, tab) => void handleClick(info, tab));
     // On the storage write itself: a sign-in's runtime message can arrive before it lands
