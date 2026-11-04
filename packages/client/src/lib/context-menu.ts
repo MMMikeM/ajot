@@ -22,6 +22,7 @@ import {
 import { keepAndSend, reasonOf, sendKeptShares, type SendOutcome } from "~/lib/send-kept-shares";
 import type { SharedText } from "@newtab-todo/shared/share-target";
 import { isPopupAdd, type PopupAdd, type PopupReply } from "~/lib/popup-message";
+import { titleWithoutSite } from "~/lib/page-title";
 
 type ClickData = browser.contextMenus.OnClickData;
 type ContextType = browser.contextMenus.ContextType;
@@ -85,7 +86,10 @@ const imageName = (src: string) => {
 
 const draftFor = (id: DraftId, info: ClickData, tab?: browser.tabs.Tab): Draft => {
   const pageUrl = tab?.url ?? info.pageUrl ?? null;
-  const pageTitle = toTitle(tab?.title || pageUrl || "Untitled page");
+  const tabTitle = tab?.title ?? "";
+  const pageTitle = toTitle(
+    (pageUrl ? titleWithoutSite(tabTitle, pageUrl) : tabTitle) || pageUrl || "Untitled page",
+  );
   const selection = info.selectionText ?? "";
   switch (id) {
     case "selection": {
@@ -246,7 +250,7 @@ const shareFor = (
   tab?: browser.tabs.Tab,
 ): { from: string; text: SharedText; image?: string } => {
   const url = tab?.url ?? info.pageUrl ?? "";
-  const title = tab?.title ?? "";
+  const title = titleWithoutSite(tab?.title ?? "", url);
   if (info.linkUrl)
     return {
       from: "link",
