@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { taskFromShare } from "~/lib/shared-page";
+import { shareIdIn, taskFromShare } from "~/lib/shared-page";
 
 test("Chrome sharing a page: its title, and the address it puts in the text", () => {
   expect(
@@ -51,4 +51,12 @@ test("a file alone is named for itself, several by their count", () => {
 
 test("nothing shared adds nothing", () => {
   expect(taskFromShare({ title: " ", text: "" })).toBeUndefined();
+});
+
+test("the share page's own share, in the PWA's path and in an extension's hash", () => {
+  expect(shareIdIn(new URL("https://ajot.test/share?id=a1"), false)).toBe("a1");
+  expect(shareIdIn(new URL("chrome-extension://x/index.html#/share?id=a1"), true)).toBe("a1");
+  expect(shareIdIn(new URL("chrome-extension://x/index.html#/task/a1"), true)).toBeNull();
+  expect(shareIdIn(new URL("chrome-extension://x/index.html"), true)).toBeNull();
+  expect(shareIdIn(new URL("https://ajot.test/?id=a1"), false)).toBeNull();
 });

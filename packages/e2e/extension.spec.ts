@@ -51,7 +51,7 @@ const signInBackground = (auth: AuthResult) =>
   );
 
 /** A new tab in flight mode, so it can only show what was saved. */
-const openInFlightMode = async (auth: AuthResult) => {
+const openInFlightMode = async (auth: AuthResult, path = "index.html") => {
   await context.setOffline(true);
   // What signIn() sets, before the first load: signed out, the tab would save empty lists
   await context.addInitScript(
@@ -65,7 +65,7 @@ const openInFlightMode = async (auth: AuthResult) => {
     { ...auth, serverUrl: SERVER_URL },
   );
   const page = await context.newPage();
-  await page.goto(`${extensionUrl}/index.html`);
+  await page.goto(`${extensionUrl}/${path}`);
   return page;
 };
 
@@ -176,4 +176,65 @@ test("the extension's background saves an attachment's thumbnail, which a tab of
   const tile = page.getByRole("button", { name: "pixel.png" });
   await expect(tile.locator("img")).toHaveJSProperty("complete", true);
   expect(await tile.locator("img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1);
+});
+
+type SharedText = { title?: string; text?: string; url?: string };
+
+/** What the context menu's "Add and open in Ajot…" keeps before it opens the share page. */
+const keepShare = (id: string, text: SharedText) =>
+  background.evaluate(
+    ({ id, text }) =>
+      new Promise<void>((done, fail) => {
+        const open = indexedDB.open("ajot-shares", 1);
+        open.onupgradeneeded = () => open.result.createObjectStore("shares");
+        open.onsuccess = () => {
+          const tx = open.result.transaction("shares", "readwrite");
+          tx.objectStore("shares").put(text, id);
+          tx.oncomplete = () => (open.result.close(), done());
+          tx.onerror = () => fail(tx.error);
+        };
+        open.onerror = () => fail(open.error);
+      }),
+    { id, text },
+  );
+
+type Row = { title: string; description: string | null };
+
+const serverTask = async (token: string, title: string) =>
+  (await apiRequest<Row[]>("GET", "/api/tasks", undefined, token)).find((t) => t.title === title);
+
+test.describe("what the context menu opens in Ajot", () => {
+  // As in use: the background has saved the lists a tab opens on offline
+  test.beforeEach(async ({ user1Auth }) => {
+    await signInBackground(user1Auth);
+    await expect.poll(() => savedTitles(background)).not.toBeNull();
+  });
+
+  test("becomes a task with its sheet open, offline, and syncs once online", async ({
+    user1Auth,
+  }) => {
+    const title = `Opened from a page ${Date.now()}`;
+    const id = crypto.randomUUID();
+    await keepShare(id, { title, url: "https://a.test/product?variant=1" });
+
+    const page = await openInFlightMode(user1Auth, `index.html#/share?id=${id}`);
+    const sheet = page.getByRole("dialog", { name: title, exact: true });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole("link", { name: "a.test/product?variant=1" })).toBeVisible();
+
+    await context.setOffline(false);
+    await expect
+      .poll(async () => (await serverTask(user1Auth.token, title))?.description)
+      .toBe("https://a.test/product?variant=1");
+  });
+
+  test("left behind by a tab closed before it opened, is added by the next", async ({
+    user1Auth,
+  }) => {
+    const title = `Kept, never opened ${Date.now()}`;
+    await keepShare(crypto.randomUUID(), { title, url: "https://a.test/" });
+
+    const page = await openInFlightMode(user1Auth);
+    await expect(page.getByText(title)).toBeVisible();
+  });
 });

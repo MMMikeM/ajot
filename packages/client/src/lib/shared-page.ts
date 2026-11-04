@@ -34,3 +34,11 @@ export const taskFromShare = ({
     description: details ? cutTo(details, MAX_TEXT) : null,
   };
 };
+
+/** The share a page's address opens, if it's the share page; an extension's routes are in its hash. */
+export const shareIdIn = (address: { pathname: string; search: string; hash: string }, hashRouted: boolean) => {
+  const [pathname, query = ""] = hashRouted
+    ? address.hash.slice(1).split("?", 2)
+    : [address.pathname, address.search.slice(1)];
+  return pathname === "/share" ? new URLSearchParams(query).get("id") : null;
+};

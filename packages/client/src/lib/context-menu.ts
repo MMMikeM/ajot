@@ -17,6 +17,8 @@ import { fetchImage } from "~/lib/files/remote-image";
 import { createUploadSender } from "~/lib/files/sender";
 import { recordMetric, sendPendingMetrics } from "~/lib/metrics";
 import { showPageToast, type PageToastTone } from "~/lib/page-toast";
+import { keepShare } from "~/lib/share-store";
+import type { SharedText } from "@newtab-todo/shared/share-target";
 
 type ClickData = browser.contextMenus.OnClickData;
 type ContextType = browser.contextMenus.ContextType;
@@ -32,6 +34,12 @@ const DRAFTS = {
   "image-link": { title: "Add image link as a task", contexts: ["image"] },
   page: { title: "Add this page as a task", contexts: ["page"] },
 } satisfies Record<string, { title: string; contexts: ContextType[] }>;
+
+const OPEN = {
+  id: "open",
+  title: "Add and open in Ajot…",
+  contexts: ["page", "link", "selection", "image"],
+} satisfies { id: string; title: string; contexts: ContextType[] };
 
 // A sent task is its recipient's, which its sender can't attach a file to
 const ATTACHES = new Set<string>(["image"]);
@@ -306,6 +314,11 @@ const askToReadImages = (src: string) =>
 
 const MB = 1024 * 1024;
 
+const imageFile = (src: string, blob: Blob) => {
+  const name = imageName(src) || `image.${blob.type.split("/")[1]?.split("+")[0] || "png"}`;
+  return new File([blob], name, { type: blob.type });
+};
+
 type ReadImage = { file: File; maxBytes: number } | { reason: string };
 
 /** The image as a file to attach, or why it can't be, so its link is added instead. */
@@ -323,18 +336,89 @@ const readImage = async (
     const blob = await fetchImage(src);
     if (blob.size > attachments.maxBytes)
       return { reason: `The image is over ${Math.round(attachments.maxBytes / MB)} MB.` };
-    const name = imageName(src) || `image.${blob.type.split("/")[1]?.split("+")[0] || "png"}`;
-    return { file: new File([blob], name, { type: blob.type }), maxBytes: attachments.maxBytes };
+    return { file: imageFile(src, blob), maxBytes: attachments.maxBytes };
   } catch (err) {
     console.error("[menu] couldn't read the image:", err);
     return { reason: "The image couldn't be fetched from its site." };
   }
 };
 
+/** What the app's share page adds and opens: the link, image, selection or page clicked. */
+const shareFor = (
+  info: ClickData,
+  tab?: browser.tabs.Tab,
+): { from: string; text: SharedText; image?: string } => {
+  const url = tab?.url ?? info.pageUrl ?? "";
+  const title = tab?.title ?? "";
+  if (info.linkUrl)
+    return {
+      from: "link",
+      text: { title: info.linkText || info.selectionText || "", url: info.linkUrl },
+    };
+  if (info.mediaType === "image" && info.srcUrl) {
+    const src = info.srcUrl;
+    const imageTitle = imageName(src) || `Image from ${title || url}`;
+    return { from: "image", text: { title: imageTitle, url }, image: src };
+  }
+  if (info.selectionText)
+    return { from: "selection", text: { title, text: info.selectionText, url } };
+  return { from: "page", text: { title, url } };
+};
+
+/** The image to attach, or undefined when it can't be read, so its link is kept instead. */
+const keptImage = async (src: string, allowed: Promise<boolean>) => {
+  if (src.startsWith("blob:") || !(await allowed)) return undefined;
+  try {
+    return imageFile(src, await fetchImage(src));
+  } catch (err) {
+    console.error("[menu] couldn't read the image:", err);
+    return undefined;
+  }
+};
+
+/**
+ * Keeps what was clicked on the device and opens the app's share page on it, which adds it to the
+ * Inbox in the app's own store, offline too, and opens its sheet to edit, share or send.
+ */
+const openInAjot = async (info: ClickData, tab?: browser.tabs.Tab) => {
+  const { from, text, image } = shareFor(info, tab);
+  const allowed = image ? askToReadImages(image) : undefined;
+  const where = `open:${from}`;
+  const count = (name: string, session: SignedInSession | null) =>
+    void recordMetric(name.slice(0, 64), session);
+  count(`menu-click:${where}`, null);
+  const id = crypto.randomUUID();
+  try {
+    const file = image && allowed ? await keptImage(image, allowed) : undefined;
+    const imageLink = image && !file && image.startsWith("http") ? image : undefined;
+    await keepShare(id, imageLink ? { ...text, text: imageLink } : text, file ? [file] : []);
+  } catch (err) {
+    console.error("[menu] couldn't keep it:", err);
+    count(`menu-fail:${where}:keep:${reasonOf(err)}`, null);
+    return tell(tab, "failed", "Not added", "Ajot couldn't save it on this device. Try again.");
+  }
+  // Kept, so from here a failure mustn't say "Not added": the next Ajot tab adds it
+  try {
+    const besideTab = tab && tab.id !== undefined && tab.id >= 0 && !tab.incognito;
+    await ext.tabs.create({
+      url: ext.runtime.getURL(`index.html#/share?id=${id}`),
+      ...(besideTab && { index: tab.index + 1, openerTabId: tab.id, windowId: tab.windowId }),
+    });
+  } catch (err) {
+    console.error("[menu] couldn't open Ajot:", err);
+    count(`menu-fail:${where}:tab:${reasonOf(err)}`, null);
+    return tell(tab, "done", "Saved for Ajot", "It'll be in your Inbox when you next open Ajot.");
+  }
+  void getStoredSession()
+    .then((session) => count(`menu:${where}`, session))
+    .catch(console.error);
+};
+
 let doneLabels = new Map<string, string>();
 
 const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
   const menuId = String(info.menuItemId);
+  if (menuId === OPEN.id) return openInAjot(info, tab);
   const [draftId, kind, target = ""] = menuId.split("|");
   if (!(draftId in DRAFTS) || !kind) return;
   const id = draftId as DraftId;
@@ -416,6 +500,8 @@ const buildMenu = (groups: Group[]) => {
         });
     });
   }
+  create({ id: `${OPEN.id}-separator`, type: "separator", contexts: OPEN.contexts });
+  create(OPEN);
 };
 
 // Firefox can update a menu as it opens; Chrome can't, so its lists and contacts are as of the
