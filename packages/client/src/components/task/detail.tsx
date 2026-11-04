@@ -17,6 +17,7 @@ import { MAX_TEXT, MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { cn } from "~/lib/utils";
 import { formatDueDateTime } from "~/lib/dates";
 import { linksIn } from "~/lib/links";
+import { autoGrow } from "~/lib/auto-grow";
 import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 import { dockedSheet } from "~/components/docked-sheet";
 import { canDeleteTask, canEditTask, grants } from "@newtab-todo/shared/task-access";
@@ -41,13 +42,6 @@ import {
 const TITLE_SLOT = "task-title";
 
 const isEditingTitle = () => document.activeElement?.getAttribute("data-slot") === TITLE_SLOT;
-
-// Fallback for engines without `field-sizing: content`
-const autoGrow = (el: HTMLTextAreaElement | null) => {
-  if (!el || CSS.supports("field-sizing", "content")) return;
-  el.style.height = "auto";
-  el.style.height = `${el.scrollHeight}px`;
-};
 
 // Underlined only while editing, so the title and details read as text, not a form
 const quietField = "border-transparent focus-visible:border-hint";

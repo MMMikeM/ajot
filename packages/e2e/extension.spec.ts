@@ -332,3 +332,51 @@ test.describe("a one-click add from the menu that couldn't reach the server", ()
     expect(await keptShareIds()).toEqual([othersId]);
   });
 });
+
+test.describe("the toolbar popup", () => {
+  const PAGE = {
+    title: "PINOLINO Fiete Children's Walker with Brake System : Amazon.de: Baby Products",
+    url: "https://www.amazon.de/-/en/PINOLINO-Childrens-Walker/dp/B0821HZLRV/",
+  };
+
+  /** The popup as the toolbar opens it, over a page in the tab. */
+  const openPopup = async () => {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 360, height: 304 });
+    // Opened as a tab, its active tab would be itself
+    await page.addInitScript((tab) => {
+      const tabs = (globalThis as unknown as { chrome: { tabs: { query: unknown } } }).chrome.tabs;
+      tabs.query = async () => [{ id: undefined, ...tab }];
+    }, PAGE);
+    await page.goto(`${extensionUrl}/popup.html`);
+    return page;
+  };
+
+  test("adds the page to the list picked", async ({ user1Auth }) => {
+    const list = await addList(user1Auth.token, "Gifts");
+    await signInBackground(user1Auth);
+    await expect.poll(() => savedTitles(background)).not.toBeNull();
+
+    const popup = await openPopup();
+    const title = popup.getByRole("textbox", { name: "Title" });
+    await expect(title).toHaveValue(PAGE.title);
+    await expect(popup.getByRole("textbox", { name: "Details" })).toHaveValue(PAGE.url);
+    await popup.screenshot({ path: test.info().outputPath("popup.png") });
+
+    await popup.getByRole("combobox", { name: "Where it goes" }).click();
+    const option = popup.getByRole("option", { name: "Gifts", exact: true });
+    await expect(option).toBeVisible();
+    await popup.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+    await popup.screenshot({ path: test.info().outputPath("popup-picker.png") });
+    await option.click();
+    await title.fill("Walker for Leo");
+    await popup.getByRole("button", { name: "Add", exact: true }).click();
+
+    await expect
+      .poll(async () => {
+        const task = await serverTask(user1Auth.token, "Walker for Leo");
+        return task && { categoryId: task.categoryId, description: task.description };
+      })
+      .toEqual({ categoryId: list.id, description: PAGE.url });
+  });
+});
