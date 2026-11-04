@@ -23,6 +23,7 @@ import { keepAndSend, reasonOf, sendKeptShares, type SendOutcome } from "~/lib/s
 import type { SharedText } from "@newtab-todo/shared/share-target";
 import { isPopupAdd, type PopupAdd, type PopupReply } from "~/lib/popup-message";
 import { titleWithoutSite } from "~/lib/page-title";
+import { mayReadImages, readPageMeta, withinMs, type PageMeta } from "~/lib/page-meta";
 
 type ClickData = browser.contextMenus.OnClickData;
 type ContextType = browser.contextMenus.ContextType;
@@ -84,12 +85,20 @@ const imageName = (src: string) => {
   }
 };
 
-const draftFor = (id: DraftId, info: ClickData, tab?: browser.tabs.Tab): Draft => {
+/** The page's title as a task's: its own (Open Graph) or the tab's, without the site's name. */
+const pageTitleOf = (title: string, url: string | null, meta: PageMeta) => {
+  const own = meta.title || title;
+  return (url ? titleWithoutSite(own, url, meta.siteName) : own) || url || "";
+};
+
+const draftFor = (
+  id: DraftId,
+  info: ClickData,
+  tab?: browser.tabs.Tab,
+  meta: PageMeta = {},
+): Draft => {
   const pageUrl = tab?.url ?? info.pageUrl ?? null;
-  const tabTitle = tab?.title ?? "";
-  const pageTitle = toTitle(
-    (pageUrl ? titleWithoutSite(tabTitle, pageUrl) : tabTitle) || pageUrl || "Untitled page",
-  );
+  const pageTitle = toTitle(pageTitleOf(tab?.title ?? "", pageUrl, meta) || "Untitled page");
   const selection = info.selectionText ?? "";
   switch (id) {
     case "selection": {
@@ -248,9 +257,10 @@ const readImage = async (
 const shareFor = (
   info: ClickData,
   tab?: browser.tabs.Tab,
+  meta: PageMeta = {},
 ): { from: string; text: SharedText; image?: string } => {
   const url = tab?.url ?? info.pageUrl ?? "";
-  const title = titleWithoutSite(tab?.title ?? "", url);
+  const title = pageTitleOf(tab?.title ?? "", url, meta);
   if (info.linkUrl)
     return {
       from: "link",
@@ -297,8 +307,11 @@ const keepAndOpen = async ({ from, text, image, allowed, tab, onKept }: OpenRequ
   count(`menu-click:${where}`, null);
   const id = crypto.randomUUID();
   try {
-    const file = image && allowed ? await keptImage(image, allowed) : undefined;
-    const imageLink = image && !file && image.startsWith("http") ? image : undefined;
+    const reading = image && allowed ? keptImage(image, allowed) : Promise.resolve(undefined);
+    // A clicked image is what's being added; the page's own picture mustn't hold up the save
+    const file = from === "image" ? await reading : await withinMs(PICTURE_MS, reading, undefined);
+    // A picture the page shows of itself is left out; an image clicked on is kept as its link
+    const imageLink = from === "image" && image?.startsWith("http") && !file ? image : undefined;
     await keepShare(id, imageLink ? { ...text, text: imageLink } : text, file ? [file] : []);
     onKept?.();
   } catch (err) {
@@ -323,10 +336,33 @@ const keepAndOpen = async ({ from, text, image, allowed, tab, onKept }: OpenRequ
     .catch(console.error);
 };
 
-const openInAjot = (info: ClickData, tab?: browser.tabs.Tab) => {
-  const { from, text, image } = shareFor(info, tab);
-  const allowed = image ? askToReadImages(image) : undefined;
-  return keepAndOpen({ from, text, image, allowed, tab });
+const openInAjot = async (info: ClickData, tab?: browser.tabs.Tab) => {
+  const clickedImage = info.mediaType === "image" && !info.linkUrl ? info.srcUrl : undefined;
+  const allowed = clickedImage ? askToReadImages(clickedImage) : undefined;
+  const meta = info.linkUrl || clickedImage ? {} : await readPageMeta(tab?.id);
+  const { from, text, image } = shareFor(info, tab, meta);
+  if (image) return keepAndOpen({ from, text, image, allowed, tab });
+  const picture = await pagePicture(meta);
+  return keepAndOpen({ from, text, image: picture, allowed: Promise.resolve(true), tab });
+};
+
+// The drafts that are the page itself, so its picture can go with them
+const PAGE_DRAFTS = new Set<DraftId>(["page", "selection-as-note"]);
+
+/** The page's picture, if images may already be read: adding a page never asks to. */
+const pagePicture = async (meta: PageMeta) =>
+  meta.image && (await mayReadImages()) ? meta.image : undefined;
+
+// The save waits for the picture, so a slow site mustn't hold it up
+const PICTURE_MS = 3000;
+
+/** The page's picture as a file to attach; left out if it can't be read in time. */
+const pagePictureFile = async (session: SignedInSession, src: string | undefined) => {
+  if (!src) return undefined;
+  const picture = await withinMs(PICTURE_MS, readImage(session, src, Promise.resolve(true)), {
+    reason: "slow",
+  });
+  return "file" in picture ? picture : undefined;
 };
 
 let doneLabels = new Map<string, string>();
@@ -373,16 +409,21 @@ const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
   const where = `${draftId}:${kind}`;
   // Clicks less the menu: and menu-fail: counts are those that ended with no notification
   void recordMetric(`menu-click:${where}`, null);
-  let draft = withinLimits(draftFor(id, info, tab));
+  const meta = PAGE_DRAFTS.has(id) ? await readPageMeta(tab?.id) : {};
+  let draft = withinLimits(draftFor(id, info, tab, meta));
   const session = await getStoredSession();
   const count = (name: string) => void recordMetric(name.slice(0, 64), session);
   if (!session) {
     count(`menu-fail:${where}:session:signed-out`);
     return tell(tab, "failed", "Not added", "Sign in to Ajot to add tasks from the menu.");
   }
-  const image =
-    draft.image && allowed ? await readImage(session, draft.image, allowed) : undefined;
-  if (image && "reason" in image) draft = withinLimits(draftFor("image-link", info, tab));
+  let image: ReadImage | undefined;
+  if (draft.image && allowed) {
+    image = await readImage(session, draft.image, allowed);
+    if ("reason" in image) draft = withinLimits(draftFor("image-link", info, tab));
+  } else if (kind !== "send") {
+    image = await pagePictureFile(session, await pagePicture(meta));
+  }
   return addAndTell({
     session,
     draft,
@@ -457,16 +498,20 @@ const addFromPopup = async (message: PopupAdd, reply: (answer: PopupReply) => vo
   try {
     const tab = await tabById(message.tabId);
     const draft = withinLimits({ title: message.title, description: message.description });
+    const picture = message.picture ?? undefined;
     if (message.open) {
       const text = { title: draft.title, ...(draft.description && { text: draft.description }) };
-      return await keepAndOpen({ from: "popup", text, tab, onKept: () => answer(true) });
+      const allowed = mayReadImages();
+      const onKept = () => answer(true);
+      return await keepAndOpen({ from: "popup", text, image: picture, allowed, tab, onKept });
     }
     const session = await getStoredSession();
     if (!session) return;
     const where = `popup:${message.to.kind}`;
     void recordMetric(`menu-click:${where}`, null);
     const { to, done } = message;
-    await addAndTell({ session, draft, to, done, where, tab, onKept: () => answer(true) });
+    const image = to.kind === "send" ? undefined : await pagePictureFile(session, picture);
+    await addAndTell({ session, draft, to, done, where, tab, image, onKept: () => answer(true) });
   } finally {
     answer(false);
   }

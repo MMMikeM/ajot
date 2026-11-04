@@ -343,11 +343,17 @@ test.describe("the toolbar popup", () => {
   const openPopup = async () => {
     const page = await context.newPage();
     await page.setViewportSize({ width: 360, height: 304 });
-    // Opened as a tab, its active tab would be itself
-    await page.addInitScript((tab) => {
-      const tabs = (globalThis as unknown as { chrome: { tabs: { query: unknown } } }).chrome.tabs;
-      tabs.query = async () => [{ id: undefined, ...tab }];
-    }, PAGE);
+    // Opened as a tab, its active tab would be itself, and there's no page to read
+    const picture = `${extensionUrl}/icons/icon-192.png`;
+    await page.addInitScript(({ tab, picture }) => {
+      const { chrome } = globalThis as unknown as {
+        chrome: { tabs: { query: unknown }; scripting: { executeScript: unknown } };
+      };
+      chrome.tabs.query = async () => [{ id: 1, ...tab }];
+      chrome.scripting.executeScript = async () => [
+        { result: { siteName: "Amazon.de", image: picture } },
+      ];
+    }, { tab: PAGE, picture });
     await page.goto(`${extensionUrl}/popup.html`);
     return page;
   };
@@ -362,6 +368,11 @@ test.describe("the toolbar popup", () => {
     // The store's name and department go: the address in the details says where it's from
     await expect(title).toHaveValue("PINOLINO Fiete Children's Walker with Brake System");
     await expect(popup.getByRole("textbox", { name: "Details" })).toHaveValue(PAGE.url);
+    // Images aren't readable yet, so the page's picture waits to be asked for
+    await expect(popup.getByRole("button", { name: "Attach picture" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
     await popup.screenshot({ path: test.info().outputPath("popup.png") });
 
     await popup.getByRole("combobox", { name: "Where it goes" }).click();

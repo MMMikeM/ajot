@@ -9,6 +9,8 @@ export type PopupAdd = {
   title: string;
   description: string | null;
   to: ShareDestination;
+  /** The page's picture to attach, if the popup was let read it. */
+  picture: string | null;
   /** What the page's toast says once it's in, such as "Added to Work". */
   done: string;
   /** Opens it in Ajot instead, in the Inbox, with its sheet open to edit. */
