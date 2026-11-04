@@ -15,7 +15,7 @@ import { MSG_TOKEN_CHANGED, SERVER_URL_KEY, TOKEN_KEY } from "@newtab-todo/share
 import { ext, getStoredSession, notifyTabs } from "~/lib/ext";
 import { apiClient, type SignedInSession } from "~/lib/api-client";
 import { fetchServerConfig } from "~/lib/server-config";
-import { setupContextMenu } from "~/lib/context-menu";
+import { sendMenuShares, setupContextMenu } from "~/lib/context-menu";
 import { createUploadSender } from "~/lib/files/sender";
 import { retryWaitingNow } from "~/lib/files/store";
 import { prewarmPeriodically, prewarmSnapshot } from "~/lib/sync/prewarm-extension";
@@ -81,10 +81,12 @@ const MAX_WORKER_UPLOAD_BYTES = 5 * 1024 * 1024;
 const sendUploads = createUploadSender(getStoredSession, {
   only: (upload) => upload.row.size <= MAX_WORKER_UPLOAD_BYTES,
 });
-const sendWaitingNow = () => retryWaitingNow().catch(console.error).then(sendUploads);
+// What the menu saved goes first, so the image it attaches goes with this run's uploads
+const sendQueued = () => sendMenuShares().catch(console.error).then(sendUploads);
+const sendWaitingNow = () => retryWaitingNow().catch(console.error).then(sendQueued);
 
 setupContextMenu();
-prewarmPeriodically(() => void sendUploads());
+prewarmPeriodically(() => void sendQueued());
 // Whatever woke this worker, uploads that were waiting for it go now
 void sendWaitingNow();
 ext.runtime.onInstalled.addListener(() => {
@@ -99,7 +101,7 @@ ext.runtime.onStartup.addListener(() => {
 ext.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && (TOKEN_KEY in changes || SERVER_URL_KEY in changes)) {
     void prewarmSnapshot();
-    void sendUploads();
+    void sendQueued();
   }
 });
 ext.runtime.onMessage.addListener((message: unknown) => {
@@ -118,7 +120,7 @@ self.addEventListener("push", (event: PushEvent) => {
       showNotification(payload),
       notifyTabs(),
       prewarmSnapshot(payload.rows),
-      sendUploads(),
+      sendQueued(),
     ]),
   );
 });
