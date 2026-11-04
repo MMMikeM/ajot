@@ -1,5 +1,6 @@
 import { MAX_TEXT, MAX_TITLE, cutTo } from "@newtab-todo/shared/field-limits";
 import type { SharedText } from "@newtab-todo/shared/share-target";
+import type { KeptShare } from "~/lib/share-store";
 
 // Apps that send only `text` end it with the address, when they send one
 const ADDRESS_AT_END = /(?:^|\s)(https?:\/\/\S+)$/i;
@@ -41,4 +42,14 @@ export const shareIdIn = (address: { pathname: string; search: string; hash: str
     ? address.hash.slice(1).split("?", 2)
     : [address.pathname, address.search.slice(1)];
   return pathname === "/share" ? new URLSearchParams(query).get("id") : null;
+};
+
+/**
+ * The task for a kept share. The menu's are already the task it made, title and details, and read
+ * as a share, a link's address would be dropped from details that repeat its title.
+ */
+export const taskOfKept = (kept: KeptShare, files: { name: string }[]) => {
+  if (!kept.to) return taskFromShare({ ...kept, files });
+  if (!kept.title) return undefined;
+  return { title: cutTo(kept.title, MAX_TITLE), description: kept.text ? cutTo(kept.text, MAX_TEXT) : null };
 };

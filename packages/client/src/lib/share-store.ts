@@ -5,10 +5,29 @@ import type { SharedText } from "@newtab-todo/shared/share-target";
 const DB_NAME = "ajot-shares";
 const STORE = "shares";
 
+/** Where the extension's menu sends a share. Without one, it's an open page's to add and show. */
+export type ShareDestination =
+  | { kind: "inbox" }
+  | { kind: "list"; categoryId: string }
+  | { kind: "share"; username: string }
+  | { kind: "send"; recipientId: string };
+
+/** A share as kept: its text, and what the menu adds with it, for the account that made it. */
+export type KeptShare = SharedText & {
+  to?: ShareDestination;
+  note?: { id: string; content: string };
+  userId?: string;
+};
+
 // A share's text under its id, and each of its files under [id, index] beside it, so its task
 // and its progress are written without copying a file again
-type KeptText = SharedText & { taskId?: string };
+// `added` once its task is in: a retry after that carries on from what follows, so it can't bring
+// back a task deleted meanwhile, which adding it again would restore
+type KeptText = KeptShare & { taskId?: string; added?: true };
 type FileKey = [string, number];
+
+/** Held by whoever adds a share, a page or the extension's background, so it's added once. */
+export const shareLockName = (id: string) => `ajot-share-${id}`;
 
 const filesOf = (id: string) => IDBKeyRange.bound([id, 0], [id, Infinity]);
 
@@ -47,7 +66,7 @@ const write = (run: (store: IDBObjectStore) => void) =>
     return () => undefined;
   });
 
-export const keepShare = (id: string, text: SharedText, files: File[]) =>
+export const keepShare = (id: string, text: KeptShare, files: File[]) =>
   write((store) => {
     store.put(text, id);
     files.forEach((file, index) => store.put(file, [id, index] satisfies FileKey));
@@ -70,8 +89,12 @@ export const readShare = (id: string) =>
   });
 
 /** Gives the share the task it goes to, so a page closed partway through finishes on that one. */
-export const setShareTask = (id: string, text: SharedText, taskId: string) =>
+export const setShareTask = (id: string, text: KeptShare, taskId: string) =>
   write((store) => store.put({ ...text, taskId } satisfies KeptText, id));
+
+/** Marks the share's task as added, so nothing adds it again. */
+export const setShareAdded = (id: string, text: KeptShare, taskId: string) =>
+  write((store) => store.put({ ...text, taskId, added: true } satisfies KeptText, id));
 
 export const forgetSharedFile = (key: FileKey) => write((store) => store.delete(key));
 
@@ -87,3 +110,18 @@ export const keptShareIds = () =>
     const keys = store.getAllKeys();
     return () => keys.result.filter((key): key is string => typeof key === "string");
   });
+
+const KEPT_CHANNEL = "ajot-shares";
+
+/** Tells open pages a share is waiting for them to add. */
+export const announceKeptShare = () => {
+  const channel = new BroadcastChannel(KEPT_CHANNEL);
+  channel.postMessage("kept");
+  channel.close();
+};
+
+export const onKeptShare = (listener: () => void) => {
+  const channel = new BroadcastChannel(KEPT_CHANNEL);
+  channel.onmessage = listener;
+  return () => channel.close();
+};

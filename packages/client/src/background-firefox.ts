@@ -10,7 +10,7 @@ import {
 import { createBackoff } from "~/lib/sync/backoff";
 import { trackSyncState } from "~/lib/sync/sync-state";
 import { getStoredSession, notifyTabs } from "~/lib/ext";
-import { setupContextMenu } from "~/lib/context-menu";
+import { sendMenuShares, setupContextMenu } from "~/lib/context-menu";
 import { createUploadSender } from "~/lib/files/sender";
 import { retryWaitingNow } from "~/lib/files/store";
 import { prewarmPeriodically, prewarmSnapshot } from "~/lib/sync/prewarm-extension";
@@ -25,7 +25,9 @@ const sendUploads = createUploadSender(getStoredSession, {
     uploadRetry = setTimeout(() => void sendUploads(), Math.max(0, at - Date.now()));
   },
 });
-const sendWaitingNow = () => retryWaitingNow().catch(console.error).then(sendUploads);
+// What the menu saved goes first, so the image it attaches goes with this run's uploads
+const sendQueued = () => sendMenuShares().catch(console.error).then(sendUploads);
+const sendWaitingNow = () => retryWaitingNow().catch(console.error).then(sendQueued);
 
 let prewarmTimer: ReturnType<typeof setTimeout> | undefined;
 const schedulePrewarm = () => {
@@ -167,7 +169,7 @@ addEventListener("online", () => {
 
 connect().catch((err) => console.error("[bg-sse] initial connect error:", err));
 setupContextMenu();
-prewarmPeriodically(() => void sendUploads());
+prewarmPeriodically(() => void sendQueued());
 void sendWaitingNow();
 
 console.log("[bg-sse] persistent background page loaded");
