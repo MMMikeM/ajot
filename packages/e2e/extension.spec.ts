@@ -359,7 +359,8 @@ test.describe("the toolbar popup", () => {
 
     const popup = await openPopup();
     const title = popup.getByRole("textbox", { name: "Title" });
-    await expect(title).toHaveValue(PAGE.title);
+    // The store's name and department go: the address in the details says where it's from
+    await expect(title).toHaveValue("PINOLINO Fiete Children's Walker with Brake System");
     await expect(popup.getByRole("textbox", { name: "Details" })).toHaveValue(PAGE.url);
     await popup.screenshot({ path: test.info().outputPath("popup.png") });
 

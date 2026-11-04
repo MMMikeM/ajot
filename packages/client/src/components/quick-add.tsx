@@ -10,6 +10,7 @@ import { autoGrow } from "~/lib/auto-grow";
 import { INBOX_COLOR } from "~/lib/constants";
 import { ext, getStoredSession } from "~/lib/ext";
 import { MSG_POPUP_ADD, type PopupAdd, type PopupReply } from "~/lib/popup-message";
+import { titleWithoutSite } from "~/lib/page-title";
 import type { ShareDestination } from "~/lib/share-store";
 import { OWNER_KEY, openSnapshotDb, readSnapshot } from "~/lib/snapshot-store";
 import type { Category, Contact } from "~/lib/types";
@@ -186,7 +187,7 @@ export function QuickAdd() {
       const [session, current] = await Promise.all([getStoredSession(), activeTab()]);
       setSignedIn(!!session);
       setTab(current);
-      setTitle(current.title || current.url);
+      setTitle(titleWithoutSite(current.title, current.url) || current.url);
       setDetails(current.url);
       // After the title renders: the caret at its end, ready to add to it or press Enter
       requestAnimationFrame(() => {
