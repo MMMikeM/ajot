@@ -29,6 +29,8 @@ import { useTaskActions } from "~/components/task/use-actions";
 import { AddRow, DetailRow, ItemRow, lineButton } from "~/components/task/detail-row";
 import { Notes, Subtasks } from "~/components/task/detail-items";
 import { Attachments } from "~/components/task/detail-attachments";
+import { useAttachmentsConfig } from "~/lib/attachments/config";
+import { useAttachFromPasteAndDrop } from "~/lib/hooks/use-attach-from-paste-and-drop";
 import {
   AssigneeField,
   ListChip,
@@ -133,9 +135,25 @@ const TaskDetailContent = ({
   const ownerName = ownerNameOf(task, lists);
   const held = holders(task, lists, parent);
   const canEdit = canEditTask(held, userId);
+  const attachments = useAttachmentsConfig();
+  const dragging = useAttachFromPasteAndDrop(
+    task.id,
+    canEdit ? attachments?.maxBytes : undefined,
+  );
 
   return (
     <div className="relative mx-auto flex w-full max-w-2xl flex-col gap-3 px-6 pt-1 pb-[max(1rem,env(safe-area-inset-bottom))] touch:gap-2 touch:px-5">
+      {dragging && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-2 z-10 flex justify-center rounded-xl border-2 border-dashed border-primary/50 bg-popover/90"
+        >
+          {/* Sticky, so on a long task it stays in the part of the sheet on screen */}
+          <span className="sticky top-1/2 h-fit text-sm font-medium text-primary">
+            Drop to attach
+          </span>
+        </div>
+      )}
       <div className="flex flex-col">
         <div className="flex items-center gap-3">
           {isTopLevel ? (

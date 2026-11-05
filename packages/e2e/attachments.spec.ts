@@ -190,6 +190,67 @@ test("someone the task is shared with sees the photo, loaded from the bucket", a
   await expectImageLoaded(viewer.getByRole("img", { name: PHOTO.name }));
 });
 
+/** Fires a paste, dragover or drop of `file` at `target`; true when the page took it. */
+const fireWithFile = (
+  target: Locator,
+  type: "paste" | "dragover" | "drop",
+  file: FilePayload,
+  text?: string,
+) =>
+  target.evaluate(
+    (element, { type, name, mimeType, base64, text }) => {
+      const data = new DataTransfer();
+      const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+      data.items.add(new File([bytes], name, { type: mimeType }));
+      if (text) data.setData("text/plain", text);
+      const init = { bubbles: true, cancelable: true };
+      const event =
+        type === "paste"
+          ? new ClipboardEvent(type, { ...init, clipboardData: data })
+          : new DragEvent(type, { ...init, dataTransfer: data });
+      element.dispatchEvent(event);
+      return event.defaultPrevented;
+    },
+    { type, name: file.name, mimeType: file.mimeType, base64: file.buffer.toString("base64"), text },
+  );
+
+test("a picture pasted into the sheet, or a file dropped on it, is attached", async ({
+  user1Page: page,
+  user1Auth,
+}) => {
+  const { task, sheet } = await openNewTask(page, user1Auth, "Paste");
+  await expect(sheet.getByRole("button", { name: "Attach a file" })).toBeVisible();
+  const details = sheet.getByRole("textbox", { name: "Details" });
+  // What a browser calls every picture on the clipboard
+  const screenshot = { ...PHOTO, name: "image.png" };
+
+  expect(await fireWithFile(details, "paste", screenshot, "Quarterly numbers")).toBe(false);
+
+  let completed = uploadCompleted(page);
+  expect(await fireWithFile(details, "paste", screenshot)).toBe(true);
+  await completed;
+  await expect(
+    sheet
+      .getByRole("group", { name: "Attachments" })
+      .getByRole("button", { name: /^Pasted image \d\d\.\d\d\.\d\d\.png$/ }),
+  ).toBeVisible();
+
+  const hint = sheet.getByText("Drop to attach");
+  expect(await fireWithFile(sheet, "dragover", NOTE)).toBe(true);
+  await expect(hint).toBeVisible();
+  completed = uploadCompleted(page);
+  expect(await fireWithFile(sheet, "drop", NOTE)).toBe(true);
+  await expect(hint).toBeHidden();
+  await completed;
+  await expect(fileRowOf(sheet, NOTE.name)).toContainText(`${NOTE_TEXT.length} B · TXT`);
+
+  const names = (await attachmentsOf(user1Auth.token))
+    .filter((a) => a.taskId === task.id)
+    .map((a) => a.name);
+  expect(names).toHaveLength(2);
+  expect(names).toContain(NOTE.name);
+});
+
 test("a file attached offline waits on this device and uploads once back online", async ({
   user1Page: page,
   user1Auth,
