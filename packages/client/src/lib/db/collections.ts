@@ -26,6 +26,13 @@ const openSnapshot = async () => {
 
 const routes = listRoutes(client);
 
+// Offline with no list saved, as after a fresh install or a change to the saved lists' schema, a
+// list starts empty rather than wait for the network (an add waits for the tasks to load).
+// `offlineFirst` is what runs the queryFn offline at all; with a list saved, its fetch fails and
+// the retries pause until the device is back online.
+const nothingSavedOffline = (key: string) =>
+  !navigator.onLine && queryClient.getQueryData([key]) === undefined;
+
 // Signed out, or on a 401 (which signs out), each queryFn returns [] rather than throwing: a
 // query error during the first load puts the collection in an error state that rejects local
 // inserts. Signed-out edits live as pending outbox transactions (lib/db/offline.ts) until the
@@ -46,8 +53,9 @@ async function makeCollections() {
       queryCollectionOptions<Contact>({
         id: "contacts",
         queryKey: ["contacts"] as const,
+        networkMode: "offlineFirst",
         queryFn: async () => {
-          if (!getAuthToken()) return [];
+          if (!getAuthToken() || nothingSavedOffline("contacts")) return [];
           const res = await routes.contacts();
           if (res.status === 401) return [];
           if (!res.ok) throw new Error("Failed to fetch contacts");
@@ -62,8 +70,9 @@ async function makeCollections() {
       queryCollectionOptions<Category>({
         id: "categories",
         queryKey: ["categories"] as const,
+        networkMode: "offlineFirst",
         queryFn: async () => {
-          if (!getAuthToken()) return [];
+          if (!getAuthToken() || nothingSavedOffline("categories")) return [];
           const res = await routes.categories();
           if (res.status === 401) return [];
           if (!res.ok) throw new Error("Failed to fetch categories");
@@ -80,8 +89,9 @@ async function makeCollections() {
       queryCollectionOptions<Task>({
         id: "tasks",
         queryKey: ["tasks"] as const,
+        networkMode: "offlineFirst",
         queryFn: async () => {
-          if (!getAuthToken()) return [];
+          if (!getAuthToken() || nothingSavedOffline("tasks")) return [];
           const res = await routes.tasks();
           if (res.status === 401) return [];
           if (!res.ok) throw new Error("Failed to fetch tasks");
@@ -96,8 +106,9 @@ async function makeCollections() {
       queryCollectionOptions<Note>({
         id: "notes",
         queryKey: ["notes"] as const,
+        networkMode: "offlineFirst",
         queryFn: async () => {
-          if (!getAuthToken()) return [];
+          if (!getAuthToken() || nothingSavedOffline("notes")) return [];
           const res = await routes.notes();
           if (res.status === 401) return [];
           if (!res.ok) throw new Error("Failed to fetch notes");
@@ -112,9 +123,10 @@ async function makeCollections() {
       queryCollectionOptions<Attachment>({
         id: "attachments",
         queryKey: ["attachments"] as const,
+        networkMode: "offlineFirst",
         queryFn: async () => {
           const token = getAuthToken();
-          if (!token) return [];
+          if (!token || nothingSavedOffline("attachments")) return [];
           const fetchedAt = Date.now();
           const res = await routes.attachments();
           // Wider than this server's types: one from before attachments answers 404

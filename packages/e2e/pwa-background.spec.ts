@@ -7,6 +7,7 @@ import {
   deliverPush,
   dispatchPeriodicSync,
   dispatchSync,
+  forgetSavedLists,
   queueUpload,
   savedTitles,
 } from "./helpers/background";
@@ -109,6 +110,31 @@ test.describe("the PWA's worker saves the lists for the next launch", () => {
     const page = await openInFlightMode(`/task/${id}`);
     await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue(title);
   });
+});
+
+test("opened offline with no lists saved, it still takes a task and sends it once online", async ({
+  user1Auth,
+}) => {
+  const earlier = `On the server already ${Date.now()}`;
+  await addTask(user1Auth.token, earlier);
+  await forgetSavedLists(worker);
+  const page = await openInFlightMode();
+
+  const title = `Added on the first offline open ${Date.now()}`;
+  await page.locator("#add-task-input").fill(title);
+  await page.locator("#add-task-input").press("Enter");
+  await expect(page.locator("[data-task-id]", { hasText: title })).toBeVisible();
+  await expect(page.getByText("Loading tasks")).toHaveCount(0);
+
+  await context.setOffline(false);
+  await expect(page.locator("[data-task-id]", { hasText: earlier })).toBeVisible({
+    timeout: 20_000,
+  });
+  const titlesOnServer = async () =>
+    (await apiRequest<{ title: string }[]>("GET", "/api/tasks", undefined, user1Auth.token)).map(
+      (t) => t.title,
+    );
+  await expect.poll(titlesOnServer, { timeout: 20_000 }).toContain(title);
 });
 
 test("the PWA's worker sends a file a page queued, on a background sync, with the app closed", async ({

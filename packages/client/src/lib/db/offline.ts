@@ -73,7 +73,10 @@ const syncMutation =
       const res = await assertOk(await endpoint.$post({ json: payload }));
       const created = await res.json();
       console.log(`[sync:${name}] POST ← 200, writing to synced store`);
-      await collection.utils.writeUpsert(created as never);
+      // Over the row as sent: the response leaves out what a list reads with it (a task's shares
+      // and subtasks), which only the stream's copy of the insert carries, and on a reconnect the
+      // outbox sends before the stream is open again
+      await collection.utils.writeUpsert({ ...m.modified, ...created } as never);
     } else if (m.type === "update") {
       const payload = { ...m.changes, id: m.key };
       console.log(`[sync:${name}] PUT →`, payload);

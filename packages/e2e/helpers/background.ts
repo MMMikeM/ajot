@@ -111,6 +111,26 @@ export const queueUpload = (
     { id, taskId, uploaderId, text },
   );
 
+/** Empties the lists saved for opening offline, as a fresh install has none. */
+export const forgetSavedLists = (worker: Worker) =>
+  worker.evaluate(
+    () =>
+      new Promise<void>((done, fail) => {
+        const open = indexedDB.open("newtab-todo-snapshot");
+        open.onupgradeneeded = () => open.transaction?.abort();
+        open.onerror = () => done();
+        open.onsuccess = () => {
+          const db = open.result;
+          const clear = db.transaction("queries", "readwrite").objectStore("queries").clear();
+          clear.onsuccess = () => {
+            db.close();
+            done();
+          };
+          clear.onerror = () => fail(clear.error);
+        };
+      }),
+  );
+
 export const savedTitles = (worker: Worker) =>
   worker.evaluate(
     () =>
