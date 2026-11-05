@@ -14,7 +14,7 @@ Any module that accesses `localStorage`, `window`, or browser-only APIs (`Indexe
 - **`files/`** — attachments a device holds: the `ajot-files` store, preparing a file, and the upload queue. Outside `db/`, so the backgrounds and the worker can send uploads too
 - **`snapshot-store.ts`** — the IndexedDB lists a new tab starts from; outside `db/` so the backgrounds can write them
 - **`auth/`** — Identity: `signed-in.ts` (the token and its user, one store so no tab ever holds one account's token with another's user), `token.ts` and `current-user.ts` (read it), `session.ts` (sign-in, sign-out, the backgrounds' copy, and expiry on a 401 from `api.ts`)
-- **`state/`** — App UI state: `active-category.ts`, `undo.ts`
+- **`state/`** — App UI state: `active-category.ts`, `nav-context.tsx`
 - **`hooks/`** — Standalone React hooks: `use-install-prompt.ts`, `use-swipe-reveal.ts`, `use-invite.ts` (People's invite link, also offered by the sharing sheets)
 - **`constants.ts`** — re-exports from `@newtab-todo/shared`
 

@@ -35,7 +35,12 @@ export default defineConfig({
   // The GitHub runner has 4 cores; each worker has its own accounts, so they don't collide
   workers: process.env.CI ? 4 : undefined,
 
-  reporter: [["list"], ["html", { outputFolder: ".report", open: "never" }]],
+  // On CI, `github` also shows each failure as an annotation on the run and the PR
+  reporter: [
+    ["list"],
+    ["html", { outputFolder: ".report", open: "never" }],
+    ...(process.env.CI ? [["github"] as const] : []),
+  ],
 
   // Without BASE_URL the suite brings its own stack, with an empty database each run
   webServer: process.env.BASE_URL
