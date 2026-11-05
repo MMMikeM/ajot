@@ -1,5 +1,4 @@
 import { nanoid } from "nanoid";
-import { keyAfter } from "@newtab-todo/shared/sort-order";
 import { now } from "@newtab-todo/shared/iso";
 import { MAX_TEXT, MAX_TITLE, cutTo } from "@newtab-todo/shared/field-limits";
 import { ApiError, apiClient, succeeded, type ApiClient, type SignedInSession } from "~/lib/api-client";
@@ -19,7 +18,7 @@ import {
 } from "~/lib/share-store";
 import { taskOfKept } from "~/lib/shared-page";
 
-export type SendStep = "sort-order" | "add" | "send" | "config" | "share" | "note" | "image";
+export type SendStep = "add" | "send" | "config" | "share" | "note" | "image";
 
 /** Which request in a send failed, so its metric can say. */
 class StepFailed extends Error {
@@ -54,11 +53,6 @@ export type SendOutcome =
   // Gone, another account's, or an open page's to add
   | { status: "skipped" };
 
-const nextSortOrder = async ({ api }: ApiClient) => {
-  const tasks = await succeeded(api.tasks.$get()).then((res) => res.json());
-  return keyAfter(tasks.flatMap((t) => (t.parentId ? [] : [t.sortOrder])));
-};
-
 type Task = { id: string; title: string; description: string | null };
 
 const postTask = async (client: ApiClient, kept: KeptShare, task: Task) => {
@@ -82,7 +76,6 @@ const postTask = async (client: ApiClient, kept: KeptShare, task: Task) => {
   }
   // Both schemas require userId; the server replaces it with the token's user. A retry of an add
   // that landed gets the stored task back.
-  const sortOrder = await step("sort-order", nextSortOrder(client));
   await step(
     "add",
     succeeded(
@@ -92,7 +85,6 @@ const postTask = async (client: ApiClient, kept: KeptShare, task: Task) => {
           userId: "",
           description: task.description,
           categoryId: to.kind === "list" ? to.categoryId : null,
-          sortOrder,
           parentId: null,
           assigneeId: null,
           dueDate: null,

@@ -220,10 +220,23 @@ export const markEdited = async (id: string, editedAt: string) => {
   return row;
 };
 
-// After the user's other top-level tasks, where the app puts a task they add themselves
+// After every top-level task the user can see, shared ones included, where the app puts a task
+// they add themselves
 export const nextSortOrder = async (userId: string) => {
   const last = await db.query.tasks.findFirst({
-    where: { userId, parentId: { isNull: true }, sortOrder: { isNotNull: true } },
+    where: {
+      parentId: { isNull: true },
+      deletedAt: { isNull: true },
+      sortOrder: { isNotNull: true },
+      RAW: (task) =>
+        inArray(
+          task.id,
+          db
+            .select({ id: taskAccess.taskId })
+            .from(taskAccess)
+            .where(eq(taskAccess.userId, userId)),
+        ),
+    },
     columns: { sortOrder: true },
     orderBy: { sortOrder: "desc" },
   });

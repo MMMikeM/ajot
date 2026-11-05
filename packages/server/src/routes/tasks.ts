@@ -79,10 +79,14 @@ export const taskRoutes = authed()
       const userId = c.get("userId");
       if (data.parentId && data.categoryId) throw new BadRequestError(SUBTASK_GOES_WITH_PARENT);
 
-      const [parent, canUseList, mayAssign] = await Promise.all([
+      // Sent without a sort key, a task goes where the app puts one it adds
+      const [parent, canUseList, mayAssign, sortOrder] = await Promise.all([
         data.parentId ? requireTask(data.parentId, userId, "edit") : null,
         data.categoryId ? categoryRepo.canUse(data.categoryId, userId) : true,
         canAssign(userId, data.assigneeId),
+        data.sortOrder === undefined && !data.parentId
+          ? taskRepo.nextSortOrder(userId)
+          : data.sortOrder,
       ]);
       if (parent?.task.parentId) throw new BadRequestError("Subtasks can't have subtasks.");
       if (!canUseList) throw new ForbiddenError(NOT_YOUR_LIST);
@@ -92,6 +96,7 @@ export const taskRoutes = authed()
       const result = await taskRepo.insert({
         ...taskChangeStamps({ status: data.status }, data.updatedAt),
         ...data,
+        sortOrder,
         userId,
       });
       if (result.dueDate) await notificationQueueRepo.scheduleFirstReminder(result.id);

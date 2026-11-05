@@ -45,6 +45,34 @@ describe("nextSortOrder", () => {
     expect(key > "a1").toBe(true);
     expect(() => generateKeyBetween(key, null)).not.toThrow();
   });
+
+  test("goes after a task shared with the user too, which their list shows among theirs", async () => {
+    await db.insert(users).values({ id: "bob", name: "Bob", username: "bob", passwordHash: "x" });
+    await addTask("mine", "a0");
+    await db
+      .insert(tasks)
+      .values({ id: "bobs", userId: "bob", title: "bobs", sortOrder: "a5", updatedAt: BEFORE_THE_DELETE });
+    await taskShareRepo.insert({ id: "s", taskId: "bobs", sharedWithUserId: "alice", permission: "edit" });
+
+    expect((await taskRepo.nextSortOrder("alice")) > "a5").toBe(true);
+  });
+
+  test("ignores deleted tasks and subtasks", async () => {
+    await addTask("parent", "a0");
+    await db.insert(tasks).values({
+      id: "sub",
+      userId: "alice",
+      parentId: "parent",
+      title: "sub",
+      sortOrder: "a7",
+      updatedAt: BEFORE_THE_DELETE,
+    });
+    await addTask("gone", "a5");
+    await taskRepo.remove("gone");
+
+    const key = await taskRepo.nextSortOrder("alice");
+    expect(key > "a0" && key < "a5").toBe(true);
+  });
 });
 
 describe("a malformed sortOrder a client sends", () => {
