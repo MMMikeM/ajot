@@ -16,6 +16,7 @@ import { useActiveCategoryId } from "~/lib/state/active-category";
 import { useIsDesk } from "~/lib/hooks/use-is-desk";
 import { releaseKeyboard } from "~/lib/keyboard-bridge";
 import { searchTasks } from "~/lib/search";
+import { pushActionToast, quoted } from "~/lib/undo-toast";
 import type { Category } from "~/lib/types";
 
 export const Route = createLazyFileRoute("/search")({
@@ -83,11 +84,15 @@ function SearchPage() {
   const close = () => void navigate({ to: "/" });
   const open = (taskId: string) =>
     void navigate({ to: "/search/task/$taskId", params: { taskId } });
-  const add = async () => {
-    await addTask(q, fromList?.id ?? null);
-    void navigate({ to: "/" });
-  };
   const addTo = fromList?.name ?? "Inbox";
+  const add = async () => {
+    const taskId = await addTask(q, fromList?.id ?? null);
+    void navigate({ to: "/" });
+    pushActionToast(quoted(q, ` to ${addTo}`, "Added "), {
+      label: "Open",
+      run: () => void navigate({ to: "/task/$taskId", params: { taskId } }),
+    });
+  };
   // Isolated so a right-to-left query or list name doesn't reorder the words around it. Chrome
   // spaces out isolated text in an accessible name, hence the label.
   const addLabel = `Add “${q}” to ${addTo}`;

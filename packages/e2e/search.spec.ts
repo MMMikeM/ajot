@@ -126,6 +126,11 @@ test("adding from search puts the task in the list it was opened from", async ({
 
   await page.waitForURL((url) => url.pathname === "/");
   await expect(page.locator("[data-task-id]", { hasText: "Book the vet" })).toBeVisible();
+
+  const toast = page.locator("[data-toast-undo]", { hasText: "Added “Book the vet” to Work" });
+  await toast.getByRole("button", { name: "Open" }).click();
+  await expect(page.locator('[data-slot="drawer-content"]')).toContainText("Book the vet");
+  await expect(toast).toHaveCount(0);
 });
 
 test("a task opened from the results closes back onto them", async ({ page }, testInfo) => {

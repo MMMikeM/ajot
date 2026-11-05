@@ -9,7 +9,7 @@ import {
 import { Toast } from "@base-ui/react/toast";
 import { X } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { UNDO_KEYS, pressUndo, type ToastData } from "~/lib/undo-toast";
+import { UNDO_KEYS, pressUndo, toastManager, type ToastData } from "~/lib/undo-toast";
 import { cn } from "~/lib/utils";
 
 const DURATION = 5000;
@@ -90,6 +90,7 @@ function ToastItem({ toast, windowBlurred }: { toast: ToastObject; windowBlurred
   const away = hidden || windowBlurred;
   const named = toast.data?.named;
   const onUndo = toast.data?.onUndo;
+  const action = toast.data?.action;
   return (
     <Toast.Root
       toast={toast}
@@ -150,6 +151,17 @@ function ToastItem({ toast, windowBlurred }: { toast: ToastObject; windowBlurred
               onClick={() => pressUndo(toast.id, onUndo)}
             >
               Undo
+            </Toast.Action>
+          )}
+          {action && (
+            <Toast.Action
+              render={<Button variant="link" className="h-8 px-2 touch:h-9" />}
+              onClick={() => {
+                toastManager.close(toast.id);
+                action.run();
+              }}
+            >
+              {action.label}
             </Toast.Action>
           )}
           <Toast.Close render={<Button variant="subtle" size="xs" icon aria-label="Dismiss" />}>

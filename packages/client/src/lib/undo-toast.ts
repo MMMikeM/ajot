@@ -7,7 +7,9 @@ import { Toast } from "@base-ui/react/toast";
  */
 export type NamedTitle = { before: string; name: string; after?: string };
 
-export type ToastData = { onUndo?: () => void; named?: NamedTitle };
+export type ToastAction = { label: string; run: () => void };
+
+export type ToastData = { onUndo?: () => void; action?: ToastAction; named?: NamedTitle };
 
 type ToastManager = ReturnType<typeof Toast.createToastManager<ToastData>>;
 
@@ -38,18 +40,24 @@ const holdUntilListening = (manager: ToastManager): ToastManager => {
 export const toastManager = holdUntilListening(Toast.createToastManager<ToastData>());
 
 // A thumb has further to travel to the toast than a pointer, and nothing to hover it with
-const undoWindowMs = () => (matchMedia("(pointer: coarse)").matches ? 8000 : 5000);
+const actionWindowMs = () => (matchMedia("(pointer: coarse)").matches ? 8000 : 5000);
 
 const fullTitle = ({ before, name, after = "" }: NamedTitle) => `${before}${name}${after}`;
 
-export const pushUndoToast = (title: string | NamedTitle, onUndo: () => void) => {
+const pushWithButton = (title: string | NamedTitle, data: ToastData) => {
   const isText = typeof title === "string";
   return toastManager.add({
     title: isText ? title : fullTitle(title),
-    timeout: undoWindowMs(),
-    data: { onUndo, named: isText ? undefined : title },
+    timeout: actionWindowMs(),
+    data: { ...data, named: isText ? undefined : title },
   });
 };
+
+export const pushUndoToast = (title: string | NamedTitle, onUndo: () => void) =>
+  pushWithButton(title, { onUndo });
+
+export const pushActionToast = (title: string | NamedTitle, action: ToastAction) =>
+  pushWithButton(title, { action });
 
 export const quoted = (name: string, after: string, before = ""): NamedTitle => ({
   before: `${before}“`,
