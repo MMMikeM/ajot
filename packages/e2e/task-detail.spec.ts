@@ -111,6 +111,35 @@ test.describe("task detail — visual language", () => {
 });
 
 test.describe("task detail — functionality", () => {
+  // Alice's contacts are her Bob and the account that invited her, so one is left to pick
+  test("sharing with one contact leaves the rest to pick from, and sends one share", async ({
+    user1Page: page,
+    user1Auth,
+    user2Auth,
+  }) => {
+    await ensureMutualContacts(user1Auth.token, user2Auth.token);
+    await createTask(page, "Shared with Bob");
+    await page.waitForSelector("[data-task-id]");
+    await page.waitForTimeout(1000); // contacts collection hydrate
+    await openFirstTaskDetail(page);
+    await tapAddLine(drawer(page), "Share");
+
+    const shares: unknown[] = [];
+    page.on("request", (request) => {
+      if (request.method() === "POST" && new URL(request.url()).pathname === "/api/tasks/share")
+        shares.push(request.postDataJSON());
+    });
+    await page.getByRole("option", { name: user2Auth.name }).click();
+
+    const d = drawer(page);
+    await expect(d.getByText(user2Auth.name, { exact: true })).toBeVisible();
+    // Once the share comes back, the picker's items change without Bob
+    await expect(d.getByRole("combobox", { name: "Share with" })).toBeVisible();
+    await page.waitForTimeout(1000);
+    expect(shares).toEqual([expect.objectContaining({ username: user2Auth.username })]);
+    await expect(d.locator(".text-destructive")).toHaveCount(0);
+  });
+
   test("title edit saves on blur", async ({ user1Page: page }) => {
     await createTask(page, "Original title");
     await page.waitForSelector("[data-task-id]");

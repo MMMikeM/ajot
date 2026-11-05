@@ -138,9 +138,11 @@ export function CategoryCollabSheet({
             <div className="flex flex-col gap-2">
               {addableContacts.length > 0 && (
                 <Select
-                  value=""
+                  value={null}
                   disabled={adding}
-                  onValueChange={(v) => void handleAdd(v as string)}
+                  onValueChange={(v) => {
+                    if (typeof v === "string") void handleAdd(v);
+                  }}
                 >
                   <SelectTrigger
                     className="self-start touch:h-10 touch:px-4"

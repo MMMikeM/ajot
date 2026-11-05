@@ -291,10 +291,12 @@ const AddShare = ({ taskId, sharing }: { taskId: string; sharing: Sharing }) => 
   return (
     <>
       <Select
-        value=""
+        value={null}
         defaultOpen
         disabled={pending}
-        onValueChange={(v) => void share(v as string)}
+        onValueChange={(v) => {
+          if (typeof v === "string") void share(v);
+        }}
       >
         <SelectTrigger variant="underline" aria-label="Share with" className={rowTrigger}>
           <SelectValue className="truncate" placeholder={pending ? "Sharing…" : "Share with…"} />
