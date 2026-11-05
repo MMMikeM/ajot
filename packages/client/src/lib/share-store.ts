@@ -1,4 +1,5 @@
 import type { SharedText } from "@newtab-todo/shared/share-target";
+import { inTransaction, openDb } from "~/lib/idb";
 
 // Apart from the lists' snapshot, whose upgrade drops everything in it: a share is the user's
 // only copy until its task and files are added
@@ -31,34 +32,10 @@ export const shareLockName = (id: string) => `ajot-share-${id}`;
 
 const filesOf = (id: string) => IDBKeyRange.bound([id, 0], [id, Infinity]);
 
-const open = () =>
-  new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => request.result.createObjectStore(STORE);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+const open = () => openDb(DB_NAME, 1, (db) => db.createObjectStore(STORE));
 
-const done = (tx: IDBTransaction) =>
-  new Promise<void>((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-  });
-
-// Opens, runs one transaction and closes, as lib/files/store.ts does: a connection left open
-// would block a newer deploy's upgrade
-const inStore = async <T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => () => T) => {
-  const db = await open();
-  try {
-    const tx = db.transaction(STORE, mode);
-    const result = run(tx.objectStore(STORE));
-    await done(tx);
-    return result();
-  } finally {
-    db.close();
-  }
-};
+const inStore = <T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => () => T) =>
+  inTransaction(open, STORE, mode, (tx) => run(tx.objectStore(STORE)));
 
 const write = (run: (store: IDBObjectStore) => void) =>
   inStore("readwrite", (store) => {

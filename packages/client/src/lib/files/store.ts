@@ -1,4 +1,5 @@
 import type { ISODateString } from "@newtab-todo/shared/iso";
+import { inTransaction as inDbTransaction, openDb, resultOf } from "~/lib/idb";
 
 // Outside lib/db, which the extension backgrounds and the PWA's worker can't import, so they can
 // send uploads too. A database of its own, because the snapshot's drops its lists on a version bump.
@@ -86,48 +87,19 @@ export const subscribeUploads = (listener: () => void) => {
 };
 
 const openFilesDb = () =>
-  new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, VERSION);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore(BLOBS);
-      request.result.createObjectStore(UPLOADS);
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+  openDb(DB_NAME, VERSION, (db) => {
+    db.createObjectStore(BLOBS);
+    db.createObjectStore(UPLOADS);
   });
 
-const done = (tx: IDBTransaction) =>
-  new Promise<void>((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-  });
-
-// Opens, runs one transaction and closes, as the snapshot store does: a connection left open
-// would block a newer deploy's upgrade
-const inTransaction = async <T>(mode: IDBTransactionMode, run: (tx: IDBTransaction) => () => T) => {
-  const db = await openFilesDb();
-  try {
-    const tx = db.transaction([BLOBS, UPLOADS], mode);
-    const result = run(tx);
-    await done(tx);
-    return result();
-  } finally {
-    db.close();
-  }
-};
+const inTransaction = <T>(mode: IDBTransactionMode, run: (tx: IDBTransaction) => () => T) =>
+  inDbTransaction(openFilesDb, [BLOBS, UPLOADS], mode, run);
 
 const write = (run: (tx: IDBTransaction) => void) =>
   inTransaction("readwrite", (tx) => {
     run(tx);
     return () => undefined;
   });
-
-const read = <T>(request: IDBRequest) => {
-  let value: T | undefined;
-  request.onsuccess = () => (value = request.result as T | undefined);
-  return () => value;
-};
 
 /** The entry and its bytes in one transaction, so neither exists without the other. */
 export const addUpload = async (upload: Upload, blobs: Partial<Record<Variant, Blob>>) => {
@@ -166,7 +138,7 @@ export const retryWaitingNow = async () => {
 };
 
 export const readUploads = () =>
-  inTransaction("readonly", (tx) => read<Upload[]>(tx.objectStore(UPLOADS).getAll())).then(
+  inTransaction("readonly", (tx) => resultOf<Upload[]>(tx.objectStore(UPLOADS).getAll())).then(
     (uploads) => uploads ?? [],
   );
 
@@ -216,15 +188,15 @@ export const changeUpload = async (
 
 export const readBlob = (id: string, variant: Variant) =>
   inTransaction("readonly", (tx) =>
-    read<SavedBlob>(tx.objectStore(BLOBS).get(blobKey(id, variant))),
+    resultOf<SavedBlob>(tx.objectStore(BLOBS).get(blobKey(id, variant))),
   );
 
 /** Both of an attachment's blobs, in one transaction. */
 export const readBlobs = (id: string) =>
   inTransaction("readonly", (tx) => {
     const blobs = tx.objectStore(BLOBS);
-    const file = read<SavedBlob>(blobs.get(blobKey(id, "file")));
-    const thumb = read<SavedBlob>(blobs.get(blobKey(id, "thumb")));
+    const file = resultOf<SavedBlob>(blobs.get(blobKey(id, "file")));
+    const thumb = resultOf<SavedBlob>(blobs.get(blobKey(id, "thumb")));
     return () => ({ file: file(), thumb: thumb() });
   });
 

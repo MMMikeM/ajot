@@ -1,3 +1,4 @@
+import { openDb, transactionDone } from "~/lib/idb";
 // The extension backgrounds write it with no tab open (lib/sync/prewarm.ts), so it lives outside
 // lib/db, which they can't import.
 const DB_NAME = "newtab-todo-snapshot";
@@ -18,41 +19,34 @@ export const SNAPSHOT_KEYS = ["tasks", "categories", "notes", "contacts", "attac
 export const OWNER_KEY = "owner";
 
 export const openSnapshotDb = () =>
-  new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, SCHEMA_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (db.objectStoreNames.contains(STORE)) db.deleteObjectStore(STORE);
-      db.createObjectStore(STORE);
+  openDb(DB_NAME, SCHEMA_VERSION, (db) => {
+    if (db.objectStoreNames.contains(STORE)) db.deleteObjectStore(STORE);
+    db.createObjectStore(STORE);
+  });
+
+export const readSnapshot = async (db: IDBDatabase, keys: readonly string[]) => {
+  const tx = db.transaction(STORE);
+  const store = tx.objectStore(STORE);
+  const found = new Map<string, unknown>();
+  for (const key of keys) {
+    const request = store.get(key);
+    request.onsuccess = () => {
+      if (request.result !== undefined) found.set(key, request.result);
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+  }
+  await transactionDone(tx);
+  return found;
+};
 
-export const readSnapshot = (db: IDBDatabase, keys: readonly string[]) =>
-  new Promise<Map<string, unknown>>((resolve, reject) => {
-    const store = db.transaction(STORE).objectStore(STORE);
-    const found = new Map<string, unknown>();
-    for (const key of keys) {
-      const request = store.get(key);
-      request.onsuccess = () => {
-        if (request.result !== undefined) found.set(key, request.result);
-      };
-    }
-    store.transaction.oncomplete = () => resolve(found);
-    store.transaction.onerror = () => reject(store.transaction.error);
-  });
-
-export const writeSnapshot = (db: IDBDatabase, entries: Iterable<readonly [string, unknown]>) =>
-  new Promise<void>((resolve, reject) => {
-    const store = db.transaction(STORE, "readwrite").objectStore(STORE);
-    for (const [key, data] of entries) {
-      if (data === undefined) store.delete(key);
-      else store.put(data, key);
-    }
-    store.transaction.oncomplete = () => resolve();
-    store.transaction.onerror = () => reject(store.transaction.error);
-  });
+export const writeSnapshot = (db: IDBDatabase, entries: Iterable<readonly [string, unknown]>) => {
+  const tx = db.transaction(STORE, "readwrite");
+  const store = tx.objectStore(STORE);
+  for (const [key, data] of entries) {
+    if (data === undefined) store.delete(key);
+    else store.put(data, key);
+  }
+  return transactionDone(tx);
+};
 
 /**
  * The other lists, if they were saved for another account, go with it: a page opened as this one
@@ -63,21 +57,20 @@ export const writeListFor = (
   key: string,
   data: unknown,
   owner: string | undefined,
-) =>
-  new Promise<void>((resolve, reject) => {
-    const store = db.transaction(STORE, "readwrite").objectStore(STORE);
-    const saved = store.get(OWNER_KEY);
-    saved.onsuccess = () => {
-      if (saved.result !== owner)
-        for (const other of SNAPSHOT_KEYS) if (other !== key) store.delete(other);
-      if (data === undefined) store.delete(key);
-      else store.put(data, key);
-      if (owner === undefined) store.delete(OWNER_KEY);
-      else store.put(owner, OWNER_KEY);
-    };
-    store.transaction.oncomplete = () => resolve();
-    store.transaction.onerror = () => reject(store.transaction.error);
-  });
+) => {
+  const tx = db.transaction(STORE, "readwrite");
+  const store = tx.objectStore(STORE);
+  const saved = store.get(OWNER_KEY);
+  saved.onsuccess = () => {
+    if (saved.result !== owner)
+      for (const other of SNAPSHOT_KEYS) if (other !== key) store.delete(other);
+    if (data === undefined) store.delete(key);
+    else store.put(data, key);
+    if (owner === undefined) store.delete(OWNER_KEY);
+    else store.put(owner, OWNER_KEY);
+  };
+  return transactionDone(tx);
+};
 
 /**
  * Writes and closes again: a connection left open would block a newer deploy's upgrade until
