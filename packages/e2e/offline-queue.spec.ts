@@ -1,4 +1,4 @@
-import { type BrowserContext, type Request, type Route } from "@playwright/test";
+import { type BrowserContext, type Route } from "@playwright/test";
 import { test, expect, type Page } from "./fixtures";
 import { mockApi, mockData } from "./helpers/mock-api";
 
@@ -12,21 +12,17 @@ type Task = Data["tasks"][number];
 const WRITE = /\/api\/(tasks|categories|notes|contacts)(\/|$)/;
 
 /** A response nobody reads can finish after a later one, so the order is when each was sent. */
+// Counted as answered: a request a reload cancels gets neither a response nor a requestfailed
 const recordWrites = (page: Page) => {
-  const writes: { request: Request; name: string }[] = [];
-  const refused = new Set<Request>();
-  page.on("request", (request) => {
+  const sent: string[] = [];
+  page.on("response", (response) => {
+    const request = response.request();
     const path = new URL(request.url()).pathname;
-    if (request.method() === "GET" || !WRITE.test(path)) return;
+    if (request.method() === "GET" || !WRITE.test(path) || response.status() >= 400) return;
     const body = (request.postDataJSON() ?? {}) as { title?: string; id?: string };
-    writes.push({
-      request,
-      name: `${request.method()} ${path} ${body.title ?? body.id ?? ""}`.trim(),
-    });
+    sent.push(`${request.method()} ${path} ${body.title ?? body.id ?? ""}`.trim());
   });
-  page.on("requestfailed", (request) => refused.add(request));
-  page.on("response", (response) => response.status() >= 400 && refused.add(response.request()));
-  return () => writes.filter((w) => !refused.has(w.request)).map((w) => w.name);
+  return () => [...sent];
 };
 
 const expectSentOnce = async (sent: () => string[], expected: string[]) => {
