@@ -320,13 +320,17 @@ test.describe("a one-click add from the menu that couldn't reach the server", ()
 
     await deliverPush(context, extensionUrl, { type: "sync" });
     await expect.poll(() => serverTask(user2Auth.token, title)).toBeDefined();
-    const notes = await apiRequest<{ id: string; content: string }[]>(
-      "GET",
-      "/api/notes",
-      undefined,
-      user1Auth.token,
-    );
-    expect(notes.find((n) => n.id === note.id)?.content).toBe(note.content);
+    // The note goes after the share, so Bob can see the task before it lands
+    const savedNote = async () =>
+      (
+        await apiRequest<{ id: string; content: string }[]>(
+          "GET",
+          "/api/notes",
+          undefined,
+          user1Auth.token,
+        )
+      ).find((n) => n.id === note.id)?.content;
+    await expect.poll(savedNote).toBe(note.content);
 
     expect(await serverTask(user1Auth.token, othersTitle)).toBeUndefined();
     expect(await keptShareIds()).toEqual([othersId]);
