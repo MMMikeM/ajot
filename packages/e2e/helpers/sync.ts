@@ -5,13 +5,14 @@ export type SyncTracker = {
   assertNoFailures: () => void;
 };
 
-/** GETs don't count, so the SSE stream never holds waitForSync open. */
+/** GETs and the event stream's ticket don't count: neither is a change being sent. */
 export const createSyncTracker = (page: Page): SyncTracker => {
   const inflight = new Set<Request>();
   const failures: { url: string; status: number }[] = [];
 
   page.on("request", (req) => {
-    if (new URL(req.url()).pathname.startsWith("/api/") && req.method() !== "GET") {
+    const path = new URL(req.url()).pathname;
+    if (path.startsWith("/api/") && !path.startsWith("/api/events") && req.method() !== "GET") {
       inflight.add(req);
     }
   });

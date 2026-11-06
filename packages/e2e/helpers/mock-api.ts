@@ -297,6 +297,8 @@ export const mockApi = async (
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
+    if (path === "/api/events/ticket")
+      return route.fulfill({ headers: cors, json: { ticket: "mock-ticket" } });
     if (path.startsWith("/api/events"))
       return route.fulfill({ status: 204, headers: cors, body: "" });
 

@@ -1,6 +1,5 @@
 import { toNotification, type PushPayload } from "@newtab-todo/shared/push-payload";
 import {
-  EVENTS_PATH,
   SSE_DATA_CHANGED,
   SSE_NOTIFICATION,
   MSG_TOKEN_CHANGED,
@@ -8,6 +7,7 @@ import {
   MSG_BG_STATUS,
 } from "~/lib/constants";
 import { createBackoff } from "~/lib/sync/backoff";
+import { eventStreamUrl } from "~/lib/sync/stream-url";
 import { trackSyncState } from "~/lib/sync/sync-state";
 import { getStoredSession, notifyTabs } from "~/lib/ext";
 import { sendMenuShares, setupContextMenu } from "~/lib/context-menu";
@@ -73,6 +73,7 @@ const backoff = createBackoff(() => {
 });
 
 const disconnect = () => {
+  connectAttempt++;
   backoff.cancel();
   eventSource?.close();
   eventSource = null;
@@ -82,8 +83,9 @@ const connect = async () => {
   disconnect();
 
   // Two calls can overlap (online fires twice, or a token change lands mid-retry); only the
-  // latest may open a stream, or the earlier one is orphaned and never closed
-  const attempt = ++connectAttempt;
+  // latest may open a stream, or the earlier one is orphaned and never closed. Going offline
+  // meanwhile counts as a later call.
+  const attempt = connectAttempt;
   const session = await getStoredSession();
   if (attempt !== connectAttempt) return;
   if (!session) {
@@ -93,8 +95,18 @@ const connect = async () => {
   }
 
   syncState.connecting();
-  const url = `${session.serverUrl}${EVENTS_PATH}?token=${encodeURIComponent(session.token)}`;
   console.log("[bg-sse] connecting...");
+  let url: string;
+  try {
+    url = await eventStreamUrl(session);
+  } catch (err) {
+    if (attempt !== connectAttempt) return;
+    console.log("[bg-sse] couldn't get a stream ticket:", err);
+    syncState.failed();
+    backoff.schedule();
+    return;
+  }
+  if (attempt !== connectAttempt) return;
   const source = new EventSource(url);
   eventSource = source;
 

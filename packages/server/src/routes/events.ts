@@ -3,19 +3,22 @@ import { streamSSE } from "hono/streaming";
 import { extractToken, validateSession } from "../auth";
 import { hasRoomForStream, registerClient, unregisterClient } from "../broadcast";
 import { UNAUTHORIZED } from "../db/errors";
+import { redeemTicket } from "../stream-tickets";
+
+// EventSource can't set headers, and a URL ends up in logs and history, so a page trades its
+// token for a ticket that the stream's opening spends. Clients from before tickets still send the
+// token itself in the URL.
+const userOf = async (request: Request, query: (name: string) => string | undefined) => {
+  const ticket = query("ticket");
+  if (ticket) return redeemTicket(ticket);
+  const token = extractToken(request) ?? query("token");
+  if (!token) return null;
+  return validateSession(token).catch(() => null);
+};
 
 export const eventsRoute = new Hono().get("/", async (c) => {
-  // EventSource can't set headers, so the stream alone takes the token in its URL; anywhere else
-  // it would end up in logs and history
-  const token = extractToken(c.req.raw) ?? c.req.query("token");
-  if (!token) return c.json({ error: UNAUTHORIZED }, 401);
-
-  let userId: string;
-  try {
-    userId = await validateSession(token);
-  } catch {
-    return c.json({ error: UNAUTHORIZED }, 401);
-  }
+  const userId = await userOf(c.req.raw, (name) => c.req.query(name));
+  if (!userId) return c.json({ error: UNAUTHORIZED }, 401);
 
   // The tabs' and Firefox background's EventSource closes on it and backs off to a minute.
   // Nothing may await between this and registerClient, which streamSSE's callback runs in this

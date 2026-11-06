@@ -11,6 +11,7 @@ import { categoryRoutes } from "./routes/categories";
 import { noteRoutes } from "./routes/notes";
 import { pushRoutes } from "./routes/push";
 import { eventsRoute } from "./routes/events";
+import { streamTicketRoutes } from "./routes/stream-ticket";
 import { inviteRoutes } from "./routes/invites";
 import { contactRoutes } from "./routes/contacts";
 import { notificationRoutes } from "./routes/notifications";
@@ -133,6 +134,7 @@ const api = app
   .route("/api/attachments", attachmentRoutes)
   .route("/api/push", pushRoutes)
   .route(EVENTS_PATH, eventsRoute)
+  .route(`${EVENTS_PATH}/ticket`, streamTicketRoutes)
   .route("/api/invites", inviteRoutes)
   .route("/api/contacts", contactRoutes)
   .route("/api/notifications", notificationRoutes)

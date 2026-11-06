@@ -14,7 +14,7 @@ import {
   tasksOf,
   type ApiNote,
 } from "./helpers/api";
-import { login } from "./helpers/auth";
+import { login, signIn } from "./helpers/auth";
 import { API_URL } from "./helpers/stack";
 import { USER_1 } from "./helpers/users";
 
@@ -286,4 +286,21 @@ test.describe("ids someone else already has", () => {
 test("a token in the URL signs in only the event stream", async ({ user1Auth }) => {
   const res = await send(`/api/tasks?token=${user1Auth.token}`);
   expect(res.status).toBe(401);
+});
+
+test("the page opens its event stream with a ticket, never its token", async ({
+  page,
+  user1Auth,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await signIn(page, user1Auth);
+  const [stream] = await Promise.all([
+    page.waitForRequest((req) => new URL(req.url()).pathname === "/api/events"),
+    page.reload({ waitUntil: "domcontentloaded" }),
+  ]);
+
+  const params = new URL(stream.url()).searchParams;
+  expect(params.has("token")).toBe(false);
+  expect(params.get("ticket")).toBeTruthy();
+  expect((await stream.response())?.status()).toBe(200);
 });

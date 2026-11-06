@@ -13,10 +13,11 @@ import { refreshPushSubscription, registerPushSubscription } from "~/lib/sync/pu
 import { createBackoff } from "~/lib/sync/backoff";
 import { getBuildTarget } from "~/lib/build-target";
 import { getServerUrl } from "~/lib/server-url";
+import { client } from "~/lib/api";
+import { eventStreamUrl } from "~/lib/sync/stream-url";
 import { ext } from "~/lib/ext";
 import {
   SSE_DATA_CHANGED,
-  EVENTS_PATH,
   MSG_GET_STATUS,
   MSG_BG_STATUS,
   MSG_SYNC_ALL,
@@ -30,6 +31,9 @@ import { shareSessionWithWorker } from "~/lib/sync/worker-session";
 import { checkForUpdate } from "~/lib/sync/register-sw";
 
 let es: EventSource | null = null;
+// Bumped by each connect and disconnect: a connect still waiting for its ticket opens nothing once
+// a later one has started, or the page has gone offline
+let connectAttempt = 0;
 let streamWasOpen = false;
 
 // Firefox's persistent MV2 background page holds the SSE connection for every tab. Chrome's MV3
@@ -134,16 +138,18 @@ const handleSSEData = (data: string) => {
   }
 };
 
-const sseBackoff = createBackoff(() => connectSSE());
+const sseBackoff = createBackoff(() => void connectSSE());
 
 const disconnectSSE = () => {
+  connectAttempt++;
   sseBackoff.cancel();
   es?.close();
   es = null;
 };
 
-const connectSSE = () => {
+const connectSSE = async () => {
   disconnectSSE();
+  const attempt = connectAttempt;
   const token = getAuthToken();
   if (!token) {
     ownSyncState.stopped();
@@ -151,7 +157,16 @@ const connectSSE = () => {
   }
 
   ownSyncState.connecting();
-  const url = `${getServerUrl()}${EVENTS_PATH}?token=${encodeURIComponent(token)}`;
+  let url: string;
+  try {
+    url = await eventStreamUrl({ serverUrl: getServerUrl(), token }, client);
+  } catch {
+    if (attempt !== connectAttempt) return;
+    ownSyncState.failed();
+    sseBackoff.schedule();
+    return;
+  }
+  if (attempt !== connectAttempt) return;
   const source = new EventSource(url);
   es = source;
   source.addEventListener(SSE_DATA_CHANGED, (e: MessageEvent) => {
@@ -177,7 +192,7 @@ const connectSSE = () => {
 const restartSSE = () => {
   sseBackoff.reset();
   ownSyncState.restart();
-  connectSSE();
+  void connectSSE();
 };
 
 const reconnect = () => {
@@ -223,7 +238,7 @@ const listenSwMessages = () => {
 export const initSync = () => {
   const target = getBuildTarget();
   if (target === "browser" || (target === "extension" && !backgroundHoldsSse())) {
-    if (!es && getAuthToken()) connectSSE();
+    if (!es && getAuthToken()) void connectSSE();
     subscribeAuthToken(reconnect);
     listenNetworkChanges();
   }

@@ -14,6 +14,8 @@ const row = (page: Page, title: string) =>
 
 const checkboxOf = (page: Page, title: string) => row(page, title).getByRole("checkbox").first();
 
+const isStream = (url: URL) => url.pathname === "/api/events";
+
 test.describe("sync status", () => {
   // mockApi answers /api/events with a 204, which closes the stream for good. This server holds
   // it open instead, as the real one does, so the page can read as connected.
@@ -40,7 +42,7 @@ test.describe("sync status", () => {
 
   test("reads Offline while the device is offline, and recovers", async ({ page, context }) => {
     await mockApi(page);
-    await page.route("**/api/events**", (route) => route.continue({ url: streamUrl }));
+    await page.route(isStream, (route) => route.continue({ url: streamUrl }));
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(syncButton(page)).toHaveText("Sync", { timeout: 15000 });
     await expect(syncStatus(page)).toHaveText("");
@@ -79,7 +81,7 @@ test.describe("sync status", () => {
   test("a server that answers again reads as syncing again, not back online", async ({ page }) => {
     let refusing = false;
     await mockApi(page);
-    await page.route("**/api/events**", (route) =>
+    await page.route(isStream, (route) =>
       refusing ? route.fulfill({ status: 503 }) : route.continue({ url: streamUrl }),
     );
     await page.goto("/", { waitUntil: "domcontentloaded" });
