@@ -18,6 +18,7 @@ const goneMessages = {
   "removed collaborator": "That can no longer be undone.",
   "task share": "That task is no longer shared with them.",
   "task shared with you": "That task is no longer shared with you.",
+  "mcp token": "That token has already been revoked.",
   invite: INVITE_GONE,
 } as const;
 

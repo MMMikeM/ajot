@@ -150,6 +150,14 @@ export const limitSharing = (userId: string) => {
   sharing.count(userId);
 };
 
+const makingTokens = createLimiter({ limit: 10, windowMs: 60 * 60_000 });
+
+export const limitMcpTokens = (userId: string) => {
+  if (makingTokens.waitMs(userId) > 0)
+    throw new HTTPException(429, { message: "That's a lot of new tokens. Try again in an hour." });
+  makingTokens.count(userId);
+};
+
 const attaching = createLimiter({
   limit: Number(process.env.ATTACHMENTS_PER_10_MINUTES) || 300,
   windowMs: 10 * 60_000,

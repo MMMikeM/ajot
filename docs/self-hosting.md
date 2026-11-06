@@ -134,6 +134,16 @@ SERVER_URL=https://your-server pnpm reset-password <user-id>  # locally, with th
 node dist/reset-password.js <user-id>                         # on the server, e.g. via `fly ssh console`
 ```
 
-It signs the user out everywhere, then tells the running server, which otherwise keeps accepting
+It signs the user out everywhere and revokes their MCP tokens, then tells the running server, which otherwise keeps accepting
 their sessions for up to 30 seconds. That request is signed with `TURSO_AUTH_TOKEN`, so it has to
 match the server's.
+
+## 7. Claude and other MCP clients
+
+The server answers MCP at `/mcp`, with nothing to configure. Each person makes their own token under
+**Settings → Connect Claude** and adds it to Claude Code with the command shown there. A token can be
+read-only, lasts the 30, 90 or 365 days chosen when it's made, and is revoked from the same screen.
+
+Tokens are personal access tokens, not OAuth, so clients that can only connect through OAuth (Claude
+on the web, desktop and phone) can't use them. A browser-based client such as MCP Inspector also
+needs its origin in `ALLOWED_ORIGINS`.

@@ -38,3 +38,6 @@ export type MutationEvent = {
   data: object;
   sourceClientId?: string;
 };
+
+/** How long a token for /mcp can last, in days, chosen when it's made. */
+export const MCP_TOKEN_DAYS = [30, 90, 365] as const;

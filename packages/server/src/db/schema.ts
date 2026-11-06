@@ -166,6 +166,28 @@ export const sessions = sqliteTable("sessions", {
   createdAt: createdAt(),
 });
 
+// A personal access token for /mcp, which only it accepts. Stored as its hash, so a copy of the
+// database lets no one in; the hint is its last characters, for telling tokens apart in Settings.
+export const mcpTokens = sqliteTable(
+  "mcp_tokens",
+  {
+    id: pk(),
+    userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
+    name: string("name"),
+    tokenHash: string("token_hash"),
+    hint: string("hint"),
+    canWrite: bool("can_write"),
+    expiresAt: string("expires_at"),
+    lastUsedAt: nullableString("last_used_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    atMost("mcp_token_name_length", t.name, MAX_NAME),
+    uniqueIndex("mcp_tokens_hash_idx").on(t.tokenHash),
+    index("mcp_tokens_user_idx").on(t.userId),
+  ],
+);
+
 export const notes = sqliteTable(
   "notes",
   {
@@ -393,6 +415,7 @@ export const relations = defineRelations(
     pushSubscriptions,
     pushPreferences,
     sessions,
+    mcpTokens,
     taskShares,
     contacts,
     removedContacts,

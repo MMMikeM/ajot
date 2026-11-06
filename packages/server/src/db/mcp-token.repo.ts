@@ -1,0 +1,86 @@
+import { createHash, randomBytes } from "node:crypto";
+import { and, eq, gt, isNull, lt, or } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import { createSelectSchema } from "drizzle-orm/zod";
+import { hoursFromNow, now } from "@newtab-todo/shared/iso";
+import { db } from "./client";
+import { mcpTokens } from "./schema";
+import { NotFoundError } from "./errors";
+
+const PREFIX = "ajot_pat_";
+const HINT_LENGTH = 4;
+
+const hashToken = (token: string) => createHash("sha256").update(token).digest("base64url");
+
+// What Settings lists: never the hash
+const listed = { tokenHash: false } as const;
+export const listedSchema = createSelectSchema(mcpTokens).omit({ tokenHash: true });
+
+const live = () => gt(mcpTokens.expiresAt, now());
+
+export const listOf = async (userId: string) =>
+  db.query.mcpTokens.findMany({
+    where: { userId, expiresAt: { gt: now() } },
+    columns: listed,
+    orderBy: { createdAt: "desc" },
+  });
+
+export const countLive = (userId: string) =>
+  db.$count(mcpTokens, and(eq(mcpTokens.userId, userId), live()));
+
+/** The token itself is in the reply only, never stored. */
+export const create = async (
+  userId: string,
+  { name, canWrite, days }: { name: string; canWrite: boolean; days: number },
+) => {
+  const token = `${PREFIX}${randomBytes(32).toString("base64url")}`;
+  const [row] = await db
+    .insert(mcpTokens)
+    .values({
+      id: createId(),
+      userId,
+      name,
+      canWrite,
+      tokenHash: hashToken(token),
+      hint: token.slice(-HINT_LENGTH),
+      expiresAt: hoursFromNow(days * 24),
+    })
+    .returning();
+  const { tokenHash: _tokenHash, ...shown } = row!;
+  return { token, ...shown };
+};
+
+export const remove = async (id: string, userId: string) => {
+  const [row] = await db
+    .delete(mcpTokens)
+    .where(and(eq(mcpTokens.id, id), eq(mcpTokens.userId, userId)))
+    .returning({ id: mcpTokens.id });
+  if (!row) throw new NotFoundError("mcp token", id);
+  return row;
+};
+
+/**
+ * Undefined for a token that isn't one, has expired or was revoked. Not cached: revoking happens
+ * in other processes too (reset-password), and a cached token would outlive it.
+ */
+export const findValid = async (token: string) => {
+  if (!token.startsWith(PREFIX)) return undefined;
+  return db.query.mcpTokens.findFirst({
+    where: { tokenHash: hashToken(token), expiresAt: { gt: now() } },
+    columns: { id: true, userId: true, canWrite: true, expiresAt: true },
+  });
+};
+
+/** At most hourly, so a busy token doesn't write on every call. */
+export const markUsed = async (id: string) => {
+  const anHourAgo = hoursFromNow(-1);
+  await db
+    .update(mcpTokens)
+    .set({ lastUsedAt: now() })
+    .where(
+      and(
+        eq(mcpTokens.id, id),
+        or(isNull(mcpTokens.lastUsedAt), lt(mcpTokens.lastUsedAt, anHourAgo)),
+      ),
+    );
+};

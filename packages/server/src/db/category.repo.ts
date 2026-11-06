@@ -3,7 +3,14 @@ import { createInsertSchema, createSelectSchema, createUpdateSchema } from "driz
 import { z } from "@hono/zod-openapi";
 import { db, inTransaction } from "./client";
 import * as reachRepo from "./reach.repo";
-import { categories, listMembers, tasks, taskShares, type CategoryDeletion } from "./schema";
+import {
+  categories,
+  categoryCollaborators,
+  listMembers,
+  tasks,
+  taskShares,
+  type CategoryDeletion,
+} from "./schema";
 import { BadRequestError, IdTakenError, NotFoundError, StaleUpdateError } from "./errors";
 import { now } from "@newtab-todo/shared/iso";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
@@ -28,7 +35,11 @@ export const deleteSchema = idBody.extend({
 // they're nullish for every route to satisfy this schema.
 export const responseSchema = createSelectSchema(categories)
   .omit({ deletedAt: true, deletion: true })
-  .extend({ collaborators: z.array(z.object({ user: userRepo.publicSchema })).nullish() });
+  .extend({
+    collaborators: z
+      .array(createSelectSchema(categoryCollaborators).extend({ user: userRepo.publicSchema }))
+      .nullish(),
+  });
 const limitedFields = {
   id: limitedId,
   userId: limitedId,

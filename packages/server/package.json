@@ -27,6 +27,7 @@
     "@hono/node-server": "^2.1.5",
     "@hono/zod-openapi": "^1.6.3",
     "@mmmike/web-push": "^1.5.0",
+    "@modelcontextprotocol/server": "2.4.0",
     "@newtab-todo/shared": "workspace:*",
     "@node-rs/argon2": "^2.2.2",
     "@paralleldrive/cuid2": "^3.3.0",
@@ -40,6 +41,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
     "drizzle-kit": "1.0.0-rc.4",
     "vite-plus": "catalog:"
   }

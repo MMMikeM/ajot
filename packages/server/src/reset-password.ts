@@ -59,13 +59,15 @@ const connection = connect({
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-const [updated, revoked] = await connection.batch(
+// The MCP tokens go too: someone who had the password could have made one
+const [updated, revoked, revokedTokens] = await connection.batch(
   [
     {
       sql: "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
       args: [await hashPassword(password), now(), userId],
     },
     { sql: "DELETE FROM sessions WHERE user_id = ?", args: [userId] },
+    { sql: "DELETE FROM mcp_tokens WHERE user_id = ?", args: [userId] },
   ],
   "immediate",
 );
@@ -76,7 +78,9 @@ if (updated!.rowsAffected === 0) {
   process.exit(1);
 }
 
-console.log(`Password reset for ${userId}; signed out of ${revoked!.rowsAffected} session(s).`);
+console.log(
+  `Password reset for ${userId}; signed out of ${revoked!.rowsAffected} session(s), revoked ${revokedTokens!.rowsAffected} MCP token(s).`,
+);
 
 // The running server caches sessions for 30 s, so it's told they're gone
 const serverUrl = process.env.SERVER_URL ?? `http://localhost:${process.env.PORT || 3000}`;

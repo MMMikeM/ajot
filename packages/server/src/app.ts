@@ -19,6 +19,8 @@ import { deployRoutes } from "./routes/deploy";
 import { configRoutes } from "./routes/config";
 import { metricRoutes } from "./routes/metrics";
 import { attachmentRoutes } from "./routes/attachments";
+import { mcpTokenRoutes } from "./routes/mcp-tokens";
+import { mountMcp } from "./mcp/route";
 import { isAllowedOrigin, parseAllowedOrigins } from "./origins";
 import { rejectInvalidInput } from "./routes/openapi-schemas";
 import { LoggedHTTPException } from "./db/errors";
@@ -89,7 +91,10 @@ app.use("*", (c, next) => {
   if (origin && isAllowedOrigin(origin, allowedOrigins)) {
     c.header("Access-Control-Allow-Origin", origin);
     c.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-    c.header("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Client-Id,X-Device-Id");
+    c.header(
+      "Access-Control-Allow-Headers",
+      "Content-Type,Authorization,X-Client-Id,X-Device-Id,Mcp-Protocol-Version,Mcp-Session-Id,Mcp-Method,Mcp-Name",
+    );
     c.header("Access-Control-Expose-Headers", "*");
     c.header("Access-Control-Max-Age", "86400");
   }
@@ -139,12 +144,15 @@ const api = app
   .route("/api/contacts", contactRoutes)
   .route("/api/notifications", notificationRoutes)
   .route("/api/deploy", deployRoutes)
-  .route("/api/metrics", metricRoutes);
+  .route("/api/metrics", metricRoutes)
+  .route("/api/mcp/tokens", mcpTokenRoutes);
 
 app.doc("/api/openapi.json", {
   openapi: "3.0.0",
   info: { title: "NewTab Todo API", version: "1.0.0" },
 });
+
+mountMcp(app);
 
 // Nothing else shows a request for a route the API doesn't have: a client with a wrong path, or one
 // newer or older than this server. 501, not 404, which routes answer for a row that isn't there and
