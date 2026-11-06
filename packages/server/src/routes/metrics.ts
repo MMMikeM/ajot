@@ -9,10 +9,11 @@ export const metricRoutes = authed()
       method: "post",
       path: "/",
       request: jsonBody(z.object({ name: metricRepo.nameSchema })),
+      // A name past the day's cap gets a 204 too: its sender has nothing to fix or retry
       responses: { 204: true },
     }),
     async (c) => {
-      await metricRepo.increment(c.req.valid("json").name);
+      await metricRepo.incrementIfRoom(c.req.valid("json").name);
       return c.body(null, 204);
     },
   )

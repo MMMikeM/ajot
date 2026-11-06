@@ -22,7 +22,21 @@ export const add = async (counts: ReadonlyMap<string, number>) => {
     });
 };
 
-export const increment = (name: string) => add(new Map([[name, 1]]));
+// Any signed-in account can send any name, so a day takes this many before it stops taking new
+// ones; names it already has keep counting
+export const MAX_NAMES_A_DAY = 500;
+
+/** Counts one for `name` today, unless it's new and today already holds `MAX_NAMES_A_DAY`. */
+export const incrementIfRoom = async (name: string) => {
+  const day = utcDay();
+  await db.run(sql`
+    INSERT INTO ${metricCounts} (name, day, count)
+    SELECT ${name}, ${day}, 1
+    WHERE EXISTS (SELECT 1 FROM ${metricCounts} WHERE name = ${name} AND day = ${day})
+      OR (SELECT count(*) FROM ${metricCounts} WHERE day = ${day}) < ${MAX_NAMES_A_DAY}
+    ON CONFLICT (name, day) DO UPDATE SET "count" = "count" + 1
+  `);
+};
 
 export const listSince = (days: number) => {
   const since = utcDay(new Date(Date.now() - (days - 1) * 86_400_000));
