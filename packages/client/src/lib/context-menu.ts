@@ -28,34 +28,26 @@ import { mayReadImages, readPageMeta, withinMs, type PageMeta } from "~/lib/page
 type ClickData = browser.contextMenus.OnClickData;
 type ContextType = browser.contextMenus.ContextType;
 
-const DRAFTS = {
-  selection: { title: "Add “%s” as a task", contexts: ["selection"] },
-  "selection-as-note": {
-    title: "Add this page, with the selection as a note",
-    contexts: ["selection"],
-  },
-  link: { title: "Add link as a task", contexts: ["link"] },
-  image: { title: "Add image as a task", contexts: ["image"] },
-  "image-link": { title: "Add image link as a task", contexts: ["image"] },
-  page: { title: "Add this page as a task", contexts: ["page"] },
-} satisfies Record<string, { title: string; contexts: ContextType[] }>;
+const CONTEXTS: ContextType[] = ["page", "link", "selection", "image"];
 
-const OPEN = {
-  id: "open",
-  title: "Add and open in Ajot…",
-  contexts: ["page", "link", "selection", "image"],
-} satisfies { id: string; title: string; contexts: ContextType[] };
+const OPEN = { id: "open", title: "Add and open in Ajot…", contexts: CONTEXTS };
 
-// A sent task is its recipient's, which its sender can't attach a file to
-const ATTACHES = new Set<string>(["image"]);
-
-type DraftId = keyof typeof DRAFTS;
+type DraftId = "selection" | "link" | "image" | "image-link" | "page";
 
 // The target rides in the menu item's id: a list's id, a contact's username or user id
 type DestinationKind = "inbox" | "list" | "share" | "send";
+const DESTINATION_KINDS = new Set<string>(["inbox", "list", "share", "send"] satisfies DestinationKind[]);
 type Destination = { kind: DestinationKind; target: string; title: string; done: string };
-// A titled group is a submenu, so a contact list doesn't make the menu twice as long per person
-type Group = { submenu?: { id: string; title: string }; destinations: Destination[] };
+type Group = { label?: string; destinations: Destination[] };
+
+/** What was clicked decides what's added: the image, else the link, else the selection, else the page. */
+const draftIdOf = (info: ClickData, kind: DestinationKind): DraftId => {
+  // A sent task is its recipient's, which its sender can't attach a file to
+  if (info.mediaType === "image" && info.srcUrl) return kind === "send" ? "image-link" : "image";
+  if (info.linkUrl) return "link";
+  if (info.selectionText) return "selection";
+  return "page";
+};
 
 type Draft = { title: string; description: string | null; note?: string; image?: string };
 
@@ -109,8 +101,6 @@ const draftFor = (
         description: [selectionIfTruncated, pageUrl].filter(Boolean).join("\n\n") || null,
       };
     }
-    case "selection-as-note":
-      return { title: pageTitle, description: pageUrl, note: selection };
     case "link":
       // Chrome doesn't send linkText; selecting the link's text first gets it there too
       return {
@@ -141,14 +131,22 @@ const fetchDestinations = async ({ api }: ApiClient): Promise<Group[]> => {
   ]);
   const people = contacts.map((c) => c.contactUser);
   return [
-    { destinations: [INBOX] },
     {
-      destinations: categories
-        .filter((c) => c.collaborators?.length)
-        .map((c) => ({ kind: "list", target: c.id, title: c.name, done: `Added to ${c.name}` })),
+      label: "Add to",
+      destinations: [
+        INBOX,
+        ...categories
+          .filter((c) => c.collaborators?.length)
+          .map((c) => ({
+            kind: "list" as const,
+            target: c.id,
+            title: c.name,
+            done: `Added to ${c.name}`,
+          })),
+      ],
     },
     {
-      submenu: { id: "share", title: "Share with" },
+      label: "Share with",
       destinations: people.map((p) => ({
         kind: "share",
         target: p.username,
@@ -157,7 +155,7 @@ const fetchDestinations = async ({ api }: ApiClient): Promise<Group[]> => {
       })),
     },
     {
-      submenu: { id: "send", title: "Send to" },
+      label: "Send to",
       destinations: people.map((p) => ({
         kind: "send",
         target: p.id,
@@ -347,7 +345,7 @@ const openInAjot = async (info: ClickData, tab?: browser.tabs.Tab) => {
 };
 
 // The drafts that are the page itself, so its picture can go with them
-const PAGE_DRAFTS = new Set<DraftId>(["page", "selection-as-note"]);
+const PAGE_DRAFTS = new Set<DraftId>(["page"]);
 
 /** The page's picture, if images may already be read: adding a page never asks to. */
 const pagePicture = async (meta: PageMeta) =>
@@ -402,11 +400,11 @@ const partsFailed = (outcome: Extract<SendOutcome, { status: "sent" }>) =>
 const handleClick = async (info: ClickData, tab?: browser.tabs.Tab) => {
   const menuId = String(info.menuItemId);
   if (menuId === OPEN.id) return openInAjot(info, tab);
-  const [draftId, kind, target = ""] = menuId.split("|");
-  if (!(draftId in DRAFTS) || !kind) return;
-  const id = draftId as DraftId;
+  const [kind = "", target = ""] = menuId.split("|");
+  if (!DESTINATION_KINDS.has(kind)) return;
+  const id = draftIdOf(info, kind as DestinationKind);
   const allowed = id === "image" && info.srcUrl ? askToReadImages(info.srcUrl) : undefined;
-  const where = `${draftId}:${kind}`;
+  const where = `${id}:${kind}`;
   // Clicks less the menu: and menu-fail: counts are those that ended with no notification
   void recordMetric(`menu-click:${where}`, null);
   const meta = PAGE_DRAFTS.has(id) ? await readPageMeta(tab?.id) : {};
@@ -543,42 +541,23 @@ export const sendMenuShares = async () => {
 const create = (item: browser.contextMenus._CreateCreateProperties) =>
   ext.contextMenus.create(item);
 
-const separatedFromPrevious = (groups: Group[], i: number) =>
-  i > 0 && !(groups[i]!.submenu && groups[i - 1]!.submenu);
-
+/**
+ * Every item is top-level, so the browser gathers them into one Ajot menu: any destination is two
+ * levels down, where a submenu per kind of add and per way of sharing made four. Each group is a
+ * section under a label that can't be clicked.
+ */
 const buildMenu = (groups: Group[]) => {
   const nonEmpty = groups.filter((group) => group.destinations.length > 0);
   doneLabels = new Map(
     nonEmpty.flatMap((group) => group.destinations).map((d) => [`${d.kind}|${d.target}`, d.done]),
   );
-  for (const [draftId, item] of Object.entries(DRAFTS)) {
-    const offered = ATTACHES.has(draftId)
-      ? nonEmpty.filter((group) => group.destinations.every((d) => d.kind !== "send"))
-      : nonEmpty;
-    // Nowhere to choose from: the item itself adds to the Inbox
-    if (offered.length === 1) {
-      create({ id: `${draftId}|inbox`, ...item });
-      continue;
-    }
-    create({ id: draftId, ...item });
-    offered.forEach(({ submenu, destinations }, i) => {
-      const child = { parentId: draftId, contexts: item.contexts };
-      if (separatedFromPrevious(offered, i))
-        create({ id: `${draftId}|separator-${i}`, type: "separator", ...child });
-      // Outside the "draft|kind|target" ids, so clicking it adds nothing
-      const parentId = submenu ? `${draftId}:${submenu.id}` : draftId;
-      if (submenu) create({ id: parentId, title: submenu.title, ...child });
-      for (const d of destinations)
-        create({
-          id: [draftId, d.kind, d.target].filter(Boolean).join("|"),
-          title: d.title,
-          parentId,
-          contexts: item.contexts,
-        });
-    });
-  }
-  create({ id: `${OPEN.id}-separator`, type: "separator", contexts: OPEN.contexts });
   create(OPEN);
+  nonEmpty.forEach(({ label, destinations }, i) => {
+    create({ id: `separator-${i}`, type: "separator", contexts: CONTEXTS });
+    if (label) create({ id: `label-${i}`, title: label, enabled: false, contexts: CONTEXTS });
+    for (const d of destinations)
+      create({ id: [d.kind, d.target].filter(Boolean).join("|"), title: d.title, contexts: CONTEXTS });
+  });
 };
 
 // Firefox can update a menu as it opens; Chrome can't, so its lists and contacts are as of the
