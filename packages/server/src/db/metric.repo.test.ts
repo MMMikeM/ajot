@@ -20,7 +20,7 @@ beforeEach(async () => {
 });
 
 const countOf = async (name: string) =>
-  (await metricRepo.listSince(1)).find((row) => row.name === name)?.count;
+  (await db.query.metricCounts.findFirst({ where: { name } }))?.count;
 
 test("a full day takes no new names, but its names keep counting", async () => {
   const names = Array.from({ length: metricRepo.MAX_NAMES_A_DAY }, (_, i) => `name-${i}`);
@@ -31,5 +31,5 @@ test("a full day takes no new names, but its names keep counting", async () => {
 
   expect(await countOf("one-too-many")).toBeUndefined();
   expect(await countOf("name-0")).toBe(2);
-  expect(await metricRepo.listSince(1)).toHaveLength(metricRepo.MAX_NAMES_A_DAY);
+  expect(await db.$count(metricCounts)).toBe(metricRepo.MAX_NAMES_A_DAY);
 });

@@ -1,11 +1,9 @@
 import { sql } from "drizzle-orm";
 import { z } from "@hono/zod-openapi";
-import { createSelectSchema } from "drizzle-orm/zod";
 import { db } from "./client";
 import { metricCounts } from "./schema";
 
 export const nameSchema = z.string().regex(/^[a-z0-9:-]{1,64}$/);
-export const countSchema = createSelectSchema(metricCounts);
 
 const utcDay = (date = new Date()) => date.toISOString().slice(0, 10);
 
@@ -36,12 +34,4 @@ export const incrementIfRoom = async (name: string) => {
       OR (SELECT count(*) FROM ${metricCounts} WHERE day = ${day}) < ${MAX_NAMES_A_DAY}
     ON CONFLICT (name, day) DO UPDATE SET "count" = "count" + 1
   `);
-};
-
-export const listSince = (days: number) => {
-  const since = utcDay(new Date(Date.now() - (days - 1) * 86_400_000));
-  return db.query.metricCounts.findMany({
-    where: { day: { gte: since } },
-    orderBy: { day: "desc", name: "asc" },
-  });
 };

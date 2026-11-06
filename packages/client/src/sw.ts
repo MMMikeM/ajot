@@ -141,7 +141,7 @@ self.addEventListener("activate", (event: ExtendableEvent) => {
 });
 
 // Counted against the server's push-sent counts, so a push lost on the way, or arriving while
-// the app is open, shows up in /api/metrics
+// the app is open, shows up in the metric counts
 const count = async (name: string) => {
   const session = await readWorkerSession();
   if (!session) return;
