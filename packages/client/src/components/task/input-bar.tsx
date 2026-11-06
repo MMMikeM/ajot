@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { ChevronDown } from "lucide-react";
 import { AddTaskInput } from "./add-input";
 import { useCategories } from "~/lib/db/hooks";
+import { usePeople } from "~/lib/hooks/use-people";
 import { CollabBadge } from "~/components/category-nav/CollabBadge";
 import { addTask } from "~/lib/db/add-task";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
@@ -35,6 +36,7 @@ export function TaskInputBar() {
   const activeCategoryId = useActiveCategoryId();
   const currentUserId = useOptimisticUserId();
   const { data: rawCategories } = useCategories();
+  const people = usePeople();
   const { setNavOpen } = useNavContext();
   const barRef = useInputBarHeightVar();
 
@@ -72,7 +74,7 @@ export function TaskInputBar() {
         <span dir="auto" className="truncate font-medium text-foreground">
           {listName}
         </span>
-        {activeCategory && <CollabBadge category={activeCategory} currentUserId={currentUserId} />}
+        {activeCategory && <CollabBadge category={activeCategory} currentUserId={currentUserId} people={people} />}
         <ChevronDown size={14} className="shrink-0 text-hint" />
       </button>
       <AddTaskInput onAdd={handleAdd} />

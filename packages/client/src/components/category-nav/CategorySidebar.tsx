@@ -112,6 +112,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
     categories,
     activeCategoryId,
     currentUserId,
+    people,
     inboxCount,
     openCounts,
     handleAdd,
@@ -198,7 +199,7 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
                   <span dir="auto" className="min-w-0 truncate" title={cat.name}>
                     {cat.name}
                   </span>
-                  <CollabBadge category={cat} currentUserId={currentUserId} />
+                  <CollabBadge category={cat} currentUserId={currentUserId} people={people} />
                   <OpenCount
                     count={openCounts.get(cat.id) ?? 0}
                     className="transition-opacity group-hover/pill:opacity-0 pill-popup-open:opacity-0 pill-options-focus-visible:opacity-0"

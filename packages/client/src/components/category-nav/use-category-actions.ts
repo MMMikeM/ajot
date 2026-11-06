@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { usePeople } from "~/lib/hooks/use-people";
 import { Toast } from "@base-ui/react/toast";
 import { compareSortOrder } from "@newtab-todo/shared/sort-order";
 import {
@@ -24,6 +25,7 @@ export const useCategoryActions = () => {
   const activeCategoryId = useActiveCategoryId();
   const authUserId = useCurrentUserId();
   const currentUserId = useOptimisticUserId();
+  const people = usePeople();
   const toastManager = Toast.useToastManager();
   const [pendingDelete, setPendingDelete] = useState<PendingCategoryDelete | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -124,6 +126,7 @@ export const useCategoryActions = () => {
     categories,
     activeCategoryId,
     currentUserId,
+    people,
     inboxCount,
     openCounts,
     handleAdd,

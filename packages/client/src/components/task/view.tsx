@@ -16,6 +16,7 @@ import { useActiveCategoryId } from "~/lib/state/active-category";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { getEffectiveCategoryId } from "~/lib/effective-category";
 import { categoriesById } from "~/lib/task-holders";
+import { usePeople } from "~/lib/hooks/use-people";
 import { CategoryNav } from "~/components/category-nav";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
@@ -275,6 +276,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
     : [];
 
   const lists = categoriesById(rawCategories ?? []);
+  const people = usePeople();
 
   // Computed before loading guard so useDndActions always receives stable values
   const categoryTasks = (allTasks ?? []).filter(
@@ -340,6 +342,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
                   task={task}
                   subtasks={subtasksByParent.get(task.id) ?? NO_SUBTASKS}
                   lists={lists}
+                  people={people}
                   onOpen={onSelectTask}
                   onToggle={toggleActive}
                   onDelete={deleteActive}
@@ -367,6 +370,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
                       task={task}
                       subtasks={subtasksByParent.get(task.id) ?? NO_SUBTASKS}
                       lists={lists}
+                      people={people}
                       onOpen={onSelectTask}
                       onToggle={actions.handleToggle}
                       onDelete={actions.handleDelete}

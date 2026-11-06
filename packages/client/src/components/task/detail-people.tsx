@@ -5,7 +5,9 @@ import type { Task } from "~/lib/types";
 import { useContacts, moveToList, updateTask } from "~/lib/db/hooks";
 import { listChoices } from "~/lib/effective-category";
 import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
-import { holders, ownerNameOf, type CategoriesById } from "~/lib/task-holders";
+import { holders, type CategoriesById } from "~/lib/task-holders";
+import { ownerNameOf, type People } from "~/lib/people";
+import { usePeople } from "~/lib/hooks/use-people";
 import { shareTask, removeTaskShare } from "~/lib/actions";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import {
@@ -145,14 +147,19 @@ export const ParentCrumb = ({
  * Everyone who can see the task besides its owner: its shares, then its list's people. A
  * subtask's are its parent's.
  */
-const peopleOnTask = (task: Task, lists: CategoriesById, parent?: Task): Person[] => {
+const peopleOnTask = (
+  task: Task,
+  lists: CategoriesById,
+  people: People,
+  parent?: Task,
+): Person[] => {
   const root = parent ?? task;
   const category = root.categoryId ? lists.get(root.categoryId) : undefined;
   const names = new Map<string, string | undefined>(
     root.shares.map((s) => [s.sharedWithUserId, s.sharedWithUser.name]),
   );
   if (category) {
-    names.set(category.userId, category.user?.name);
+    names.set(category.userId, people.get(category.userId));
     for (const c of category.collaborators ?? []) names.set(c.userId, c.user.name);
   }
   return grants(holders(task, lists, parent)).flatMap(({ userId: id }) => {
@@ -163,12 +170,13 @@ const peopleOnTask = (task: Task, lists: CategoriesById, parent?: Task): Person[
 
 export const useSharing = (task: Task, lists: CategoriesById, parent?: Task) => {
   const userId = useOptimisticUserId();
+  const people = usePeople();
   const { data: contacts = [] } = useContacts();
   const category = task.categoryId ? lists.get(task.categoryId) : undefined;
   const isOwner = task.userId === userId;
   const sharedList = category?.collaborators?.length ? category : undefined;
   const sharedWithIds = new Set(task.shares.map((s) => s.sharedWithUserId));
-  const others = peopleOnTask(task, lists, parent);
+  const others = peopleOnTask(task, lists, people, parent);
   return {
     userId,
     isOwner,
@@ -233,13 +241,13 @@ export const SharingField = ({ task, sharing }: { task: Task; sharing: Sharing }
 export const SubtaskSharing = ({
   parent,
   sharing,
-  lists,
+  people,
 }: {
   parent: Task;
   sharing: Sharing;
-  lists: CategoriesById;
+  people: People;
 }) => {
-  const owner = { id: parent.userId, name: ownerNameOf(parent, lists) ?? "" };
+  const owner = { id: parent.userId, name: ownerNameOf(parent, people) ?? "" };
   const names = [owner, ...sharing.others]
     .filter((p) => p.id !== sharing.userId)
     .map((p) => p.name.trim())

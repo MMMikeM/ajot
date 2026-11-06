@@ -19,7 +19,8 @@ import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { useSwipeReveal } from "~/lib/hooks/use-swipe-reveal";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { canDeleteTask } from "@newtab-todo/shared/task-access";
-import { holders, ownerNameOf, type CategoriesById } from "~/lib/task-holders";
+import { holders, type CategoriesById } from "~/lib/task-holders";
+import { ownerNameOf, samePeople, type People } from "~/lib/people";
 import { isReadyToTick } from "~/lib/ready-to-tick";
 import { rowDragSensors } from "./row-drag";
 import { formatDueDate } from "~/lib/dates";
@@ -94,6 +95,7 @@ function TaskRow({
   onAddSubtask,
   subtasks = [],
   lists,
+  people,
   parent,
   hideDate,
   isSubtask,
@@ -109,6 +111,7 @@ function TaskRow({
   onAddSubtask: (task: Task, title: string) => void;
   subtasks?: Task[];
   lists: CategoriesById;
+  people: People;
   parent?: Task;
   hideDate?: boolean;
   isSubtask?: boolean;
@@ -123,7 +126,7 @@ function TaskRow({
   const showDate = !!due && (!hideDate || due.overdue);
   // In a shared list everyone sees every task, so only whose it is needs saying
   const reachesOthers = !isSubtask && (isInSharedCategory || task.shares.length > 0);
-  const ownerName = reachesOthers && !isOwned ? ownerNameOf(task, lists) : undefined;
+  const ownerName = reachesOthers && !isOwned ? ownerNameOf(task, people) : undefined;
   const owner = ownerName ? { id: task.userId, name: ownerName } : undefined;
   const sharedWith =
     reachesOthers && !isInSharedCategory && isOwned
@@ -480,6 +483,7 @@ function TaskRow({
                 disabled={isDone}
                 task={sub}
                 lists={lists}
+                people={people}
                 parent={task}
                 isSubtask
                 onOpen={onOpen}
@@ -544,7 +548,9 @@ const sameLists = (a: CategoriesById | undefined, b: CategoriesById | undefined)
  * those again on every render, and a row that compared them by identity would render with every
  * other row.
  */
-export const sameRowProps = <P extends { subtasks?: Task[]; lists?: CategoriesById }>(
+export const sameRowProps = <
+  P extends { subtasks?: Task[]; lists?: CategoriesById; people?: People },
+>(
   prev: P,
   next: P,
 ) => {
@@ -556,7 +562,9 @@ export const sameRowProps = <P extends { subtasks?: Task[]; lists?: CategoriesBy
         ? sameRows(prev.subtasks, next.subtasks)
         : key === "lists"
           ? sameLists(prev.lists, next.lists)
-          : Object.is(prev[key], next[key]),
+          : key === "people"
+            ? samePeople(prev.people, next.people)
+            : Object.is(prev[key], next[key]),
     )
   );
 };

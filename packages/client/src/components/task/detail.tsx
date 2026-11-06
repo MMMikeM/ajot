@@ -22,7 +22,9 @@ import { keepOpenOnToastPress } from "~/components/sheet-open-change";
 import { dockedSheet } from "~/components/docked-sheet";
 import { canDeleteTask, canEditTask, grants } from "@newtab-todo/shared/task-access";
 import { useCategoriesById } from "~/lib/hooks/use-categories-by-id";
-import { holders, ownerNameOf } from "~/lib/task-holders";
+import { holders } from "~/lib/task-holders";
+import { ownerNameOf } from "~/lib/people";
+import { usePeople } from "~/lib/hooks/use-people";
 import { isReadyToTick } from "~/lib/ready-to-tick";
 import { useTasks } from "~/lib/db/hooks";
 import { useTaskActions } from "~/components/task/use-actions";
@@ -132,7 +134,8 @@ const TaskDetailContent = ({
   const filing = useListFiling(task);
   const lists = useCategoriesById();
   const sharing = useSharing(task, lists, parent);
-  const ownerName = ownerNameOf(task, lists);
+  const people = usePeople();
+  const ownerName = ownerNameOf(task, people);
   const held = holders(task, lists, parent);
   const canEdit = canEditTask(held, userId);
   const attachments = useAttachmentsConfig();
@@ -292,7 +295,7 @@ const TaskDetailContent = ({
           {isTopLevel ? (
             <SharingField task={task} sharing={sharing} />
           ) : (
-            parent && <SubtaskSharing parent={parent} sharing={sharing} lists={lists} />
+            parent && <SubtaskSharing parent={parent} sharing={sharing} people={people} />
           )}
           <AssigneeField task={task} sharing={sharing} />
         </div>

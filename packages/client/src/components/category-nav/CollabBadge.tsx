@@ -1,5 +1,6 @@
 import { Users } from "lucide-react";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
+import type { People } from "~/lib/people";
 import type { Category } from "~/lib/types";
 import { listNames } from "~/lib/utils";
 
@@ -7,12 +8,14 @@ import { listNames } from "~/lib/utils";
 export function CollabBadge({
   category,
   currentUserId,
+  people,
 }: {
   category: Category;
   currentUserId: string;
+  people: People;
 }) {
   if (category.userId !== currentUserId) {
-    const owner = category.user?.name ?? "?";
+    const owner = people.get(category.userId) ?? "?";
     return (
       <>
         <span aria-hidden="true" className="shrink-0">

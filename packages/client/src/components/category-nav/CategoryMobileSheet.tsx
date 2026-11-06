@@ -47,6 +47,7 @@ function CategoryMobileSheet() {
     categories,
     activeCategoryId,
     currentUserId,
+    people,
     inboxCount,
     openCounts,
     handleAdd,
@@ -135,14 +136,14 @@ function CategoryMobileSheet() {
           <ColorDot color={cat.color ?? undefined} className="mt-1.5 self-start" />
           <span className="min-w-0 flex-1 wrap-anywhere">
             <span dir="auto">{cat.name}</span>
-            {!isOwned && cat.user?.name && (
+            {!isOwned && people.has(cat.userId) && (
               <span className="ml-1 text-xs font-normal text-hint">
-                · <span dir="auto">{cat.user.name}</span>
+                · <span dir="auto">{people.get(cat.userId)}</span>
               </span>
             )}
           </span>
           {/* For someone else's list the suffix already names the owner */}
-          {isOwned && <CollabBadge category={cat} currentUserId={currentUserId} />}
+          {isOwned && <CollabBadge category={cat} currentUserId={currentUserId} people={people} />}
           <OpenCount count={openCounts.get(cat.id) ?? 0} />
         </button>
 
