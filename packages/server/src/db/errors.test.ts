@@ -4,7 +4,7 @@ import { IdTakenError, InsertFailedError, NotFoundError, StaleUpdateError } from
 describe("errors a person may be shown", () => {
   test.each([
     [new NotFoundError("task", "tsk_123"), 404],
-    [new NotFoundError("username", "bob"), 404],
+    [new NotFoundError("contact", "bob"), 404],
     [new StaleUpdateError("task", "tsk_123"), 409],
     [new IdTakenError("task", "tsk_123"), 409],
     [new InsertFailedError("task share"), 500],

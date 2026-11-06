@@ -31,9 +31,9 @@ export const removeMany = async (endpoints: string[]) => {
 
 type PushSubscriptionKind = (typeof pushSubscriptions.$inferSelect)["kind"];
 
-export const findForUsers = async (userIds: string[], kind?: PushSubscriptionKind) => {
+export const findForUsers = async (userIds: string[]) => {
   if (userIds.length === 0) return [];
-  return db.query.pushSubscriptions.findMany({ where: { kind, userId: { in: userIds } } });
+  return db.query.pushSubscriptions.findMany({ where: { userId: { in: userIds } } });
 };
 
 export const findByKind = async (kind: PushSubscriptionKind) =>

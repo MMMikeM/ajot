@@ -119,15 +119,6 @@ export const list = async (userId: string) =>
     orderBy: { sortOrder: "asc", createdAt: "asc" },
   });
 
-export const findById = async (id: string, { deleted = false } = {}) => {
-  const row = await db.query.tasks.findFirst({
-    where: deleted ? { id } : { id, deletedAt: { isNull: true } },
-    columns: hidden,
-  });
-  if (!row) throw new NotFoundError("task", id);
-  return row;
-};
-
 /** A row per way in. */
 export const accessTo = async (taskIds: string[]) =>
   taskIds.length === 0
@@ -299,13 +290,6 @@ export const findListItem = async (id: string) => {
   if (!row) throw new NotFoundError("task", id);
   return row;
 };
-
-export const findListItemWithSubtasks = async (id: string) =>
-  db.query.tasks.findMany({
-    where: { OR: [{ id }, { parentId: id }], deletedAt: { isNull: true } },
-    columns: hidden,
-    with: listItemWith,
-  });
 
 export const findListItems = async (ids: string[]) => {
   if (ids.length === 0) return [];

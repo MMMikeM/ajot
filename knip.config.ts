@@ -31,6 +31,9 @@ export default {
       // The pack block in vite.config.ts bundles these, which knip doesn't read
       entry: ["src/index.ts", "src/reset-password.ts", "src/bucket-setup.ts"],
       project: ["src/**/*.{ts,tsx}"],
+      // package.json exports the repos the client takes types from, which makes them entry files,
+      // whose unused exports knip otherwise skips
+      includeEntryExports: true,
     },
     "packages/shared": {
       project: ["src/**/*.{ts,tsx}"],

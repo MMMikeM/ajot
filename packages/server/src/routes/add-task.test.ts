@@ -31,7 +31,7 @@ const add = async (id: string, fields: object = {}) => {
   expect(res.status).toBe(200);
 };
 
-const storedSortOrder = async (id: string) => (await taskRepo.findById(id))?.sortOrder;
+const storedSortOrder = async (id: string) => (await taskRepo.findListItem(id)).sortOrder;
 
 beforeAll(async () => {
   await userRepo.insert({ id: "alice", name: "Alice", username: "alice", passwordHash: "x" });

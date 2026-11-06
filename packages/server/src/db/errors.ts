@@ -12,7 +12,6 @@ const goneMessages = {
   note: "That note no longer exists.",
   attachment: "That file no longer exists.",
   user: "That account no longer exists.",
-  username: "No one here has that username.",
   contact: "They're no longer one of your contacts.",
   "removed contact": "That can no longer be undone.",
   "category collaborator": "They're no longer in this list.",
