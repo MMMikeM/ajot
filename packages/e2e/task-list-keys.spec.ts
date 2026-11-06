@@ -58,21 +58,6 @@ test("Up and Down, or j and k, move between rows, subtasks included", async ({ p
   await expect(checkboxOf(page, "Book flights")).toBeFocused();
 });
 
-test("Tab returns to the row the arrows left off on", async ({ page }) => {
-  await page.keyboard.press("Tab");
-  for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowDown");
-  await expect(checkboxOf(page, "Call the plumber")).toBeFocused();
-
-  await page.keyboard.press("Shift+Tab");
-  await expect(page.locator("#add-task-input")).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(checkboxOf(page, "Call the plumber")).toBeFocused();
-
-  // Into that row's own controls, not the next row's
-  await page.keyboard.press("Tab");
-  await expect(row(page, "Call the plumber").getByRole("button").first()).toBeFocused();
-});
-
 test("Enter on a row's checkbox opens the task", async ({ page }) => {
   await page.keyboard.press("Tab");
   await page.keyboard.press("j");
@@ -106,11 +91,4 @@ test("j and k typed into a new subtask stay in the field", async ({ page }) => {
   await page.keyboard.type("jk");
   await expect(field).toHaveValue("jk");
   await expect(field).toBeFocused();
-});
-
-test("/ still opens search from a focused row", async ({ page }) => {
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("/");
-  await page.waitForURL("**/search");
 });

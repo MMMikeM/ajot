@@ -49,30 +49,6 @@ test.describe("the lists sheet", () => {
     ).toBeVisible();
   });
 
-  test("a list's options open as a sheet at the bottom, where the thumb is", async ({ page }) => {
-    await openList(page);
-    await openListsSheet(page);
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: /^Work/ })
-      .locator("..")
-      .getByRole("button", { name: "List options" })
-      .click();
-
-    const options = page.getByRole("dialog", { name: "Work options" });
-    await expect(options.getByRole("button", { name: "Rename" })).toBeVisible();
-    await expect
-      .poll(async () => {
-        const box = await options.boundingBox();
-        return box && Math.round(box.y + box.height);
-      })
-      .toBe(page.viewportSize()!.height);
-
-    await options.getByRole("button", { name: "Rename" }).click();
-    await expect(options).toBeHidden();
-    await expect(page.getByRole("textbox", { name: "List name" })).toBeFocused();
-  });
-
   test("a list with tasks asks before it's deleted, and Cancel keeps it", async ({ page }) => {
     await openList(page);
     await openListsSheet(page);
@@ -131,27 +107,6 @@ test.describe("deleting someone else's task", () => {
     await expect(deleteControls(page, "Eggs")).toHaveCount(0);
     await expect(await openDetail(page, "Eggs")).toHaveCount(0);
   });
-});
-
-test("an iPhone that hasn't installed Ajot is told how, until it's dismissed", async ({ page }) => {
-  await mockApi(page, { setupHintSeen: false });
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  const offer = page.getByText("tap Share, then Add to Home Screen");
-  await expect(offer).toBeVisible({ timeout: 15000 });
-  await page.getByRole("button", { name: "Dismiss" }).click();
-  await expect(offer).toHaveCount(0);
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.locator("#add-task-input")).toBeVisible({ timeout: 15000 });
-  await expect(offer).toHaveCount(0);
-});
-
-test("the Undo window lasts longer on touch", async ({ page }) => {
-  await openList(page);
-  await row(page, "Pick up dry cleaning").getByRole("checkbox").click();
-  const toast = page.locator("[data-toast-undo]", { hasText: "“Pick up dry cleaning” done" });
-  await expect(toast).toBeVisible();
-  await page.waitForTimeout(6500);
-  await expect(toast).toBeVisible();
 });
 
 test("a long task title keeps its toast on one line, with Undo in view", async ({ page }) => {

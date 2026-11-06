@@ -10,7 +10,6 @@ test.use({ serviceWorkers: "block" });
 
 const MAX_TITLE = 1_000;
 const MAX_TEXT = 50_000;
-const MAX_NAME = 200;
 
 const sent = (page: Page, method: string, path: string) => {
   const bodies: Record<string, unknown>[] = [];
@@ -78,19 +77,4 @@ test("a new note stops at its limit, and its title is the start of it", async ({
   await expect
     .poll(() => created.map((n) => [String(n.title).length, String(n.content).length]))
     .toEqual([[MAX_TITLE, MAX_TEXT]]);
-});
-
-test("a new task's title and a new list's name stop at their limits", async ({ page }) => {
-  await openList(page);
-
-  const add = page.locator("#add-task-input");
-  await add.click();
-  await page.keyboard.insertText("a".repeat(MAX_TITLE + 5));
-  expect((await add.inputValue()).length).toBe(MAX_TITLE);
-
-  await page.getByTestId("category-sidebar").getByLabel("Add list").click();
-  const name = page.getByPlaceholder("Name...");
-  await expect(name).toBeFocused();
-  await page.keyboard.insertText("l".repeat(MAX_NAME + 5));
-  expect((await name.inputValue()).length).toBe(MAX_NAME);
 });

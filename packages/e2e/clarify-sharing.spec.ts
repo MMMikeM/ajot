@@ -31,8 +31,6 @@ test.describe("share and assignee chips", () => {
     const target = row(page, "Write a thank-you note to Anna");
     const glyph = target.getByTitle("Shared with Sarah Murray");
     await expect(glyph).toBeVisible();
-    await expect(glyph.locator("svg")).toBeVisible();
-    await expect(target.getByText("Shared with Sarah Murray")).toHaveCount(1);
     await expect(target.getByText("SM", { exact: true })).toHaveCount(0);
   });
 

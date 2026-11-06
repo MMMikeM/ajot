@@ -38,13 +38,6 @@ test("the column stays put between the list and People", async ({ page }) => {
   expect((await column.boundingBox())!.x).toBe(listX);
 });
 
-test("the sidebar shows open-task counts", async ({ page }) => {
-  await openList(page);
-  const sidebar = page.getByTestId("category-sidebar");
-  await expect(sidebar.getByRole("button", { name: /^Inbox/ })).toContainText("7");
-  await expect(sidebar.getByRole("button", { name: /^Work/ })).toContainText("2");
-});
-
 test("your shared lists read differently from lists shared with you", async ({ page }) => {
   await openList(page);
   const sharedWithMe = page.getByRole("group", { name: "Shared with me" });

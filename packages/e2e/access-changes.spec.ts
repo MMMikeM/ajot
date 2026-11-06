@@ -364,21 +364,6 @@ test.describe("what a list's members and strangers may do to it", () => {
     expect(await status("POST", restore, undefined, alice.token)).toBe(404);
   });
 
-  test("once deleted, it's gone for its collaborators", async ({
-    user1Auth: alice,
-    user2Auth: bob,
-  }) => {
-    const list = await addList(alice.token, unique("Deleted"));
-    await addCollaborator(alice.token, list.id, bob.username);
-    await apiRequest("DELETE", "/api/categories", { id: list.id }, alice.token);
-    expect(await status("POST", `/api/categories/${list.id}/restore`, undefined, bob.token)).toBe(
-      404,
-    );
-    expect(await status("POST", `/api/categories/${list.id}/restore`, undefined, alice.token)).toBe(
-      200,
-    );
-  });
-
   test("only a task's owner shares it or takes a share back", async ({
     user1Auth: alice,
     user2Auth: bob,

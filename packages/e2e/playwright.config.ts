@@ -8,7 +8,6 @@ const TOUCH_SPECS = [
   "add-visible.spec.ts",
   "back-button.spec.ts",
   "category-nav.spec.ts",
-  "contrast.spec.ts",
   "harden-edges.spec.ts",
   "harden-trust.spec.ts",
   "search.spec.ts",

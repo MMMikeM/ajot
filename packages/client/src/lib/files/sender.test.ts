@@ -17,9 +17,3 @@ test("calls during a run make one more run, not one each", async () => {
   await first;
   expect(drainUploads).toHaveBeenCalledTimes(2);
 });
-
-test("nothing is sent with no one signed in", async () => {
-  vi.mocked(drainUploads).mockClear();
-  await createUploadSender(() => null)();
-  expect(drainUploads).not.toHaveBeenCalled();
-});

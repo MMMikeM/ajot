@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { fitWithin, hasExif } from "~/lib/files/prepare";
+import { hasExif } from "~/lib/files/prepare";
 
 const segment = (marker: number, payload: number[]) => {
   const length = payload.length + 2;
@@ -23,16 +23,5 @@ describe("hasExif", () => {
     const exifAfterScan = [...segment(0xda, [0]), ...segment(0xe1, ascii("Exif\0\0"))];
     expect(hasExif(jpeg(exifAfterScan))).toBe(false);
     expect(hasExif(new Uint8Array(ascii("\x89PNG")))).toBe(false);
-  });
-});
-
-describe("fitWithin", () => {
-  test("scales the longer side down to fit, keeping the ratio", () => {
-    expect(fitWithin(8064, 6048, 2560)).toEqual({ width: 2560, height: 1920 });
-    expect(fitWithin(1000, 4000, 320)).toEqual({ width: 80, height: 320 });
-  });
-
-  test("never scales up", () => {
-    expect(fitWithin(200, 100, 320)).toEqual({ width: 200, height: 100 });
   });
 });

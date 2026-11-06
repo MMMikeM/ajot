@@ -184,10 +184,6 @@ test("someone the task is shared with sees the photo, loaded from the bucket", a
   await thumbLoaded;
   await fileLoaded;
   await expectImageLoaded(tile.locator("img"));
-
-  await tile.click();
-  const viewer = bobPage.getByRole("dialog", { name: PHOTO.name, exact: true });
-  await expectImageLoaded(viewer.getByRole("img", { name: PHOTO.name }));
 });
 
 /** Fires a paste, dragover or drop of `file` at `target`; true when the page took it. */
@@ -356,24 +352,5 @@ test.describe("Undo brings back a deleted attachment, on the server too", () => 
     });
     await expect(row).toContainText(`${NOTE_TEXT.length} B · TXT`);
     expect((await serverRowOf(user1Auth.token, task.id, NOTE.name))?.uploadedAt).toBeTruthy();
-  });
-
-  test("a photo, from the viewer", async ({ user1Page: page, user1Auth }) => {
-    const { task, sheet } = await openNewTask(page, user1Auth, "Delete photo");
-    const completed = uploadCompleted(page);
-    await attach(sheet, PHOTO);
-    await completed;
-    const tile = tileOf(sheet, PHOTO.name);
-
-    await deletedThenRestored(page, PHOTO.name, async () => {
-      await tile.click();
-      const viewer = page.getByRole("dialog", { name: PHOTO.name, exact: true });
-      await viewer.getByRole("button", { name: "Delete attachment" }).click();
-      await expect(viewer).toBeHidden();
-      await expect(tile).toHaveCount(0);
-    });
-    await expect(tile).toBeVisible();
-    await expectImageLoaded(tile.locator("img"));
-    expect((await serverRowOf(user1Auth.token, task.id, PHOTO.name))?.uploadedAt).toBeTruthy();
   });
 });

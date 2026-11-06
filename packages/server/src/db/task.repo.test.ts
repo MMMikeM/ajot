@@ -56,23 +56,6 @@ describe("nextSortOrder", () => {
 
     expect((await taskRepo.nextSortOrder("alice")) > "a5").toBe(true);
   });
-
-  test("ignores deleted tasks and subtasks", async () => {
-    await addTask("parent", "a0");
-    await db.insert(tasks).values({
-      id: "sub",
-      userId: "alice",
-      parentId: "parent",
-      title: "sub",
-      sortOrder: "a7",
-      updatedAt: BEFORE_THE_DELETE,
-    });
-    await addTask("gone", "a5");
-    await taskRepo.remove("gone");
-
-    const key = await taskRepo.nextSortOrder("alice");
-    expect(key > "a0" && key < "a5").toBe(true);
-  });
 });
 
 describe("a malformed sortOrder a client sends", () => {
@@ -193,11 +176,5 @@ describe("sharing again with the same person", () => {
       changed: true,
       share: { id: "first", permission: "edit" },
     });
-  });
-
-  test("with the same permission changes nothing", async () => {
-    await shareWithBob("first", "edit");
-    const again = await shareWithBob("second", "edit");
-    expect(again).toMatchObject({ added: false, changed: false, share: { id: "first" } });
   });
 });

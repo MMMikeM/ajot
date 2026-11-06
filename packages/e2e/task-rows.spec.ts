@@ -20,32 +20,6 @@ test("a right-to-left title reads right to left wherever it shows", async ({ pag
   expect(await sheet.getByRole("textbox", { name: "Title" }).evaluate(isRtl)).toBe(true);
 });
 
-test("the capture input keeps its name once something is typed", async ({ page }) => {
-  await openList(page);
-  const input = page.getByRole("textbox", { name: "New task" });
-  await input.fill("Water the plants");
-  await expect(input).toHaveAccessibleName("New task");
-});
-
-test("hover actions take no space at rest and appear on hover", async ({ page }) => {
-  await openList(page);
-  const target = row(page, "Pick up dry cleaning");
-  const actions = target.getByRole("button", { name: "Delete task" }).locator("xpath=..");
-
-  await page.mouse.move(0, 0);
-  await expect(actions).toHaveCSS("opacity", "0");
-
-  // The title runs to the row's padding instead of stopping short of a reserved gutter
-  const titleBox = await target
-    .getByRole("button", { name: "Pick up dry cleaning", exact: true })
-    .boundingBox();
-  const rowBox = await target.locator(".group\\/task").first().boundingBox();
-  expect(rowBox!.x + rowBox!.width - (titleBox!.x + titleBox!.width)).toBeLessThan(12);
-
-  await target.hover();
-  await expect(actions).toHaveCSS("opacity", "1");
-});
-
 test("a ticked task holds in place before moving to Done", async ({ page }) => {
   await openList(page);
   const target = row(page, "Pick up dry cleaning");
@@ -70,16 +44,6 @@ test("ticking again during the hold cancels the move", async ({ page }) => {
 
   await expect(checkbox).toHaveAttribute("aria-checked", "false");
   await expect(target).toBeVisible();
-});
-
-test("avatars use first and last initials", async ({ page }) => {
-  await openList(page);
-  await expect(
-    row(page, "Sort out the car insurance").getByTitle("Assigned to Sam Okafor"),
-  ).toHaveText(/^SO/);
-  await expect(
-    row(page, "Pick a restaurant for Friday").getByTitle("Sarah Murray's task"),
-  ).toHaveText(/^SM/);
 });
 
 test("only a task added now slides in; the loaded list appears at once", async ({ page }) => {

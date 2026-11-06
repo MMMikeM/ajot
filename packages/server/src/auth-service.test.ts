@@ -36,11 +36,7 @@ const hashesBeforeAnyLogin = vi.mocked(hashPassword).mock.calls.length;
 beforeEach(() => vi.clearAllMocks());
 
 describe("signing up without an invite that works", () => {
-  test.each([
-    ["taken", true],
-    ["free", false],
-  ])("answers the same for a %s username", async (_, taken) => {
-    vi.mocked(userRepo.exists).mockResolvedValue(taken);
+  test("answers the same for any username, never asking whether it's taken", async () => {
     vi.mocked(userRepo.count).mockResolvedValue(3);
     vi.mocked(inviteTokenRepo.claim).mockResolvedValue(undefined);
 

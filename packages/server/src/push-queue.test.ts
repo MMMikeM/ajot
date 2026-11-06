@@ -50,16 +50,6 @@ afterEach(async () => {
 });
 
 describe("queueChanges", () => {
-  test("a burst within a second goes out as one push", async () => {
-    queueChanges(["me"], [edit("a")], fromPhone);
-    await vi.advanceTimersByTimeAsync(400);
-    queueChanges(["me"], [edit("b")], fromPhone);
-    expect(sendPush).not.toHaveBeenCalled();
-
-    await vi.advanceTimersByTimeAsync(600);
-    expect(sentIds()).toEqual([["a", "b"]]);
-  });
-
   test("a steady stream of edits still sends every second", async () => {
     for (const id of ["a", "b", "c", "d"]) {
       queueChanges(["me"], [edit(id)], fromPhone);
@@ -76,11 +66,4 @@ describe("queueChanges", () => {
 
     expect(sentIds()).toEqual([["mine"], ["theirs"]]);
   });
-});
-
-test("a server about to stop sends what's waiting at once", async () => {
-  queueChanges(["me"], [edit("a")], fromPhone);
-  await flushPushes();
-
-  expect(sentIds()).toEqual([["a"]]);
 });

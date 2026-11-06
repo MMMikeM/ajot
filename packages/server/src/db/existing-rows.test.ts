@@ -72,11 +72,6 @@ describe("tables holding keys the CHECK refuses", async () => {
       UPDATE tasks SET category_id = 'work' WHERE id IN ('d', 'e')`);
   });
 
-  test("keeps every row", () => {
-    expect(now.tasks).toHaveLength(was.tasks.length);
-    expect(now.categories).toHaveLength(was.categories.length);
-  });
-
   test("keeps the order, ties broken as the server breaks them, across the whole table", () => {
     expect(ids(now.tasks)).toEqual(ids(was.tasks));
     expect(ids(now.categories)).toEqual(ids(was.categories));

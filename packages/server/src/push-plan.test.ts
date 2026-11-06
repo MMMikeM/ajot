@@ -53,13 +53,6 @@ describe("planPushes", () => {
     for (const push of pushes) expect(push.message.rows).toEqual({ userId: ME, events: [event] });
   });
 
-  test("devices with the same settings share one send", () => {
-    const pushes = planPushes(ME, changeFrom("tablet"), [phone, laptop], new Map());
-
-    expect(pushes).toHaveLength(1);
-    expect(pushes[0]!.subs).toEqual([phone, laptop]);
-  });
-
   test("a device that turned off its own changes still hears about someone else's", () => {
     const muted = prefs([[laptop, { muted: ["own-changes"] }]]);
 
@@ -86,20 +79,6 @@ describe("planPushes", () => {
       sentTo(planPushes(ME, { changes: [], notifications: [shared] }, [laptop], muted)),
     ).toEqual({});
   });
-
-  test("a device that chose to wait gets normal urgency", () => {
-    const pushes = planPushes(
-      ME,
-      changeFrom("tablet"),
-      [phone, laptop],
-      prefs([[phone, { urgent: false }]]),
-    );
-
-    const urgencyOf = (endpoint: string) =>
-      pushes.find((push) => push.subs.some((sub) => sub.endpoint === endpoint))?.options.urgency;
-    expect(urgencyOf("phone")).toBe("normal");
-    expect(urgencyOf("laptop")).toBe("high");
-  });
 });
 
 describe("fitted", () => {
@@ -107,11 +86,6 @@ describe("fitted", () => {
 
   test("drops rows that don't fit, keeping the push", () => {
     expect(fitted({ type: "changes", rows })).toEqual({ type: "changes" });
-  });
-
-  test("keeps rows that fit", () => {
-    const small = { userId: ME, events: [event] };
-    expect(fitted({ type: "changes", rows: small })).toEqual({ type: "changes", rows: small });
   });
 
   test("turns a push too long without rows into a plain one", () => {

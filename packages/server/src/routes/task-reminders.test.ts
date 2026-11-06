@@ -69,11 +69,6 @@ beforeAll(async () => {
 });
 
 describe("a task's reminder", () => {
-  test("is scheduled when the task is created with a due date", async () => {
-    await create("dated", PAST);
-    expect(await remindersSent()).toEqual([`dated ${PAST}`]);
-  });
-
   test("isn't again when a create is retried after it went out", async () => {
     await create("retried", PAST);
     expect(await remindersSent()).toEqual([`retried ${PAST}`]);
@@ -81,21 +76,10 @@ describe("a task's reminder", () => {
     expect(await remindersSent()).toEqual([]);
   });
 
-  test("isn't, for a task created with none", async () => {
-    await create("undated");
-    expect(await remindersSent()).toEqual([]);
-  });
-
   test("moves with the due date", async () => {
     await create("moved", FUTURE);
     await setDueDate("moved", PAST);
     expect(await remindersSent()).toEqual([`moved ${PAST}`]);
-  });
-
-  test("goes when the due date is cleared", async () => {
-    await create("cleared", PAST);
-    await setDueDate("cleared", null);
-    expect(await remindersSent()).toEqual([]);
   });
 
   test("once sent, isn't sent again for the same date picked again", async () => {

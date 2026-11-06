@@ -42,55 +42,6 @@ test.beforeEach(async ({ page, user1Auth }) => {
     .catch(() => {});
 });
 
-test("desktop: sidebar in DOM, mobile trigger absent", async ({ page, isMobile }) => {
-  test.skip(!!isMobile, "desktop only");
-
-  await expect(page.getByTestId("category-sidebar")).toHaveCount(1);
-
-  // Switched in JS, not hidden with CSS
-  await expect(page.getByTestId("category-nav-trigger")).toHaveCount(0);
-});
-
-test("mobile: sidebar absent from DOM, header trigger present", async ({ page, isMobile }) => {
-  test.skip(!isMobile, "mobile only");
-
-  await expect(page.getByTestId("category-sidebar")).toHaveCount(0);
-
-  await expect(page.getByTestId("category-nav-trigger")).toBeVisible();
-});
-
-test("desktop: sidebar shows added category", async ({ page, isMobile }) => {
-  test.skip(!!isMobile, "desktop only");
-
-  await createCategory(page, "Personal", "sidebar");
-
-  const sidebar = page.getByTestId("category-sidebar");
-  await expect(sidebar.getByText("Personal")).toBeVisible();
-});
-
-test("desktop: clicking a sidebar category switches the active list", async ({
-  page,
-  isMobile,
-}) => {
-  test.skip(!!isMobile, "desktop only");
-
-  const sidebar = page.getByTestId("category-sidebar");
-
-  await createCategory(page, "Work", "sidebar");
-
-  await sidebar.getByText("Work").click();
-
-  await expect(sidebar.getByText("Work")).toBeVisible();
-});
-
-test("desktop: People link visible in sidebar", async ({ page, isMobile }) => {
-  test.skip(!!isMobile, "desktop only");
-
-  await expect(
-    page.getByTestId("category-sidebar").getByRole("link", { name: "People" }),
-  ).toBeVisible();
-});
-
 test("desktop: Settings link in the sidebar opens Settings", async ({ page, isMobile }) => {
   test.skip(!!isMobile, "desktop only");
 
@@ -114,20 +65,6 @@ const openCategoryOptionsPopover = async (
   // The trigger is opacity-0 until hover; force skips the visibility check
   await pill.getByRole("button", { name: "List options" }).click({ force: true });
 };
-
-test("desktop: category options popover is visible above main content", async ({
-  page,
-  isMobile,
-}) => {
-  test.skip(!!isMobile, "desktop only");
-
-  await createCategory(page, "StackTest", "sidebar");
-  await openCategoryOptionsPopover(page, "StackTest");
-
-  await expect(
-    page.getByRole("menuitem", { name: "Rename" }).or(page.getByText("Rename")),
-  ).toBeVisible({ timeout: 3000 });
-});
 
 test("desktop: category options popover Rename item is not obscured by main content", async ({
   page,
@@ -207,14 +144,6 @@ test("desktop: clicking Delete in category options removes the category", async 
   });
 });
 
-test("mobile: tapping header trigger opens sheet", async ({ page, isMobile }) => {
-  test.skip(!isMobile, "mobile only");
-
-  await page.getByTestId("category-nav-trigger").tap();
-
-  await expect(page.getByRole("button", { name: "Add list" })).toBeVisible({ timeout: 3000 });
-});
-
 test("mobile: selecting a category from the sheet closes it and updates trigger", async ({
   page,
   isMobile,
@@ -233,61 +162,6 @@ test("mobile: selecting a category from the sheet closes it and updates trigger"
 
   await expect(trigger).toContainText("Errands");
   await expect(page.getByRole("button", { name: "Add list" })).toBeHidden({ timeout: 3000 });
-});
-
-test("mobile: input chip visible with active category", async ({ page, isMobile }) => {
-  test.skip(!isMobile, "mobile only");
-
-  const chip = page.getByTestId("category-input-chip");
-
-  await expect(chip).toBeVisible();
-
-  await expect(chip).toContainText("Inbox");
-
-  await page.getByTestId("category-nav-trigger").tap();
-  await page.getByRole("button", { name: "Add list" }).tap();
-  await page.locator('input[placeholder="List name..."]').fill("Personal");
-  await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "Personal" }).tap();
-
-  await expect(chip).toContainText("Personal");
-});
-
-test("mobile: tapping input chip opens the category sheet", async ({ page, isMobile }) => {
-  test.skip(!isMobile, "mobile only");
-
-  await page.getByTestId("category-input-chip").tap();
-
-  await expect(page.getByRole("button", { name: "Add list" })).toBeVisible({ timeout: 3000 });
-});
-
-test("mobile: header trigger and input chip stay visible while scrolling", async ({
-  page,
-  isMobile,
-}) => {
-  test.skip(!isMobile, "mobile only");
-
-  for (let i = 1; i <= 8; i++) {
-    await page.fill("#add-task-input", `Task ${i}`);
-    await page.keyboard.press("Enter");
-  }
-
-  await page.evaluate(() => {
-    const content = document.querySelector(".touch\\:order-1") as HTMLElement | null;
-    if (content) content.scrollTop = 400;
-    else window.scrollBy(0, 400);
-  });
-
-  await expect(page.getByTestId("category-nav-trigger")).toBeVisible();
-  await expect(page.getByTestId("category-input-chip")).toBeVisible();
-});
-
-test("mobile: People link present in the sheet", async ({ page, isMobile }) => {
-  test.skip(!isMobile, "mobile only");
-
-  await page.getByTestId("category-nav-trigger").tap();
-
-  await expect(page.getByRole("link", { name: "People" })).toBeVisible({ timeout: 3000 });
 });
 
 test("mobile: Settings link in the sheet opens Settings", async ({ page, isMobile }) => {

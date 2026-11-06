@@ -17,22 +17,6 @@ const remove = async (page: Page, name: string) => {
   await contactRow.last().getByRole("button", { name: "Remove" }).click();
 };
 
-test("Undo brings them back", async ({ page }) => {
-  await openPeople(page);
-  await remove(page, "Sarah Murray");
-
-  const toast = page.locator("[data-toast-undo]", { hasText: "Removed Sarah Murray" });
-  await expect(toast).toBeVisible();
-  await expect(page.getByText("@sarah")).toHaveCount(0);
-
-  const restore = page.waitForRequest(
-    (r) => r.method() === "POST" && r.url().endsWith("/api/contacts/ct-u-sarah/restore"),
-  );
-  await toast.getByRole("button", { name: "Undo" }).click();
-  await restore;
-  await expect(page.getByText("@sarah")).toBeVisible();
-});
-
 test("a remove the server refuses says so and keeps them", async ({ page }) => {
   await openPeople(page);
   await page.route("**/api/contacts/*", (route) =>

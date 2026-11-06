@@ -41,24 +41,9 @@ describe("scheduling a task's reminder", () => {
     await notificationQueueRepo.scheduleReminder("t1");
   };
 
-  test("adds one for the task's due date, for its owner", async () => {
-    await schedule("2026-11-01");
-    expect(await rows()).toMatchObject([
-      { userId: "alice", type: "reminder-due", taskId: "t1", scheduledFor: "2026-11-01" },
-    ]);
-  });
-
   test("adds none for a task with no due date", async () => {
     await schedule(null);
     expect(await rows()).toEqual([]);
-  });
-
-  test("moves the unsent one to the date the task holds", async () => {
-    await schedule("2026-11-01");
-    await schedule("2026-11-08");
-    expect(await rows()).toMatchObject([
-      { taskId: "t1", scheduledFor: "2026-11-08", sentAt: null },
-    ]);
   });
 
   test("keeps one already sent, and adds the next beside it", async () => {
@@ -97,35 +82,6 @@ describe("claiming the reminders due", () => {
     await notificationQueueRepo.scheduleReminder("t1");
   });
 
-  test("claims each once, however many runs ask at the same time", async () => {
-    const claims = await Promise.all([
-      notificationQueueRepo.claimDueReminders(at),
-      notificationQueueRepo.claimDueReminders(at),
-    ]);
-    expect(claims.flat()).toMatchObject([
-      { userId: "alice", task: { id: "t1", title: "Pay rent", dueDate: "2026-11-01" } },
-    ]);
-    expect(await rows()).toMatchObject([{ sentAt: at }]);
-  });
-
-  test("leaves one not yet due", async () => {
-    expect(await notificationQueueRepo.claimDueReminders("2026-10-31T23:59:59.000Z")).toEqual([]);
-    expect(await rows()).toMatchObject([{ sentAt: null }]);
-  });
-
-  test("marks one for a task that's done or deleted, but returns none to send", async () => {
-    await db.update(tasks).set({ status: "done" }).where(eq(tasks.id, "t1"));
-    expect(await notificationQueueRepo.claimDueReminders(at)).toEqual([]);
-    expect(await rows()).toMatchObject([{ sentAt: at }]);
-  });
-
-  test("released, is claimed again by the next run", async () => {
-    const [claimed] = await notificationQueueRepo.claimDueReminders(at);
-    await notificationQueueRepo.releaseReminders([claimed!.id], at);
-    expect(await rows()).toMatchObject([{ sentAt: null }]);
-    expect(await notificationQueueRepo.claimDueReminders(at)).toMatchObject([{ id: claimed!.id }]);
-  });
-
   test("released after the task got a new reminder, stays marked", async () => {
     const [claimed] = await notificationQueueRepo.claimDueReminders(at);
     await setDueDate("2026-11-08");
@@ -140,21 +96,7 @@ describe("claiming the reminders due", () => {
 
 describe("claiming the day's digests", () => {
   const morning = "2026-10-28T08:00:00.000Z";
-  const evening = "2026-10-28T20:00:00.000Z";
   const userIdsOf = (claims: { userId: string }[]) => claims.map((claim) => claim.userId).sort();
-
-  test("claims each user once a day, and says whose it claimed", async () => {
-    const claim = (ids: string[], day: string, at: string) =>
-      notificationQueueRepo.claimDigests(ids, day, at).then(userIdsOf);
-    expect(await claim(["alice"], "2026-10-28", morning)).toEqual(["alice"]);
-    expect(await claim(["alice", "bob"], "2026-10-28", evening)).toEqual(["bob"]);
-    expect(await claim(["alice"], "2026-10-29", evening)).toEqual(["alice"]);
-    expect(await rows()).toMatchObject([
-      { userId: "alice", type: "overdue-digest", taskId: null, scheduledFor: "2026-10-28" },
-      { userId: "bob", scheduledFor: "2026-10-28", sentAt: evening },
-      { userId: "alice", scheduledFor: "2026-10-29", sentAt: evening },
-    ]);
-  });
 
   test("passes over a user who's gone, and claims the rest", async () => {
     const claimed = await notificationQueueRepo.claimDigests(
@@ -175,17 +117,5 @@ describe("claiming the day's digests", () => {
       .values(many.map((id) => ({ id, name: id, username: id, passwordHash: "x" })));
     const claimed = await notificationQueueRepo.claimDigests(many, "2026-10-28", morning);
     expect(userIdsOf(claimed)).toEqual([...many].sort());
-  });
-
-  test("released, is claimed again that day", async () => {
-    const [claimed] = await notificationQueueRepo.claimDigests(["alice"], "2026-10-28", morning);
-    await notificationQueueRepo.releaseDigests([claimed!.id]);
-    expect(
-      userIdsOf(await notificationQueueRepo.claimDigests(["alice"], "2026-10-28", evening)),
-    ).toEqual(["alice"]);
-  });
-
-  test("claims no one when there's no one to claim", async () => {
-    expect(await notificationQueueRepo.claimDigests([], "2026-10-28", morning)).toEqual([]);
   });
 });

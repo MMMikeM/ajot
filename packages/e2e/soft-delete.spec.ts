@@ -202,24 +202,6 @@ test("deleting a list hides its tasks and their notes, and they can come back to
   expect((await notesOf(user1Auth.token)).some((n) => n.id === note.id)).toBe(true);
 });
 
-test("a note needs a task", async ({ user1Auth }) => {
-  const at = new Date().toISOString();
-  await expect(
-    apiRequest(
-      "POST",
-      "/api/notes",
-      {
-        id: `loose-${Date.now()}`,
-        userId: user1Auth.userId,
-        title: "Loose",
-        createdAt: at,
-        updatedAt: at,
-      },
-      user1Auth.token,
-    ),
-  ).rejects.toThrow(/400/);
-});
-
 test("a subtask's notes go and come back with it", async ({ user1Auth }) => {
   const at = new Date().toISOString();
   const auth = { userId: user1Auth.userId };

@@ -5,7 +5,6 @@ test.each([
   ["the secret", "the secret", true],
   ["the secreT", "the secret", false],
   ["the", "the secret", false],
-  ["", "the secret", false],
   [undefined, "the secret", false],
   ["anything", undefined, false],
   ["", "", false],

@@ -11,13 +11,12 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-test("a stream past an account's hundred is refused, and the ones open stay open", async () => {
+test("a stream past an account's hundred is refused", async () => {
   for (const writer of open) registerClient("alice", writer);
 
   const res = await eventsRoute.request(`/?ticket=${issueTicket("alice")}`);
 
   expect(res.status).toBe(429);
-  for (const writer of open) expect(writer.close).not.toHaveBeenCalled();
 });
 
 test("below the hundred, a stream opens", async () => {

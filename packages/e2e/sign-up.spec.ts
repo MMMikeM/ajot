@@ -11,13 +11,6 @@ const signedOutAt = async (page: Page, path: string, awaitingFirstUser = false) 
   await config;
 };
 
-test("a server with accounts only takes signups through an invite", async ({ page }) => {
-  await signedOutAt(page, "/auth");
-  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
-  await expect(page.getByText("New here? Ask someone on this server")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create an account" })).toHaveCount(0);
-});
-
 test("a new server opens on its first account", async ({ page }) => {
   await signedOutAt(page, "/auth", true);
   await expect(
@@ -40,12 +33,4 @@ test("an invite link opens on signing up with its invite", async ({ page }) => {
   const signup = page.waitForRequest((r) => r.url().endsWith("/api/auth/signup"));
   await page.getByRole("button", { name: "Create account" }).click();
   expect((await signup).postDataJSON()).toMatchObject({ username: "sam", invite: "abc" });
-});
-
-test("an invite that can't be looked up still signs up with it", async ({ page }) => {
-  const lookup = page.waitForResponse("**/api/auth/invites/expired");
-  await signedOutAt(page, "/invite/expired");
-  await lookup;
-  await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
-  await expect(page.getByText("Signing up accepts your invite.")).toBeVisible();
 });

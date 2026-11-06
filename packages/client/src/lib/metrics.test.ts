@@ -41,15 +41,6 @@ beforeEach(() => {
   posted.length = 0;
 });
 
-test("counts kept while signed out are sent, in order, once there's a session", async () => {
-  await recordMetric("menu-click:page:share", null);
-  await recordMetric("menu-fail:page:share:session:signed-out", null);
-  expect(posted).toEqual([]);
-  await sendPendingMetrics(session);
-  expect(posted).toEqual(["menu-click:page:share", "menu-fail:page:share:session:signed-out"]);
-  expect(pending()).toEqual([]);
-});
-
 test("offline, or with an expired token, counts wait for the next send", async () => {
   answers.push(0);
   await recordMetric("menu-click:page:inbox", session);

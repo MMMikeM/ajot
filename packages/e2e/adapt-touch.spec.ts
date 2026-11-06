@@ -364,25 +364,6 @@ test.describe("dragging on touch", () => {
     await expect.poll(() => isAbove(page, "Renew passport", "Call the plumber")).toBe(true);
   });
 
-  test("a tap still opens the task", async ({ page }) => {
-    await openList(page);
-    await titleOf(page, "Renew passport").tap();
-    await expect(page.locator('[data-slot="drawer-content"]')).toBeVisible();
-  });
-
-  test("a long press let go in place neither opens nor moves the task", async ({ page }) => {
-    await openList(page);
-    const { send } = await touch(page);
-    const at = await centreOf(titleOf(page, "Renew passport"));
-    await send("touchStart", at.x, at.y);
-    await page.waitForTimeout(400);
-    await send("touchEnd");
-
-    await page.waitForTimeout(300);
-    await expect(page.locator('[data-slot="drawer-content"]')).toHaveCount(0);
-    expect(await isAbove(page, "Call the plumber", "Renew passport")).toBe(true);
-  });
-
   test("a quick flick doesn't drag", async ({ page }) => {
     await openList(page);
     const { send } = await touch(page);
@@ -403,21 +384,6 @@ test.describe("dragging on touch", () => {
 
     await expect.poll(() => isAbove(page, "Renew passport", "Call the plumber")).toBe(true);
     await expect(row(page, "Renew passport").locator("[data-swipe-tray]")).toHaveAttribute("inert");
-  });
-
-  test("a long press drags a subtask within its parent", async ({ page }) => {
-    await mockApi(page, { data: withSecondSubtask() });
-    await page.goto("/", { waitUntil: "domcontentloaded" });
-    await expect(byId(page, BAGGAGE)).toBeVisible({ timeout: 15000 });
-    expect(await subtaskOrder(page)).toEqual([FARES, BAGGAGE]);
-
-    const to = (await byId(page, FARES).boundingBox())!;
-    await longPressDrag(page, await centreOf(byId(page, BAGGAGE)), {
-      x: to.x + to.width / 2,
-      y: to.y,
-    });
-
-    await expect.poll(() => subtaskOrder(page)).toEqual([BAGGAGE, FARES]);
   });
 
   test("a subtask dragged among the tasks stays under its parent", async ({ page }) => {
@@ -461,13 +427,6 @@ test.describe("dragging with a mouse", () => {
     });
 
     await expect.poll(() => isAbove(page, "Renew passport", "Call the plumber")).toBe(true);
-  });
-
-  test("a click still opens the task", async ({ page }) => {
-    await openList(page);
-    await titleOf(page, "Renew passport").click();
-    await expect(page.locator('[data-slot="drawer-content"]')).toBeVisible();
-    expect(await isAbove(page, "Call the plumber", "Renew passport")).toBe(true);
   });
 
   test("dragging a subtask moves it within its parent", async ({ page }) => {

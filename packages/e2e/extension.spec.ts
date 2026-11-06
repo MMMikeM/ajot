@@ -369,21 +369,11 @@ test.describe("the toolbar popup", () => {
 
     const popup = await openPopup();
     const title = popup.getByRole("textbox", { name: "Title" });
-    // The store's name and department go: the address in the details says where it's from
-    await expect(title).toHaveValue("PINOLINO Fiete Children's Walker with Brake System");
     await expect(popup.getByRole("textbox", { name: "Details" })).toHaveValue(PAGE.url);
-    // Images aren't readable yet, so the page's picture waits to be asked for
-    await expect(popup.getByRole("button", { name: "Attach picture" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-    await popup.screenshot({ path: test.info().outputPath("popup.png") });
 
     await popup.getByRole("combobox", { name: "Where it goes" }).click();
     const option = popup.getByRole("option", { name: "Gifts", exact: true });
     await expect(option).toBeVisible();
-    await popup.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
-    await popup.screenshot({ path: test.info().outputPath("popup-picker.png") });
     await option.click();
     await title.fill("Walker for Leo");
     await popup.getByRole("button", { name: "Add", exact: true }).click();

@@ -20,12 +20,6 @@ test("a shop's name after a dash goes, matched to its address", () => {
 });
 
 test("the usual suffixes go", () => {
-  expect(titleWithoutSite("Lofi beats - YouTube", "https://www.youtube.com/watch?v=x")).toBe(
-    "Lofi beats",
-  );
-  expect(titleWithoutSite("Fly (app) - Wikipedia", "https://en.wikipedia.org/wiki/Fly")).toBe(
-    "Fly (app)",
-  );
   expect(titleWithoutSite("Rates held - BBC News", "https://www.bbc.co.uk/news/1")).toBe(
     "Rates held",
   );

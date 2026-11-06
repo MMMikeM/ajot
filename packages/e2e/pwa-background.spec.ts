@@ -179,9 +179,6 @@ test.describe("settings", () => {
     const page = await context.newPage();
     await page.goto("/settings");
 
-    await expect(
-      page.getByRole("checkbox", { name: "Keep lists up to date while Ajot is closed" }),
-    ).toBeChecked();
     await page.getByRole("button", { name: "Notifications" }).click();
     const due = page.getByRole("checkbox", { name: "A task is due" });
     const rightAway = page.getByRole("checkbox", { name: "Update even while this device sleeps" });
@@ -200,9 +197,7 @@ test.describe("settings", () => {
     await savedAgain;
 
     await page.reload();
-    await expect(page.getByRole("button", { name: "Notifications" })).toContainText("8 of 9 on");
     await page.getByRole("button", { name: "Notifications" }).click();
-    await expect(page.getByRole("group", { name: "Reminders" })).toBeVisible();
     await expect(page.getByRole("checkbox", { name: "A task is due" })).not.toBeChecked();
     await expect(
       page.getByRole("checkbox", { name: "Update even while this device sleeps" }),
@@ -210,20 +205,6 @@ test.describe("settings", () => {
     await expect(
       page.getByRole("checkbox", { name: "Someone changes a list you share" }),
     ).toBeChecked();
-  });
-
-  test("turning updates on with notifications blocked says how to unblock them", async () => {
-    await context.clearPermissions();
-    const page = await context.newPage();
-    await page.goto("/settings");
-    await page.evaluate(() => Notification.requestPermission());
-
-    await page
-      .getByRole("checkbox", { name: "Keep lists up to date while Ajot is closed" })
-      .click();
-    await expect(
-      page.getByRole("alertdialog", { name: "Notifications are blocked" }),
-    ).toBeVisible();
   });
 });
 

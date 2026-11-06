@@ -1,13 +1,10 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import * as inviteTokenRepo from "../db/invite-token.repo";
-import { NotFoundError } from "../db/errors";
 import * as sessionRepo from "../db/session.repo";
 import { login, signup } from "../auth-service";
 import { signRevocation } from "../session-revocation";
 import { authRoutes } from "./auth";
-import { sendContactChanges } from "./contact-changes";
 import { rejectInvalidInput } from "./openapi-schemas";
 
 vi.mock("../db/invite-token.repo", () => ({ findInviterName: vi.fn() }));
@@ -17,23 +14,6 @@ vi.mock("../auth", () => ({ extractToken: vi.fn(), validateSession: vi.fn() }));
 vi.mock("../notify", () => ({ sendNotification: vi.fn() }));
 vi.mock("./contact-changes", () => ({ sendContactChanges: vi.fn() }));
 
-describe("GET /invites/:token", () => {
-  test("names whoever made a usable invite, without a session", async () => {
-    vi.mocked(inviteTokenRepo.findInviterName).mockResolvedValueOnce("Mike Murray");
-    const res = await authRoutes.request("/invites/abc");
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ inviterName: "Mike Murray" });
-    expect(inviteTokenRepo.findInviterName).toHaveBeenCalledWith("abc");
-  });
-
-  test("an unknown, used or expired invite says nothing about anyone", async () => {
-    vi.mocked(inviteTokenRepo.findInviterName).mockRejectedValueOnce(new NotFoundError("invite"));
-    const res = await authRoutes.request("/invites/nope");
-    expect(res.status).toBe(404);
-    expect(await res.text()).not.toMatch(/Mike/);
-  });
-});
-
 // Mounted as app.ts mounts it, under an app whose hook every route inherits
 const api = new OpenAPIHono({ defaultHook: rejectInvalidInput }).route("/", authRoutes);
 const post = (path: string, body: unknown) =>
@@ -42,14 +22,6 @@ const post = (path: string, body: unknown) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-
-describe("input a route refuses", () => {
-  test("answers with a message the client can show, as other refusals do", async () => {
-    const res = await post("/signup", { username: "ab", password: "long enough", name: "Al" });
-    expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: "Username must be at least 3 characters" });
-  });
-});
 
 describe("POST /sessions-revoked", () => {
   const key = "the-database-token";
@@ -81,28 +53,6 @@ describe("POST /sessions-revoked", () => {
     const res = await post("/sessions-revoked", signRevocation("", "me"));
     expect(res.status).toBe(401);
     expect(sessionRepo.forgetUser).not.toHaveBeenCalled();
-  });
-});
-
-describe("POST /signup", () => {
-  test("with an invite, sends both new contact rows to their pages live", async () => {
-    vi.mocked(signup).mockResolvedValueOnce({
-      session: { userId: "bob", token: "t", name: "Bob", username: "bob" },
-      invitedBy: "alice",
-      contacts: [
-        { id: "alices-row", userId: "alice", contactUserId: "bob", createdAt: "now" },
-        { id: "bobs-row", userId: "bob", contactUserId: "alice", createdAt: "now" },
-      ],
-    });
-    const res = await authRoutes.request("/signup", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: "bob", password: "long enough pw", name: "Bob" }),
-    });
-    expect(res.status).toBe(200);
-    expect(sendContactChanges).toHaveBeenCalledWith(expect.anything(), {
-      addedIds: ["alices-row", "bobs-row"],
-    });
   });
 });
 

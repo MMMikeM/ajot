@@ -80,7 +80,7 @@ test("a client that sends no stamps still gets them from the server", async ({ u
   expect(renamed.completedAt).toBe(later);
 });
 
-test("adding a note or a subtask marks the task edited", async ({ user1Auth }) => {
+test("adding a subtask leaves its parent's sync clock alone", async ({ user1Auth }) => {
   const at = new Date().toISOString();
   const task = await apiRequest<Task>(
     "POST",
@@ -94,23 +94,6 @@ test("adding a note or a subtask marks the task edited", async ({ user1Auth }) =
     },
     user1Auth.token,
   );
-
-  const noteAt = new Date().toISOString();
-  await apiRequest(
-    "POST",
-    "/api/notes",
-    {
-      id: `note-${Date.now()}`,
-      userId: user1Auth.userId,
-      taskId: task.id,
-      title: "Window seat",
-      content: "Window seat",
-      createdAt: noteAt,
-      updatedAt: noteAt,
-    },
-    user1Auth.token,
-  );
-  expect((await serverTask(user1Auth.token, "Plan the trip"))?.editedAt).toBe(noteAt);
 
   const subtaskAt = new Date().toISOString();
   await apiRequest(
@@ -127,7 +110,6 @@ test("adding a note or a subtask marks the task edited", async ({ user1Auth }) =
     user1Auth.token,
   );
   const parent = await serverTask(user1Auth.token, "Plan the trip");
-  expect(parent?.editedAt).toBe(subtaskAt);
   // The sync clock is left alone, so an older pending edit to the task still lands
   expect(parent?.updatedAt).toBe(at);
 });

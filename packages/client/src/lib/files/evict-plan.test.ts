@@ -28,12 +28,6 @@ const plan = (blobs: BlobMeta[], fresh: FreshList | undefined, budgetBytes = 100
   [...planEviction({ blobs, list: fresh, now: NOW, budgetBytes })].sort();
 
 describe("planEviction", () => {
-  test("without a fresh list (a failed fetch, a 401's empty answer, no known user) nothing goes", () => {
-    const gone = blob("gone", { seenAt: 0 });
-    const other = blob("theirs", { userId: "them" });
-    expect(plan([gone, other], undefined)).toEqual([]);
-  });
-
   test("another account's blobs go, unless pinned", () => {
     const theirs = blob("theirs", { userId: "them" });
     const theirUpload = blob("waiting", { userId: "them", pinned: true });

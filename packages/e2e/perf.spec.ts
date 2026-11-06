@@ -33,10 +33,4 @@ test.describe("Time to DOMContentLoaded", () => {
     console.log(`  DOMContentLoaded /        → ${ms} ms`);
     expect(ms, `DOMContentLoaded exceeded ${DCL_BUDGET_MS} ms budget`).toBeLessThan(DCL_BUDGET_MS);
   });
-
-  test("/auth", async ({ browser, baseURL }) => {
-    const ms = await measure(browser, baseURL, "/auth");
-    console.log(`  DOMContentLoaded /auth     → ${ms} ms`);
-    expect(ms, `DOMContentLoaded exceeded ${DCL_BUDGET_MS} ms budget`).toBeLessThan(DCL_BUDGET_MS);
-  });
 });

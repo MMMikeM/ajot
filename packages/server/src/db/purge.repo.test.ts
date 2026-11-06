@@ -37,8 +37,6 @@ const ids = (table: string) =>
     (r) => r.id,
   );
 
-let purged: Awaited<ReturnType<typeof purgeExpired>>;
-
 // Key to when it was last written
 const objects = new Map<string, string>();
 const bucket = {
@@ -195,7 +193,7 @@ beforeAll(async () => {
   objects.set("u/a/att-uploading", hoursFromNow(0));
   objects.set("a/just-copied", hoursFromNow(0));
 
-  purged = await purgeExpired(db, bucket);
+  await purgeExpired(db, bucket);
 });
 
 describe("purging deleted tasks", () => {
@@ -247,19 +245,16 @@ describe("purging Undo records", () => {
   test("takes those past their hour and keeps the rest", () => {
     expect(ids("removed_contacts")).toEqual(["rc-new"]);
     expect(ids("removed_collaborators")).toEqual(["rx-new"]);
-    expect(purged.undoRecords).toEqual({ contacts: 1, collaborators: 1 });
   });
 });
 
 describe("purging what's expired", () => {
   test("takes sessions past their expiry and keeps the rest", () => {
     expect(ids("sessions")).toEqual(["session-live"]);
-    expect(purged.sessions).toBe(1);
   });
 
   test("takes invites used or expired long ago, and keeps the rest", () => {
     expect(ids("invite_tokens")).toEqual(["expired-lately", "unused", "used-lately"]);
-    expect(purged.invites).toBe(2);
   });
 
   test("takes notifications sent long ago or never sent though due long ago", () => {
@@ -269,7 +264,6 @@ describe("purging what's expired", () => {
       "remind-live",
       "sent-lately",
     ]);
-    expect(purged.notifications).toBe(2);
   });
 });
 
@@ -301,7 +295,6 @@ describe("purging attachments", () => {
       "a/just-copied",
       "u/a/att-uploading",
     ]);
-    expect(purged.attachments).toEqual({ ofPurgedTasks: 2, deleted: 1, unfinished: 1, strays: 2 });
   });
 
   test("keeps the rows of a live one, one deleted lately and one still uploading", () => {

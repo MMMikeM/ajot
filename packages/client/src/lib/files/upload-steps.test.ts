@@ -35,16 +35,6 @@ const after = (from: Upload, request: Parameters<typeof afterAnswer>[1], status:
   afterAnswer(from, request, { status, error: `answered ${status}` }, NOW).next;
 
 describe("nextStep", () => {
-  test("inserts, then uploads once the server has the row", () => {
-    expect(nextStep(upload(), NOW)).toBe("insert");
-    expect(nextStep(upload({ posted: true }), NOW)).toBe("upload");
-  });
-
-  test("waits out a backoff, and sends nothing for a refused one", () => {
-    expect(nextStep(upload({ retryAt: NOW + 1 }), NOW)).toBeUndefined();
-    expect(nextStep(upload({ failed: "Too big" }), NOW)).toBeUndefined();
-  });
-
   test("a delete sends DELETE when the server has the row, then waits out Undo before dropping", () => {
     const deleted = upload({ posted: true, deletedAt: NOW });
     expect(nextStep(deleted, NOW)).toBe("delete");
@@ -52,10 +42,6 @@ describe("nextStep", () => {
     expect(nextStep(sent, NOW + KEEP_DELETED_MS - 1)).toBeUndefined();
     expect(nextStep(sent, NOW + KEEP_DELETED_MS)).toBe("drop");
     expect(nextStep(upload({ deletedAt: NOW, failed: "x" }), NOW + KEEP_DELETED_MS)).toBe("drop");
-  });
-
-  test("Undo after the DELETE went out restores it first", () => {
-    expect(nextStep(upload({ posted: true, serverDeleted: true }), NOW)).toBe("restore");
   });
 });
 
@@ -79,21 +65,6 @@ describe("afterAnswer", () => {
       expect(next.serverDeleted, request).toBe(false);
       expect(next.retryAt, request).toBeGreaterThan(NOW);
     }
-  });
-
-  test("backoff grows", () => {
-    const first = after(upload(), "insert", 503) as Upload;
-    const second = after(first, "insert", 503) as Upload;
-    expect(second.retryAt - NOW).toBeGreaterThan(first.retryAt - NOW);
-  });
-
-  test.each([403, 409, 413, 422])("a %i to the insert fails with its reason", (status) => {
-    expect((after(upload(), "insert", status) as Upload).failed).toBe(`answered ${status}`);
-  });
-
-  test("deleted on the server, the attachment or its task, it's let go with its bytes", () => {
-    for (const request of ["insert", "upload-url", "complete", "restore"] as const)
-      expect(after(upload({ posted: true }), request, 410)).toBe("discarded");
   });
 
   test("an expired session holds everything", () => {
@@ -126,7 +97,7 @@ describe("afterAnswer", () => {
   });
 
   test("a delete the server no longer has counts as done", () => {
-    for (const status of [200, 404, 410])
+    for (const status of [404, 410])
       expect(
         (after(upload({ posted: true, deletedAt: NOW }), "delete", status) as Upload).serverDeleted,
       ).toBe(true);

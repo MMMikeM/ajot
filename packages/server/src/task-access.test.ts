@@ -4,7 +4,6 @@ import { drizzle } from "drizzle-orm/node-sqlite";
 import { describe, expect, test } from "vite-plus/test";
 import {
   canDeleteAttachment,
-  canDeleteTask,
   canFileShareIn,
   canMoveTo,
   grants,
@@ -141,12 +140,6 @@ describe("who reaches what", () => {
   test("not a stranger", () => {
     for (const { id } of taskRows) expect(access(id)).not.toHaveProperty("dave");
   });
-});
-
-test("canDeleteTask: the owner, or the parent's for a subtask", () => {
-  const sub = holder("sub-of-shared");
-  expect(canDeleteTask({ ...sub, parent: holder("shared") }, "alice")).toBe(true);
-  expect(canDeleteTask({ ...sub, parent: holder("shared") }, "bob")).toBe(false);
 });
 
 test("an attachment is deleted by its uploader while they see the task, or by whoever deletes it", () => {

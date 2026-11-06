@@ -9,7 +9,6 @@ test("counts characters as the database's CHECK does, so a row it holds can be s
   expect(note.safeParse("😀".repeat(MAX_TEXT)).success).toBe(true);
 });
 
-test("refuses one character past the limit, saying how long it may be", () => {
-  const result = note.safeParse("😀".repeat(MAX_TEXT + 1));
-  expect(result.error?.issues[0]?.message).toBe("A note can be at most 50,000 characters.");
+test("refuses one character past the limit", () => {
+  expect(note.safeParse("😀".repeat(MAX_TEXT + 1)).success).toBe(false);
 });

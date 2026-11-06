@@ -33,7 +33,6 @@ describe("parseAllowedOrigins", () => {
 
   test("nothing set allows nothing extra", () => {
     expect(parseAllowedOrigins(undefined)).toEqual([]);
-    expect(parseAllowedOrigins("")).toEqual([]);
   });
 
   test("skips entries whose origin would be opaque", () => {

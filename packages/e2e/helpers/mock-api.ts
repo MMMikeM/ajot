@@ -205,8 +205,6 @@ type MockApiOptions = {
   data?: MockData;
   /** Suppress the one-time swipe peek, which would otherwise move the first row on touch */
   swipeHintSeen?: boolean;
-  /** Suppress the install and background-update offers, which would otherwise sit above the list */
-  setupHintSeen?: boolean;
   /** The server has a bucket, so the sheet offers "Attach a file" */
   attachments?: boolean;
 };
@@ -217,22 +215,21 @@ export const mockApi = async (
     signedIn = true,
     data = mockData(),
     swipeHintSeen = true,
-    setupHintSeen = true,
     attachments = false,
   }: MockApiOptions = {},
 ) => {
   await page.addInitScript(
-    ({ me, signedIn, swipeHintSeen, setupHintSeen }) => {
+    ({ me, signedIn, swipeHintSeen }) => {
       if (signedIn) {
         localStorage.setItem("newtab-todo-token", "mock-token");
         localStorage.setItem("newtab-todo-user-id", me.id);
         localStorage.setItem("newtab-todo-user-info", JSON.stringify(me));
       }
       if (swipeHintSeen) localStorage.setItem("newtab-todo-swipe-hint-seen", "1");
-      if (setupHintSeen)
-        localStorage.setItem("newtab-todo-setup-hint-dismissed", '["install","background"]');
+      // The install and background-update offers would otherwise sit above the list
+      localStorage.setItem("newtab-todo-setup-hint-dismissed", '["install","background"]');
     },
-    { me: MOCK_ME, signedIn, swipeHintSeen, setupHintSeen },
+    { me: MOCK_ME, signedIn, swipeHintSeen },
   );
 
   const collections: Record<string, unknown> = {

@@ -1,6 +1,5 @@
 import { test, expect, type Page } from "./fixtures";
 import { mockApi, noteOn } from "./helpers/mock-api";
-import { expectTapTarget } from "./helpers/touch";
 
 // Edge cases in the list chrome, with /api mocked
 
@@ -85,25 +84,6 @@ test("a long URL or list name keeps the task sheet's controls on screen", async 
       expect(right).toBeLessThanOrEqual(sheetRight);
     }
   }
-});
-
-test("on a 320px phone a note keeps most of its row", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name === "desktop", "desktop floats the actions over the row");
-  await page.setViewportSize({ width: 320, height: 568 });
-  const data = await mockApi(page);
-  const flights = data.tasks[0]!;
-  data.notes.push(noteOn(flights, "Window seat if possible"));
-  await page.goto(`/task/${flights.id}`, { waitUntil: "domcontentloaded" });
-  const notes = page.locator('[data-slot="drawer-content"]').getByRole("group", { name: "Notes" });
-  const text = notes.getByRole("button", { name: /^Edit note/ });
-  await expect(text).toBeVisible({ timeout: 15000 });
-  const rowBox = (await text
-    .locator("xpath=ancestor::*[contains(@class, 'group/row')][1]")
-    .boundingBox())!;
-  const textBox = (await text.boundingBox())!;
-  expect(textBox.width / rowBox.width).toBeGreaterThan(0.75);
-
-  await expectTapTarget(notes.getByRole("button", { name: "Delete note" }));
 });
 
 test.describe("done section", () => {

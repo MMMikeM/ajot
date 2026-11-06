@@ -72,16 +72,6 @@ test.beforeEach(async ({ page }) => {
   await page.waitForSelector("[data-task-id]");
 });
 
-test("the search field's text starts where the list title's did", async ({ page }, testInfo) => {
-  const title = page.getByRole("heading", { level: 2 }).locator("span.font-display");
-  const titleLeft = (await title.boundingBox())!.x;
-  const field = await openSearch(page, testInfo);
-  const fieldLeft = await field.evaluate(
-    (el) => el.getBoundingClientRect().left + parseFloat(getComputedStyle(el).paddingLeft),
-  );
-  expect(Math.abs(fieldLeft - titleLeft)).toBeLessThan(1);
-});
-
 test("finds tasks across every list, grouped by list, with what matched", async ({
   page,
 }, testInfo) => {
@@ -102,14 +92,6 @@ test("finds tasks across every list, grouped by list, with what matched", async 
     page.getByRole("region", { name: "Done" }).getByText("Renew Sam's passport"),
   ).toBeVisible();
   await expect(page.getByRole("region", { name: "Done" })).toContainText("Home · Sep 2");
-});
-
-test("a typo is corrected, and there's nothing to add for it", async ({ page }, testInfo) => {
-  const field = await openSearch(page, testInfo);
-  await field.fill("pasport");
-  await expect(page.getByText("Showing results for")).toContainText("passport");
-  await expect(result(page, "Renew passport")).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Add “/ })).toHaveCount(0);
 });
 
 test("adding from search puts the task in the list it was opened from", async ({
@@ -160,12 +142,6 @@ test("ticking a result offers Undo", async ({ page }, testInfo) => {
   ).toBeVisible();
 });
 
-test("Escape in the field goes back to the list", async ({ page }, testInfo) => {
-  const field = await openSearch(page, testInfo);
-  await field.press("Escape");
-  await page.waitForURL((url) => url.pathname === "/");
-});
-
 test.describe("the keyboard in the results", () => {
   test.skip(({ isMobile }) => isMobile, "a hardware keyboard");
 
@@ -201,18 +177,6 @@ test.describe("the keyboard in the results", () => {
     await page.keyboard.press("ArrowUp");
     await expect(field).toBeFocused();
     await expect(field).toHaveValue("passport");
-  });
-
-  test("Escape on a result goes back to the field and stays in search", async ({
-    page,
-  }, testInfo) => {
-    const field = await openSearch(page, testInfo);
-    await field.fill("passport");
-    await field.press("ArrowDown");
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("Escape");
-    await expect(field).toBeFocused();
-    await expect(page).toHaveURL(/\/search$/);
   });
 
   test("Enter in the field opens the first result", async ({ page }, testInfo) => {

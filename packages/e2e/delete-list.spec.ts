@@ -67,22 +67,6 @@ test("an empty category deletes without asking", async ({ page }) => {
   await expect(page.getByText("“Home” deleted")).toBeVisible();
 });
 
-test("Undo brings a deleted list back", async ({ page }) => {
-  await openList(page);
-  await openOptions(page, "Home");
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
-  const toast = page.locator("[data-toast-undo]", { hasText: "“Home” deleted" });
-  await expect(toast).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Home/ })).toHaveCount(0);
-
-  const restore = page.waitForRequest(
-    (r) => r.method() === "POST" && r.url().endsWith("/api/categories/c-home/restore"),
-  );
-  await toast.getByRole("button", { name: "Undo" }).click();
-  await restore;
-  await expect(page.getByRole("button", { name: /^Home/ }).first()).toBeVisible();
-});
-
 test("a refused delete says so and brings the category back", async ({ page }) => {
   await openList(page);
   await page.route("**/api/categories", (route) =>

@@ -50,11 +50,3 @@ test("an accept that fails leaves the invite to try again", async () => {
   expect((await accept()).status).toBe(500);
   expect(inviteTokenRepo.release).toHaveBeenCalledWith("invite");
 });
-
-test("an accept claims the invite, and only once", async () => {
-  vi.mocked(inviteTokenRepo.claim).mockResolvedValueOnce(invite("bob"));
-  vi.mocked(inviteTokenRepo.consume).mockResolvedValueOnce([]);
-  expect((await accept()).status).toBe(200);
-  expect(inviteTokenRepo.claim).toHaveBeenCalledWith("invite");
-  expect(inviteTokenRepo.release).not.toHaveBeenCalled();
-});

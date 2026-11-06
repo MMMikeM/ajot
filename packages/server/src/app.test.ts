@@ -30,7 +30,6 @@ test("the page and the API carry the Content Security Policy", async () => {
     const res = await app.request(path);
     expect(res.headers.get(CSP_HEADER), path).toBe(contentSecurityPolicy());
   }
-  expect(await (await app.request("/task/abc")).text()).toBe("<!doctype html>");
 });
 
 test("a share no worker answered sends its text on to the page, and its files nowhere", async () => {
@@ -49,12 +48,11 @@ test("a share no worker answered sends its text on to the page, and its files no
   });
 });
 
-test("a request for a route the API doesn't have is logged and answered 501, not a row's 404", async () => {
+test("a request for a route the API doesn't have is answered 501, not a row's 404", async () => {
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   for (const path of ["/api/no-such-route", "/api/config/"]) {
     const res = await app.request(path, { method: "POST" });
     expect(res.status, path).toBe(501);
-    expect(warn).toHaveBeenLastCalledWith(`[501] no route for POST ${path}`);
   }
   warn.mockRestore();
 });

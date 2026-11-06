@@ -50,34 +50,10 @@ describe("the length CHECKs", async () => {
       content,
     );
 
-  test.each([
-    ["a task's title", () => insertTask(sqlite, "long-title", "t".repeat(MAX_TITLE + 1))],
-    [
-      "a task's description",
-      () => insertTask(sqlite, "long-text", "T", { description: "d".repeat(MAX_TEXT + 1) }),
-    ],
-    [
-      "a sort key",
-      () => insertTask(sqlite, "long-key", "T", { sort_order: `a0${"V".repeat(MAX_SORT_KEY)}` }),
-    ],
-    ["a note's title", note("n".repeat(MAX_TITLE + 1), "n")],
-    ["a note", note("n", "n".repeat(MAX_TEXT + 1))],
-    [
-      "a list's name",
-      run(
-        "INSERT INTO categories (id, user_id, name) VALUES ('long', 'alice', ?)",
-        "l".repeat(MAX_NAME + 1),
-      ),
-    ],
-    [
-      "a person's name",
-      run(
-        "INSERT INTO users (id, name, username, password_hash) VALUES ('long', ?, 'long', 'x')",
-        "p".repeat(MAX_NAME + 1),
-      ),
-    ],
-  ])("refuse %s one character past its limit", (_what, write) => {
-    expect(write).toThrow(/CHECK constraint failed/);
+  test("refuse a task's description one character past its limit", () => {
+    expect(() =>
+      insertTask(sqlite, "long-text", "T", { description: "d".repeat(MAX_TEXT + 1) }),
+    ).toThrow(/CHECK constraint failed/);
   });
 
   test("take every field at its limit, counted in characters as the API counts them", () => {

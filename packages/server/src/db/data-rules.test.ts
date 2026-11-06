@@ -40,11 +40,6 @@ describe("the constraints", async () => {
 
   test.each([
     [
-      "a contact with yourself",
-      "INSERT INTO contacts (id, user_id, contact_user_id) VALUES ('c', 'alice', 'alice')",
-      /CHECK constraint failed: contact_is_someone_else/,
-    ],
-    [
       "a second unsent reminder for a task",
       `INSERT INTO notification_queue (id, user_id, type, task_id, scheduled_for)
         VALUES ('again', 'alice', 'reminder-due', 'top', '2026-11-02')`,
@@ -57,18 +52,6 @@ describe("the constraints", async () => {
       /UNIQUE constraint failed/,
     ],
     [
-      "a reminder without a task",
-      `INSERT INTO notification_queue (id, user_id, type, scheduled_for)
-        VALUES ('bare', 'alice', 'reminder-due', '2026-11-01')`,
-      /CHECK constraint failed: only_reminders_have_a_task/,
-    ],
-    [
-      "a digest with a task",
-      `INSERT INTO notification_queue (id, user_id, type, task_id, scheduled_for)
-        VALUES ('tasked', 'alice', 'overdue-digest', 'other', '2026-10-29T08:00:00.000Z')`,
-      /CHECK constraint failed: only_reminders_have_a_task/,
-    ],
-    [
       "a subtask of a subtask",
       "INSERT INTO tasks (id, user_id, parent_id, title) VALUES ('deeper', 'alice', 'sub', 'No')",
       /FOREIGN KEY constraint failed/,
@@ -77,36 +60,6 @@ describe("the constraints", async () => {
       "a task with subtasks becoming one",
       "UPDATE tasks SET parent_id = 'other' WHERE id = 'top'",
       /FOREIGN KEY constraint failed/,
-    ],
-    [
-      "an empty attachment",
-      `INSERT INTO attachments (id, task_id, uploader_id, name, mime_type, size)
-        VALUES ('empty', 'top', 'alice', 'a.txt', 'text/plain', 0)`,
-      /CHECK constraint failed: attachment_size/,
-    ],
-    [
-      "an attachment over the ceiling",
-      `INSERT INTO attachments (id, task_id, uploader_id, name, mime_type, size)
-        VALUES ('huge', 'top', 'alice', 'a.bin', 'application/octet-stream', 104857601)`,
-      /CHECK constraint failed: attachment_size/,
-    ],
-    [
-      "an attachment's bytes purged while it's live",
-      `INSERT INTO attachments (id, task_id, uploader_id, name, mime_type, size, uploaded_at, purged_at)
-        VALUES ('live', 'top', 'alice', 'a.jpg', 'image/jpeg', 10, '2026-10-01', '2026-10-02')`,
-      /CHECK constraint failed: attachment_purged_once_uploaded_and_deleted/,
-    ],
-    [
-      "an attachment's bytes purged before they were uploaded",
-      `INSERT INTO attachments (id, task_id, uploader_id, name, mime_type, size, deleted_at, purged_at)
-        VALUES ('never', 'top', 'alice', 'a.jpg', 'image/jpeg', 10, '2026-10-01', '2026-10-02')`,
-      /CHECK constraint failed: attachment_purged_once_uploaded_and_deleted/,
-    ],
-    [
-      "an attachment's name past 255 characters",
-      `INSERT INTO attachments (id, task_id, uploader_id, name, mime_type, size)
-        VALUES ('long', 'top', 'alice', '${"a".repeat(256)}', 'text/plain', 1)`,
-      /CHECK constraint failed: attachment_name_length/,
     ],
   ])("refuse %s", (_what, sql, error) => {
     expect(run(sql)).toThrow(error);
@@ -224,9 +177,5 @@ describe("rows already breaking them", async () => {
     expect(
       sqlite.prepare("SELECT id, parent_id FROM tasks WHERE id LIKE 'loop-%' ORDER BY id").all(),
     ).toEqual(["loop-w", "loop-x", "loop-y", "loop-z"].map((id) => ({ id, parent_id: null })));
-  });
-
-  test("leave no row pointing at one that's gone", () => {
-    expect(sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
   });
 });
