@@ -177,6 +177,8 @@ describe("a task shared with the same person more than once", async () => {
     sqlite.exec(`INSERT INTO task_shares (id, task_id, shared_with_user_id) VALUES
       ('first', 'a', 'bob'), ('again', 'a', 'bob'), ('carols', 'a', 'carol'),
       ('other', 'b', 'bob'), ('third', 'a', 'bob')`);
+    sqlite.exec(`INSERT INTO contacts (id, user_id, contact_user_id) VALUES
+      ('ab', 'alice', 'bob'), ('ac', 'alice', 'carol')`);
   });
   const shares = sqlite.prepare("SELECT id FROM task_shares ORDER BY id").all() as Row[];
 
@@ -189,5 +191,22 @@ describe("a task shared with the same person more than once", async () => {
       sqlite.exec(`INSERT INTO task_shares (id, task_id, shared_with_user_id)
         VALUES ('more', 'a', 'bob')`),
     ).toThrow(/UNIQUE/);
+  });
+});
+
+describe("a task shared with someone no longer a contact", async () => {
+  const { sqlite } = await seeded((sqlite) => {
+    sqlite.exec(`INSERT INTO users (id, name, username, password_hash)
+      VALUES ('carol', 'Carol', 'carol', 'x')`);
+    sqlite.exec(`INSERT INTO tasks (id, user_id, title, sort_order, created_at, updated_at) VALUES
+      ${task("a", "a0")}`);
+    sqlite.exec(`INSERT INTO contacts (id, user_id, contact_user_id) VALUES ('ab', 'alice', 'bob')`);
+    sqlite.exec(`INSERT INTO task_shares (id, task_id, shared_with_user_id) VALUES
+      ('to-bob', 'a', 'bob'), ('to-carol', 'a', 'carol')`);
+  });
+
+  test("is unshared, as removing them as a contact now does", () => {
+    const shares = sqlite.prepare("SELECT id FROM task_shares ORDER BY id").all() as Row[];
+    expect(ids(shares)).toEqual(["to-bob"]);
   });
 });

@@ -47,7 +47,6 @@ export const useCategoryActions = () => {
       userId: currentUserId,
       color: null,
       sortOrder: null,
-      user: null,
     });
     setActiveCategoryId(cat.id);
   };

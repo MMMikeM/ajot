@@ -131,7 +131,6 @@ const syncEach =
 
 const syncTask = syncMutation("tasks", client.api.tasks, tasksCollection);
 const syncCategory = syncMutation("categories", client.api.categories, categoriesCollection, [
-  "user",
   "collaborators",
 ]);
 const syncNote = syncMutation("notes", client.api.notes, notesCollection);

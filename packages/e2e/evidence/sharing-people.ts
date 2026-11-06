@@ -60,7 +60,6 @@ const withSharing = () => {
   add("t-sams", "Fix the gate latch", {
     categoryId: "c-home",
     userId: SAM.id,
-    user: { id: SAM.id, name: SAM.name },
   });
   add("t-mine-home", "Paint the shed door", { categoryId: "c-home" });
   return data;

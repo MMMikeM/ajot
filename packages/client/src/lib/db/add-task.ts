@@ -47,7 +47,6 @@ export const addTask = async (
       shares: [],
       assignee: null,
       sentBy: null,
-      user: null,
     }),
   );
   return id;

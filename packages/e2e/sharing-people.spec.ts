@@ -12,7 +12,6 @@ const withHomeTasks = () => {
   const data = mockData();
   const template = data.tasks.find((t) => t.title === "Pick up dry cleaning")!;
   data.tasks.push(
-    // As a live insert has it: no user
     {
       ...template,
       id: "t-sams",
@@ -20,7 +19,6 @@ const withHomeTasks = () => {
       sortOrder: "b1",
       categoryId: "c-home",
       userId: SAM.id,
-      user: null as never,
     },
     {
       ...template,

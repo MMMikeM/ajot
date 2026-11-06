@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from "./fixtures";
-import { mockApi } from "./helpers/mock-api";
+import { mockApi, mockData } from "./helpers/mock-api";
 
 // A production build registers sw.js, which would answer /api before the mocks see it
 test.use({ serviceWorkers: "block" });
@@ -65,7 +65,6 @@ test("wide initials fit inside the face", async ({ page }) => {
     assigneeId: assignee.id,
     createdAt: "2026-09-20T09:00:00.000Z",
     updatedAt: "2026-09-20T09:00:00.000Z",
-    user: { id: owner.id, name: owner.name },
     subtasks: [],
     shares: [
       {
@@ -81,10 +80,16 @@ test("wide initials fit inside the face", async ({ page }) => {
     ],
     assignee,
   };
-  await mockApi(page);
-  await page.route("**/api/tasks", (route) =>
-    route.request().method() === "GET" ? route.fulfill({ json: [task] }) : route.fallback(),
-  );
+  const data = mockData();
+  data.tasks = [task as never];
+  // Whoever shares a task with you is one of your contacts
+  data.contacts.push({
+    ...data.contacts[0]!,
+    id: "ct-mia",
+    contactUserId: owner.id,
+    contactUser: { ...owner, avatarUrl: null },
+  });
+  await mockApi(page, { data });
   await openList(page);
 
   const target = row(page, "Water the plants");

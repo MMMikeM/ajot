@@ -32,7 +32,6 @@ const {
 } = getColumns(tasks);
 
 export const listItemSchema = responseSchema.extend({
-  user: userRepo.nameSchema,
   subtasks: z.array(responseSchema),
   shares: z.array(taskShareRepo.responseSchema.extend({ sharedWithUser: userRepo.handleSchema })),
   assignee: userRepo.handleSchema.nullable(),
@@ -40,7 +39,6 @@ export const listItemSchema = responseSchema.extend({
 });
 
 const listItemWith = {
-  user: { columns: userRepo.nameColumns },
   subtasks: { where: { deletedAt: { isNull: true } }, columns: hidden },
   shares: { with: taskShareRepo.withSharedWithUser },
   assignee: { columns: userRepo.handleColumns },

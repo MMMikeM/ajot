@@ -24,14 +24,11 @@ export const deleteSchema = idBody.extend({
     .max(MAX_TASK_IDS, `A list can be deleted with at most ${MAX_TASK_IDS} tasks at once.`)
     .optional(),
 });
-// list() includes user + collaborators; insert/update/delete return flat rows without them.
-// nullish() allows these keys to be absent so all routes satisfy this schema.
+// list() includes the collaborators; insert/update/delete return flat rows without them, so
+// they're nullish for every route to satisfy this schema.
 export const responseSchema = createSelectSchema(categories)
   .omit({ deletedAt: true, deletion: true })
-  .extend({
-    user: z.object({ name: z.string() }).nullish(),
-    collaborators: z.array(z.object({ user: userRepo.publicSchema })).nullish(),
-  });
+  .extend({ collaborators: z.array(z.object({ user: userRepo.publicSchema })).nullish() });
 const limitedFields = {
   id: limitedId,
   userId: limitedId,
@@ -62,7 +59,6 @@ const live = { deletedAt: { isNull: true } } as const;
 const withCollaborators = {
   collaborators: { with: { user: { columns: userRepo.publicColumns } } },
 } as const;
-const listWith = { user: { columns: { name: true } }, ...withCollaborators } as const;
 
 export const list = async (userId: string) =>
   db.query.categories.findMany({
@@ -78,18 +74,18 @@ export const list = async (userId: string) =>
         ),
     },
     columns: hidden,
-    with: listWith,
+    with: withCollaborators,
     orderBy: { sortOrder: "asc", name: "asc" },
   });
 
-export type CategoryWithOwner = Awaited<ReturnType<typeof list>>[number];
+export type CategoryWithCollaborators = Awaited<ReturnType<typeof list>>[number];
 
 export const listByIds = async (ids: string[]) => {
   if (ids.length === 0) return [];
   return db.query.categories.findMany({
     where: { ...live, id: { in: ids } },
     columns: hidden,
-    with: listWith,
+    with: withCollaborators,
   });
 };
 

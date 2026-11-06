@@ -76,8 +76,8 @@ async function makeCollections() {
           const res = await routes.categories();
           if (res.status === 401) return [];
           if (!res.ok) throw new Error("Failed to fetch categories");
-          // Response schema marks user/collaborators nullish (shared with mutation routes),
-          // but the list endpoint always includes them.
+          // The response schema marks collaborators nullish (shared with the mutation routes),
+          // but the list endpoint always includes them
           return (await res.json()) as Category[];
         },
         queryClient,

@@ -237,7 +237,6 @@ const serveByAccount = async (context: BrowserContext) => {
         title: "Plan the garden",
         description: null,
         userId: ALEX.id,
-        user: { id: ALEX.id, name: ALEX.name },
       },
     ],
     categories: [
@@ -246,7 +245,6 @@ const serveByAccount = async (context: BrowserContext) => {
         id: "c-alex",
         name: "Allotment",
         userId: ALEX.id,
-        user: { name: ALEX.name },
         collaborators: [],
       },
     ],

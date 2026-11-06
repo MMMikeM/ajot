@@ -66,7 +66,6 @@ export const mockData = () => {
       editedAt: null as string | null,
       completedAt: null as string | null,
       deletedAt: null as string | null,
-      user: { id: MOCK_ME.id, name: MOCK_ME.name },
       subtasks: [],
       shares: [] as unknown[],
       assignee: null as MockUser | null,
@@ -100,13 +99,11 @@ export const mockData = () => {
     task("Eggs", {
       categoryId: "c-groc",
       userId: MOCK_SARAH.id,
-      user: { id: MOCK_SARAH.id, name: MOCK_SARAH.name },
     }),
     task("Sourdough", { categoryId: "c-groc" }),
   ];
   const sharedWithMe = task("Pick a restaurant for Friday", {
     userId: MOCK_SARAH.id,
-    user: { id: MOCK_SARAH.id, name: MOCK_SARAH.name },
   });
   sharedWithMe.shares = [shareWith(sharedWithMe.id, MOCK_ME)];
   tasks.push(sharedWithMe);
@@ -125,7 +122,6 @@ export const mockData = () => {
     sortOrder,
     createdAt: TIMESTAMP,
     updatedAt: TIMESTAMP,
-    user: { name: owner.name },
     collaborators: [] as unknown[],
   });
   const groceries = category("c-groc", "Groceries", "oklch(0.68 0.16 58)", MOCK_SARAH, "a2");
