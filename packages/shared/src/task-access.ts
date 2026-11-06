@@ -89,3 +89,32 @@ export const canMoveTo = (task: Holder, list: List | null, userId: string) =>
  */
 export const canFileShareIn = (task: Holder, list: List | null, userId: string) =>
   !!task.shares?.some((s) => s.sharedWithUserId === userId) && canFileIn(list, userId);
+
+export type Placement = {
+  /**
+   * How `userId` moves it to another list: `owner` moves the task, `share` files their share of
+   * it, and `list` can't move it, since it sits in a list that's someone else's to arrange.
+   */
+  mode: "owner" | "share" | "list";
+  /** The list it appears in: a category, `null` for the Inbox, `undefined` for nowhere. */
+  categoryId: string | null | undefined;
+};
+
+type PlacedTask = Omit<Holder, "shares"> & {
+  categoryId: string | null;
+  shares: { sharedWithUserId: string; permission: "view" | "edit"; categoryId: string | null }[];
+};
+
+/**
+ * Where a top-level task appears for `userId`, given its list as far as the caller has it. A task
+ * in a list they're in stays in that list: a share never overrides list membership, so filing one
+ * there would change nothing they can see.
+ */
+export const placement = (task: PlacedTask, userId: string): Placement => {
+  if (canDeleteTask(task, userId)) return { mode: "owner", categoryId: task.categoryId ?? null };
+  if (task.category && listMemberIds(task.category).includes(userId))
+    return { mode: "list", categoryId: task.categoryId };
+  const myShare = task.shares.find((s) => s.sharedWithUserId === userId);
+  if (myShare) return { mode: "share", categoryId: myShare.categoryId ?? null };
+  return { mode: "list", categoryId: task.categoryId ?? undefined };
+};
