@@ -1,123 +1,104 @@
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { hoursFromNow } from "@newtab-todo/shared/iso";
+import { db } from "./client";
 import * as categoryRepo from "./category.repo";
 import * as categoryCollaboratorRepo from "./category-collaborator.repo";
 import * as contactRepo from "./contact.repo";
 import {
   categories,
-  categoryCollaborators,
   contacts,
   removedCollaborators,
   removedContacts,
   tasks,
   taskShares,
+  users,
 } from "./schema";
 
-type Row = Record<string, unknown>;
-type Where = Record<string, unknown>;
-
-// vi.mock is hoisted above the imports, so the fake it returns has to be too
-const { tables, writes, fakeDb } = vi.hoisted(() => {
-  const tables: Record<string, Row[]> = {};
-  const writes: { op: string; table: unknown; data?: unknown }[] = [];
-
-  // Enough of the relational filter syntax for the reads these restores make
-  const matches = (row: Row, where: Where = {}) =>
-    Object.entries(where).every(([key, want]) => {
-      if (want && typeof want === "object" && "in" in want)
-        return (want.in as unknown[]).includes(row[key]);
-      if (want && typeof want === "object" && "isNull" in want)
-        return (row[key] == null) === want.isNull;
-      if (want && typeof want === "object" && "gte" in want)
-        return (row[key] as string) >= (want.gte as string);
-      return row[key] === want;
-    });
-
-  const reader = (name: string) => ({
-    findFirst: async ({ where }: { where?: Where }) => tables[name]?.find((r) => matches(r, where)),
-    findMany: async ({ where }: { where?: Where }) =>
-      (tables[name] ?? []).filter((r) => matches(r, where)),
-  });
-
-  const writer = (op: string, table: unknown) => {
-    const entry: (typeof writes)[number] = { op, table };
-    writes.push(entry);
-    const steps: Record<string, (data: Row) => unknown> = {
-      values: (data) => ((entry.data = data), builder),
-      // Updates every row of the table, ignoring where: each test holds one row per table
-      set: (data) => {
-        entry.data = data;
-        const name = (table as Record<symbol, string>)[Symbol.for("drizzle:Name")];
-        const key = name.replace(/_(\w)/g, (_, c: string) => c.toUpperCase());
-        for (const row of tables[key] ?? []) Object.assign(row, data);
-        return builder;
-      },
-    };
-    for (const step of ["where", "returning", "onConflictDoNothing", "onConflictDoUpdate"])
-      steps[step] = () => builder;
-    const builder = Object.assign(Promise.resolve<Row[]>([]), steps);
-    return builder;
-  };
-
-  const fakeDb = {
-    query: new Proxy({}, { get: (_, name: string) => reader(name) }),
-    insert: (table: unknown) => writer("insert", table),
-    update: (table: unknown) => writer("update", table),
-    delete: (table: unknown) => writer("delete", table),
-  };
-  return { tables, writes, fakeDb };
+// vi.mock runs before this file's imports, so the database it builds can only be imported there
+vi.mock("./client", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const { fileURLToPath } = await import("node:url");
+  const { drizzle } = await import("drizzle-orm/node-sqlite");
+  const { migrate } = await import("./migrator");
+  const { relations } = await import("./schema");
+  const memory = drizzle({ client: new DatabaseSync(":memory:"), relations });
+  await migrate(memory, fileURLToPath(new URL("../../drizzle", import.meta.url)));
+  return { db: memory, inTransaction: (run: (tx: typeof memory) => unknown) => run(memory) };
 });
-
-vi.mock("./client", () => ({
-  db: fakeDb,
-  inTransaction: (run: (tx: typeof fakeDb) => unknown) => run(fakeDb),
-}));
-
-// Reads the views, which the fake can't; what it reads only addresses the broadcast
-vi.mock("./reach.repo", () => ({
-  read: async () => ({ taskIds: [], listIds: [], tasks: new Map(), lists: new Map() }),
-}));
 
 const owner = "owner";
 const collaborator = "collaborator";
 const stranger = "stranger";
 
-const list = (fields: Row = {}) => ({
-  id: "list",
-  userId: owner,
-  name: "Groceries",
-  deletedAt: "2026-10-26T10:00:00.000Z",
-  deletion: { deletedTaskIds: ["t1"], movedTaskIds: [], unfiledShares: [] },
-  collaborators: [{ userId: collaborator }],
-  ...fields,
-});
+const LIST_DELETED_AT = "2026-10-26T10:00:00.000Z";
+const DELETED_SINCE = "2026-10-27T10:00:00.000Z";
+const LONG_AGO = "2026-01-01T09:00:00.000Z";
 
-beforeEach(() => {
-  for (const key of Object.keys(tables)) delete tables[key];
-  writes.length = 0;
+const ids = async (rows: Promise<{ id: string }[]>) => (await rows).map((row) => row.id).sort();
+const contactIds = () => ids(db.query.contacts.findMany({ columns: { id: true } }));
+const collaboratorIds = () =>
+  ids(db.query.categoryCollaborators.findMany({ columns: { id: true } }));
+const removedContactIds = () => ids(db.query.removedContacts.findMany({ columns: { id: true } }));
+
+beforeEach(async () => {
+  // Every other table cascades from users
+  await db.delete(users);
+  await db
+    .insert(users)
+    .values(
+      [owner, collaborator, stranger, "carol", "bob"].map((id) => ({
+        id,
+        name: id,
+        username: id,
+        passwordHash: "x",
+      })),
+    );
 });
 
 // Only its owner may restore a list: requireList checks that in the route, before this runs
 describe("restoring a deleted list", () => {
-  test("of a list that doesn't exist is not found", async () => {
-    await expect(categoryRepo.restore("list")).rejects.toMatchObject({ status: 404 });
-    expect(writes).toEqual([]);
-  });
-
   test("brings the list back", async () => {
-    tables.categories = [list()];
+    await db.insert(categories).values({
+      id: "list",
+      userId: owner,
+      name: "Groceries",
+      deletedAt: LIST_DELETED_AT,
+      deletion: { deletedTaskIds: ["t1", "t2"], movedTaskIds: [], unfiledShares: [] },
+    });
+    await db.insert(tasks).values([
+      { id: "t1", userId: owner, categoryId: "list", title: "Milk", deletedAt: LIST_DELETED_AT },
+      // Deleted again on its own since the list's delete took it
+      { id: "t2", userId: owner, categoryId: "list", title: "Eggs", deletedAt: DELETED_SINCE },
+    ]);
+
     await categoryRepo.restore("list");
-    expect(writes[0]).toMatchObject({
-      op: "update",
-      table: categories,
-      data: { deletedAt: null, deletion: null },
+
+    expect(await db.query.categories.findFirst({ where: { id: "list" } })).toMatchObject({
+      deletedAt: null,
+      deletion: null,
+    });
+    expect(await db.query.tasks.findFirst({ where: { id: "t1" } })).toMatchObject({
+      deletedAt: null,
+    });
+    expect(await db.query.tasks.findFirst({ where: { id: "t2" } })).toMatchObject({
+      deletedAt: DELETED_SINCE,
     });
   });
 
   test("of a list that isn't deleted changes nothing, so a replay is harmless", async () => {
-    tables.categories = [list({ deletedAt: null, deletion: null })];
+    await db
+      .insert(categories)
+      .values({ id: "list", userId: owner, name: "Groceries", updatedAt: LONG_AGO });
+    await db
+      .insert(tasks)
+      .values({ id: "t1", userId: owner, categoryId: "list", title: "Milk", updatedAt: LONG_AGO });
+    const listBefore = await db.query.categories.findFirst({ where: { id: "list" } });
+    const tasksBefore = await db.query.tasks.findMany();
+
     await categoryRepo.restore("list");
-    expect(writes).toEqual([]);
+
+    expect(await db.query.categories.findFirst({ where: { id: "list" } })).toEqual(listBefore);
+    expect(await db.query.tasks.findMany()).toEqual(tasksBefore);
   });
 });
 
@@ -136,126 +117,116 @@ describe("restoring a removed contact", () => {
     removedAt: hoursFromNow(-0.1),
   };
 
+  beforeEach(async () => {
+    await db.insert(categories).values([
+      { id: "live", userId: owner, name: "Live" },
+      { id: "gone", userId: owner, name: "Gone", deletedAt: LIST_DELETED_AT },
+    ]);
+  });
+
   test("is only for the person who removed it", async () => {
-    tables.removedContacts = [record];
+    await db.insert(removedContacts).values(record);
     for (const userId of [collaborator, stranger]) {
       await expect(contactRepo.restore("mine", userId)).rejects.toMatchObject({ status: 404 });
     }
-    expect(writes).toEqual([]);
+    expect(await removedContactIds()).toEqual(["mine"]);
+    expect(await contactIds()).toEqual([]);
+    expect(await collaboratorIds()).toEqual([]);
   });
 
   test("puts both rows back, and sharing for the lists that still exist", async () => {
-    tables.removedContacts = [record];
-    tables.categories = [{ id: "live", deletedAt: null }];
+    await db.insert(removedContacts).values(record);
     await contactRepo.restore("mine", owner);
-    expect(writes).toEqual([
-      { op: "insert", table: contacts, data: record.contacts },
-      { op: "insert", table: categoryCollaborators, data: [record.collaborators[0]] },
-      { op: "delete", table: removedContacts },
-    ]);
+    expect(await contactIds()).toEqual(["mine", "theirs"]);
+    expect(await collaboratorIds()).toEqual(["c1"]);
+    expect(await removedContactIds()).toEqual([]);
   });
 
   test("puts back what leaving the list took out of it", async () => {
-    const left = { movedTaskIds: ["bobs-task"], unfiledTaskIds: ["shared-with-bob"] };
-    tables.removedContacts = [{ ...record, collaborators: [{ ...record.collaborators[0], left }] }];
-    tables.categories = [{ id: "live", deletedAt: null }];
-    await contactRepo.restore("mine", owner);
-    expect(writes.map(({ op, table }) => ({ op, table }))).toEqual([
-      { op: "insert", table: contacts },
-      { op: "insert", table: categoryCollaborators },
-      { op: "update", table: tasks },
-      { op: "update", table: taskShares },
-      { op: "delete", table: removedContacts },
+    await db.insert(tasks).values([
+      { id: "their-task", userId: collaborator, title: "Theirs" },
+      { id: "shared-with-them", userId: owner, title: "Shared" },
     ]);
-    expect(writes[1]!.data).toEqual([record.collaborators[0]]);
-  });
+    await db
+      .insert(taskShares)
+      .values({ id: "share", taskId: "shared-with-them", sharedWithUserId: collaborator });
+    const left = { movedTaskIds: ["their-task"], unfiledTaskIds: ["shared-with-them"] };
+    await db
+      .insert(removedContacts)
+      .values({ ...record, collaborators: [{ ...record.collaborators[0]!, left }] });
 
-  test("with nothing left to restore is not found", async () => {
-    await expect(contactRepo.restore("mine", owner)).rejects.toMatchObject({ status: 404 });
+    await contactRepo.restore("mine", owner);
+
+    expect(await db.query.tasks.findFirst({ where: { id: "their-task" } })).toMatchObject({
+      categoryId: "live",
+    });
+    expect(await db.query.taskShares.findFirst({ where: { id: "share" } })).toMatchObject({
+      categoryId: "live",
+    });
+    expect(await collaboratorIds()).toEqual(["c1"]);
   });
 
   test("more than an hour later is not found", async () => {
-    tables.removedContacts = [{ ...record, removedAt: hoursFromNow(-1.1) }];
+    await db.insert(removedContacts).values({ ...record, removedAt: hoursFromNow(-1.1) });
     await expect(contactRepo.restore("mine", owner)).rejects.toMatchObject({ status: 404 });
-    expect(writes).toEqual([]);
+    expect(await contactIds()).toEqual([]);
+    expect(await removedContactIds()).toEqual(["mine"]);
   });
 
   test("replayed after it landed changes nothing, so a lost response doesn't undo the Undo", async () => {
-    tables.contacts = [record.contacts[0]];
+    await db.insert(removedContacts).values(record);
+    await contactRepo.restore("mine", owner);
     await expect(contactRepo.restore("mine", owner)).resolves.toMatchObject({
       contact: record.contacts[0],
       restored: [],
     });
-    expect(writes).toEqual([]);
+    expect(await contactIds()).toEqual(["mine", "theirs"]);
   });
 
   test("replayed by someone else is still not found", async () => {
-    tables.contacts = [record.contacts[1]];
+    await db.insert(contacts).values(record.contacts[1]!);
     await expect(contactRepo.restore("theirs", owner)).rejects.toMatchObject({ status: 404 });
   });
 });
 
 describe("removing a contact", () => {
   test("drops Undo records past their hour before keeping its own", async () => {
-    tables.contacts = [{ id: "mine", userId: owner, contactUserId: collaborator }];
-    await contactRepo.remove("mine", owner);
-    expect(writes.map(({ op, table }) => ({ op, table }))).toEqual([
-      { op: "delete", table: contacts },
-      { op: "delete", table: removedContacts },
-      { op: "insert", table: removedContacts },
+    await db.insert(contacts).values([
+      { id: "mine", userId: owner, contactUserId: collaborator },
+      { id: "theirs", userId: collaborator, contactUserId: owner },
     ]);
+    const nothingKept = { contacts: [], collaborators: [] };
+    await db.insert(removedContacts).values([
+      { id: "stale", userId: stranger, ...nothingKept, removedAt: hoursFromNow(-2) },
+      { id: "carols", userId: "carol", ...nothingKept, removedAt: hoursFromNow(-0.1) },
+    ]);
+
+    await contactRepo.remove("mine", owner);
+
+    expect(await removedContactIds()).toEqual(["carols", "mine"]);
   });
 });
 
 // Only the list's owner may restore someone they removed: requireList checks that in the route
 describe("restoring someone removed from a list", () => {
-  const record = {
-    id: "c1",
-    categoryId: "list",
-    userId: collaborator,
-    addedAt: "then",
-    movedTaskIds: ["their-task"],
-    unfiledTaskIds: ["shared-with-them"],
-    removedAt: hoursFromNow(-0.1),
-  };
-
-  test("with nothing recorded is not found", async () => {
-    await expect(categoryCollaboratorRepo.restore("list", collaborator)).rejects.toMatchObject({
-      status: 404,
-    });
-    expect(writes).toEqual([]);
-  });
-
   test("more than an hour later is not found", async () => {
-    tables.removedCollaborators = [{ ...record, removedAt: hoursFromNow(-1.1) }];
-    await expect(categoryCollaboratorRepo.restore("list", collaborator)).rejects.toMatchObject({
-      status: 404,
-    });
-    expect(writes).toEqual([]);
-  });
-
-  test("puts back their row, what leaving took out of the list, then drops the record", async () => {
-    tables.removedCollaborators = [record];
-    await categoryCollaboratorRepo.restore("list", collaborator);
-    expect(writes.map(({ op, table }) => ({ op, table }))).toEqual([
-      { op: "insert", table: categoryCollaborators },
-      { op: "update", table: tasks },
-      { op: "update", table: taskShares },
-      { op: "delete", table: removedCollaborators },
-    ]);
-    expect(writes[0]!.data).toEqual({
+    await db.insert(categories).values({ id: "list", userId: owner, name: "Groceries" });
+    await db.insert(removedCollaborators).values({
       id: "c1",
       categoryId: "list",
       userId: collaborator,
       addedAt: "then",
+      movedTaskIds: [],
+      unfiledTaskIds: [],
+      removedAt: hoursFromNow(-1.1),
     });
-  });
 
-  test("of someone else's removal is not found", async () => {
-    tables.removedCollaborators = [record];
-    await expect(categoryCollaboratorRepo.restore("list", stranger)).rejects.toMatchObject({
+    await expect(categoryCollaboratorRepo.restore("list", collaborator)).rejects.toMatchObject({
       status: 404,
     });
-    expect(writes).toEqual([]);
+    expect(await collaboratorIds()).toEqual([]);
+    expect(
+      await ids(db.query.removedCollaborators.findMany({ columns: { id: true } })),
+    ).toEqual(["c1"]);
   });
 });

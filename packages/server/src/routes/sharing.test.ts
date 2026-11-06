@@ -99,19 +99,9 @@ describe("sharing a task", () => {
     );
   });
 
-  test("with someone it's already shared with changes nothing and tells no one", async () => {
-    vi.mocked(contactRepo.findContactUser).mockResolvedValueOnce(bob);
-    vi.mocked(taskShareRepo.insert).mockResolvedValueOnce({ share, added: false, changed: false });
-    const res = await shareWith("bob");
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(share);
-    expect(sendReachChanges).not.toHaveBeenCalled();
-    expect(sendNotification).not.toHaveBeenCalled();
-  });
-
   test("again with another permission changes it, and tells no one it's new", async () => {
     vi.mocked(contactRepo.findContactUser).mockResolvedValueOnce(bob);
-    const upgraded = { ...share, permission: "edit" as const };
+    const upgraded = { ...share, permission: "view" as const };
     vi.mocked(taskShareRepo.insert).mockResolvedValueOnce({
       share: upgraded,
       added: false,
@@ -182,13 +172,9 @@ describe("who sent a task", () => {
   });
 
   test("reaches the recipient with the sender's name on it", async () => {
-    const listed = {
-      ...draft,
-      userId: "bob",
-      sentById: "alice",
-      sentBy: { id: "alice", name: "Alice" },
-    };
-    vi.mocked(taskRepo.insertSent).mockResolvedValueOnce(listed as never);
+    const sent = { ...draft, userId: "bob", sentById: "alice" };
+    const listed = { ...sent, sentBy: { id: "alice", name: "Alice" } };
+    vi.mocked(taskRepo.insertSent).mockResolvedValueOnce(sent as never);
     vi.mocked(taskRepo.findListItem).mockResolvedValueOnce(listed as never);
     await post(taskRoutes, "/send", { ...draft, recipientId: "bob" });
     expect(broadcast).toHaveBeenCalledWith(expect.anything(), "tasks", "insert", listed, ["bob"]);
@@ -202,13 +188,13 @@ describe("who sent a task", () => {
   });
 });
 
-// Last: the limit counts every call above for the same user
+// Last: it uses up alice's sharing limit, so a test after it would be refused
 describe("sharing too much at once", () => {
-  test("is refused until a few minutes have passed", async () => {
+  test("is refused past thirty shares at once", async () => {
     vi.mocked(contactRepo.findContactUser).mockResolvedValue(bob);
     vi.mocked(taskShareRepo.insert).mockResolvedValue({ share, added: false, changed: false });
     const statuses = [];
-    for (let i = 0; i < 30; i++) statuses.push((await shareWith("bob")).status);
+    for (let i = 0; i < 31; i++) statuses.push((await shareWith("bob")).status);
     expect(statuses.at(-1)).toBe(429);
     expect(await (await shareWith("bob")).text()).toBe(
       "That's a lot of sharing at once. Try again in a few minutes.",

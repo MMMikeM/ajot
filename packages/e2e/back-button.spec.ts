@@ -82,6 +82,7 @@ for (const mode of ["standalone", "minimal-ui"])
 
 test("in a browser tab, back leaves at once", async ({ page }) => {
   await openApp(page);
+  await interact(page);
   await page.goBack();
   await expect(page).not.toHaveURL(/localhost/);
 });

@@ -93,3 +93,24 @@ describe("the inviter's name, before signing up", () => {
     }
   });
 });
+
+describe("claiming an invite", () => {
+  test("hands it to one taker only, until it's released", async () => {
+    const invite = await inviteTokenRepo.create("bob", "9999-01-01T00:00:00.000Z");
+
+    expect(await inviteTokenRepo.claim(invite.id)).toMatchObject({ id: invite.id });
+    expect(await inviteTokenRepo.claim(invite.id)).toBeUndefined();
+    await inviteTokenRepo.release(invite.id);
+    expect(await inviteTokenRepo.claim(invite.id)).toMatchObject({ id: invite.id });
+  });
+});
+
+describe("who can be shared with", () => {
+  test("is one of the sharer's own contacts, and no one else's", async () => {
+    await db.insert(contacts).values([contactRow("alice", "bob"), contactRow("bob", "carol")]);
+
+    expect(await contactRepo.findContactUser("alice", "bob")).toMatchObject({ id: "bob" });
+    expect(await contactRepo.findContactUser("alice", "carol")).toBeUndefined();
+    expect(await contactRepo.findContactUser("alice", "nobody")).toBeUndefined();
+  });
+});

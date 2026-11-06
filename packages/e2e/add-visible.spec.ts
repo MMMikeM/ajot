@@ -45,9 +45,23 @@ test("a task added on desktop leaves the page where it is", async ({ page }, tes
 
 test("each add is announced with the list it went to", async ({ page }) => {
   await openList(page, { data: withLongInbox(mockData()) });
+  const announcement = page.getByRole("status").filter({ hasText: "Added to Inbox" });
   await addTask(page, "Water the basil");
-  await expect(page.getByRole("status").filter({ hasText: "Added to Inbox" })).toHaveCount(1);
+  await expect(announcement).toHaveCount(1);
+
+  // A screen reader skips a live region whose text stays the same, so the same words must arrive
+  // as a new node
+  await announcement.evaluate((region) => {
+    const seen = window as Window & { announced?: number };
+    seen.announced = 0;
+    new MutationObserver((records) => {
+      for (const record of records) seen.announced! += record.addedNodes.length;
+    }).observe(region, { childList: true, subtree: true });
+  });
   await addTask(page, "Repot the fern");
-  await expect(page.getByRole("status").filter({ hasText: "Added to Inbox" })).toHaveCount(1);
+  await expect
+    .poll(() => page.evaluate(() => (window as Window & { announced?: number }).announced))
+    .toBeGreaterThan(0);
+  await expect(announcement).toHaveCount(1);
   await expect(page.locator("#add-task-input")).toBeFocused();
 });

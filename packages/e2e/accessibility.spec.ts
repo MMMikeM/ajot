@@ -73,6 +73,13 @@ test("people", async ({ page }) => {
   await expectNoAxeViolations(page);
 });
 
+test("signed-out list", async ({ page }) => {
+  await mockApi(page, { signedIn: false });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("#add-task-input")).toBeVisible({ timeout: 15000 });
+  await expectNoAxeViolations(page);
+});
+
 test("sign in", async ({ page }) => {
   await mockApi(page, { signedIn: false });
   await page.goto("/auth", { waitUntil: "domcontentloaded" });

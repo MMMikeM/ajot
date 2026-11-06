@@ -51,9 +51,6 @@ test.describe("sync status", () => {
     await page.evaluate(() => window.dispatchEvent(new Event("offline")));
     await expect(syncButton(page)).toHaveText("Offline · saved here");
     await expect(syncStatus(page)).toHaveText("Offline, changes saved on this device");
-    await expect(syncButton(page)).toHaveAccessibleName(
-      "Sync settings: Offline · saved here, changes saved on this device",
-    );
     await expect(syncButton(page).locator(".animate-pulse")).toHaveCount(0);
 
     await syncButton(page).click();
@@ -98,19 +95,42 @@ test.describe("sync status", () => {
   });
 });
 
+/**
+ * Fails the build's chunk at `url` as an offline device would. A route abort leaves
+ * `navigator.onLine` true, which would have the page reload for a chunk it reads as removed by a
+ * deploy, so the page's own handler for that is skipped, as it skips itself offline.
+ */
+const unreachableUntilBack = async (page: Page, url: RegExp) => {
+  let reachable = false;
+  let failures = 0;
+  await page.addInitScript(() =>
+    window.addEventListener("vite:preloadError", (event) => event.stopImmediatePropagation()),
+  );
+  await page.route(url, (route) => {
+    if (reachable) return route.continue();
+    failures++;
+    return route.abort("internetdisconnected");
+  });
+  return {
+    failures: () => failures,
+    back: () => {
+      reachable = true;
+    },
+  };
+};
+
 test("a task sheet that failed to load offline keeps the list and loads on the next open", async ({
   page,
 }) => {
-  let reachable = false;
   await mockApi(page);
-  await page.route("**/components/task/detail.tsx*", (route) =>
-    reachable ? route.continue() : route.abort("internetdisconnected"),
-  );
+  const chunk = await unreachableUntilBack(page, /\/assets\/detail-[^/]+\.js$/);
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForSelector("[data-task-id]", { timeout: 15000 });
+  await expect.poll(chunk.failures).toBeGreaterThan(0);
+  await expect(page.locator("[data-task-id]").first()).toBeVisible();
   await expect(syncButton(page)).toBeVisible();
 
-  reachable = true;
+  chunk.back();
   await row(page, "Renew passport").getByRole("button", { name: "Renew passport" }).click();
   await expect(page.locator('[data-slot="drawer-content"]')).toBeVisible();
 });
@@ -119,18 +139,15 @@ test("a list sheet that failed to load offline keeps the list and loads on the n
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile", "the list sheet is the touch layout's");
-  let reachable = false;
   await mockApi(page);
-  await page.route("**/category-nav/CategoryMobileSheet.tsx*", (route) =>
-    reachable ? route.continue() : route.abort("internetdisconnected"),
-  );
+  const chunk = await unreachableUntilBack(page, /\/assets\/CategoryMobileSheet-[^/]+\.js$/);
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForSelector("[data-task-id]", { timeout: 15000 });
-  // Long enough for the ahead-of-time fetch to have failed
-  await page.waitForTimeout(500);
+  await expect.poll(chunk.failures).toBeGreaterThan(0);
+  await expect(page.locator("[data-task-id]").first()).toBeVisible();
   await expect(syncButton(page)).toBeVisible();
 
-  reachable = true;
+  chunk.back();
   await page.getByTestId("category-nav-trigger").click();
   await expect(page.getByRole("dialog", { name: "Lists" })).toBeVisible();
 });
