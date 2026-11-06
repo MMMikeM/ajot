@@ -45,12 +45,13 @@ export const findContactUser = async (userId: string, username: string) => {
 
 // One transaction: deleting only one direction would leave one user still seeing the other.
 // Sharing a list needs a contact, so each leaves the lists the other shared with them.
-export const remove = async (id: string, userId: string) => {
-  const contact = await db.query.contacts.findFirst({ where: { id, userId } });
-  if (!contact) throw new NotFoundError("contact", id);
-  const otherId = contact.contactUserId;
-
-  return inTransaction(async (tx) => {
+// The read is inside it too: two removals at once could otherwise both find the contact, and the
+// second would overwrite the first's Undo record with nothing.
+export const remove = async (id: string, userId: string) =>
+  inTransaction(async (tx) => {
+    const contact = await tx.query.contacts.findFirst({ where: { id, userId } });
+    if (!contact) throw new NotFoundError("contact", id);
+    const otherId = contact.contactUserId;
     const shared = await tx.query.categoryCollaborators.findMany({
       where: {
         OR: [
@@ -93,7 +94,6 @@ export const remove = async (id: string, userId: string) => {
     const changed = leavings.flatMap((l) => [...l.movedTaskIds, ...l.unfiledTaskIds]);
     return { contact, removed, before, changed };
   });
-};
 
 /** A replay after a lost response finds the contact already back and changes nothing. */
 export const restore = async (id: string, userId: string) =>

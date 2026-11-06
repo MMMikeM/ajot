@@ -23,7 +23,14 @@ vi.mock("./client", async () => {
   const { relations } = await import("./schema");
   const memory = drizzle({ client: new DatabaseSync(":memory:"), relations });
   await migrate(memory, fileURLToPath(new URL("../../drizzle", import.meta.url)));
-  return { db: memory, inTransaction: (run: (tx: typeof memory) => unknown) => run(memory) };
+  // One after another, as BEGIN IMMEDIATE runs them
+  let last: Promise<unknown> = Promise.resolve();
+  const inTransaction = (run: (tx: typeof memory) => unknown) => {
+    const result = last.then(() => run(memory));
+    last = result.catch(() => {});
+    return result;
+  };
+  return { db: memory, inTransaction };
 });
 
 const owner = "owner";
@@ -204,6 +211,23 @@ describe("removing a contact", () => {
     await contactRepo.remove("mine", owner);
 
     expect(await removedContactIds()).toEqual(["carols", "mine"]);
+  });
+
+  test("twice at once keeps the first's Undo", async () => {
+    await db.insert(contacts).values([
+      { id: "mine", userId: owner, contactUserId: collaborator },
+      { id: "theirs", userId: collaborator, contactUserId: owner },
+    ]);
+
+    const [first, second] = await Promise.allSettled([
+      contactRepo.remove("mine", owner),
+      contactRepo.remove("mine", owner),
+    ]);
+
+    expect(first.status).toBe("fulfilled");
+    expect(second).toMatchObject({ status: "rejected", reason: { status: 404 } });
+    await contactRepo.restore("mine", owner);
+    expect(await contactIds()).toEqual(["mine", "theirs"]);
   });
 });
 
