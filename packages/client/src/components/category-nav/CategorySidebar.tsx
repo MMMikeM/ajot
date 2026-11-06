@@ -12,7 +12,6 @@ import { MAX_NAME } from "@newtab-todo/shared/field-limits";
 import { ColorDot } from "~/components/ui/color-dot";
 import { setActiveCategoryId } from "~/lib/state/active-category";
 import { useCurrentUserId } from "~/lib/auth/current-user";
-import { getBuildTarget } from "~/lib/build-target";
 import { isListPath } from "~/lib/list-path";
 import { cn } from "~/lib/utils";
 import { navRow } from "./nav-row";
@@ -336,22 +335,20 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
                 </>
               )}
             </Link>
-            {getBuildTarget() === "browser" && (
-              <Link
-                to="/settings"
-                className={navRow({ class: "data-[status=active]:text-foreground" })}
-              >
-                {({ isActive }) => (
-                  <>
-                    {isActive && <ActiveBar />}
-                    <NavIcon>
-                      <SettingsIcon className="size-3.5" aria-hidden="true" />
-                    </NavIcon>
-                    Settings
-                  </>
-                )}
-              </Link>
-            )}
+            <Link
+              to="/settings"
+              className={navRow({ class: "data-[status=active]:text-foreground" })}
+            >
+              {({ isActive }) => (
+                <>
+                  {isActive && <ActiveBar />}
+                  <NavIcon>
+                    <SettingsIcon className="size-3.5" aria-hidden="true" />
+                  </NavIcon>
+                  Settings
+                </>
+              )}
+            </Link>
           </div>
         )}
       </nav>

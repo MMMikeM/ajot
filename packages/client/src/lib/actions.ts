@@ -24,6 +24,27 @@ export const createInvite = async (): Promise<{ token: string; expiresAt: string
   return res.json() as Promise<{ token: string; expiresAt: string }>;
 };
 
+export const fetchMcpTokens = async () => {
+  const res = await reach(client.api.mcp.tokens.$get());
+  if (!res.ok) throw await errorFrom(res, "Couldn't load your tokens. Try again.");
+  return res.json();
+};
+
+export type McpToken = Awaited<ReturnType<typeof fetchMcpTokens>>[number];
+
+/** The token itself is in this reply only. */
+export const makeMcpToken = async (json: { name: string; canWrite: boolean; days: 30 | 90 | 365 }) => {
+  const res = await reach(client.api.mcp.tokens.$post({ json }));
+  if (!res.ok) throw await errorFrom(res, "Couldn't make a token. Try again.");
+  return res.json();
+};
+
+/** One already gone is revoked all the same. */
+export const revokeMcpToken = async (id: string) => {
+  const res = await reach(client.api.mcp.tokens[":id"].$delete({ param: { id } }));
+  if (!res.ok && res.status !== 404) throw await errorFrom(res, "Couldn't revoke it. Try again.");
+};
+
 export const fetchInviterName = async (token: string): Promise<string | null> => {
   try {
     const res = await client.api.auth.invites[":token"].$get({ param: { token } });

@@ -6,7 +6,6 @@ import { useAuthToken } from "~/lib/auth/token";
 import { useCurrentUser } from "~/lib/auth/current-user";
 import { onSessionExpired } from "~/lib/auth/session";
 import { signOut } from "~/lib/actions";
-import { getBuildTarget } from "~/lib/build-target";
 import { useSyncState, usePendingMutations } from "~/lib/sync/sse";
 import { useDeviceOnline } from "~/lib/hooks/use-device-online";
 import { Button } from "~/components/ui/button";
@@ -154,16 +153,14 @@ export const SyncSettings = () => {
           >
             People
           </MenuItem>
-          {getBuildTarget() === "browser" && (
-            <MenuItem
-              onClick={() => {
-                void router.navigate({ to: "/settings" });
-                setOpen(false);
-              }}
-            >
-              Settings
-            </MenuItem>
-          )}
+          <MenuItem
+            onClick={() => {
+              void router.navigate({ to: "/settings" });
+              setOpen(false);
+            }}
+          >
+            Settings
+          </MenuItem>
           <MenuItem intent="destructive" onClick={handleLogout}>
             Sign out
           </MenuItem>

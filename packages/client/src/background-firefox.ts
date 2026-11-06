@@ -35,8 +35,8 @@ const schedulePrewarm = () => {
   prewarmTimer = setTimeout(() => void prewarmSnapshot(), PREWARM_DELAY_MS);
 };
 
-// The add-on has no Web Push, so what the server notifies arrives on the event stream. Like
-// Chrome's extension, it has no Settings, so no kind is turned off.
+// The add-on has no Web Push, so what the server notifies arrives on the event stream. As in
+// Chrome's extension, Settings offers no notification choices, so no kind is turned off.
 const notificationUrls = new Map<string, string>();
 const showNotification = async (payload: PushPayload) => {
   const notification = toNotification(payload);

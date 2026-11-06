@@ -19,6 +19,8 @@ import {
   type PushPreferences,
 } from "~/lib/sync/push";
 import { BuildStamp } from "~/components/BuildStamp";
+import { CheckRow } from "~/components/CheckRow";
+import { ConnectClaude } from "~/components/ConnectClaude";
 import { CategorySidebar } from "~/components/category-nav/CategorySidebar";
 import {
   AlertDialog,
@@ -30,7 +32,6 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
-import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { listRowVariants } from "~/components/ui/list-row";
 import { SectionLabel } from "~/components/ui/section-label";
 import { cn } from "~/lib/utils";
@@ -113,6 +114,7 @@ export function SettingsPage() {
       ) : (
         <BackgroundUpdates />
       )}
+      {signedIn && <ConnectClaude />}
       <BuildStamp />
     </div>
   );
@@ -364,36 +366,4 @@ const TriggerGroup = ({ label, children }: { label: string; children: ReactNode 
     </legend>
     <div className="-mx-2 flex flex-col">{children}</div>
   </fieldset>
-);
-
-type CheckRowProps = {
-  label: string;
-  detail?: string;
-  checked: boolean;
-  disabled: boolean;
-  onCheckedChange: (checked: boolean) => void;
-};
-
-const CheckRow = ({ label, detail, checked, disabled, onCheckedChange }: CheckRowProps) => (
-  <label
-    className={cn(
-      listRowVariants(),
-      "cursor-pointer items-start touch:py-3",
-      disabled && "cursor-not-allowed hover:bg-transparent",
-    )}
-  >
-    <Checkbox
-      checked={checked}
-      disabled={disabled}
-      onCheckedChange={onCheckedChange}
-      // A page of settings that are all on shouldn't be a wall of solid green
-      className={cn("mt-0.5", checkboxDoneClass)}
-    />
-    <span className="flex min-w-0 flex-col gap-0.5">
-      <span className={cn("text-sm font-medium", disabled ? "text-hint" : "text-foreground")}>
-        {label}
-      </span>
-      {detail && <span className="text-xs text-hint">{detail}</span>}
-    </span>
-  </label>
 );

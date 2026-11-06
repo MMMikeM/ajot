@@ -11,7 +11,6 @@ import { MAX_NAME } from "@newtab-todo/shared/field-limits";
 import { ColorDot } from "~/components/ui/color-dot";
 import { setActiveCategoryId } from "~/lib/state/active-category";
 import { useCurrentUserId } from "~/lib/auth/current-user";
-import { getBuildTarget } from "~/lib/build-target";
 import { useNavContext } from "~/lib/state/nav-context";
 import { cn } from "~/lib/utils";
 import { navRow } from "./nav-row";
@@ -253,7 +252,7 @@ function CategoryMobileSheet() {
               People
             </Link>
           )}
-          {signedIn && getBuildTarget() === "browser" && (
+          {signedIn && (
             <Link
               to="/settings"
               replace
