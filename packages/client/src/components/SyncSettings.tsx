@@ -8,7 +8,6 @@ import { onSessionExpired } from "~/lib/auth/session";
 import { signOut } from "~/lib/actions";
 import { getBuildTarget } from "~/lib/build-target";
 import { useSyncState, usePendingMutations } from "~/lib/sync/sse";
-import { useInstallPrompt } from "~/lib/hooks/use-install-prompt";
 import { useDeviceOnline } from "~/lib/hooks/use-device-online";
 import { Button } from "~/components/ui/button";
 import { MenuItem } from "~/components/ui/menu-item";
@@ -52,7 +51,6 @@ export const SyncSettings = () => {
   const hasPending = usePendingMutations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const { canInstall, install } = useInstallPrompt();
   const toastManager = Toast.useToastManager();
   const syncAnnouncement = useSyncAnnouncement(syncState, deviceOnline);
 
@@ -148,9 +146,6 @@ export const SyncSettings = () => {
             </p>
           )}
           <div className="mb-1 h-px bg-border" />
-          {getBuildTarget() === "browser" && canInstall && (
-            <MenuItem onClick={install}>Add to Home Screen</MenuItem>
-          )}
           <MenuItem
             onClick={() => {
               void router.navigate({ to: "/people" });

@@ -3,10 +3,11 @@ import { DragDropProvider } from "@dnd-kit/react";
 import { Toast } from "@base-ui/react/toast";
 import { createLazyFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import type { PushTrigger } from "@newtab-todo/shared/push-payload";
 import { useAuthToken } from "~/lib/auth/token";
 import { getBuildTarget } from "~/lib/build-target";
+import { useInstallPrompt } from "~/lib/hooks/use-install-prompt";
 import { useIsDesk } from "~/lib/hooks/use-is-desk";
 import {
   fetchPushPreferences,
@@ -100,6 +101,7 @@ export function SettingsPage() {
         <h2 className="font-display text-3xl text-foreground">Settings</h2>
       </div>
 
+      {isPwa && <InstallRow />}
       {!isPwa ? (
         <p className="text-sm text-hint">
           Your lists stay up to date while Ajot is closed, with nothing to set up.
@@ -225,6 +227,29 @@ const BackgroundUpdates = () => {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+};
+
+const InstallRow = () => {
+  const { canInstall, install } = useInstallPrompt();
+  if (!canInstall) return null;
+  return (
+    <div className="-mx-2 flex flex-col">
+      <button
+        type="button"
+        onClick={() => void install()}
+        className={cn(
+          listRowVariants(),
+          "cursor-pointer items-start text-left focus-visible:bg-muted touch:py-3",
+        )}
+      >
+        <Download aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-hint" />
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-sm font-medium text-foreground">Install Ajot</span>
+          <span className="text-xs text-hint">It opens like an app, even offline.</span>
+        </span>
+      </button>
+    </div>
   );
 };
 
