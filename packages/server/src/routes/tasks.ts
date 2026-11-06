@@ -159,6 +159,11 @@ export const taskRoutes = authed()
 
       // What the client stamped wins; an older one sends neither
       const stamps = taskChangeStamps(fields, updatedAt);
+      const notifiableFields = ["title", "description", "status", "dueDate"] as const;
+      const changedNotifiable = notifiableFields.filter((f) => f in fields);
+      const assigneeChanged = fields.assigneeId && fields.assigneeId !== task.assigneeId;
+      const notifies = changedNotifiable.length > 0 || assigneeChanged;
+      const actorNameLookup = notifies ? getUserName(userId) : undefined;
       const moving = "categoryId" in fields ? await reachRepo.read({ taskIds: [id] }) : undefined;
       const result = await taskRepo.update(id, updatedAt, { ...stamps, ...fields });
       if (moving) await sendReachChanges(c, moving, [id]);
@@ -166,12 +171,8 @@ export const taskRoutes = authed()
       if (task.parentId && stamps.editedAt)
         await markTaskEdited(c, task.parentId, userId, updatedAt);
 
-      const notifiableFields = ["title", "description", "status", "dueDate"] as const;
-      const changedNotifiable = notifiableFields.filter((f) => f in fields);
-      const assigneeChanged = fields.assigneeId && fields.assigneeId !== task.assigneeId;
-
-      if (changedNotifiable.length > 0 || assigneeChanged) {
-        const actorName = await getUserName(userId);
+      if (actorNameLookup) {
+        const actorName = await actorNameLookup;
 
         const allRecipients = audience.filter((uid) => uid !== userId);
 
@@ -259,20 +260,23 @@ export const taskRoutes = authed()
       const { recipientId, ...data } = c.req.valid("json");
       const userId = c.get("userId");
       limitSharing(userId);
-      if (!(await contactRepo.exists(userId, recipientId)))
-        throw new BadRequestError("You can only send tasks to your contacts.");
+      const [isContact, sortOrder, actorName] = await Promise.all([
+        contactRepo.exists(userId, recipientId),
+        taskRepo.nextSortOrder(recipientId),
+        getUserName(userId),
+      ]);
+      if (!isContact) throw new BadRequestError("You can only send tasks to your contacts.");
 
       // The recipient owns it, as if they'd added it, so it lands in their Inbox and not the sender's
       const result = await taskRepo.insertSent({
         ...data,
         userId: recipientId,
         sentById: userId,
-        sortOrder: await taskRepo.nextSortOrder(recipientId),
+        sortOrder,
       });
       // As the list sends it, so the recipient's devices can say who sent it, offline too
       broadcast(c, "tasks", "insert", await taskRepo.findListItem(result.id), [recipientId]);
 
-      const actorName = await getUserName(userId);
       sendNotification(recipientId, {
         type: "task-sent",
         taskId: result.id,
@@ -294,9 +298,10 @@ export const taskRoutes = authed()
       const data = c.req.valid("json");
       const userId = c.get("userId");
       limitSharing(userId);
-      const [{ task }, targetUser] = await Promise.all([
+      const [{ task }, targetUser, actorName] = await Promise.all([
         requireTask(data.taskId, userId, "manage"),
         contactRepo.findContactUser(userId, data.username.toLowerCase()),
+        getUserName(userId),
       ]);
       if (task.parentId) throw new BadRequestError(SUBTASK_GOES_WITH_PARENT);
       if (!targetUser) throw new BadRequestError(ONLY_CONTACTS);
@@ -317,7 +322,6 @@ export const taskRoutes = authed()
       // A new permission on a share they already had isn't news to them
       if (!added) return c.json(result, 200);
 
-      const actorName = await getUserName(userId);
       sendNotification(targetUser.id, {
         type: "task-shared",
         taskId: data.taskId,

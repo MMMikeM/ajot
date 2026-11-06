@@ -45,6 +45,7 @@ export const inviteRoutes = authed()
         throw new BadRequestError("That's your own invite. Send it to someone else.");
       }
 
+      const actorName = getUserName(userId);
       let added;
       try {
         added = await inviteTokenRepo.consume(invite, userId);
@@ -56,7 +57,7 @@ export const inviteRoutes = authed()
 
       sendNotification(invite.createdByUserId, {
         type: "contact-accepted",
-        contactName: await getUserName(userId),
+        contactName: await actorName,
       });
 
       return c.json(okBody, 200);

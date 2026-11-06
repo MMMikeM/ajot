@@ -130,9 +130,10 @@ export const categoryRoutes = authed()
       const { username } = c.req.valid("json");
 
       limitSharing(userId);
-      const [cat, targetUser] = await Promise.all([
+      const [cat, targetUser, actorName] = await Promise.all([
         requireList(id, userId, "manage"),
         contactRepo.findContactUser(userId, username.toLowerCase()),
+        getUserName(userId),
       ]);
       if (!targetUser) throw new BadRequestError(ONLY_CONTACTS);
 
@@ -141,7 +142,6 @@ export const categoryRoutes = authed()
       if (!added) return c.json(targetUser, 200);
       await sendReachChanges(c, before);
 
-      const actorName = await getUserName(userId);
       sendNotification(targetUser.id, {
         type: "category-shared",
         categoryId: id,

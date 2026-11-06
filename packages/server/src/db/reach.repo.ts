@@ -70,13 +70,13 @@ export const read = async (
   { taskIds = [], listIds = [] }: { taskIds?: string[]; listIds?: string[] },
   q: Reader = db,
 ): Promise<Reach> => {
-  const rowIds = await liveTaskIds(q, [...tasksAndSubtasks(taskIds), ...inLists(listIds)]);
-  return {
-    taskIds: [...new Set([...taskIds, ...rowIds])],
-    listIds,
-    tasks: await accessTo(q, rowIds),
-    lists: await membersOf(q, listIds),
-  };
+  const reachedRows = liveTaskIds(q, [...tasksAndSubtasks(taskIds), ...inLists(listIds)]);
+  const [rowIds, tasks, lists] = await Promise.all([
+    reachedRows,
+    reachedRows.then((ids) => accessTo(q, ids)),
+    membersOf(q, listIds),
+  ]);
+  return { taskIds: [...new Set([...taskIds, ...rowIds])], listIds, tasks, lists };
 };
 
 /** The same tasks and lists after the write, including any it moved out of those lists. */
