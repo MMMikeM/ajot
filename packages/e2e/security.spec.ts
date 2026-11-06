@@ -283,9 +283,9 @@ test.describe("ids someone else already has", () => {
   });
 });
 
-test("a token in the URL signs in only the event stream", async ({ user1Auth }) => {
-  const res = await send(`/api/tasks?token=${user1Auth.token}`);
-  expect(res.status).toBe(401);
+test("a token in the URL signs nothing in, the event stream included", async ({ user1Auth }) => {
+  expect((await send(`/api/tasks?token=${user1Auth.token}`)).status).toBe(401);
+  expect((await send(`/api/events?token=${user1Auth.token}`)).status).toBe(401);
 });
 
 test("the page opens its event stream with a ticket, never its token", async ({
