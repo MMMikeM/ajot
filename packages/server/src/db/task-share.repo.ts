@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createSelectSchema } from "drizzle-orm/zod";
 import { db } from "./client";
 import { taskShares } from "./schema";
@@ -10,22 +10,18 @@ export type Insert = typeof taskShares.$inferInsert;
 export const idSchema = createSelectSchema(taskShares, { id: limitedId }).pick({ id: true });
 export const responseSchema = createSelectSchema(taskShares);
 
+// A share they already have keeps its id; only a new permission changes it
 export const insert = async (data: Insert) => {
-  const [row] = await db.insert(taskShares).values(data).onConflictDoNothing().returning();
-  if (row) return { share: row, added: true, changed: true };
-  const permission = data.permission ?? "edit";
-  const [updated] = await db
-    .update(taskShares)
-    .set({ permission })
-    .where(
-      and(
-        eq(taskShares.taskId, data.taskId),
-        eq(taskShares.sharedWithUserId, data.sharedWithUserId),
-        ne(taskShares.permission, permission),
-      ),
-    )
+  const [row] = await db
+    .insert(taskShares)
+    .values(data)
+    .onConflictDoUpdate({
+      target: [taskShares.taskId, taskShares.sharedWithUserId],
+      set: { permission: sql`excluded.permission` },
+      setWhere: sql`${taskShares.permission} <> excluded.permission`,
+    })
     .returning();
-  if (updated) return { share: updated, added: false, changed: true };
+  if (row) return { share: row, added: row.id === data.id, changed: true };
   const existing = await db.query.taskShares.findFirst({
     where: { taskId: data.taskId, sharedWithUserId: data.sharedWithUserId },
   });

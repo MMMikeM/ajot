@@ -168,6 +168,14 @@ describe("sharing again with the same person", () => {
   const shareWithBob = (id: string, permission: "view" | "edit") =>
     taskShareRepo.insert({ id, taskId: "t", sharedWithUserId: "bob", permission });
 
+  test("the first time adds it", async () => {
+    expect(await shareWithBob("first", "view")).toMatchObject({
+      added: true,
+      changed: true,
+      share: { id: "first", permission: "view" },
+    });
+  });
+
   test("with another permission changes it on the one share", async () => {
     await shareWithBob("first", "view");
     const again = await shareWithBob("second", "edit");
@@ -176,5 +184,17 @@ describe("sharing again with the same person", () => {
       changed: true,
       share: { id: "first", permission: "edit" },
     });
+  });
+
+  test("with the same permission changes nothing", async () => {
+    await shareWithBob("first", "view");
+    expect(await shareWithBob("second", "view")).toMatchObject({
+      added: false,
+      changed: false,
+      share: { id: "first", permission: "view" },
+    });
+    expect(await db.query.taskShares.findMany({ columns: { id: true } })).toEqual([
+      { id: "first" },
+    ]);
   });
 });
