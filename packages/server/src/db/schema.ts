@@ -281,18 +281,22 @@ export const contacts = sqliteTable(
 
 type ContactRow = typeof contacts.$inferSelect;
 type CollaboratorRow = typeof categoryCollaborators.$inferSelect;
+type ShareRow = typeof taskShares.$inferSelect;
 // With what leaving the list took out of it, for Undo to put back; older records have none
 type RemovedCollaborator = CollaboratorRow & {
   left?: { movedTaskIds: string[]; unfiledTaskIds: string[] };
 };
 
-// Removing a contact deletes both rows and the lists they shared; this keeps them for Undo
+// Removing a contact deletes both rows, the lists they shared and the tasks they shared; this
+// keeps them for Undo
 export const removedContacts = sqliteTable("removed_contacts", {
   // The remover's contact row id, which their Undo names
   id: pk(),
   userId: fk("user_id", () => users.id, { onDelete: "cascade" }),
   contacts: json<ContactRow[]>("contacts"),
   collaborators: json<RemovedCollaborator[]>("collaborators"),
+  // Records made before tasks were unshared have none
+  shares: json<ShareRow[]>("shares").default([]),
   removedAt: createdAt("removed_at"),
 });
 

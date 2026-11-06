@@ -1,0 +1,1 @@
+ALTER TABLE `removed_contacts` ADD `shares` text DEFAULT '[]' NOT NULL;

@@ -213,6 +213,50 @@ describe("removing a contact", () => {
     expect(await removedContactIds()).toEqual(["carols", "mine"]);
   });
 
+  test("unshares the tasks between them both ways, which Undo shares again as filed", async () => {
+    await db.insert(contacts).values([
+      { id: "mine", userId: owner, contactUserId: collaborator },
+      { id: "theirs", userId: collaborator, contactUserId: owner },
+    ]);
+    await db.insert(categories).values({ id: "their-list", userId: collaborator, name: "Theirs" });
+    await db.insert(tasks).values([
+      { id: "owners-task", userId: owner, title: "Owner's" },
+      { id: "their-task", userId: collaborator, title: "Theirs" },
+      { id: "carols-task", userId: "carol", title: "Carol's" },
+    ]);
+    await db.insert(taskShares).values([
+      {
+        id: "to-them",
+        taskId: "owners-task",
+        sharedWithUserId: collaborator,
+        categoryId: "their-list",
+      },
+      { id: "to-owner", taskId: "their-task", sharedWithUserId: owner, permission: "view" },
+      { id: "carols", taskId: "carols-task", sharedWithUserId: collaborator },
+    ]);
+    const shares = () =>
+      db.query.taskShares.findMany({
+        columns: { id: true, categoryId: true, permission: true },
+        orderBy: { id: "asc" },
+      });
+    const before = await shares();
+
+    const removal = await contactRepo.remove("mine", owner);
+
+    expect(await shares()).toEqual([{ id: "carols", categoryId: null, permission: "edit" }]);
+    expect(await ids(db.query.tasks.findMany({ columns: { id: true } }))).toEqual([
+      "carols-task",
+      "owners-task",
+      "their-task",
+    ]);
+    expect(removal.changed).toEqual(expect.arrayContaining(["owners-task", "their-task"]));
+
+    const undo = await contactRepo.restore("mine", owner);
+
+    expect(await shares()).toEqual(before);
+    expect(undo.changed).toEqual(expect.arrayContaining(["owners-task", "their-task"]));
+  });
+
   test("twice at once keeps the first's Undo", async () => {
     await db.insert(contacts).values([
       { id: "mine", userId: owner, contactUserId: collaborator },

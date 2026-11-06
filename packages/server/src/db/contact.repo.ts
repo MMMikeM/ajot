@@ -1,7 +1,7 @@
 import { and, eq, inArray, lt, or } from "drizzle-orm";
 import { createSelectSchema } from "drizzle-orm/zod";
-import { db, inTransaction } from "./client";
-import { categoryCollaborators, contacts, removedContacts } from "./schema";
+import { db, inTransaction, type Transaction } from "./client";
+import { categoryCollaborators, contacts, removedContacts, taskShares } from "./schema";
 import { now } from "@newtab-todo/shared/iso";
 import { NotFoundError } from "./errors";
 import * as userRepo from "./user.repo";
@@ -12,6 +12,8 @@ import * as reachRepo from "./reach.repo";
 export const responseSchema = createSelectSchema(contacts).extend({
   contactUser: userRepo.publicSchema,
 });
+
+type ShareRow = typeof taskShares.$inferSelect;
 
 const withContactUser = { contactUser: { columns: userRepo.publicColumns } } as const;
 
@@ -42,9 +44,10 @@ export const findContactUser = async (userId: string, username: string) => {
 };
 
 // One transaction: deleting only one direction would leave one user still seeing the other.
-// Sharing a list needs a contact, so each leaves the lists the other shared with them.
-// The read is inside it too: two removals at once could otherwise both find the contact, and the
-// second would overwrite the first's Undo record with nothing.
+// Sharing needs a contact, so each leaves the lists the other shared with them and loses the tasks
+// the other shared with them; what each owns stays theirs. The read is inside it too: two removals
+// at once could otherwise both find the contact, and the second would overwrite the first's Undo
+// record with nothing.
 export const remove = async (id: string, userId: string) =>
   inTransaction(async (tx) => {
     const contact = await tx.query.contacts.findFirst({ where: { id, userId } });
@@ -58,8 +61,17 @@ export const remove = async (id: string, userId: string) =>
         ],
       },
     });
+    const sharedTasks = await tx.query.taskShares.findMany({
+      where: {
+        OR: [
+          { sharedWithUserId: otherId, task: { userId } },
+          { sharedWithUserId: userId, task: { userId: otherId } },
+        ],
+      },
+    });
     const listIds = [...new Set(shared.map((c) => c.categoryId))];
-    const before = await reachRepo.read({ listIds }, tx);
+    const unsharedTaskIds = [...new Set(sharedTasks.map((s) => s.taskId))];
+    const before = await reachRepo.read({ listIds, taskIds: unsharedTaskIds }, tx);
     const removed = await tx
       .delete(contacts)
       .where(
@@ -76,6 +88,13 @@ export const remove = async (id: string, userId: string) =>
           shared.map((c) => c.id),
         ),
       );
+    if (sharedTasks.length > 0)
+      await tx.delete(taskShares).where(
+        inArray(
+          taskShares.id,
+          sharedTasks.map((s) => s.id),
+        ),
+      );
     const leavings = await categoryCollaboratorRepo.leave(tx, shared);
     const collaborators = shared.map((row, i) => {
       const { movedTaskIds, unfiledTaskIds } = leavings[i]!;
@@ -84,14 +103,46 @@ export const remove = async (id: string, userId: string) =>
     await tx.delete(removedContacts).where(lt(removedContacts.removedAt, undoableSince()));
     await tx
       .insert(removedContacts)
-      .values({ id: contact.id, userId, contacts: removed, collaborators })
+      .values({ id: contact.id, userId, contacts: removed, collaborators, shares: sharedTasks })
       .onConflictDoUpdate({
         target: removedContacts.id,
-        set: { contacts: removed, collaborators, removedAt: now() },
+        set: { contacts: removed, collaborators, shares: sharedTasks, removedAt: now() },
       });
-    const changed = leavings.flatMap((l) => [...l.movedTaskIds, ...l.unfiledTaskIds]);
+    const changed = [
+      ...leavings.flatMap((l) => [...l.movedTaskIds, ...l.unfiledTaskIds]),
+      // Their owners keep them, with one share fewer
+      ...unsharedTaskIds,
+    ];
     return { contact, removed, before, changed };
   });
+
+/**
+ * The shares whose task is still there, each filed where it was unless that list has gone since.
+ * A task its owner deleted keeps its share, for that task's own Undo.
+ */
+const sharesStillPossible = async (tx: Transaction, shares: ShareRow[]) => {
+  if (shares.length === 0) return [];
+  const [taskRows, listRows] = await Promise.all([
+    tx.query.tasks.findMany({
+      where: { id: { in: shares.map((s) => s.taskId) } },
+      columns: { id: true },
+    }),
+    tx.query.categories.findMany({
+      where: {
+        id: { in: shares.flatMap((s) => (s.categoryId ? [s.categoryId] : [])) },
+        deletedAt: { isNull: true },
+      },
+      columns: { id: true },
+    }),
+  ]);
+  const tasksThere = new Set(taskRows.map((t) => t.id));
+  const listsThere = new Set(listRows.map((l) => l.id));
+  const filedIn = (categoryId: string | null) =>
+    categoryId && listsThere.has(categoryId) ? categoryId : null;
+  return shares
+    .filter((s) => tasksThere.has(s.taskId))
+    .map((s) => ({ ...s, categoryId: filedIn(s.categoryId) }));
+};
 
 /** A replay after a lost response finds the contact already back and changes nothing. */
 export const restore = async (id: string, userId: string) =>
@@ -129,14 +180,21 @@ export const restore = async (id: string, userId: string) =>
       movedTaskIds: left?.movedTaskIds ?? [],
       unfiledTaskIds: left?.unfiledTaskIds ?? [],
     }));
-    const taskIds = leavings.flatMap((l) => [...l.movedTaskIds, ...l.unfiledTaskIds]);
+    const sharesBack = await sharesStillPossible(tx, record.shares);
+    const resharedTaskIds = [...new Set(sharesBack.map((s) => s.taskId))];
+    const taskIds = [
+      ...leavings.flatMap((l) => [...l.movedTaskIds, ...l.unfiledTaskIds]),
+      ...resharedTaskIds,
+    ];
     const before = await reachRepo.read({ listIds: [...liveCategoryIds], taskIds }, tx);
     if (back.length > 0)
       await tx
         .insert(categoryCollaborators)
         .values(back.map(({ left: _left, ...row }) => row))
         .onConflictDoNothing();
-    const changed = await categoryCollaboratorRepo.rejoin(tx, leavings);
+    // A share made again since keeps its own id and permission
+    if (sharesBack.length > 0) await tx.insert(taskShares).values(sharesBack).onConflictDoNothing();
+    const changed = [...(await categoryCollaboratorRepo.rejoin(tx, leavings)), ...resharedTaskIds];
     await tx.delete(removedContacts).where(eq(removedContacts.id, id));
     return { contact, restored, before, changed };
   });
