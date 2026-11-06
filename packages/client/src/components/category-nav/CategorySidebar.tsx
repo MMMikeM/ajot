@@ -58,7 +58,9 @@ function SortablePill({
   disabled: boolean;
   children: (ref: RefCallback<HTMLElement>) => ReactNode;
 }) {
-  const { ref } = useSortable({ id, index, type: "category", disabled });
+  // A task dragged across this pill would otherwise count as sorting among the lists: dnd-kit
+  // then moves the task's row into the sidebar, where React can't find it to remove it
+  const { ref } = useSortable({ id, index, type: "category", accept: "category", disabled });
   return <>{children(ref)}</>;
 }
 

@@ -1,3 +1,4 @@
+import type { Locator } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { taskRow as row } from "./helpers/app";
 import { mockData, openList } from "./helpers/mock-api";
@@ -31,6 +32,31 @@ test("a ticked task holds in place before moving to Done", async ({ page }) => {
 
   await expect(page.locator("[data-task-id]", { hasText: "Pick up dry cleaning" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /done \(3\)/i })).toBeVisible();
+});
+
+test("a task dragged across its own list's pill still drops onto another list", async ({
+  page,
+}) => {
+  await openList(page);
+  const sidebar = page.getByTestId("category-sidebar");
+  const pill = (name: string) => sidebar.getByRole("button", { name: new RegExp(`^${name}`) });
+  await pill("Work").click();
+  const title = "Reply to Priya about the contract";
+  await expect(row(page, title)).toBeVisible();
+
+  const centre = async (target: Locator) => {
+    const box = (await target.boundingBox())!;
+    return [box.x + box.width / 2, box.y + box.height / 2] as const;
+  };
+  await page.mouse.move(...(await centre(row(page, title).getByRole("button", { name: title }).first())));
+  await page.mouse.down();
+  await page.mouse.move(...(await centre(pill("Work"))), { steps: 12 });
+  await page.mouse.move(...(await centre(pill("Home"))), { steps: 12 });
+  await page.mouse.up();
+
+  await expect(row(page, title)).toHaveCount(0);
+  await pill("Home").click();
+  await expect(row(page, title)).toBeVisible();
 });
 
 test("ticking again during the hold cancels the move", async ({ page }) => {
