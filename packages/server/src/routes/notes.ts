@@ -3,6 +3,7 @@ import * as noteRepo from "../db/note.repo";
 import { authed, authedRoute } from "../middleware";
 import { broadcast } from "../broadcast";
 import { jsonBody } from "./crud";
+import { idBody } from "../db/field-limits";
 import { markTaskEdited, requireTask } from "./task-users";
 import * as taskRepo from "../db/task.repo";
 import { NotFoundError } from "../db/errors";
@@ -63,7 +64,7 @@ export const noteRoutes = authed()
     authedRoute({
       method: "delete",
       path: "/",
-      request: jsonBody(noteRepo.idSchema),
+      request: jsonBody(idBody),
       responses: { 200: noteRepo.responseSchema, 404: true },
     }),
     async (c) => {

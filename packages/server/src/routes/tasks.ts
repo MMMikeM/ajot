@@ -10,6 +10,7 @@ import { broadcast, broadcastAll } from "../broadcast";
 import { sendNotification, getUserName } from "../notify";
 import * as notificationQueueRepo from "../db/notification-queue.repo";
 import { jsonBody } from "./crud";
+import { idBody } from "../db/field-limits";
 import * as reachRepo from "../db/reach.repo";
 import * as attachmentRepo from "../db/attachment.repo";
 import { audienceOf, markTaskEdited, requireTask } from "./task-users";
@@ -221,7 +222,7 @@ export const taskRoutes = authed()
     authedRoute({
       method: "delete",
       path: "/",
-      request: jsonBody(taskRepo.idSchema),
+      request: jsonBody(idBody),
       responses: { 200: taskRepo.responseSchema, 403: true, 404: true },
     }),
     async (c) => {
@@ -336,7 +337,7 @@ export const taskRoutes = authed()
     authedRoute({
       method: "delete",
       path: "/share",
-      request: jsonBody(taskShareRepo.idSchema),
+      request: jsonBody(idBody),
       responses: { 200: taskShareRepo.responseSchema, 403: true, 404: true },
     }),
     async (c) => {

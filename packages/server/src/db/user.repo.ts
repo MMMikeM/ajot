@@ -3,13 +3,16 @@ import { db } from "./client";
 import { users } from "./schema";
 import { InsertFailedError } from "./errors";
 
-/** What other users may see of someone: never the password hash. */
-export const publicSchema = createSelectSchema(users).pick({
-  id: true,
-  name: true,
-  username: true,
-  avatarUrl: true,
-});
+// What other users may see of someone, never the password hash. A query's `columns` and a
+// schema's `pick` take the same mask, so each is written once.
+export const publicColumns = { id: true, name: true, username: true, avatarUrl: true } as const;
+export const handleColumns = { id: true, name: true, username: true } as const;
+export const nameColumns = { id: true, name: true } as const;
+
+const userSchema = createSelectSchema(users);
+export const publicSchema = userSchema.pick(publicColumns);
+export const handleSchema = userSchema.pick(handleColumns);
+export const nameSchema = userSchema.pick(nameColumns);
 
 export type Insert = typeof users.$inferInsert;
 

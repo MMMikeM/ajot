@@ -1,4 +1,4 @@
-import type { z } from "@hono/zod-openapi";
+import { z } from "@hono/zod-openapi";
 import { MAX_ID } from "@newtab-todo/shared/field-limits";
 
 const count = (n: number) => n.toLocaleString("en");
@@ -19,3 +19,6 @@ export const limited = (what: string, max: number) => (schema: z.ZodString) =>
 
 /** An id the client made, which no person types. */
 export const limitedId = (schema: z.ZodString) => schema.max(MAX_ID);
+
+/** A request body naming one row, such as a delete's. */
+export const idBody = z.object({ id: z.string().max(MAX_ID) });

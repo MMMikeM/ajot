@@ -3,11 +3,10 @@ import { createSelectSchema } from "drizzle-orm/zod";
 import { db } from "./client";
 import { taskShares } from "./schema";
 import { InsertFailedError, NotFoundError } from "./errors";
-import { limitedId } from "./field-limits";
+import * as userRepo from "./user.repo";
 
 export type Insert = typeof taskShares.$inferInsert;
 
-export const idSchema = createSelectSchema(taskShares, { id: limitedId }).pick({ id: true });
 export const responseSchema = createSelectSchema(taskShares);
 
 // A share they already have keeps its id; only a new permission changes it
@@ -55,13 +54,15 @@ export const updateCategory = async (
   return row;
 };
 
+export const withSharedWithUser = {
+  sharedWithUser: { columns: userRepo.handleColumns },
+} as const;
+
 export const listForTasks = async (taskIds: string[]) => {
   if (taskIds.length === 0) return [];
   return db.query.tasks.findMany({
     where: { id: { in: taskIds } },
     columns: { id: true },
-    with: {
-      shares: { with: { sharedWithUser: { columns: { id: true, name: true, username: true } } } },
-    },
+    with: { shares: { with: withSharedWithUser } },
   });
 };

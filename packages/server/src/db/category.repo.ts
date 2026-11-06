@@ -9,16 +9,14 @@ import { now } from "@newtab-todo/shared/iso";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { keptSortOrder } from "./sort-key";
 import { MAX_ID, MAX_NAME, MAX_SHORT, MAX_TASK_IDS } from "@newtab-todo/shared/field-limits";
-import { limited, limitedId } from "./field-limits";
+import { idBody, limited, limitedId } from "./field-limits";
+import * as userRepo from "./user.repo";
 import { notAfterNow, stampsNotAfterNow } from "./stamps";
 import { CATEGORY_TASK_ACTIONS, type CategoryTaskAction } from "@newtab-todo/shared/constants";
 
 export type Insert = typeof categories.$inferInsert;
 
-export const idSchema = createSelectSchema(categories, { id: limitedId }).pick({
-  id: true,
-});
-export const deleteSchema = idSchema.extend({
+export const deleteSchema = idBody.extend({
   tasks: z.enum(CATEGORY_TASK_ACTIONS).optional(),
   /** The top-level tasks the user was shown; only these can be deleted */
   taskIds: z
@@ -26,20 +24,13 @@ export const deleteSchema = idSchema.extend({
     .max(MAX_TASK_IDS, `A list can be deleted with at most ${MAX_TASK_IDS} tasks at once.`)
     .optional(),
 });
-const collaboratorUserSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  username: z.string(),
-  avatarUrl: z.string().nullable(),
-});
-
 // list() includes user + collaborators; insert/update/delete return flat rows without them.
 // nullish() allows these keys to be absent so all routes satisfy this schema.
 export const responseSchema = createSelectSchema(categories)
   .omit({ deletedAt: true, deletion: true })
   .extend({
     user: z.object({ name: z.string() }).nullish(),
-    collaborators: z.array(z.object({ user: collaboratorUserSchema })).nullish(),
+    collaborators: z.array(z.object({ user: userRepo.publicSchema })).nullish(),
   });
 const limitedFields = {
   id: limitedId,
@@ -68,6 +59,10 @@ export const updateSchema = createUpdateSchema(categories, {
 const hidden = { deletedAt: false, deletion: false } as const;
 const { deletedAt: _deletedAt, deletion: _deletion, ...sentColumns } = getColumns(categories);
 const live = { deletedAt: { isNull: true } } as const;
+const withCollaborators = {
+  collaborators: { with: { user: { columns: userRepo.publicColumns } } },
+} as const;
+const listWith = { user: { columns: { name: true } }, ...withCollaborators } as const;
 
 export const list = async (userId: string) =>
   db.query.categories.findMany({
@@ -83,12 +78,7 @@ export const list = async (userId: string) =>
         ),
     },
     columns: hidden,
-    with: {
-      user: { columns: { name: true } },
-      collaborators: {
-        with: { user: { columns: { id: true, name: true, username: true, avatarUrl: true } } },
-      },
-    },
+    with: listWith,
     orderBy: { sortOrder: "asc", name: "asc" },
   });
 
@@ -99,12 +89,7 @@ export const listByIds = async (ids: string[]) => {
   return db.query.categories.findMany({
     where: { ...live, id: { in: ids } },
     columns: hidden,
-    with: {
-      user: { columns: { name: true } },
-      collaborators: {
-        with: { user: { columns: { id: true, name: true, username: true, avatarUrl: true } } },
-      },
-    },
+    with: listWith,
   });
 };
 
@@ -121,11 +106,7 @@ export const findByIdWithCollaborators = async (id: string) => {
   const row = await db.query.categories.findFirst({
     where: { ...live, id },
     columns: hidden,
-    with: {
-      collaborators: {
-        with: { user: { columns: { id: true, name: true, username: true, avatarUrl: true } } },
-      },
-    },
+    with: withCollaborators,
   });
   if (!row) throw new NotFoundError("category", id);
   return row;

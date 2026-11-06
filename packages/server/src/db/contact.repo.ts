@@ -13,9 +13,7 @@ export const responseSchema = createSelectSchema(contacts).extend({
   contactUser: userRepo.publicSchema,
 });
 
-const withContactUser = {
-  contactUser: { columns: { id: true, name: true, username: true, avatarUrl: true } },
-} as const;
+const withContactUser = { contactUser: { columns: userRepo.publicColumns } } as const;
 
 export const list = async (userId: string) =>
   db.query.contacts.findMany({ where: { userId }, with: withContactUser });

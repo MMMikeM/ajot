@@ -11,7 +11,6 @@ import { notAfterNow, stampsNotAfterNow } from "./stamps";
 export type Insert = typeof notes.$inferInsert;
 export type NoteSelect = typeof notes.$inferSelect;
 
-export const idSchema = createSelectSchema(notes, { id: limitedId }).pick({ id: true });
 export const responseSchema = createSelectSchema(notes);
 const limitedFields = {
   id: limitedId,

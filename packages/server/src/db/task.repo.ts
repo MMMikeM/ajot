@@ -4,8 +4,9 @@ import { keptSortOrder } from "./sort-key";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "@hono/zod-openapi";
 import { db } from "./client";
-import { categories, taskAccess, tasks, users } from "./schema";
+import { categories, taskAccess, tasks } from "./schema";
 import * as taskShareRepo from "./task-share.repo";
+import * as userRepo from "./user.repo";
 import { IdTakenError, NotFoundError, StaleUpdateError } from "./errors";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { now } from "@newtab-todo/shared/iso";
@@ -15,7 +16,6 @@ import { notAfterNow, stampsNotAfterNow } from "./stamps";
 
 export type Insert = typeof tasks.$inferInsert;
 
-export const idSchema = createSelectSchema(tasks, { id: limitedId }).pick({ id: true });
 export const responseSchema = createSelectSchema(tasks).omit({
   live: true,
   topLevel: true,
@@ -31,23 +31,21 @@ const {
   ...sentColumns
 } = getColumns(tasks);
 
-const sharedWithUserSchema = createSelectSchema(users).pick({
-  id: true,
-  name: true,
-  username: true,
+export const listItemSchema = responseSchema.extend({
+  user: userRepo.nameSchema,
+  subtasks: z.array(responseSchema),
+  shares: z.array(taskShareRepo.responseSchema.extend({ sharedWithUser: userRepo.handleSchema })),
+  assignee: userRepo.handleSchema.nullable(),
+  sentBy: userRepo.nameSchema.nullable(),
 });
 
-export const listItemSchema = responseSchema.extend({
-  user: z.object({ id: z.string(), name: z.string() }),
-  subtasks: z.array(responseSchema),
-  shares: z.array(
-    taskShareRepo.responseSchema.extend({
-      sharedWithUser: sharedWithUserSchema,
-    }),
-  ),
-  assignee: sharedWithUserSchema.nullable(),
-  sentBy: z.object({ id: z.string(), name: z.string() }).nullable(),
-});
+const listItemWith = {
+  user: { columns: userRepo.nameColumns },
+  subtasks: { where: { deletedAt: { isNull: true } }, columns: hidden },
+  shares: { with: taskShareRepo.withSharedWithUser },
+  assignee: { columns: userRepo.handleColumns },
+  sentBy: { columns: userRepo.nameColumns },
+} as const;
 const limitedFields = {
   id: limitedId,
   userId: limitedId,
@@ -105,17 +103,7 @@ export const list = async (userId: string) =>
         ),
     },
     columns: hidden,
-    with: {
-      user: { columns: { id: true, name: true } },
-      subtasks: { where: { deletedAt: { isNull: true } }, columns: hidden },
-      shares: {
-        with: {
-          sharedWithUser: { columns: { id: true, name: true, username: true } },
-        },
-      },
-      assignee: { columns: { id: true, name: true, username: true } },
-      sentBy: { columns: { id: true, name: true } },
-    },
+    with: listItemWith,
     orderBy: { sortOrder: "asc", createdAt: "asc" },
   });
 
@@ -268,18 +256,6 @@ export const restore = async (id: string, updatedAt: string) => {
   if (!row) throw new NotFoundError("task", id);
   return row;
 };
-
-const listItemWith = {
-  user: { columns: { id: true, name: true } },
-  subtasks: { where: { deletedAt: { isNull: true } }, columns: hidden },
-  shares: {
-    with: {
-      sharedWithUser: { columns: { id: true, name: true, username: true } },
-    },
-  },
-  assignee: { columns: { id: true, name: true, username: true } },
-  sentBy: { columns: { id: true, name: true } },
-} as const;
 
 export const findListItem = async (id: string) => {
   const row = await db.query.tasks.findFirst({
