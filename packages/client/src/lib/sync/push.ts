@@ -6,6 +6,7 @@ import {
 import { apiHeaders, client } from "~/lib/api";
 import { apiClient, succeeded } from "~/lib/api-client";
 import { getOrCreateDeviceId } from "~/lib/auth/current-user";
+import { getAuthToken } from "~/lib/auth/token";
 import { fetchServerConfig } from "~/lib/server-config";
 import { getServerUrl } from "~/lib/server-url";
 import { getBuildTarget } from "~/lib/build-target";
@@ -46,10 +47,21 @@ const uploadSubscription = async (subscription: PushSubscription) => {
   if (!ok) throw new Error("subscription upload failed");
 };
 
+const canAsk = () => "Notification" in window;
+
+/**
+ * Asks for notifications, if they haven't been answered, then subscribes. Call it from a tap and
+ * before awaiting anything there: Safari and Firefox show the prompt only within the tap.
+ */
 export const registerPushSubscription = async (): Promise<boolean> => {
   if (!ownsSubscription()) return false;
+  const permission = canAsk() ? Notification.requestPermission() : null;
 
   try {
+    if ((await permission) !== "granted") {
+      console.log("[push] not subscribed: notifications not allowed");
+      return false;
+    }
     const { vapidPublicKey } = await fetchServerConfig(getServerUrl());
     if (!vapidPublicKey) {
       console.warn("[push] the server has no VAPID_PUBLIC_KEY");
@@ -72,6 +84,22 @@ export const registerPushSubscription = async (): Promise<boolean> => {
     console.error("[push] registration failed:", err);
     return false;
   }
+};
+
+/** Subscribes only where notifications are already allowed, so it never prompts. */
+export const registerPushIfAllowed = async () => {
+  if (canAsk() && Notification.permission === "granted") await registerPushSubscription();
+};
+
+/**
+ * Asks for notifications from the sign-in tap, so the lists update in the background from the
+ * start. The answer can come before or after the sign-in finishes; whichever is second subscribes.
+ */
+export const askForPushAtSignIn = () => {
+  if (!ownsSubscription() || !canAsk() || Notification.permission !== "default") return;
+  void Notification.requestPermission().then((permission) => {
+    if (permission === "granted" && getAuthToken()) void registerPushSubscription();
+  });
 };
 
 /**

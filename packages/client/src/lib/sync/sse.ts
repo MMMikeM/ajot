@@ -9,7 +9,7 @@ import {
   contactsCollection,
   attachmentsCollection,
 } from "~/lib/db/collections";
-import { refreshPushSubscription, registerPushSubscription } from "~/lib/sync/push";
+import { refreshPushSubscription, registerPushIfAllowed } from "~/lib/sync/push";
 import { createBackoff } from "~/lib/sync/backoff";
 import { getBuildTarget } from "~/lib/build-target";
 import { getServerUrl } from "~/lib/server-url";
@@ -197,7 +197,7 @@ const restartSSE = () => {
 
 const reconnect = () => {
   restartSSE();
-  if (getAuthToken() && getBuildTarget() === "browser") void registerPushSubscription();
+  if (getAuthToken() && getBuildTarget() === "browser") void registerPushIfAllowed();
 };
 
 const listenNetworkChanges = () => {

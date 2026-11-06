@@ -17,6 +17,7 @@ import { getBuildTarget } from "~/lib/build-target";
 import { useInviterName } from "~/lib/hooks/use-inviter-name";
 import { requestSyncDataConsent } from "~/lib/ext";
 import { getServerUrl, setServerUrl } from "~/lib/server-url";
+import { askForPushAtSignIn } from "~/lib/sync/push";
 import { fetchServerConfig, normalizeServerUrl, type ServerConfig } from "~/lib/server-config";
 
 // An object schema's first parse would probe for `new Function`, which the CSP refuses and reports
@@ -152,6 +153,8 @@ const AuthView = () => {
             e.preventDefault();
             // Firefox only prompts from within the submit itself, before anything is awaited
             if (choosesServer) syncConsent.current = requestSyncDataConsent();
+            // Safari and Firefox prompt for notifications only from within the tap too
+            if (schema.safeParse(form.state.values).success) askForPushAtSignIn();
             void form.handleSubmit();
           }}
           className="flex flex-col gap-3"
