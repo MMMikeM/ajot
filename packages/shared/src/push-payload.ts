@@ -6,9 +6,17 @@ export type PushPayload =
   | { type: "changes" }
   | { type: "task-shared"; taskId: string; taskTitle: string; fromUser: string }
   | { type: "task-sent"; taskId: string; taskTitle: string; fromUser: string }
-  | { type: "task-updated"; taskId: string; taskTitle: string; fromUser: string; changes: string }
+  // `more` is how many other tasks the same change made, for one notification standing for them all
+  | {
+      type: "task-updated";
+      taskId: string;
+      taskTitle: string;
+      more: number;
+      fromUser: string;
+      changes: string;
+    }
   | { type: "task-assigned"; taskId: string; taskTitle: string; fromUser: string }
-  | { type: "task-completed"; taskId: string; taskTitle: string; byUser: string }
+  | { type: "task-completed"; taskId: string; taskTitle: string; more: number; byUser: string }
   | { type: "category-shared"; categoryId: string; categoryName: string; fromUser: string }
   | { type: "contact-accepted"; contactName: string }
   | { type: "reminder-due"; taskId: string; taskTitle: string; dueDate: string }
@@ -59,6 +67,9 @@ export const NOTIFICATION_TRIGGERS: Record<
   "overdue-digest": "overdue",
 };
 
+const tasksNamed = ({ taskTitle, more }: { taskTitle: string; more: number }) =>
+  more ? `"${taskTitle}" and ${more} more` : `"${taskTitle}"`;
+
 const overdueCount = (payload: Extract<PushPayload, { type: "overdue-digest" }>) =>
   payload.total ?? payload.tasks.length;
 
@@ -94,8 +105,8 @@ export const toNotification = (payload: PushPayload): ShownNotification | null =
     case "task-updated":
       return {
         title: payload.fromUser,
-        body: `Updated "${payload.taskTitle}": ${payload.changes}`,
-        url: `/task/${payload.taskId}`,
+        body: `Updated ${tasksNamed(payload)}: ${payload.changes}`,
+        url: payload.more ? "/" : `/task/${payload.taskId}`,
         tag: `task:${payload.taskId}`,
       };
     case "task-assigned":
@@ -108,8 +119,8 @@ export const toNotification = (payload: PushPayload): ShownNotification | null =
     case "task-completed":
       return {
         title: payload.byUser,
-        body: `Completed "${payload.taskTitle}"`,
-        url: `/task/${payload.taskId}`,
+        body: `Completed ${tasksNamed(payload)}`,
+        url: payload.more ? "/" : `/task/${payload.taskId}`,
         tag: `task:${payload.taskId}`,
       };
     case "category-shared":

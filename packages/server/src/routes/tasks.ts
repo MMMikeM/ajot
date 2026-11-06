@@ -16,7 +16,10 @@ import * as attachmentRepo from "../db/attachment.repo";
 import { audienceOf, markTaskEdited, requireTask } from "./task-users";
 import { sendReachChanges } from "./reach";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
-import { MAX_ID, MAX_USERNAME } from "@newtab-todo/shared/field-limits";
+import { MAX_ID, MAX_STATUS_IDS, MAX_USERNAME } from "@newtab-todo/shared/field-limits";
+import { isoDatetime } from "@newtab-todo/shared/iso-schema";
+import { HTTPException } from "hono/http-exception";
+import { taskStatuses } from "../db/schema";
 import { limitSharing } from "../rate-limit";
 
 const shareSchema = z.object({
@@ -53,6 +56,17 @@ const syncReminder = (taskId: string, dueDate: string | null) =>
   dueDate
     ? notificationQueueRepo.scheduleReminder(taskId)
     : notificationQueueRepo.cancelReminder(taskId);
+
+const statusChangeSchema = z.object({
+  ids: z
+    .array(z.string().max(MAX_ID))
+    .min(1)
+    .max(MAX_STATUS_IDS, `At most ${MAX_STATUS_IDS} tasks can change at once.`),
+  status: z.enum(taskStatuses),
+  updatedAt: isoDatetime,
+});
+
+const refusalSchema = z.object({ id: z.string(), status: z.number(), error: z.string() });
 
 const shareCategorySchema = z.object({
   taskId: z.string().max(MAX_ID),
@@ -183,6 +197,7 @@ export const taskRoutes = authed()
               type: "task-completed",
               taskId: id,
               taskTitle: result.title,
+              more: 0,
               byUser: actorName,
             });
           }
@@ -205,6 +220,7 @@ export const taskRoutes = authed()
               type: "task-updated",
               taskId: id,
               taskTitle: result.title,
+              more: 0,
               fromUser: actorName,
               changes: changeDescriptions.join(", "),
             });
@@ -216,6 +232,65 @@ export const taskRoutes = authed()
       if (result.dueDate !== task.dueDate) await syncReminder(id, result.dueDate);
 
       return c.json(result, 200);
+    },
+  )
+  .openapi(
+    authedRoute({
+      method: "put",
+      path: "/status",
+      request: jsonBody(statusChangeSchema),
+      responses: {
+        200: z.object({ updated: z.array(taskRepo.responseSchema), refused: z.array(refusalSchema) }),
+      },
+    }),
+    // Each task as PUT / would change it, with one notification per person for the lot, where
+    // PUT / sends one for each task
+    async (c) => {
+      const { ids, status, updatedAt } = c.req.valid("json");
+      const userId = c.get("userId");
+      const actorNameLookup = getUserName(userId);
+      const stamps = taskChangeStamps({ status }, updatedAt);
+      const unique = [...new Set(ids)];
+      const outcomes = await Promise.allSettled(
+        unique.map(async (id) => {
+          const { task, audience } = await requireTask(id, userId, "edit");
+          const result = await taskRepo.update(id, updatedAt, { ...stamps, status });
+          broadcast(c, "tasks", "update", result, audience);
+          return { before: task, result, audience };
+        }),
+      );
+
+      const updated = outcomes.flatMap((o) => (o.status === "fulfilled" ? [o.value] : []));
+      const refused = outcomes.flatMap((o, i) => {
+        if (o.status === "fulfilled") return [];
+        const id = unique[i]!;
+        if (o.reason instanceof HTTPException)
+          return [{ id, status: o.reason.status, error: o.reason.message }];
+        console.error(`[tasks] couldn't change ${id}'s status:`, o.reason);
+        return [{ id, status: 500, error: "Couldn't change it. Try again." }];
+      });
+
+      const changedFor = new Map<string, { id: string; title: string }[]>();
+      for (const { before, result, audience } of updated) {
+        if (before.status === result.status) continue;
+        for (const recipientId of audience)
+          if (recipientId !== userId)
+            changedFor.set(recipientId, [...(changedFor.get(recipientId) ?? []), result]);
+      }
+      if (changedFor.size > 0) {
+        const actorName = await actorNameLookup;
+        for (const [recipientId, [first, ...others]] of changedFor) {
+          const about = { taskId: first!.id, taskTitle: first!.title, more: others.length };
+          sendNotification(
+            recipientId,
+            status === "done"
+              ? { type: "task-completed", ...about, byUser: actorName }
+              : { type: "task-updated", ...about, fromUser: actorName, changes: "reopened" },
+          );
+        }
+      }
+
+      return c.json({ updated: updated.map((u) => u.result), refused }, 200);
     },
   )
   .openapi(
