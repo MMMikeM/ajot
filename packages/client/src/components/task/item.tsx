@@ -231,9 +231,10 @@ function TaskRow({
       data-task-id={task.id}
       data-leaving={completing || undefined}
       // Lifted while dragged, so it doesn't read as text floating over the rows below. Only the
-      // dragged row's own: a parent's subtasks ride along inside its lift.
+      // dragged row's own: a parent's subtasks ride along inside its lift. The scroll margin keeps a
+      // row scrolled into view clear of the touch list's bottom edge fade.
       className={cn(
-        "transition-[opacity,translate,scale] duration-150 ease-out [[data-dnd-dragging]>&]:-mx-2 [[data-dnd-dragging]>&]:scale-102 [[data-dnd-dragging]>&]:rounded-lg [[data-dnd-dragging]>&]:bg-popover [[data-dnd-dragging]>&]:px-2 [[data-dnd-dragging]>&]:shadow-md motion-reduce:[[data-dnd-dragging]>&]:scale-100",
+        "scroll-mb-8 transition-[opacity,translate,scale] duration-150 ease-out [[data-dnd-dragging]>&]:-mx-2 [[data-dnd-dragging]>&]:scale-102 [[data-dnd-dragging]>&]:rounded-lg [[data-dnd-dragging]>&]:bg-popover [[data-dnd-dragging]>&]:px-2 [[data-dnd-dragging]>&]:shadow-md motion-reduce:[[data-dnd-dragging]>&]:scale-100",
         leaving && !isDone && "translate-y-1 opacity-0 ease-in motion-reduce:translate-y-0",
       )}
     >

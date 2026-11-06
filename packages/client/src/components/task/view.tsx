@@ -23,6 +23,7 @@ import { TaskItem, sameRowProps } from "./item";
 import { FlipList } from "./flip-list";
 import { TaskRowsSkeleton } from "./rows-skeleton";
 import { finishStartup } from "~/lib/startup-timing";
+import { revealPendingRow } from "./reveal-added";
 import { useTaskActions } from "./use-actions";
 import { handOffRowFocus } from "./focus-handoff";
 import {
@@ -314,6 +315,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   const isLoading =
     tasksLoading || categoriesLoading || allTasks === undefined || rawCategories === undefined;
   const hasRows = !!allTasks?.length;
+  useEffect(() => revealPendingRow(activeListRef.current));
   useEffect(() => {
     if (hasRows) finishStartup("tasks-shown");
     else if (!isLoading) finishStartup("list-ready");
