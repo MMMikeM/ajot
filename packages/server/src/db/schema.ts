@@ -166,8 +166,11 @@ export const sessions = sqliteTable("sessions", {
   createdAt: createdAt(),
 });
 
-// A personal access token for /mcp, which only it accepts. Stored as its hash, so a copy of the
-// database lets no one in; the hint is its last characters, for telling tokens apart in Settings.
+export const tokenKinds = ["mcp", "widget"] as const;
+
+// A personal access token for /mcp, which only it accepts, or for the Android widget's few routes.
+// Stored as its hash, so a copy of the database lets no one in; the hint is its last characters,
+// for telling tokens apart in Settings.
 export const mcpTokens = sqliteTable(
   "mcp_tokens",
   {
@@ -177,12 +180,15 @@ export const mcpTokens = sqliteTable(
     tokenHash: string("token_hash"),
     hint: string("hint"),
     canWrite: bool("can_write"),
+    // What it opens: /mcp, or the routes the Android widget calls (mcp/caller.ts)
+    kind: oneOf("kind", tokenKinds).default("mcp"),
     expiresAt: string("expires_at"),
     lastUsedAt: nullableString("last_used_at"),
     createdAt: createdAt(),
   },
   (t) => [
     atMost("mcp_token_name_length", t.name, MAX_NAME),
+    check("mcp_token_kind", sql`${t.kind} IN ${sql.raw(`('${tokenKinds.join("', '")}')`)}`),
     uniqueIndex("mcp_tokens_hash_idx").on(t.tokenHash),
     index("mcp_tokens_user_idx").on(t.userId),
   ],

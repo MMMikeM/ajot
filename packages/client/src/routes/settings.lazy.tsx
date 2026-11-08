@@ -5,6 +5,7 @@ import { createLazyFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import type { PushTrigger } from "@newtab-todo/shared/push-payload";
+import { androidAppPackage } from "~/lib/android-app";
 import { useAuthToken } from "~/lib/auth/token";
 import { getBuildTarget } from "~/lib/build-target";
 import { useInstallPrompt } from "~/lib/hooks/use-install-prompt";
@@ -20,6 +21,7 @@ import {
 } from "~/lib/sync/push";
 import { BuildStamp } from "~/components/BuildStamp";
 import { CheckRow } from "~/components/CheckRow";
+import { AndroidWidget } from "~/components/AndroidWidget";
 import { ConnectClaude } from "~/components/ConnectClaude";
 import { CategorySidebar } from "~/components/category-nav/CategorySidebar";
 import {
@@ -78,6 +80,7 @@ export function SettingsPage() {
   const router = useRouter();
   const isDesk = useIsDesk();
   const signedIn = !!useAuthToken();
+  const [appPackage] = useState(androidAppPackage);
   const isPwa = getBuildTarget() === "browser";
 
   return (
@@ -114,6 +117,7 @@ export function SettingsPage() {
       ) : (
         <BackgroundUpdates />
       )}
+      {signedIn && appPackage && <AndroidWidget appPackage={appPackage} />}
       {signedIn && <ConnectClaude />}
       <BuildStamp />
     </div>

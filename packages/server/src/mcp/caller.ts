@@ -13,3 +13,12 @@ export const mayCall = ({ canWrite }: McpCaller, method: string, path: string) =
   const route = `${method} ${path}`;
   return READS.has(route) || (canWrite && WRITES.has(route));
 };
+
+const WIDGET_READS = new Set(["GET /api/tasks/inbox"]);
+const WIDGET_WRITES = new Set(["PUT /api/tasks/status"]);
+
+/** The routes the Android widget calls with its own token: its list, and ticking a task off. */
+export const widgetMayCall = (canWrite: boolean, method: string, path: string) => {
+  const route = `${method} ${path}`;
+  return WIDGET_READS.has(route) || (canWrite && WIDGET_WRITES.has(route));
+};

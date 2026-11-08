@@ -43,7 +43,7 @@ test("a token is shown once, then listed only by its hint, and works until revok
   expect(listed).toContain(made.id);
   expect(listed).not.toContain(made.token);
   expect(listed).not.toMatch(/tokenHash/);
-  expect(await mcpTokenRepo.findValid(made.token)).toMatchObject({
+  expect(await mcpTokenRepo.findValid(made.token, "mcp")).toMatchObject({
     userId: "alice",
     canWrite: false,
   });
@@ -52,14 +52,14 @@ test("a token is shown once, then listed only by its hint, and works until revok
   expect((await send("DELETE", `/${made.id}`)).status).toBe(404);
   signedIn = "alice";
   expect((await send("DELETE", `/${made.id}`)).status).toBe(200);
-  expect(await mcpTokenRepo.findValid(made.token)).toBeUndefined();
+  expect(await mcpTokenRepo.findValid(made.token, "mcp")).toBeUndefined();
 });
 
 test("an expired token doesn't work", async () => {
   vi.useFakeTimers({ now: Date.now() - 31 * 24 * 60 * 60_000, toFake: ["Date"] });
   const { token } = await mcpTokenRepo.create("alice", { name: "Old", canWrite: true, days: 30 });
   vi.useRealTimers();
-  expect(await mcpTokenRepo.findValid(token)).toBeUndefined();
+  expect(await mcpTokenRepo.findValid(token, "mcp")).toBeUndefined();
 });
 
 test("a person can't hold more than 20 live tokens", async () => {

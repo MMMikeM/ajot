@@ -2,6 +2,7 @@ import { z } from "@hono/zod-openapi";
 import { MAX_NAME } from "@newtab-todo/shared/field-limits";
 import { MCP_TOKEN_DAYS } from "@newtab-todo/shared/constants";
 import * as mcpTokenRepo from "../db/mcp-token.repo";
+import { tokenKinds } from "../db/schema";
 import { BadRequestError } from "../db/errors";
 import { authed, authedRoute } from "../middleware";
 import { limitMcpTokens } from "../rate-limit";
@@ -17,6 +18,7 @@ const createSchema = z.object({
     .max(MAX_NAME, `A token's name can be at most ${MAX_NAME} characters.`),
   canWrite: z.boolean(),
   days: z.union(MCP_TOKEN_DAYS.map((days) => z.literal(days))),
+  kind: z.enum(tokenKinds).default("mcp"),
 });
 
 export const mcpTokenRoutes = authed()

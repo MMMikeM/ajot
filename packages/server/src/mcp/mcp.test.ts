@@ -87,6 +87,31 @@ describe("who /mcp lets in", () => {
     expect(res.status).toBe(401);
   });
 
+  test("the widget's token reaches its list and ticking, and nothing else", async () => {
+    const { token } = await mcpTokenRepo.create("alice", {
+      name: "Android widget",
+      canWrite: true,
+      days: 30,
+      kind: "widget",
+    });
+    const call = (path: string, init: RequestInit = {}) =>
+      app.request(path, { ...init, headers: { authorization: `Bearer ${token}` } });
+    const inbox = await call("/api/tasks/inbox");
+    expect(inbox.status).toBe(200);
+    // Shared with Alice and filed nowhere, so in her Inbox
+    expect((await inbox.json()).map((t: { id: string }) => t.id)).toContain("sarahs");
+    const status = await call("/api/tasks/status", {
+      method: "PUT",
+      body: JSON.stringify({ ids: ["no-such-task"], status: "done", updatedAt: LONG_AGO }),
+    });
+    expect(status.status).not.toBe(401);
+    expect(status.status).not.toBe(403);
+    expect((await call("/api/tasks")).status).toBe(403);
+    expect((await call("/api/categories")).status).toBe(403);
+    expect((await call("/api/mcp/tokens")).status).toBe(403);
+    expect((await post(`Bearer ${token}`)).status).toBe(401);
+  });
+
   test("OAuth discovery finds nothing, rather than the app's page", async () => {
     const res = await app.request("/.well-known/oauth-protected-resource");
     expect(res.status).toBe(404);

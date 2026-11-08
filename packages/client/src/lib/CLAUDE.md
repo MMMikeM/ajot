@@ -17,6 +17,7 @@ Any module that accesses `localStorage`, `window`, or browser-only APIs (`Indexe
 - **`state/`** — App UI state: `active-category.ts`, `nav-context.tsx`
 - **`hooks/`** — Standalone React hooks: `use-install-prompt.ts`, `use-swipe-reveal.ts`, `use-invite.ts` (People's invite link, also offered by the sharing sheets)
 - **`constants.ts`** — re-exports from `@newtab-todo/shared`
+- **`android-app.ts`** — whether the page runs inside the Android app (Chrome's `android-app://` referrer), and handing its widget a token through an `intent://` URL
 
 ## Non-obvious decisions
 

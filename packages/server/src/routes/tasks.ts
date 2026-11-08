@@ -15,6 +15,7 @@ import * as reachRepo from "../db/reach.repo";
 import * as attachmentRepo from "../db/attachment.repo";
 import { audienceOf, markTaskEdited, requireTask } from "./task-users";
 import { sendReachChanges } from "./reach";
+import { inboxOf } from "../widget-inbox";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
 import { MAX_ID, MAX_STATUS_IDS, MAX_USERNAME } from "@newtab-todo/shared/field-limits";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
@@ -81,6 +82,18 @@ export const taskRoutes = authed()
       responses: { 200: z.array(taskRepo.listItemSchema) },
     }),
     async (c) => c.json(await taskRepo.list(c.get("userId")), 200),
+  )
+  .openapi(
+    authedRoute({
+      method: "get",
+      path: "/inbox",
+      responses: { 200: z.array(taskRepo.listItemSchema) },
+    }),
+    async (c) => {
+      const userId = c.get("userId");
+      const [tasks, lists] = await Promise.all([taskRepo.list(userId), categoryRepo.list(userId)]);
+      return c.json(inboxOf(tasks, lists, userId), 200);
+    },
   )
   .openapi(
     authedRoute({

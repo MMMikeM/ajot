@@ -4,11 +4,17 @@ import { createId } from "@paralleldrive/cuid2";
 import { createSelectSchema } from "drizzle-orm/zod";
 import { hoursFromNow, now } from "@newtab-todo/shared/iso";
 import { db } from "./client";
-import { mcpTokens } from "./schema";
+import { mcpTokens, type tokenKinds } from "./schema";
 import { NotFoundError } from "./errors";
 
-const PREFIX = "ajot_pat_";
+type Kind = (typeof tokenKinds)[number];
+
+// Told apart before any lookup, so a token is only ever looked for among its own kind
+const PREFIX: Record<Kind, string> = { mcp: "ajot_pat_", widget: "ajot_wgt_" };
 const HINT_LENGTH = 4;
+
+export const kindOf = (token: string) =>
+  (Object.keys(PREFIX) as Kind[]).find((kind) => token.startsWith(PREFIX[kind]));
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("base64url");
 
@@ -31,9 +37,14 @@ export const countLive = (userId: string) =>
 /** The token itself is in the reply only, never stored. */
 export const create = async (
   userId: string,
-  { name, canWrite, days }: { name: string; canWrite: boolean; days: number },
+  {
+    name,
+    canWrite,
+    days,
+    kind = "mcp",
+  }: { name: string; canWrite: boolean; days: number; kind?: Kind },
 ) => {
-  const token = `${PREFIX}${randomBytes(32).toString("base64url")}`;
+  const token = `${PREFIX[kind]}${randomBytes(32).toString("base64url")}`;
   const [row] = await db
     .insert(mcpTokens)
     .values({
@@ -41,6 +52,7 @@ export const create = async (
       userId,
       name,
       canWrite,
+      kind,
       tokenHash: hashToken(token),
       hint: token.slice(-HINT_LENGTH),
       expiresAt: hoursFromNow(days * 24),
@@ -63,10 +75,10 @@ export const remove = async (id: string, userId: string) => {
  * Undefined for a token that isn't one, has expired or was revoked. Not cached: revoking happens
  * in other processes too (reset-password), and a cached token would outlive it.
  */
-export const findValid = async (token: string) => {
-  if (!token.startsWith(PREFIX)) return undefined;
+export const findValid = async (token: string, kind: Kind) => {
+  if (!token.startsWith(PREFIX[kind])) return undefined;
   return db.query.mcpTokens.findFirst({
-    where: { tokenHash: hashToken(token), expiresAt: { gt: now() } },
+    where: { tokenHash: hashToken(token), kind, expiresAt: { gt: now() } },
     columns: { id: true, userId: true, canWrite: true, expiresAt: true },
   });
 };

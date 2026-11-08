@@ -4,7 +4,7 @@ import type { McpCaller } from "./caller";
 
 export const verifier: OAuthTokenVerifier = {
   verifyAccessToken: async (token) => {
-    const row = await mcpTokenRepo.findValid(token);
+    const row = await mcpTokenRepo.findValid(token, "mcp");
     if (!row)
       throw new OAuthError(
         OAuthErrorCode.InvalidToken,
