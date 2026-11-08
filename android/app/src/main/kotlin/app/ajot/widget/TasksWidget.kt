@@ -86,11 +86,11 @@ private fun Content(context: Context, state: WidgetState) {
     }
     Spacer(GlanceModifier.padding(top = 4.dp))
     when (state) {
-      WidgetState.NotConnected ->
+      WidgetState.SignedOut ->
         Text(
-          "Open Ajot's Settings and tap Connect the widget.",
+          "Tap to show your Inbox",
           style = hint,
-          modifier = GlanceModifier.clickable(openApp(context, "/settings")),
+          modifier = GlanceModifier.clickable(openApp(context, "/")),
         )
       is WidgetState.Inbox ->
         when {

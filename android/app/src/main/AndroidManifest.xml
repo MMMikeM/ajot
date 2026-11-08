@@ -91,9 +91,9 @@
 
         <activity android:name="com.google.androidbrowserhelper.trusted.NotificationPermissionRequestActivity" />
 
-        <!-- Settings, inside the app, hands the widget its token: intent://connect-widget#Intent;scheme=ajot;... -->
+        <!-- Settings' "Add Inbox to home screen", inside the app: intent://add-widget#Intent;scheme=ajot;... -->
         <activity
-            android:name=".widget.ConnectWidgetActivity"
+            android:name=".widget.AddWidgetActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:noHistory="true"
@@ -102,7 +102,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="ajot" android:host="connect-widget" />
+                <data android:scheme="ajot" android:host="add-widget" />
             </intent-filter>
         </activity>
 

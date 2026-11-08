@@ -15,6 +15,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.delay
 
 private val online = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
@@ -93,6 +94,49 @@ class TickWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             .setConstraints(online)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .setInputData(workDataOf(ID to id, STAMP to AjotApi.now()))
+            .build(),
+        )
+    }
+  }
+}
+
+/** Waits for the app's page to approve the widget's code, then keeps the token it claims. */
+class ClaimWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+  override suspend fun doWork(): Result {
+    val code = inputData.getString(CODE) ?: return Result.success()
+    // Inside WorkManager's ten minutes, and the server's approval lasts as long
+    repeat(ATTEMPTS) {
+      val token =
+        try {
+          AjotApi.claim(code)
+        } catch (_: IOException) {
+          null
+        }
+      if (token != null) {
+        WidgetData.connect(applicationContext, token)
+        TasksWidget().updateAll(applicationContext)
+        RefreshWorker.schedule(applicationContext)
+        RefreshWorker.now(applicationContext)
+        return Result.success()
+      }
+      delay(EVERY_MS)
+    }
+    return Result.success()
+  }
+
+  companion object {
+    private const val CODE = "code"
+    private const val ATTEMPTS = 110
+    private const val EVERY_MS = 4_000L
+
+    fun start(context: Context, code: String) {
+      WorkManager.getInstance(context)
+        .enqueueUniqueWork(
+          "claim",
+          ExistingWorkPolicy.REPLACE,
+          OneTimeWorkRequestBuilder<ClaimWorker>()
+            .setConstraints(online)
+            .setInputData(workDataOf(CODE to code))
             .build(),
         )
     }
