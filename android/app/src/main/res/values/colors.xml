@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The app's background (DESIGN.md, theme_color), so Chrome's system bars match the page -->
+    <color name="ink">#FF151A22</color>
+</resources>
