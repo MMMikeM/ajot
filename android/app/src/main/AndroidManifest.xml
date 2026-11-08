@@ -25,6 +25,13 @@
             <meta-data
                 android:name="android.support.customtabs.trusted.FALLBACK_STRATEGY"
                 android:value="customtabs" />
+            <!-- Otherwise the default browser, which opens Firefox's Custom Tab with a URL bar -->
+            <meta-data
+                android:name="android.support.customtabs.trusted.LAUNCHING_BROWSER"
+                android:value="com.android.chrome" />
+            <meta-data
+                android:name="android.support.customtabs.trusted.LAUNCHING_BROWSER_NAME"
+                android:value="Chrome" />
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
