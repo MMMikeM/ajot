@@ -198,15 +198,18 @@ test.describe("a change to who reaches a task reaches an open page live", () => 
     try {
       await apiRequest("DELETE", `/api/contacts/${contact.id}`, undefined, alice.token);
       await expect(row(bobPage, bobsTask.title)).toBeVisible();
-      await expect(row(bobPage, filed.title)).toBeVisible();
       await expect(sidebarList(bobPage, name)).toHaveCount(0);
       await bobLive.expectHeard("tasks.delete", alicesTask.id);
+      // Alice's, so unshared with Bob
+      await bobLive.expectHeard("tasks.delete", filed.id);
+      await expect(row(bobPage, filed.title)).toHaveCount(0);
       await expect(row(alicePage, bobsTask.title)).toHaveCount(0);
 
       await apiRequest("POST", `/api/contacts/${contact.id}/restore`, undefined, alice.token);
       restored = true;
       await expect(sidebarList(bobPage, name)).toBeVisible();
       await bobLive.expectHeard("tasks.insert", alicesTask.id);
+      await bobLive.expectHeard("tasks.insert", filed.id);
       // Back in the list, so out of Bob's Inbox
       await expect(row(bobPage, bobsTask.title)).toHaveCount(0);
       await expect(row(bobPage, filed.title)).toHaveCount(0);
