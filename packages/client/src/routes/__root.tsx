@@ -11,6 +11,7 @@ import { isListPath } from "~/lib/list-path";
 import { registerServiceWorker } from "~/lib/sync/register-sw";
 import { UndoShortcut, toastManager } from "~/lib/undo-toast";
 import { useLeaveGuard } from "~/lib/hooks/use-leave-guard";
+import { useWidgetApproval } from "~/lib/android-app";
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -23,6 +24,7 @@ export default function RootComponent() {
     registerServiceWorker();
   }, []);
   useLeaveGuard();
+  useWidgetApproval();
 
   return (
     <NavContextProvider>

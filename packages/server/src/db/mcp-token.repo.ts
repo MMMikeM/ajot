@@ -24,15 +24,16 @@ export const listedSchema = createSelectSchema(mcpTokens).omit({ tokenHash: true
 
 const live = () => gt(mcpTokens.expiresAt, now());
 
+// Claude's tokens: the widget's belong to the app's sign-in, and are never shown
 export const listOf = async (userId: string) =>
   db.query.mcpTokens.findMany({
-    where: { userId, expiresAt: { gt: now() } },
+    where: { userId, kind: "mcp", expiresAt: { gt: now() } },
     columns: listed,
     orderBy: { createdAt: "desc" },
   });
 
 export const countLive = (userId: string) =>
-  db.$count(mcpTokens, and(eq(mcpTokens.userId, userId), live()));
+  db.$count(mcpTokens, and(eq(mcpTokens.userId, userId), eq(mcpTokens.kind, "mcp"), live()));
 
 /** The token itself is in the reply only, never stored. */
 export const create = async (
@@ -42,7 +43,8 @@ export const create = async (
     canWrite,
     days,
     kind = "mcp",
-  }: { name: string; canWrite: boolean; days: number; kind?: Kind },
+    sessionId = null,
+  }: { name: string; canWrite: boolean; days: number; kind?: Kind; sessionId?: string | null },
 ) => {
   const token = `${PREFIX[kind]}${randomBytes(32).toString("base64url")}`;
   const [row] = await db
@@ -53,6 +55,7 @@ export const create = async (
       name,
       canWrite,
       kind,
+      sessionId,
       tokenHash: hashToken(token),
       hint: token.slice(-HINT_LENGTH),
       expiresAt: hoursFromNow(days * 24),
@@ -60,6 +63,22 @@ export const create = async (
     .returning();
   const { tokenHash: _tokenHash, ...shown } = row!;
   return { token, ...shown };
+};
+
+const WIDGET_DAYS = 365;
+
+/** One per sign-in: a phone's earlier widget token goes when it's approved again. */
+export const replaceWidgetToken = async (userId: string, sessionId: string) => {
+  await db
+    .delete(mcpTokens)
+    .where(and(eq(mcpTokens.sessionId, sessionId), eq(mcpTokens.kind, "widget")));
+  return create(userId, {
+    name: "Android widget",
+    canWrite: true,
+    days: WIDGET_DAYS,
+    kind: "widget",
+    sessionId,
+  });
 };
 
 export const remove = async (id: string, userId: string) => {

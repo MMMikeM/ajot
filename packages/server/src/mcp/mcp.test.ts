@@ -87,13 +87,23 @@ describe("who /mcp lets in", () => {
     expect(res.status).toBe(401);
   });
 
-  test("the widget's token reaches its list and ticking, and nothing else", async () => {
-    const { token } = await mcpTokenRepo.create("alice", {
-      name: "Android widget",
-      canWrite: true,
-      days: 30,
-      kind: "widget",
-    });
+  test("the widget signs in through the app's session, and out with it", async () => {
+    const session = await sessionRepo.insert("alice");
+    const code = "a".repeat(43);
+    const widget = (path: string, authorization?: string) =>
+      app.request(`/api/widget/${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(authorization && { authorization }) },
+        body: JSON.stringify({ code }),
+      });
+    expect((await widget("claim")).status).toBe(404);
+    expect((await widget("approve")).status).toBe(401);
+    expect((await widget("approve", `Bearer ${session}`)).status).toBe(200);
+    const claimed = await widget("claim");
+    expect(claimed.status).toBe(200);
+    const { token } = (await claimed.json()) as { token: string };
+    expect((await widget("claim")).status).toBe(404);
+
     const call = (path: string, init: RequestInit = {}) =>
       app.request(path, { ...init, headers: { authorization: `Bearer ${token}` } });
     const inbox = await call("/api/tasks/inbox");
@@ -110,6 +120,9 @@ describe("who /mcp lets in", () => {
     expect((await call("/api/categories")).status).toBe(403);
     expect((await call("/api/mcp/tokens")).status).toBe(403);
     expect((await post(`Bearer ${token}`)).status).toBe(401);
+
+    await sessionRepo.remove(session);
+    expect((await call("/api/tasks/inbox")).status).toBe(401);
   });
 
   test("OAuth discovery finds nothing, rather than the app's page", async () => {

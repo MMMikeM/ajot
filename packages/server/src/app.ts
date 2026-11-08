@@ -21,6 +21,7 @@ import { metricRoutes } from "./routes/metrics";
 import { attachmentRoutes } from "./routes/attachments";
 import { mcpTokenRoutes } from "./routes/mcp-tokens";
 import { mountMcp } from "./mcp/route";
+import { widgetRoutes } from "./routes/widget";
 import { isAllowedOrigin, parseAllowedOrigins } from "./origins";
 import { rejectInvalidInput } from "./routes/openapi-schemas";
 import { LoggedHTTPException } from "./db/errors";
@@ -152,7 +153,8 @@ const api = app
   .route("/api/notifications", notificationRoutes)
   .route("/api/deploy", deployRoutes)
   .route("/api/metrics", metricRoutes)
-  .route("/api/mcp/tokens", mcpTokenRoutes);
+  .route("/api/mcp/tokens", mcpTokenRoutes)
+  .route("/api/widget", widgetRoutes);
 
 app.doc("/api/openapi.json", {
   openapi: "3.0.0",

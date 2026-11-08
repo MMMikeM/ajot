@@ -33,15 +33,16 @@ export const fetchMcpTokens = async () => {
 export type McpToken = Awaited<ReturnType<typeof fetchMcpTokens>>[number];
 
 /** The token itself is in this reply only. */
-export const makeMcpToken = async (json: {
-  name: string;
-  canWrite: boolean;
-  days: 30 | 90 | 365;
-  kind?: "mcp" | "widget";
-}) => {
+export const makeMcpToken = async (json: { name: string; canWrite: boolean; days: 30 | 90 | 365 }) => {
   const res = await reach(client.api.mcp.tokens.$post({ json }));
   if (!res.ok) throw await errorFrom(res, "Couldn't make a token. Try again.");
   return res.json();
+};
+
+/** Lets the Android widget that made `code` sign in with this page's session. */
+export const approveWidgetCode = async (code: string) => {
+  const res = await reach(client.api.widget.approve.$post({ json: { code } }));
+  if (!res.ok) throw await errorFrom(res, "Couldn't sign the widget in. Try again.");
 };
 
 /** One already gone is revoked all the same. */

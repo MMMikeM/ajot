@@ -168,9 +168,9 @@ export const sessions = sqliteTable("sessions", {
 
 export const tokenKinds = ["mcp", "widget"] as const;
 
-// A personal access token for /mcp, which only it accepts, or for the Android widget's few routes.
-// Stored as its hash, so a copy of the database lets no one in; the hint is its last characters,
-// for telling tokens apart in Settings.
+// A personal access token for /mcp, which only it accepts, or the Android widget's, for its few
+// routes. Stored as its hash, so a copy of the database lets no one in; the hint is its last
+// characters, for telling tokens apart in Settings.
 export const mcpTokens = sqliteTable(
   "mcp_tokens",
   {
@@ -182,6 +182,12 @@ export const mcpTokens = sqliteTable(
     canWrite: bool("can_write"),
     // What it opens: /mcp, or the routes the Android widget calls (mcp/caller.ts)
     kind: oneOf("kind", tokenKinds).default("mcp"),
+    // The app's sign-in on the phone that approved the widget: signing out there clears it. Updated
+    // with the session's id, which changes when a stored token is hashed (session.repo.ts)
+    sessionId: nullableFk("session_id", () => sessions.id, {
+      onDelete: "cascade",
+      onUpdate: "cascade",
+    }),
     expiresAt: string("expires_at"),
     lastUsedAt: nullableString("last_used_at"),
     createdAt: createdAt(),
@@ -189,8 +195,10 @@ export const mcpTokens = sqliteTable(
   (t) => [
     atMost("mcp_token_name_length", t.name, MAX_NAME),
     check("mcp_token_kind", sql`${t.kind} IN ${sql.raw(`('${tokenKinds.join("', '")}')`)}`),
+    check("widget_token_has_session", sql`${t.kind} <> 'widget' OR ${t.sessionId} IS NOT NULL`),
     uniqueIndex("mcp_tokens_hash_idx").on(t.tokenHash),
     index("mcp_tokens_user_idx").on(t.userId),
+    index("mcp_tokens_session_idx").on(t.sessionId),
   ],
 );
 

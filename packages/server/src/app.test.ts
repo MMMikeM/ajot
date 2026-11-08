@@ -131,7 +131,8 @@ test("every route behind the auth middleware declares its 401, and a public one 
   ).flatMap(([path, operations]) =>
     Object.entries(operations).map(([method, { responses }]) => ({
       route: `${method.toUpperCase()} ${path}`,
-      public: path.startsWith("/api/auth/") || path === "/api/config",
+      public:
+        path.startsWith("/api/auth/") || path === "/api/config" || path === "/api/widget/claim",
       declares401: "401" in responses,
     })),
   );
