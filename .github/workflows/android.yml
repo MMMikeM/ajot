@@ -1,0 +1,65 @@
+name: Android
+
+# Builds the Android app for the server in the AJOT_SERVER_URL repo variable, signed with the
+# ANDROID_KEYSTORE_BASE64 secret (a PKCS12 keystore, key alias "ajot"), and attaches it to a
+# pre-release
+on:
+  push:
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # No wrapper is committed: its jar is a binary nobody here builds
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          gradle-version: 9.9.0
+
+      # Opens the keystore first, so a bad secret fails here rather than after the build
+      - name: Signing key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.p12"
+          keytool -list -storetype pkcs12 -keystore "$RUNNER_TEMP/release.p12" -storepass "$ANDROID_KEYSTORE_PASSWORD"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
+
+      - name: Build
+        working-directory: android
+        env:
+          AJOT_SERVER_URL: ${{ vars.AJOT_SERVER_URL || 'https://ajot.fly.dev' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: gradle assembleRelease
+
+      # A server serves this fingerprint in its assetlinks.json; a mismatch only shows on the phone,
+      # as the app's URL bar
+      - name: Signing fingerprint
+        run: |
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner"
+          "$apksigner" verify --print-certs android/app/build/outputs/apk/release/app-release.apk \
+            | grep SHA-256 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Never "latest": Firefox's update_url reads updates.json from the latest release
+      - name: Pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: android-poc-${{ github.run_number }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk ajot-android.apk
+          gh release create "$TAG" ajot-android.apk --prerelease --latest=false \
+            --target "$GITHUB_SHA" --title "Android POC ${{ github.run_number }}" \
+            --notes "Built from $GITHUB_SHA"
