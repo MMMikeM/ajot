@@ -1,12 +1,13 @@
 package app.ajot.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
@@ -17,74 +18,120 @@ import androidx.glance.appwidget.CheckBox
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.ActionCallback
-import androidx.glance.appwidget.action.ToggleableStateKey
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
-import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.appwidget.updateAll
 import androidx.glance.background
-import androidx.glance.currentState
+import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
+import androidx.glance.layout.Row
+import androidx.glance.layout.Spacer
+import androidx.glance.layout.defaultWeight
 import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import app.ajot.BuildConfig
+import app.ajot.LauncherActivity
 
-private val TASKS = listOf("a" to "Check the checkbox persists", "b" to "Survives a reboot")
 private val taskKey = ActionParameters.Key<String>("task")
 
 class TasksWidgetReceiver : GlanceAppWidgetReceiver() {
   override val glanceAppWidget: GlanceAppWidget = TasksWidget()
+
+  override fun onEnabled(context: Context) {
+    super.onEnabled(context)
+    RefreshWorker.schedule(context)
+  }
+
+  override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
+    super.onUpdate(context, manager, ids)
+    RefreshWorker.now(context)
+  }
 }
 
 class TasksWidget : GlanceAppWidget() {
   override suspend fun provideGlance(context: Context, id: GlanceId) {
-    provideContent { GlanceTheme { Content(context) } }
+    provideContent {
+      val state by WidgetData.state(context).collectAsState(initial = WidgetState.Inbox(null))
+      GlanceTheme { Content(context, state) }
+    }
   }
 }
 
 @Composable
-private fun Content(context: Context) {
-  val state = currentState<Preferences>()
+private fun Content(context: Context, state: WidgetState) {
   val text = TextStyle(color = GlanceTheme.colors.onSurface)
+  val hint = TextStyle(color = GlanceTheme.colors.onSurfaceVariant)
   Column(
     modifier =
       GlanceModifier.fillMaxSize().background(GlanceTheme.colors.widgetBackground).padding(12.dp)
   ) {
-    Text("Ajot POC", style = text.copy(fontWeight = FontWeight.Bold))
-    TASKS.forEach { (id, title) ->
-      CheckBox(
-        checked = state[booleanPreferencesKey(id)] ?: false,
-        onCheckedChange = actionRunCallback<ToggleTask>(actionParametersOf(taskKey to id)),
-        text = title,
-        style = text,
+    Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+      Text(
+        "Inbox",
+        style = text.copy(fontWeight = FontWeight.Bold),
+        modifier = GlanceModifier.defaultWeight().clickable(openApp(context, "/")),
       )
+      if (state is WidgetState.Inbox)
+        Text(
+          "Refresh",
+          style = hint,
+          modifier = GlanceModifier.padding(start = 8.dp).clickable(actionRunCallback<Refresh>()),
+        )
     }
-    RouteLink(context, "Open Settings", "/settings", text)
-    RouteLink(context, "Open Search", "/search", text)
+    Spacer(GlanceModifier.padding(top = 4.dp))
+    when (state) {
+      WidgetState.NotConnected ->
+        Text(
+          "Open Ajot's Settings and tap Connect the widget.",
+          style = hint,
+          modifier = GlanceModifier.clickable(openApp(context, "/settings")),
+        )
+      is WidgetState.Inbox ->
+        when {
+          state.tasks == null -> Text("Loading…", style = hint)
+          state.tasks.isEmpty() -> Text("Nothing in your Inbox.", style = hint)
+          else ->
+            LazyColumn {
+              items(state.tasks, itemId = { it.id.hashCode().toLong() }) { task ->
+                CheckBox(
+                  checked = false,
+                  onCheckedChange = actionRunCallback<Tick>(actionParametersOf(taskKey to task.id)),
+                  text = task.title,
+                  style = text,
+                  maxLines = 2,
+                )
+              }
+            }
+        }
+    }
   }
 }
 
-/** Opens a route in the TWA, through the launcher that already handles the server's links. */
-@Composable
-private fun RouteLink(context: Context, label: String, path: String, style: TextStyle) {
-  val intent =
+/** Opens a route in the app, through the launcher that already handles the server's links. */
+private fun openApp(context: Context, path: String) =
+  actionStartActivity(
     Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.SERVER_URL + path))
-      .setClassName(context, "com.google.androidbrowserhelper.trusted.LauncherActivity")
-  Text(
-    label,
-    style = style.copy(color = GlanceTheme.colors.primary),
-    modifier = GlanceModifier.padding(top = 8.dp).clickable(actionStartActivity(intent)),
+      .setClass(context, LauncherActivity::class.java)
   )
-}
 
-class ToggleTask : ActionCallback {
+class Tick : ActionCallback {
   override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
     val id = parameters[taskKey] ?: return
-    val checked = parameters[ToggleableStateKey] ?: return
-    updateAppWidgetState(context, glanceId) { it[booleanPreferencesKey(id)] = checked }
-    TasksWidget().update(context, glanceId)
+    WidgetData.markPending(context, id)
+    TickWorker.send(context, id)
+    TasksWidget().updateAll(context)
+  }
+}
+
+class Refresh : ActionCallback {
+  override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+    RefreshWorker.now(context)
   }
 }

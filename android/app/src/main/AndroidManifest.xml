@@ -16,7 +16,7 @@
             android:resource="@string/assetStatements" />
 
         <activity
-            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:name=".LauncherActivity"
             android:alwaysRetainTaskState="true"
             android:exported="true"
             android:label="@string/appName">
@@ -77,7 +77,7 @@
         <activity android:name="com.google.androidbrowserhelper.trusted.FocusActivity" />
 
         <service
-            android:name="com.google.androidbrowserhelper.trusted.DelegationService"
+            android:name=".DelegationService"
             android:enabled="true"
             android:exported="true">
             <meta-data
@@ -90,6 +90,21 @@
         </service>
 
         <activity android:name="com.google.androidbrowserhelper.trusted.NotificationPermissionRequestActivity" />
+
+        <!-- Settings, inside the app, hands the widget its token: intent://connect-widget#Intent;scheme=ajot;... -->
+        <activity
+            android:name=".widget.ConnectWidgetActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="ajot" android:host="connect-widget" />
+            </intent-filter>
+        </activity>
 
         <receiver
             android:name=".widget.TasksWidgetReceiver"

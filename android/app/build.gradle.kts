@@ -69,4 +69,5 @@ dependencies {
   implementation("com.google.androidbrowserhelper:androidbrowserhelper:2.7.4")
   implementation("androidx.glance:glance-appwidget:1.2.0")
   implementation("androidx.datastore:datastore-preferences:1.3.0")
+  implementation("androidx.work:work-runtime-ktx:2.12.0")
 }
