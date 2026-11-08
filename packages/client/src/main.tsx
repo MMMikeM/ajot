@@ -12,7 +12,7 @@ import { initSync } from "~/lib/sync/sse";
 import { initAttachments } from "~/lib/attachments/queue";
 import { initShares } from "~/lib/add-share";
 import { reloadOnStaleChunk } from "~/lib/stale-chunk";
-import { takeLaunchParams } from "~/lib/android-app";
+import { startWidgetSignIn } from "~/lib/android-app";
 import "./app.css";
 
 // Firefox 139 and Chrome 144 ship Temporal; elsewhere the polyfill loads before the first render
@@ -27,7 +27,7 @@ reloadOnStaleChunk();
 console.log(`[build] ${__BUILD_VERSION__}`);
 
 const root = document.getElementById("root")!;
-takeLaunchParams();
+startWidgetSignIn();
 const router = getRouter();
 const isPrerendered = root.innerHTML.trim() !== "";
 

@@ -1,6 +1,5 @@
-import { useEffect } from "react";
 import { approveWidgetCode } from "~/lib/actions";
-import { useAuthToken } from "~/lib/auth/token";
+import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
 
 const PACKAGE_KEY = "ajot-android-app";
 const CODE_KEY = "ajot-widget-code";
@@ -50,8 +49,7 @@ export const androidAppPackage = (): string | null => {
 /** Whether the app said, when it opened this page, that its widget is on the home screen. */
 export const widgetIsPlaced = () => session.get(PLACED_KEY) === "1";
 
-/** Keeps what the app's launcher sent, and takes it out of the address. Before the router starts. */
-export const takeLaunchParams = () => {
+const takeLaunchParams = () => {
   const url = new URL(location.href);
   const code = url.searchParams.get(CODE_PARAM);
   const placed = url.searchParams.get(PLACED_PARAM) === "placed";
@@ -63,16 +61,23 @@ export const takeLaunchParams = () => {
   history.replaceState(history.state, "", url);
 };
 
-/** Signs the widget in with this page's session once there is one: after sign-in, if need be. */
-export const useWidgetApproval = () => {
-  const token = useAuthToken();
-  useEffect(() => {
-    const code = session.get(CODE_KEY);
-    if (!token || !code) return;
-    approveWidgetCode(code)
-      .then(() => session.remove(CODE_KEY))
-      .catch((err) => console.error("[widget] couldn't approve its code:", err));
-  }, [token]);
+const approveKeptCode = () => {
+  const code = session.get(CODE_KEY);
+  if (!code || !getAuthToken()) return;
+  approveWidgetCode(code)
+    .then(() => session.remove(CODE_KEY))
+    .catch((err) => console.error("[widget] couldn't approve its code:", err));
+};
+
+/**
+ * Keeps what the app's launcher sent, takes it out of the address, and signs the widget in with
+ * this page's session once there is one: after sign-in, if need be. Before the router starts.
+ */
+export const startWidgetSignIn = () => {
+  takeLaunchParams();
+  if (!session.get(CODE_KEY)) return;
+  approveKeptCode();
+  subscribeAuthToken(approveKeptCode);
 };
 
 const newCode = () =>
