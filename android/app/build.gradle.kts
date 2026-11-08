@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
   id("com.android.application")
   id("org.jetbrains.kotlin.plugin.compose")
@@ -17,7 +19,7 @@ android {
     versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
     versionName = "0.0.${System.getenv("VERSION_CODE") ?: "1"}-poc"
 
-    manifestPlaceholders["host"] = java.net.URI(serverUrl).host
+    manifestPlaceholders["host"] = URI(serverUrl).host
     resValue("string", "launchUrl", "$serverUrl/")
     // Quotes escaped for a string resource, which drops bare ones
     resValue(
