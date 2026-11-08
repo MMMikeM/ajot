@@ -25,6 +25,7 @@ import { isAllowedOrigin, parseAllowedOrigins } from "./origins";
 import { rejectInvalidInput } from "./routes/openapi-schemas";
 import { LoggedHTTPException } from "./db/errors";
 import { storage } from "./storage";
+import { androidAssetLinks } from "./asset-links";
 import { SHARED_TEXT_FIELDS } from "@newtab-todo/shared/share-target";
 
 const app = new OpenAPIHono({ defaultHook: rejectInvalidInput });
@@ -129,6 +130,12 @@ app.use(
 );
 
 app.get("/health", (c) => c.json({ ok: true }));
+
+// Ahead of mountMcp's catch-all for /.well-known/*
+const assetLinks = androidAssetLinks(process.env);
+app.get("/.well-known/assetlinks.json", (c) =>
+  assetLinks ? c.json(assetLinks) : c.json({ error: "Not found" }, 404),
+);
 
 const api = app
   .route("/api/config", configRoutes)

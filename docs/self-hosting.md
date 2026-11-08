@@ -57,6 +57,8 @@ Keep the private key secret. Changing the keys later makes every device subscrib
 | `ALLOWED_ORIGINS`     | no       | A web app's address, if served from another address than the API     |
 | `ATTACHMENT_MAX_MB`   | no       | The largest file someone can attach; defaults to 25, at most 100     |
 | `ATTACHMENT_QUOTA_MB` | no       | Each person's files in all; defaults to 2048                         |
+| `ANDROID_PACKAGE_NAME` | no      | The Android app's package, if you build one, for its asset links    |
+| `ANDROID_SHA256_FINGERPRINTS` | no | Its signing key's SHA-256 fingerprints, comma-separated     |
 
 On Fly, set the app name in `fly.toml`, then:
 
