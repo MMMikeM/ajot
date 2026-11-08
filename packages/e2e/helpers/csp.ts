@@ -6,7 +6,7 @@ declare global {
   }
 }
 
-/** Fails the test on a CSP violation, which a report-only policy only logs. */
+/** Fails the test on a CSP violation, which the browser otherwise only blocks and logs. */
 export const watchCsp = async (context: BrowserContext) => {
   const violations: string[] = [];
   await context.exposeBinding("__cspViolation", (_, violation: string) => {

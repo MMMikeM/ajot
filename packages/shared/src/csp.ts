@@ -1,5 +1,5 @@
-/** Report-only until a deploy has shown nothing the app does breaks it. */
-export const CSP_HEADER = "Content-Security-Policy-Report-Only";
+// Enforced: the one violation real devices reported was a script another extension injects
+export const CSP_HEADER = "Content-Security-Policy";
 
 /** `bucketEndpoint` is `AWS_ENDPOINT_URL_S3`, where presigned uploads and downloads go. */
 export const contentSecurityPolicy = (bucketEndpoint?: string) =>
