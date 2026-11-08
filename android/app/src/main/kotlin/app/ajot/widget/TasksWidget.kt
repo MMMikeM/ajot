@@ -31,6 +31,7 @@ import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
@@ -84,7 +85,7 @@ private fun Content(context: Context, state: WidgetState) {
           modifier = GlanceModifier.padding(start = 8.dp).clickable(actionRunCallback<Refresh>()),
         )
     }
-    Spacer(GlanceModifier.padding(top = 4.dp))
+    Spacer(GlanceModifier.height(4.dp))
     when (state) {
       WidgetState.SignedOut ->
         Text(
@@ -97,7 +98,8 @@ private fun Content(context: Context, state: WidgetState) {
           state.tasks == null -> Text("Loading…", style = hint)
           state.tasks.isEmpty() -> Text("Nothing in your Inbox.", style = hint)
           else ->
-            LazyColumn {
+            // A widget's list has no height of its own: without the rest of the column, it shows nothing
+            LazyColumn(modifier = GlanceModifier.defaultWeight()) {
               items(state.tasks, itemId = { it.id.hashCode().toLong() }) { task ->
                 CheckBox(
                   checked = false,
