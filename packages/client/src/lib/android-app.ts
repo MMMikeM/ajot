@@ -52,10 +52,13 @@ export const widgetIsPlaced = () => session.get(PLACED_KEY) === "1";
 const takeLaunchParams = () => {
   const url = new URL(location.href);
   const code = url.searchParams.get(CODE_PARAM);
-  const placed = url.searchParams.get(PLACED_PARAM) === "placed";
-  if (!code && !placed) return;
+  // Each launch says afresh, so a widget removed since the last one shows Settings' row again
+  if (document.referrer.startsWith("android-app://")) {
+    if (url.searchParams.get(PLACED_PARAM) === "placed") session.set(PLACED_KEY, "1");
+    else session.remove(PLACED_KEY);
+  }
+  if (!code && !url.searchParams.has(PLACED_PARAM)) return;
   if (code) session.set(CODE_KEY, code);
-  if (placed) session.set(PLACED_KEY, "1");
   url.searchParams.delete(CODE_PARAM);
   url.searchParams.delete(PLACED_PARAM);
   history.replaceState(history.state, "", url);
