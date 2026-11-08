@@ -44,21 +44,21 @@ Keep the private key secret. Changing the keys later makes every device subscrib
 
 ## 4. Configure and deploy
 
-| Variable              | Required | What it is                                                           |
-| --------------------- | -------- | -------------------------------------------------------------------- |
-| `TURSO_DATABASE_URL`  | yes      | From step 1                                                          |
-| `TURSO_AUTH_TOKEN`    | yes      | From step 1                                                          |
-| `VAPID_PUBLIC_KEY`    | yes      | From step 3; clients fetch it from `/api/config`                     |
-| `VAPID_PRIVATE_KEY`   | yes      | From step 3                                                          |
-| `VAPID_SUBJECT`       | yes      | `mailto:` address push services can contact, e.g. `mailto:you@x.com` |
-| `CRON_SECRET`         | no       | Bearer token for `POST /api/notifications/process`                   |
-| `DEPLOY_PUSH_SECRET`  | no       | Header for `POST /api/deploy/notify`, which CI calls after deploying |
-| `PORT`                | no       | Defaults to 3000                                                     |
-| `ALLOWED_ORIGINS`     | no       | A web app's address, if served from another address than the API     |
-| `ATTACHMENT_MAX_MB`   | no       | The largest file someone can attach; defaults to 25, at most 100     |
-| `ATTACHMENT_QUOTA_MB` | no       | Each person's files in all; defaults to 2048                         |
-| `ANDROID_PACKAGE_NAME` | no      | The Android app's package, if you build one, for its asset links    |
-| `ANDROID_SHA256_FINGERPRINTS` | no | Its signing key's SHA-256 fingerprints, comma-separated     |
+| Variable                      | Required | What it is                                                           |
+| ----------------------------- | -------- | -------------------------------------------------------------------- |
+| `TURSO_DATABASE_URL`          | yes      | From step 1                                                          |
+| `TURSO_AUTH_TOKEN`            | yes      | From step 1                                                          |
+| `VAPID_PUBLIC_KEY`            | yes      | From step 3; clients fetch it from `/api/config`                     |
+| `VAPID_PRIVATE_KEY`           | yes      | From step 3                                                          |
+| `VAPID_SUBJECT`               | yes      | `mailto:` address push services can contact, e.g. `mailto:you@x.com` |
+| `CRON_SECRET`                 | no       | Bearer token for `POST /api/notifications/process`                   |
+| `DEPLOY_PUSH_SECRET`          | no       | Header for `POST /api/deploy/notify`, which CI calls after deploying |
+| `PORT`                        | no       | Defaults to 3000                                                     |
+| `ALLOWED_ORIGINS`             | no       | A web app's address, if served from another address than the API     |
+| `ATTACHMENT_MAX_MB`           | no       | The largest file someone can attach; defaults to 25, at most 100     |
+| `ATTACHMENT_QUOTA_MB`         | no       | Each person's files in all; defaults to 2048                         |
+| `ANDROID_PACKAGE_NAME`        | no       | The Android app's package, if you build one, for its asset links     |
+| `ANDROID_SHA256_FINGERPRINTS` | no       | Its signing key's SHA-256 fingerprints, comma-separated              |
 
 On Fly, set the app name in `fly.toml`, then:
 

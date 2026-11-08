@@ -62,7 +62,8 @@ export const registerReadTools = (server: McpServer, caller: McpCaller, api: Api
         const parts = [`${list.name} [${list.id}]`, `${open(list.id)} open`];
         if (list.userId !== me) parts.push(`${people.get(list.userId) ?? "someone"}'s list`);
         const others = (list.collaborators ?? []).filter((c) => c.userId !== me);
-        if (others.length > 0) parts.push(`shared with ${others.map((c) => c.user.name).join(", ")}`);
+        if (others.length > 0)
+          parts.push(`shared with ${others.map((c) => c.user.name).join(", ")}`);
         lines.push(parts.join(" · "));
       }
       return lines.join("\n");
@@ -77,7 +78,13 @@ export const registerReadTools = (server: McpServer, caller: McpCaller, api: Api
       inputSchema: z.object({
         listId,
         includeDone: z.boolean().optional().describe(`Also the ${RECENT_DONE} most recently done`),
-        limit: z.number().int().min(1).max(200).optional().describe("Open tasks to show, 100 by default"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe("Open tasks to show, 100 by default"),
       }),
       annotations: reads,
     },
@@ -147,21 +154,25 @@ export const registerReadTools = (server: McpServer, caller: McpCaller, api: Api
   server.registerTool(
     "get_task",
     {
-      description: "One task in full: details, dates, who it's shared with, subtasks and your notes.",
+      description:
+        "One task in full: details, dates, who it's shared with, subtasks and your notes.",
       inputSchema: z.object({ taskId: z.string().max(MAX_ID) }),
       annotations: reads,
     },
     guarded(caller, "get_task", async ({ taskId }) => {
       const lists = await loadLists(api);
       const task = lists.tasks.find((t) => t.id === taskId);
-      if (!task) throw new Refusal(`There's no task [${taskId}] you can see. It may have been deleted.`);
+      if (!task)
+        throw new Refusal(`There's no task [${taskId}] you can see. It may have been deleted.`);
       const parent = task.parentId ? lists.tasks.find((t) => t.id === task.parentId) : undefined;
       const line = lineOf(lists, me);
       const lines = [line(task, parent)];
       if (parent) lines.push(`Subtask of "${parent.title}" [${parent.id}]`);
       else {
         const id = listIdOf(task, me, lists.lists);
-        lines.push(`In ${id === null ? "the Inbox" : (lists.lists.find((l) => l.id === id)?.name ?? "a list")}`);
+        lines.push(
+          `In ${id === null ? "the Inbox" : (lists.lists.find((l) => l.id === id)?.name ?? "a list")}`,
+        );
       }
       const shares = task.shares.map((s) => `${s.sharedWithUser.name} (${s.permission})`);
       if (shares.length > 0) lines.push(`Shared with ${shares.join(", ")}`);
@@ -175,7 +186,9 @@ export const registerReadTools = (server: McpServer, caller: McpCaller, api: Api
         lines.push(
           "",
           "Your notes:",
-          ...notes.map((n) => `- ${n.createdAt}: ${[n.title, n.content].filter(Boolean).join(" — ")}`),
+          ...notes.map(
+            (n) => `- ${n.createdAt}: ${[n.title, n.content].filter(Boolean).join(" — ")}`,
+          ),
         );
       return lines.join("\n");
     }),

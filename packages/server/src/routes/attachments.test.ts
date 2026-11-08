@@ -177,8 +177,7 @@ describe("uploading", () => {
   });
 
   test("an id that isn't plain letters, digits, - or _ is refused, since it's part of a bucket key", async () => {
-    for (const id of ["../b1", "b1?x"])
-      expect((await as("bob").add(id)).status, id).toBe(400);
+    for (const id of ["../b1", "b1?x"]) expect((await as("bob").add(id)).status, id).toBe(400);
   });
 
   test("bytes that aren't the size it claimed are deleted, and /complete is 400", async () => {

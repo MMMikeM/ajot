@@ -36,7 +36,13 @@ export const titleWithoutSite = (title: string, url: string, siteName?: string) 
   const names = (segment: string) => keys.some((key) => normalized(segment).includes(key));
   // parts alternate segment, separator, segment…; the first segment is never the site's alone
   for (let i = 2; i < parts.length; i += 2)
-    if (names(parts[i]!)) return parts.slice(0, i - 1).join("").trim() || title;
+    if (names(parts[i]!))
+      return (
+        parts
+          .slice(0, i - 1)
+          .join("")
+          .trim() || title
+      );
   const leading = parts[0] ?? "";
   if (parts.length > 2 && keys.includes(normalized(leading))) return parts.slice(2).join("").trim();
   return title;

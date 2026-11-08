@@ -33,7 +33,11 @@ export const fetchMcpTokens = async () => {
 export type McpToken = Awaited<ReturnType<typeof fetchMcpTokens>>[number];
 
 /** The token itself is in this reply only. */
-export const makeMcpToken = async (json: { name: string; canWrite: boolean; days: 30 | 90 | 365 }) => {
+export const makeMcpToken = async (json: {
+  name: string;
+  canWrite: boolean;
+  days: 30 | 90 | 365;
+}) => {
   const res = await reach(client.api.mcp.tokens.$post({ json }));
   if (!res.ok) throw await errorFrom(res, "Couldn't make a token. Try again.");
   return res.json();

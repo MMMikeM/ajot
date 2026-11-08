@@ -1,4 +1,9 @@
-import { OAuthError, OAuthErrorCode, type AuthInfo, type OAuthTokenVerifier } from "@modelcontextprotocol/server";
+import {
+  OAuthError,
+  OAuthErrorCode,
+  type AuthInfo,
+  type OAuthTokenVerifier,
+} from "@modelcontextprotocol/server";
 import * as mcpTokenRepo from "../db/mcp-token.repo";
 import type { McpCaller } from "./caller";
 

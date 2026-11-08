@@ -14,7 +14,9 @@ export const androidAssetLinks = (env: Record<string, string | undefined>) => {
   if (!packageName || fingerprints.length === 0) return undefined;
   const malformed = fingerprints.filter((f) => !FINGERPRINT.test(f));
   if (malformed.length > 0)
-    throw new Error(`ANDROID_SHA256_FINGERPRINTS has a malformed fingerprint: ${malformed.join(", ")}`);
+    throw new Error(
+      `ANDROID_SHA256_FINGERPRINTS has a malformed fingerprint: ${malformed.join(", ")}`,
+    );
   return [
     {
       relation: ["delegate_permission/common.handle_all_urls"],

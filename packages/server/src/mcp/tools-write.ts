@@ -37,36 +37,43 @@ export const registerWriteTools = (server: McpServer, caller: McpCaller, api: Ap
       }),
       annotations: writes,
     },
-    guarded(caller, "add_task", async ({ title, listId = INBOX, description, dueDate }) => {
-      const categoryId = listId === INBOX ? null : listId;
-      const at = now();
-      const res = await api.tasks.$post({
-        json: {
-          id: createId(),
-          userId: me,
-          title,
-          description: description ?? null,
-          dueDate: dueDate ?? null,
-          categoryId,
-          parentId: null,
-          assigneeId: null,
-          editedAt: null,
-          completedAt: null,
-          createdAt: at,
-          updatedAt: at,
-        },
-      });
-      if (!res.ok) throw await refusalOf(res);
-      const task = await res.json();
-      const lists = await loadLists(api);
-      const listName =
-        categoryId === null ? "the Inbox" : (lists.lists.find((l) => l.id === categoryId)?.name ?? "the list");
-      const others = othersInList(lists, categoryId, me);
-      return [
-        `Added "${task.title}" [${task.id}] to ${listName}.`,
-        ...(others.length > 0 ? [`Visible to ${others.join(", ")}.`] : []),
-      ].join("\n");
-    }, { write: true }),
+    guarded(
+      caller,
+      "add_task",
+      async ({ title, listId = INBOX, description, dueDate }) => {
+        const categoryId = listId === INBOX ? null : listId;
+        const at = now();
+        const res = await api.tasks.$post({
+          json: {
+            id: createId(),
+            userId: me,
+            title,
+            description: description ?? null,
+            dueDate: dueDate ?? null,
+            categoryId,
+            parentId: null,
+            assigneeId: null,
+            editedAt: null,
+            completedAt: null,
+            createdAt: at,
+            updatedAt: at,
+          },
+        });
+        if (!res.ok) throw await refusalOf(res);
+        const task = await res.json();
+        const lists = await loadLists(api);
+        const listName =
+          categoryId === null
+            ? "the Inbox"
+            : (lists.lists.find((l) => l.id === categoryId)?.name ?? "the list");
+        const others = othersInList(lists, categoryId, me);
+        return [
+          `Added "${task.title}" [${task.id}] to ${listName}.`,
+          ...(others.length > 0 ? [`Visible to ${others.join(", ")}.`] : []),
+        ].join("\n");
+      },
+      { write: true },
+    ),
   );
 
   server.registerTool(
@@ -79,25 +86,30 @@ export const registerWriteTools = (server: McpServer, caller: McpCaller, api: Ap
       }),
       annotations: writes,
     },
-    guarded(caller, "set_task_status", async ({ taskIds, status }) => {
-      const change = async (ids: string[]) => {
-        const res = await api.tasks.status.$put({ json: { ids, status, updatedAt: now() } });
-        if (!res.ok) throw await refusalOf(res);
-        return res.json();
-      };
-      const first = await change(taskIds);
-      // Changed elsewhere in the same instant: once more, now later than that change
-      const stale = first.refused.filter((r) => r.status === STALE).map((r) => r.id);
-      const again = stale.length > 0 ? await change(stale) : { updated: [], refused: [] };
-      const updated = [...first.updated, ...again.updated];
-      const refused = [...first.refused.filter((r) => r.status !== STALE), ...again.refused];
-      if (updated.length === 0 && refused.length > 0)
-        throw new Refusal(refused.map((r) => `[${r.id}] ${r.error}`).join("\n"));
-      const label = { todo: "to do", in_progress: "in progress", done: "done" }[status];
-      return [
-        `Marked ${updated.length} ${label}.`,
-        ...refused.map((r) => `Not changed: [${r.id}] ${r.error}`),
-      ].join("\n");
-    }, { write: true }),
+    guarded(
+      caller,
+      "set_task_status",
+      async ({ taskIds, status }) => {
+        const change = async (ids: string[]) => {
+          const res = await api.tasks.status.$put({ json: { ids, status, updatedAt: now() } });
+          if (!res.ok) throw await refusalOf(res);
+          return res.json();
+        };
+        const first = await change(taskIds);
+        // Changed elsewhere in the same instant: once more, now later than that change
+        const stale = first.refused.filter((r) => r.status === STALE).map((r) => r.id);
+        const again = stale.length > 0 ? await change(stale) : { updated: [], refused: [] };
+        const updated = [...first.updated, ...again.updated];
+        const refused = [...first.refused.filter((r) => r.status !== STALE), ...again.refused];
+        if (updated.length === 0 && refused.length > 0)
+          throw new Refusal(refused.map((r) => `[${r.id}] ${r.error}`).join("\n"));
+        const label = { todo: "to do", in_progress: "in progress", done: "done" }[status];
+        return [
+          `Marked ${updated.length} ${label}.`,
+          ...refused.map((r) => `Not changed: [${r.id}] ${r.error}`),
+        ].join("\n");
+      },
+      { write: true },
+    ),
   );
 };

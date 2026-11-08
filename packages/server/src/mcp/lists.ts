@@ -32,7 +32,8 @@ export const INBOX = "inbox";
 /** The name of everyone whose things the caller can see: their contacts and each list's members. */
 export const peopleOf = ({ lists, contacts, tasks }: Lists) => {
   const names = new Map<string, string>();
-  for (const list of lists) for (const c of list.collaborators ?? []) names.set(c.userId, c.user.name);
+  for (const list of lists)
+    for (const c of list.collaborators ?? []) names.set(c.userId, c.user.name);
   for (const t of tasks) {
     for (const s of t.shares) names.set(s.sharedWithUserId, s.sharedWithUser.name);
     if (t.assignee) names.set(t.assignee.id, t.assignee.name);

@@ -37,7 +37,10 @@ export const taskFromShare = ({
 };
 
 /** The share a page's address opens, if it's the share page; an extension's routes are in its hash. */
-export const shareIdIn = (address: { pathname: string; search: string; hash: string }, hashRouted: boolean) => {
+export const shareIdIn = (
+  address: { pathname: string; search: string; hash: string },
+  hashRouted: boolean,
+) => {
   const [pathname, query = ""] = hashRouted
     ? address.hash.slice(1).split("?", 2)
     : [address.pathname, address.search.slice(1)];
@@ -51,5 +54,8 @@ export const shareIdIn = (address: { pathname: string; search: string; hash: str
 export const taskOfKept = (kept: KeptShare, files: { name: string }[]) => {
   if (!kept.to) return taskFromShare({ ...kept, files });
   if (!kept.title) return undefined;
-  return { title: cutTo(kept.title, MAX_TITLE), description: kept.text ? cutTo(kept.text, MAX_TEXT) : null };
+  return {
+    title: cutTo(kept.title, MAX_TITLE),
+    description: kept.text ? cutTo(kept.text, MAX_TEXT) : null,
+  };
 };

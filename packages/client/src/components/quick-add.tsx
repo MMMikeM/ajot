@@ -325,8 +325,16 @@ export function QuickAdd() {
               onError={() => setPicture(undefined)}
               className="size-10 shrink-0 rounded-md bg-muted object-cover"
             />
-            <TogglePill selected={picture.attach} aria-pressed={picture.attach} onClick={togglePicture}>
-              {picture.attach ? <Check data-icon="inline-start" /> : <ImagePlus data-icon="inline-start" />}
+            <TogglePill
+              selected={picture.attach}
+              aria-pressed={picture.attach}
+              onClick={togglePicture}
+            >
+              {picture.attach ? (
+                <Check data-icon="inline-start" />
+              ) : (
+                <ImagePlus data-icon="inline-start" />
+              )}
               Attach picture
             </TogglePill>
           </div>

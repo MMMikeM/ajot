@@ -207,7 +207,13 @@ const fireWithFile = (
       element.dispatchEvent(event);
       return event.defaultPrevented;
     },
-    { type, name: file.name, mimeType: file.mimeType, base64: file.buffer.toString("base64"), text },
+    {
+      type,
+      name: file.name,
+      mimeType: file.mimeType,
+      base64: file.buffer.toString("base64"),
+      text,
+    },
   );
 
 test("a picture pasted into the sheet, or a file dropped on it, is attached", async ({

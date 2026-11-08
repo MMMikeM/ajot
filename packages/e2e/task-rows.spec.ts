@@ -48,7 +48,9 @@ test("a task dragged across its own list's pill still drops onto another list", 
     const box = (await target.boundingBox())!;
     return [box.x + box.width / 2, box.y + box.height / 2] as const;
   };
-  await page.mouse.move(...(await centre(row(page, title).getByRole("button", { name: title }).first())));
+  await page.mouse.move(
+    ...(await centre(row(page, title).getByRole("button", { name: title }).first())),
+  );
   await page.mouse.down();
   await page.mouse.move(...(await centre(pill("Work"))), { steps: 12 });
   await page.mouse.move(...(await centre(pill("Home"))), { steps: 12 });

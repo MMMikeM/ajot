@@ -68,7 +68,8 @@ test("signing in asks for notifications within the tap, and an answer after it s
   await page.route("**/api/auth/login", (route) =>
     route.fulfill({ json: { userId: "u-me", token: "t", name: "Mike Murray", username: "mike" } }),
   );
-  const asks = () => page.evaluate(() => (window as unknown as { notificationAsks: boolean[] }).notificationAsks);
+  const asks = () =>
+    page.evaluate(() => (window as unknown as { notificationAsks: boolean[] }).notificationAsks);
 
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByText("Enter your username")).toBeVisible();
@@ -82,7 +83,9 @@ test("signing in asks for notifications within the tap, and an answer after it s
   expect(registering).toEqual([]);
 
   await page.evaluate(() =>
-    (window as unknown as { answerNotifications: (p: string) => void }).answerNotifications("granted"),
+    (window as unknown as { answerNotifications: (p: string) => void }).answerNotifications(
+      "granted",
+    ),
   );
   // The mocked server has no VAPID key, the first thing a subscription needs after the permission
   await expect.poll(() => registering).toContain("[push] the server has no VAPID_PUBLIC_KEY");

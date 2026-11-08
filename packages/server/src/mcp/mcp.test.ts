@@ -58,7 +58,8 @@ beforeAll(async () => {
     updatedAt: LONG_AGO,
   });
   await taskShareRepo.insert({ id: "to-alice", taskId: "sarahs", sharedWithUserId: "alice" });
-  readToken = (await mcpTokenRepo.create("alice", { name: "Read", canWrite: false, days: 30 })).token;
+  readToken = (await mcpTokenRepo.create("alice", { name: "Read", canWrite: false, days: 30 }))
+    .token;
   writeToken = (await mcpTokenRepo.create("alice", { name: "Write", canWrite: true, days: 30 }))
     .token;
 });

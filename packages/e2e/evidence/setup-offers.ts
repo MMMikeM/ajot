@@ -40,7 +40,11 @@ const fresh = async (
   run: (page: Page) => Promise<void>,
   { path = "/", installable = false } = {},
 ) => {
-  const context = await browser.newContext({ ...device, colorScheme: "dark", serviceWorkers: "block" });
+  const context = await browser.newContext({
+    ...device,
+    colorScheme: "dark",
+    serviceWorkers: "block",
+  });
   if (installable) await context.addInitScript(OFFER_INSTALL);
   const page = await context.newPage();
   await mockApi(page);
@@ -90,9 +94,14 @@ for (const [label, device] of [
     },
     { installable: true },
   );
-  await fresh(browser, device, async (page) => void (await shot(page, `${label}-5-settings-installable`)), {
-    path: "/settings",
-    installable: true,
-  });
+  await fresh(
+    browser,
+    device,
+    async (page) => void (await shot(page, `${label}-5-settings-installable`)),
+    {
+      path: "/settings",
+      installable: true,
+    },
+  );
 }
 await browser.close();

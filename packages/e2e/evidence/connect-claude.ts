@@ -45,8 +45,16 @@ const TOKENS = [
   },
 ];
 
-const fresh = async (browser: Browser, device: typeof phone, run: (page: Page) => Promise<void>) => {
-  const context = await browser.newContext({ ...device, colorScheme: "dark", serviceWorkers: "block" });
+const fresh = async (
+  browser: Browser,
+  device: typeof phone,
+  run: (page: Page) => Promise<void>,
+) => {
+  const context = await browser.newContext({
+    ...device,
+    colorScheme: "dark",
+    serviceWorkers: "block",
+  });
   const page = await context.newPage();
   await mockApi(page);
   await page.route("**/api/push/preferences**", (route) =>
@@ -55,7 +63,12 @@ const fresh = async (browser: Browser, device: typeof phone, run: (page: Page) =
   await page.route("**/api/mcp/tokens**", (route) =>
     route.request().method() === "POST"
       ? route.fulfill({
-          json: { ...TOKENS[0], id: "tok-3", name: "Studio iMac", token: "ajot_pat_Zq3kV9mW2xT8rY4nB6cH1jL5pD7fG0sA_u2EoKiNw" },
+          json: {
+            ...TOKENS[0],
+            id: "tok-3",
+            name: "Studio iMac",
+            token: "ajot_pat_Zq3kV9mW2xT8rY4nB6cH1jL5pD7fG0sA_u2EoKiNw",
+          },
         })
       : route.fulfill({ json: TOKENS }),
   );

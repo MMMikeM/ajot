@@ -253,7 +253,10 @@ export const taskRoutes = authed()
       path: "/status",
       request: jsonBody(statusChangeSchema),
       responses: {
-        200: z.object({ updated: z.array(taskRepo.responseSchema), refused: z.array(refusalSchema) }),
+        200: z.object({
+          updated: z.array(taskRepo.responseSchema),
+          refused: z.array(refusalSchema),
+        }),
       },
     }),
     // Each task as PUT / would change it, with one notification per person for the lot, where

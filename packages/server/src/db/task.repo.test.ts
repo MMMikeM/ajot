@@ -51,8 +51,19 @@ describe("nextSortOrder", () => {
     await addTask("mine", "a0");
     await db
       .insert(tasks)
-      .values({ id: "bobs", userId: "bob", title: "bobs", sortOrder: "a5", updatedAt: BEFORE_THE_DELETE });
-    await taskShareRepo.insert({ id: "s", taskId: "bobs", sharedWithUserId: "alice", permission: "edit" });
+      .values({
+        id: "bobs",
+        userId: "bob",
+        title: "bobs",
+        sortOrder: "a5",
+        updatedAt: BEFORE_THE_DELETE,
+      });
+    await taskShareRepo.insert({
+      id: "s",
+      taskId: "bobs",
+      sharedWithUserId: "alice",
+      permission: "edit",
+    });
 
     expect((await taskRepo.nextSortOrder("alice")) > "a5").toBe(true);
   });

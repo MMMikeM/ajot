@@ -49,10 +49,7 @@ export const widgetRoutes = new OpenAPIHono()
     async (c) => {
       const approval = widgetCodes.take(c.req.valid("json").code);
       if (!approval) return c.json({ error: "Not approved, or already claimed" }, 404);
-      const { token } = await mcpTokenRepo.replaceWidgetToken(
-        approval.userId,
-        approval.sessionId,
-      );
+      const { token } = await mcpTokenRepo.replaceWidgetToken(approval.userId, approval.sessionId);
       return c.json({ token }, 200);
     },
   );

@@ -16,12 +16,7 @@ import { getServerUrl } from "~/lib/server-url";
 import { client } from "~/lib/api";
 import { eventStreamUrl } from "~/lib/sync/stream-url";
 import { ext } from "~/lib/ext";
-import {
-  SSE_DATA_CHANGED,
-  MSG_GET_STATUS,
-  MSG_BG_STATUS,
-  MSG_SYNC_ALL,
-} from "~/lib/constants";
+import { SSE_DATA_CHANGED, MSG_GET_STATUS, MSG_BG_STATUS, MSG_SYNC_ALL } from "~/lib/constants";
 import type { ModelName, MutationEvent } from "~/lib/constants";
 import { createExternalStore } from "~/lib/external-store";
 import { offline } from "~/lib/db/offline";

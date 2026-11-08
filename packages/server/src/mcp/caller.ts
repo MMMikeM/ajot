@@ -5,7 +5,12 @@
  */
 export type McpCaller = { userId: string; tokenId: string; canWrite: boolean };
 
-const READS = new Set(["GET /api/tasks", "GET /api/categories", "GET /api/notes", "GET /api/contacts"]);
+const READS = new Set([
+  "GET /api/tasks",
+  "GET /api/categories",
+  "GET /api/notes",
+  "GET /api/contacts",
+]);
 const WRITES = new Set(["POST /api/tasks", "PUT /api/tasks/status"]);
 
 /** The routes the tools call, and nothing else a token could reach. */

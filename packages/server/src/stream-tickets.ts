@@ -13,7 +13,8 @@ const dropExpired = (now: number) => {
 
 const dropOldestOf = (userId: string) => {
   const held = [...tickets].filter(([, t]) => t.userId === userId).map(([ticket]) => ticket);
-  for (const ticket of held.slice(0, held.length - MAX_TICKETS_PER_USER + 1)) tickets.delete(ticket);
+  for (const ticket of held.slice(0, held.length - MAX_TICKETS_PER_USER + 1))
+    tickets.delete(ticket);
 };
 
 /** A ticket that opens one event stream as `userId`, in place of a token in its URL. */

@@ -316,7 +316,11 @@ test.describe("a one-click add from the menu that couldn't reach the server", ()
     });
     const othersId = crypto.randomUUID();
     const othersTitle = `Another account's ${Date.now()}`;
-    await keepShare(othersId, { title: othersTitle, to: { kind: "inbox" }, userId: "someone-else" });
+    await keepShare(othersId, {
+      title: othersTitle,
+      to: { kind: "inbox" },
+      userId: "someone-else",
+    });
 
     await deliverPush(context, extensionUrl, { type: "sync" });
     await expect.poll(() => serverTask(user2Auth.token, title)).toBeDefined();
@@ -349,15 +353,18 @@ test.describe("the toolbar popup", () => {
     await page.setViewportSize({ width: 360, height: 304 });
     // Opened as a tab, its active tab would be itself, and there's no page to read
     const picture = `${extensionUrl}/icons/icon-192.png`;
-    await page.addInitScript(({ tab, picture }) => {
-      const { chrome } = globalThis as unknown as {
-        chrome: { tabs: { query: unknown }; scripting: { executeScript: unknown } };
-      };
-      chrome.tabs.query = async () => [{ id: 1, ...tab }];
-      chrome.scripting.executeScript = async () => [
-        { result: { siteName: "Amazon.de", image: picture } },
-      ];
-    }, { tab: PAGE, picture });
+    await page.addInitScript(
+      ({ tab, picture }) => {
+        const { chrome } = globalThis as unknown as {
+          chrome: { tabs: { query: unknown }; scripting: { executeScript: unknown } };
+        };
+        chrome.tabs.query = async () => [{ id: 1, ...tab }];
+        chrome.scripting.executeScript = async () => [
+          { result: { siteName: "Amazon.de", image: picture } },
+        ];
+      },
+      { tab: PAGE, picture },
+    );
     await page.goto(`${extensionUrl}/popup.html`);
     return page;
   };

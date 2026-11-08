@@ -139,10 +139,7 @@ const TaskDetailContent = ({
   const held = holders(task, lists, parent);
   const canEdit = canEditTask(held, userId);
   const attachments = useAttachmentsConfig();
-  const dragging = useAttachFromPasteAndDrop(
-    task.id,
-    canEdit ? attachments?.maxBytes : undefined,
-  );
+  const dragging = useAttachFromPasteAndDrop(task.id, canEdit ? attachments?.maxBytes : undefined);
 
   return (
     <div className="relative mx-auto flex w-full max-w-2xl flex-col gap-3 px-6 pt-1 pb-[max(1rem,env(safe-area-inset-bottom))] touch:gap-2 touch:px-5">

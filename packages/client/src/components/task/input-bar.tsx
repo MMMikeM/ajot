@@ -74,7 +74,9 @@ export function TaskInputBar() {
         <span dir="auto" className="truncate font-medium text-foreground">
           {listName}
         </span>
-        {activeCategory && <CollabBadge category={activeCategory} currentUserId={currentUserId} people={people} />}
+        {activeCategory && (
+          <CollabBadge category={activeCategory} currentUserId={currentUserId} people={people} />
+        )}
         <ChevronDown size={14} className="shrink-0 text-hint" />
       </button>
       <AddTaskInput onAdd={handleAdd} />

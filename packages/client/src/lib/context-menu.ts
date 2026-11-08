@@ -36,7 +36,12 @@ type DraftId = "selection" | "link" | "image" | "image-link" | "page";
 
 // The target rides in the menu item's id: a list's id, a contact's username or user id
 type DestinationKind = "inbox" | "list" | "share" | "send";
-const DESTINATION_KINDS = new Set<string>(["inbox", "list", "share", "send"] satisfies DestinationKind[]);
+const DESTINATION_KINDS = new Set<string>([
+  "inbox",
+  "list",
+  "share",
+  "send",
+] satisfies DestinationKind[]);
 type Destination = { kind: DestinationKind; target: string; title: string; done: string };
 type Group = { label?: string; destinations: Destination[] };
 
@@ -556,7 +561,11 @@ const buildMenu = (groups: Group[]) => {
     create({ id: `separator-${i}`, type: "separator", contexts: CONTEXTS });
     if (label) create({ id: `label-${i}`, title: label, enabled: false, contexts: CONTEXTS });
     for (const d of destinations)
-      create({ id: [d.kind, d.target].filter(Boolean).join("|"), title: d.title, contexts: CONTEXTS });
+      create({
+        id: [d.kind, d.target].filter(Boolean).join("|"),
+        title: d.title,
+        contexts: CONTEXTS,
+      });
   });
 };
 

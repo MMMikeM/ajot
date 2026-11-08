@@ -38,7 +38,10 @@ const isThisPagesToAdd = ({ to, userId }: KeptShare) =>
 const addOnce = async (id: string) => {
   const kept = await readShare(id);
   if (!kept || !isThisPagesToAdd(kept.text)) return undefined;
-  const task = taskOfKept(kept.text, kept.files.map(({ file }) => file));
+  const task = taskOfKept(
+    kept.text,
+    kept.files.map(({ file }) => file),
+  );
   if (!task) {
     await forgetShare(id);
     return undefined;

@@ -1,7 +1,13 @@
 import { nanoid } from "nanoid";
 import { now } from "@newtab-todo/shared/iso";
 import { MAX_TEXT, MAX_TITLE, cutTo } from "@newtab-todo/shared/field-limits";
-import { ApiError, apiClient, succeeded, type ApiClient, type SignedInSession } from "~/lib/api-client";
+import {
+  ApiError,
+  apiClient,
+  succeeded,
+  type ApiClient,
+  type SignedInSession,
+} from "~/lib/api-client";
 import { queueFile } from "~/lib/files/attach";
 import { withLock } from "~/lib/locks";
 import { fetchServerConfig } from "~/lib/server-config";
@@ -141,7 +147,11 @@ const queueFiles = async (
   const failed: FailedPart[] = [];
   for (const { file, key } of files) {
     const refusal = attachments
-      ? await queueFile(file, { taskId, uploaderId: session.userId, maxBytes: attachments.maxBytes })
+      ? await queueFile(file, {
+          taskId,
+          uploaderId: session.userId,
+          maxBytes: attachments.maxBytes,
+        })
       : "no-attachments";
     if (refusal) failed.push({ step: "image", label: "the image", reason: refusal });
     await forgetSharedFile(key);
@@ -153,7 +163,10 @@ const sendOnce = async (session: SignedInSession, id: string): Promise<SendOutco
   const kept = await readShare(id);
   if (!kept?.text.to || (kept.text.userId ?? null) !== session.userId) return { status: "skipped" };
   const { text } = kept;
-  const shared = taskOfKept(text, kept.files.map(({ file }) => file));
+  const shared = taskOfKept(
+    text,
+    kept.files.map(({ file }) => file),
+  );
   if (!shared) {
     await forgetShare(id);
     return { status: "skipped" };
@@ -177,7 +190,8 @@ const sendOnce = async (session: SignedInSession, id: string): Promise<SendOutco
     }
     failed.push(...(await queueFiles(session, taskId, kept.files)));
   } catch (err) {
-    const [failedStep, cause] = err instanceof StepFailed ? [err.step, err.cause] : ["add" as const, err];
+    const [failedStep, cause] =
+      err instanceof StepFailed ? [err.step, err.cause] : ["add" as const, err];
     if (isWorthRetrying(cause)) return { status: "waiting", step: failedStep, error: cause };
     await forgetShare(id);
     return { status: "refused", title: shared.title, step: failedStep, error: cause };
@@ -208,18 +222,22 @@ export const keepAndSend = (
   withLock(shareLockName(id), async () => {
     await keepShare(id, kept, files);
     onKept?.();
-    return sendOnce(session, id).catch(
-      (error: unknown): SendOutcome => ({ status: "waiting", step: "add", error }),
-    );
+    return sendOnce(session, id).catch((error: unknown): SendOutcome => ({
+      status: "waiting",
+      step: "add",
+      error,
+    }));
   });
 
 /** Sends every share the menu kept that's still waiting; returns what each did. */
 export const sendKeptShares = async (session: SignedInSession) => {
   const outcomes: { id: string; outcome: SendOutcome }[] = [];
   for (const id of await keptShareIds()) {
-    const outcome = await sendKeptShare(session, id).catch(
-      (error: unknown): SendOutcome => ({ status: "waiting", step: "add", error }),
-    );
+    const outcome = await sendKeptShare(session, id).catch((error: unknown): SendOutcome => ({
+      status: "waiting",
+      step: "add",
+      error,
+    }));
     outcomes.push({ id, outcome });
     // Unreachable for one, unreachable for the rest
     if (outcome.status === "waiting" && !(outcome.error instanceof ApiError)) break;

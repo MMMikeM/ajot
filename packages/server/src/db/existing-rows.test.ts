@@ -200,7 +200,9 @@ describe("a task shared with someone no longer a contact", async () => {
       VALUES ('carol', 'Carol', 'carol', 'x')`);
     sqlite.exec(`INSERT INTO tasks (id, user_id, title, sort_order, created_at, updated_at) VALUES
       ${task("a", "a0")}`);
-    sqlite.exec(`INSERT INTO contacts (id, user_id, contact_user_id) VALUES ('ab', 'alice', 'bob')`);
+    sqlite.exec(
+      `INSERT INTO contacts (id, user_id, contact_user_id) VALUES ('ab', 'alice', 'bob')`,
+    );
     sqlite.exec(`INSERT INTO task_shares (id, task_id, shared_with_user_id) VALUES
       ('to-bob', 'a', 'bob'), ('to-carol', 'a', 'carol')`);
   });

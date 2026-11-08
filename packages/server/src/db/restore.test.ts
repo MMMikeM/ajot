@@ -50,16 +50,14 @@ const removedContactIds = () => ids(db.query.removedContacts.findMany({ columns:
 beforeEach(async () => {
   // Every other table cascades from users
   await db.delete(users);
-  await db
-    .insert(users)
-    .values(
-      [owner, collaborator, stranger, "carol", "bob"].map((id) => ({
-        id,
-        name: id,
-        username: id,
-        passwordHash: "x",
-      })),
-    );
+  await db.insert(users).values(
+    [owner, collaborator, stranger, "carol", "bob"].map((id) => ({
+      id,
+      name: id,
+      username: id,
+      passwordHash: "x",
+    })),
+  );
 });
 
 // Only its owner may restore a list: requireList checks that in the route, before this runs
@@ -293,8 +291,8 @@ describe("restoring someone removed from a list", () => {
       status: 404,
     });
     expect(await collaboratorIds()).toEqual([]);
-    expect(
-      await ids(db.query.removedCollaborators.findMany({ columns: { id: true } })),
-    ).toEqual(["c1"]);
+    expect(await ids(db.query.removedCollaborators.findMany({ columns: { id: true } }))).toEqual([
+      "c1",
+    ]);
   });
 });
