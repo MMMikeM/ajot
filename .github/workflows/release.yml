@@ -1,6 +1,6 @@
 name: Release
 
-# A tag like v1.1.0 makes a GitHub release with both extensions attached. Bump
+# A tag like v1.1.0 makes a GitHub release with both extensions and the Android app. Bump
 # packages/client/package.json first: the tag must match it.
 on:
   push:
@@ -80,3 +80,10 @@ jobs:
           files=(ajot-"$VERSION"-*)
           [ -f updates.json ] && files+=(updates.json)
           gh release create "$GITHUB_REF_NAME" "${files[@]}" --generate-notes
+
+  android:
+    needs: release
+    uses: ./.github/workflows/android.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit

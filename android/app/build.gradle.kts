@@ -8,25 +8,35 @@ plugins {
 // One APK per server: a self-hoster's fork sets its own URL and signing key
 val serverUrl = (System.getenv("AJOT_SERVER_URL") ?: "https://ajot.fly.dev").trimEnd('/')
 
+// The PWA's share_target (packages/client/vite.config.ts): Chrome hands a share to the TWA only
+// with a copy of it, and the build can't read the web manifest
+val shareTarget =
+  """{"action": "$serverUrl/share", "method": "POST", "enctype": "multipart/form-data",
+  "params": {"title": "title", "text": "text", "url": "url",
+  "files": [{"name": "files", "accept": ["*/*"]}]}}"""
+
+val assetStatements =
+  """[{"relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {"namespace": "web", "site": "$serverUrl"}}]"""
+
+// A string resource drops bare quotes
+fun escaped(json: String) = json.replace("\"", "\\\"")
+
 android {
   namespace = "app.ajot"
   compileSdk = 36
 
   defaultConfig {
-    applicationId = System.getenv("ANDROID_PACKAGE_NAME") ?: "app.ajot.poc"
+    applicationId = System.getenv("ANDROID_PACKAGE_NAME") ?: "app.ajot"
     minSdk = 24
     targetSdk = 36
     versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
-    versionName = "0.0.${System.getenv("VERSION_CODE") ?: "1"}-poc"
+    versionName = System.getenv("VERSION_NAME") ?: "0.0.0-dev"
 
     manifestPlaceholders["host"] = URI(serverUrl).host
     resValue("string", "launchUrl", "$serverUrl/")
-    // Quotes escaped for a string resource, which drops bare ones
-    resValue(
-      "string",
-      "assetStatements",
-      """[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"$serverUrl\"}}]""",
-    )
+    resValue("string", "assetStatements", escaped(assetStatements))
+    resValue("string", "shareTarget", escaped(shareTarget))
     buildConfigField("String", "SERVER_URL", "\"$serverUrl\"")
   }
 

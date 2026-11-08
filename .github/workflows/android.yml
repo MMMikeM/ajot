@@ -1,12 +1,17 @@
 name: Android
 
 # Builds the Android app for the server in the AJOT_SERVER_URL repo variable, signed with the
-# ANDROID_KEYSTORE_BASE64 secret (a PKCS12 keystore, key alias "ajot"), and attaches it to a
-# pre-release
+# ANDROID_KEYSTORE_BASE64 secret (a PKCS12 keystore, key alias "ajot"). A push keeps the APK as the
+# run's artifact; a release (release.yml) attaches it to its tag's release, where Obtainium finds it.
 on:
   push:
     paths: ["android/**", ".github/workflows/android.yml"]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
 
 permissions:
   contents: write
@@ -17,6 +22,15 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
+      # Android refuses an update whose versionCode isn't higher, so it grows with the version
+      - name: Version
+        id: version
+        run: |
+          version=$(jq -r .version packages/client/package.json)
+          IFS=. read -r major minor patch <<< "$version"
+          echo "name=$version" >> "$GITHUB_OUTPUT"
+          echo "code=$((major * 10000 + minor * 100 + patch))" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
@@ -26,7 +40,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           gradle-version: 9.9.0
-          # Saved only from the default branch otherwise, and this branch has never run there
+          # Saved only from the default branch otherwise
           cache-read-only: false
 
       # Opens the keystore first, so a bad secret fails here rather than after the build
@@ -44,24 +58,29 @@ jobs:
         env:
           AJOT_SERVER_URL: ${{ vars.AJOT_SERVER_URL || 'https://ajot.fly.dev' }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          VERSION_CODE: ${{ github.run_number }}
-        run: gradle assembleRelease
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          gradle assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/ajot-$VERSION_NAME.apk"
 
       # A server serves this fingerprint in its assetlinks.json; a mismatch only shows on the phone,
       # as the app's URL bar
       - name: Signing fingerprint
         run: |
           apksigner="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner"
-          "$apksigner" verify --print-certs android/app/build/outputs/apk/release/app-release.apk \
-            | grep SHA-256 | tee -a "$GITHUB_STEP_SUMMARY"
+          "$apksigner" verify --print-certs ajot-*.apk | grep SHA-256 | tee -a "$GITHUB_STEP_SUMMARY"
 
-      # Never "latest": Firefox's update_url reads updates.json from the latest release
-      - name: Pre-release
+      - if: ${{ !inputs.tag }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ajot-android
+          path: ajot-*.apk
+
+      # One APK per release, which Obtainium needs to update in the background
+      - if: ${{ inputs.tag }}
+        name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: android-poc-${{ github.run_number }}
-        run: |
-          cp android/app/build/outputs/apk/release/app-release.apk ajot-android.apk
-          gh release create "$TAG" ajot-android.apk --prerelease --latest=false \
-            --target "$GITHUB_SHA" --title "Android POC ${{ github.run_number }}" \
-            --notes "Built from $GITHUB_SHA"
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" ajot-*.apk
