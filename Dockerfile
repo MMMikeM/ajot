@@ -1,7 +1,8 @@
 # CI builds the server stage while the tests run and passes its image in; locally it's the stage below
 ARG SERVER_IMAGE=server
+ARG NODE_IMAGE=node:24.22.2-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8
 
-FROM node:24-alpine AS base
+FROM ${NODE_IMAGE} AS base
 RUN corepack enable && corepack install -g pnpm@12.6.0
 
 ENV CI=true
@@ -23,7 +24,7 @@ COPY packages/server/src ./packages/server/src
 RUN pnpm --filter @newtab-todo/server build
 RUN pnpm --filter @newtab-todo/server --prod deploy --legacy /app/deploy
 
-FROM node:24-alpine AS server
+FROM ${NODE_IMAGE} AS server
 RUN apk add --no-cache ca-certificates tini
 WORKDIR /app
 COPY --from=server-build /app/deploy .

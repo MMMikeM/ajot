@@ -65,8 +65,11 @@ On Fly, set the app name in `fly.toml`, then:
 ```sh
 fly launch --no-deploy --copy-config
 fly secrets set TURSO_DATABASE_URL=… TURSO_AUTH_TOKEN=… VAPID_PUBLIC_KEY=… VAPID_PRIVATE_KEY=… VAPID_SUBJECT=mailto:…
-fly deploy
+fly deploy --ha=false
 ```
+
+Keep it to one machine: the server holds live connections and the widget's sign-in codes in
+memory, so a second machine would miss changes made on the first. A first plain `fly deploy` starts two.
 
 Elsewhere, build the `server` target of the `Dockerfile` and run it with those variables. It
 listens on `PORT`.
