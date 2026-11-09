@@ -5,6 +5,8 @@ name: Android
 # run's artifact; a release (release.yml) attaches it to its tag's release, where Obtainium finds it.
 on:
   push:
+    # Branches only: a tag builds through release.yml
+    branches: ["**"]
     paths: ["android/**", ".github/workflows/android.yml"]
   workflow_dispatch:
   workflow_call:
