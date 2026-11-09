@@ -11,7 +11,6 @@ const prefetchedTaskDetail = loadTaskDetail();
 prefetchedTaskDetail.catch(() => {});
 const TaskDetail = lazy(() => prefetchedTaskDetail.catch(loadTaskDetail));
 
-/** An open task, sheeted over the page it was opened from: the list, or search. */
 export function TaskSheet({ taskId, page }: { taskId: string; page: "/" | "/search" }) {
   const router = useRouter();
   const navigate = useNavigate();

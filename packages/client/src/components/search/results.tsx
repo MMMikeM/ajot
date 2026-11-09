@@ -103,7 +103,6 @@ function ResultRow({
   );
 }
 
-/** Open tasks under their lists in the sidebar's order, then everything done. */
 export function SearchResults({
   results,
   categories,

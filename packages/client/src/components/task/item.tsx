@@ -246,7 +246,7 @@ function TaskRow({
           containerRef.current = el;
           dragHandleRef?.(el);
         }}
-        // The drag handle. Its own role and tabIndex keep dnd-kit from making it a button and a tab stop.
+        // Its own role and tabIndex keep dnd-kit from making the drag handle a button and a tab stop
         role={dragHandleRef ? "group" : undefined}
         tabIndex={dragHandleRef ? -1 : undefined}
         data-entering={entering || undefined}

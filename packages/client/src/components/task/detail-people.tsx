@@ -45,7 +45,6 @@ const crumb = "flex h-9 min-w-0 items-center gap-2 text-sm text-muted-foreground
 
 type Person = { id: string; name: string };
 
-/** The list this task is in for the viewer, and the lists they can move it to. */
 export const useListFiling = (task: Task) => {
   const userId = useOptimisticUserId();
   const lists = useCategoriesById();
@@ -61,7 +60,6 @@ export const useListFiling = (task: Task) => {
 
 type Filing = ReturnType<typeof useListFiling>;
 
-/** Where a top-level task sits, opening the lists it can move to. Plain text when it can't move. */
 export const ListChip = ({ filing }: { filing: Filing }) => {
   const { categoryId, category, choices, move } = filing;
   if (categoryId === undefined) return null;
@@ -120,7 +118,6 @@ export const ListChip = ({ filing }: { filing: Filing }) => {
   );
 };
 
-/** A subtask's way back up: the task it sits under, whose sheet it opens. */
 export const ParentCrumb = ({
   parent,
   onOpen,
@@ -143,10 +140,6 @@ export const ParentCrumb = ({
   );
 };
 
-/**
- * Everyone who can see the task besides its owner: its shares, then its list's people. A
- * subtask's are its parent's.
- */
 const peopleOnTask = (
   task: Task,
   lists: CategoriesById,
@@ -237,7 +230,6 @@ export const SharingField = ({ task, sharing }: { task: Task; sharing: Sharing }
   );
 };
 
-/** Who else a subtask reaches: everyone who can see the task it sits under, besides the viewer. */
 export const SubtaskSharing = ({
   parent,
   sharing,
@@ -347,7 +339,6 @@ export const AssigneeField = ({ task, sharing }: { task: Task; sharing: Sharing 
     );
   }
 
-  // The owner can hand the task to themselves or anyone who can see it
   const candidates = [{ id: task.userId, name: "You" }, ...sharing.others];
   if (task.assignee && !candidates.some((c) => c.id === task.assigneeId))
     candidates.push({ id: task.assignee.id, name: task.assignee.name });

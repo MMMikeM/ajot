@@ -137,7 +137,6 @@ const connect = async () => {
     backoff.reset();
     void notifyTabs();
     schedulePrewarm();
-    // Connected again: what waited on the network goes now
     void sendWaitingNow();
   });
 
