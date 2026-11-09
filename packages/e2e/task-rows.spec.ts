@@ -84,3 +84,23 @@ test("only a task added now slides in; the loaded list appears at once", async (
   await expect(row(page, "Water the plants").locator('[class*="task-enter"]')).toHaveCount(1);
   await expect(entering).toHaveCount(1);
 });
+
+test("a list dragged above another moves there, still one list to a row", async ({ page }) => {
+  await openList(page);
+  const rows = page.getByTestId("category-sidebar").locator(".group\\/pill");
+  const firstLine = async () => (await rows.allInnerTexts()).map((text) => text.split("\n")[0]);
+  const [first, second] = await firstLine();
+
+  const centre = async (target: Locator) => {
+    const box = (await target.boundingBox())!;
+    return [box.x + box.width / 2, box.y + box.height / 2] as const;
+  };
+  await page.mouse.move(...(await centre(rows.nth(1).getByRole("button").first())));
+  await page.mouse.down();
+  await page.mouse.move(...(await centre(rows.nth(0).getByRole("button").first())), { steps: 12 });
+  await page.mouse.up();
+
+  await expect.poll(async () => (await firstLine()).slice(0, 2)).toEqual([second, first]);
+  for (const listRow of await rows.all())
+    await expect(listRow.locator(":scope > button:not([data-slot])")).toHaveCount(1);
+});

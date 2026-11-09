@@ -14,6 +14,7 @@ import { setActiveCategoryId } from "~/lib/state/active-category";
 import { useCurrentUserId } from "~/lib/auth/current-user";
 import { isListPath } from "~/lib/list-path";
 import { cn } from "~/lib/utils";
+import { rowDragSensors } from "~/components/task/row-drag";
 import { navRow } from "./nav-row";
 import type { Category } from "~/lib/types";
 import { useCategoryNavState } from "./use-category-nav-state";
@@ -55,12 +56,20 @@ function SortablePill({
   id: string;
   index: number;
   disabled: boolean;
-  children: (ref: RefCallback<HTMLElement>) => ReactNode;
+  children: (ref: RefCallback<HTMLElement>, handleRef: RefCallback<HTMLElement>) => ReactNode;
 }) {
   // A task dragged across this pill would otherwise count as sorting among the lists: dnd-kit
   // then moves the task's row into the sidebar, where React can't find it to remove it
-  const { ref } = useSortable({ id, index, type: "category", accept: "category", disabled });
-  return <>{children(ref)}</>;
+  const { ref, handleRef } = useSortable({
+    id,
+    index,
+    type: "category",
+    accept: "category",
+    disabled,
+    // A handle on its own picks up on press, so a click on the list would open nothing
+    sensors: rowDragSensors,
+  });
+  return <>{children(ref, handleRef)}</>;
 }
 
 function DroppablePill({
@@ -174,17 +183,19 @@ export function CategorySidebar({ reorderable = true }: { reorderable?: boolean 
 
     return (
       <SortablePill key={cat.id} id={cat.id} index={index} disabled={!reorderable}>
-        {(sortableRef) => (
+        {(sortableRef, handleRef) => (
           <DroppablePill
             categoryId={cat.id}
             activeCategoryId={activeCategoryId}
             disabled={!reorderable}
           >
             {(droppableRef, isDropTarget) => (
-              <div className="group/pill relative flex items-center">
+              // The row is what sorts, its button the handle: dnd-kit moves the sorted element
+              // among its siblings as it's dragged, and a button moved there lands in another row
+              <div ref={sortableRef} className="group/pill relative flex items-center">
                 <button
                   ref={(el) => {
-                    sortableRef(el);
+                    handleRef(el);
                     droppableRef(el);
                   }}
                   onClick={() => openList(cat.id)}
