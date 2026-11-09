@@ -47,9 +47,16 @@ export const widgetRoutes = new OpenAPIHono()
     }),
     // Asked again until the app approves it, so a 404 is the usual answer
     async (c) => {
-      const approval = widgetCodes.take(c.req.valid("json").code);
+      const { code } = c.req.valid("json");
+      const approval = widgetCodes.take(code);
       if (!approval) return c.json({ error: "Not approved, or already claimed" }, 404);
-      const { token } = await mcpTokenRepo.replaceWidgetToken(approval.userId, approval.sessionId);
-      return c.json({ token }, 200);
+      try {
+        const token = await mcpTokenRepo.replaceWidgetToken(approval.userId, approval.sessionId);
+        return c.json({ token }, 200);
+      } catch (err) {
+        // Kept for the widget's next try, unless the sign-in is gone (the foreign key refused it)
+        widgetCodes.putBack(code, approval);
+        throw err;
+      }
     },
   );

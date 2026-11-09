@@ -7,6 +7,9 @@ import * as taskRepo from "../db/task.repo";
 import * as taskShareRepo from "../db/task-share.repo";
 import * as userRepo from "../db/user.repo";
 import * as sessionRepo from "../db/session.repo";
+import { db } from "../db/client";
+import { mcpTokens, sessions } from "../db/schema";
+import { eq } from "drizzle-orm";
 
 // vi.mock runs before this file's imports, so the database it builds can only be imported there
 vi.mock("../db/client", async () => {
@@ -124,6 +127,33 @@ describe("who /mcp lets in", () => {
 
     await sessionRepo.remove(session);
     expect((await call("/api/tasks/inbox")).status).toBe(401);
+  });
+
+  test("a sign-in holds one widget token, which ends when the session expires", async () => {
+    const session = await sessionRepo.insert("alice");
+    const { id: sessionId } = (await sessionRepo.findValid(session))!;
+    const claimFor = async (code: string) => {
+      const send = (path: string, authorization?: string) =>
+        app.request(`/api/widget/${path}`, {
+          method: "POST",
+          headers: { "content-type": "application/json", ...(authorization && { authorization }) },
+          body: JSON.stringify({ code }),
+        });
+      await send("approve", `Bearer ${session}`);
+      return ((await (await send("claim")).json()) as { token: string }).token;
+    };
+    await claimFor("b".repeat(43));
+    const token = await claimFor("c".repeat(43));
+    expect(await db.$count(mcpTokens, eq(mcpTokens.sessionId, sessionId))).toBe(1);
+
+    const inbox = () =>
+      app.request("/api/tasks/inbox", { headers: { authorization: `Bearer ${token}` } });
+    expect((await inbox()).status).toBe(200);
+    await db
+      .update(sessions)
+      .set({ expiresAt: "2026-01-01T00:00:00.000Z" })
+      .where(eq(sessions.id, sessionId));
+    expect((await inbox()).status).toBe(401);
   });
 
   test("OAuth discovery finds nothing, rather than the app's page", async () => {

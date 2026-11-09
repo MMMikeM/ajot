@@ -1,7 +1,9 @@
 import { approveWidgetCode } from "~/lib/actions";
 import { getAuthToken, subscribeAuthToken } from "~/lib/auth/token";
+import { fetchServerConfig } from "~/lib/server-config";
+import { getServerUrl } from "~/lib/server-url";
 
-const PACKAGE_KEY = "ajot-android-app";
+const LAUNCHED_BY_KEY = "ajot-android-app";
 const CODE_KEY = "ajot-widget-code";
 const PLACED_KEY = "ajot-widget-placed";
 
@@ -33,43 +35,53 @@ const session = {
   },
 };
 
+/** The package Chrome names as a Trusted Web Activity's opener, on the load it launched. */
+const launchingPackage = () =>
+  document.referrer.startsWith("android-app://") ? new URL(document.referrer).host : null;
+
 /**
- * The Android app's package when this page runs inside it, or null. Chrome gives a Trusted Web
- * Activity's first page the app as its referrer (`android-app://<package>/`), so it's kept for the
- * session's later loads.
+ * The Android app's package when this page runs inside it, or null. Only the server's own app
+ * counts: the referrer names whichever app opened Chrome, and a code or the Settings row handed to
+ * another one would sign this account in there.
  */
-export const androidAppPackage = (): string | null => {
-  const referrer = document.referrer.startsWith("android-app://")
-    ? new URL(document.referrer).host
-    : null;
-  if (referrer) session.set(PACKAGE_KEY, referrer);
-  return referrer ?? session.get(PACKAGE_KEY);
+export const androidAppPackage = async (): Promise<string | null> => {
+  const opener = session.get(LAUNCHED_BY_KEY);
+  if (!opener) return null;
+  const { androidPackage } = await fetchServerConfig(getServerUrl());
+  return androidPackage === opener ? opener : null;
 };
 
 /** Whether the app said, when it opened this page, that its widget is on the home screen. */
 export const widgetIsPlaced = () => session.get(PLACED_KEY) === "1";
 
+// A code in any other address is a link someone sent, and approving it would hand them a token
 const takeLaunchParams = () => {
   const url = new URL(location.href);
-  const code = url.searchParams.get(CODE_PARAM);
-  // Each launch says afresh, so a widget removed since the last one shows Settings' row again
-  if (document.referrer.startsWith("android-app://")) {
+  const opener = launchingPackage();
+  if (opener) {
+    session.set(LAUNCHED_BY_KEY, opener);
+    // Each launch says afresh, so a widget removed since the last one shows Settings' row again
     if (url.searchParams.get(PLACED_PARAM) === "placed") session.set(PLACED_KEY, "1");
     else session.remove(PLACED_KEY);
+    const code = url.searchParams.get(CODE_PARAM);
+    if (code) session.set(CODE_KEY, code);
+    else session.remove(CODE_KEY);
   }
-  if (!code && !url.searchParams.has(PLACED_PARAM)) return;
-  if (code) session.set(CODE_KEY, code);
+  if (!url.searchParams.has(CODE_PARAM) && !url.searchParams.has(PLACED_PARAM)) return;
   url.searchParams.delete(CODE_PARAM);
   url.searchParams.delete(PLACED_PARAM);
   history.replaceState(history.state, "", url);
 };
 
-const approveKeptCode = () => {
+const approveKeptCode = async () => {
   const code = session.get(CODE_KEY);
   if (!code || !getAuthToken()) return;
-  approveWidgetCode(code)
-    .then(() => session.remove(CODE_KEY))
-    .catch((err) => console.error("[widget] couldn't approve its code:", err));
+  if (!(await androidAppPackage())) {
+    session.remove(CODE_KEY);
+    return;
+  }
+  await approveWidgetCode(code);
+  session.remove(CODE_KEY);
 };
 
 /**
@@ -79,22 +91,16 @@ const approveKeptCode = () => {
 export const startWidgetSignIn = () => {
   takeLaunchParams();
   if (!session.get(CODE_KEY)) return;
-  approveKeptCode();
-  subscribeAuthToken(approveKeptCode);
+  const approve = () =>
+    approveKeptCode().catch((err) => console.error("[widget] couldn't approve its code:", err));
+  void approve();
+  subscribeAuthToken(() => void approve());
 };
 
-const newCode = () =>
-  btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
-
 /**
- * Asks Android to place the widget, already signed in: the code is approved here, and the app
- * claims the widget's token with it.
+ * Asks Android to place the widget. It signs in on its first tap, through the launcher's code:
+ * a code passed here would let any page that can open the app's intent pick the account.
  */
-export const addWidgetToHomeScreen = async (appPackage: string) => {
-  const code = newCode();
-  await approveWidgetCode(code);
-  location.href = `intent://add-widget#Intent;scheme=ajot;package=${appPackage};S.code=${code};end`;
+export const addWidgetToHomeScreen = (appPackage: string) => {
+  location.href = `intent://add-widget#Intent;scheme=ajot;package=${appPackage};end`;
 };

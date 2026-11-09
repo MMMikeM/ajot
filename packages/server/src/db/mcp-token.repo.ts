@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, gt, isNull, lt, or } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { createSelectSchema } from "drizzle-orm/zod";
 import { hoursFromNow, now } from "@newtab-todo/shared/iso";
 import { db } from "./client";
-import { mcpTokens, type tokenKinds } from "./schema";
+import { mcpTokens, sessions, type tokenKinds } from "./schema";
 import { NotFoundError } from "./errors";
 
 type Kind = (typeof tokenKinds)[number];
@@ -67,18 +67,27 @@ export const create = async (
 
 const WIDGET_DAYS = 365;
 
-/** One per sign-in: a phone's earlier widget token goes when it's approved again. */
+/** One per sign-in (the unique index): approving a phone's widget again replaces its token. */
 export const replaceWidgetToken = async (userId: string, sessionId: string) => {
+  const token = `${PREFIX.widget}${randomBytes(32).toString("base64url")}`;
+  const fresh = {
+    tokenHash: hashToken(token),
+    hint: token.slice(-HINT_LENGTH),
+    expiresAt: hoursFromNow(WIDGET_DAYS * 24),
+  };
   await db
-    .delete(mcpTokens)
-    .where(and(eq(mcpTokens.sessionId, sessionId), eq(mcpTokens.kind, "widget")));
-  return create(userId, {
-    name: "Android widget",
-    canWrite: true,
-    days: WIDGET_DAYS,
-    kind: "widget",
-    sessionId,
-  });
+    .insert(mcpTokens)
+    .values({
+      id: createId(),
+      userId,
+      name: "Android widget",
+      canWrite: true,
+      kind: "widget",
+      sessionId,
+      ...fresh,
+    })
+    .onConflictDoUpdate({ target: mcpTokens.sessionId, set: { ...fresh, lastUsedAt: null } });
+  return token;
 };
 
 export const remove = async (id: string, userId: string) => {
@@ -97,7 +106,16 @@ export const remove = async (id: string, userId: string) => {
 export const findValid = async (token: string, kind: Kind) => {
   if (!token.startsWith(PREFIX[kind])) return undefined;
   return db.query.mcpTokens.findFirst({
-    where: { tokenHash: hashToken(token), kind, expiresAt: { gt: now() } },
+    where: {
+      tokenHash: hashToken(token),
+      kind,
+      expiresAt: { gt: now() },
+      // A widget's sign-in ends with its session's expiry, not at the purge that deletes it
+      ...(kind === "widget" && {
+        RAW: (row) =>
+          sql`EXISTS (SELECT 1 FROM ${sessions} WHERE ${sessions.id} = ${row.sessionId} AND ${sessions.expiresAt} > ${now()})`,
+      }),
+    },
     columns: { id: true, userId: true, canWrite: true, expiresAt: true },
   });
 };
