@@ -1,4 +1,4 @@
-import { beforeAll, expect, test, vi } from "vite-plus/test";
+import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import * as taskRepo from "../db/task.repo";
 import * as taskShareRepo from "../db/task-share.repo";
 import * as userRepo from "../db/user.repo";
@@ -65,5 +65,49 @@ test("ticking several tells each person once, and refuses only the tasks it can'
     taskTitle: "Milk",
     more: 2,
     byUser: "Alice",
+  });
+});
+
+describe("an edit to a shared task", () => {
+  const edit = (updatedAt: string, fields: object) =>
+    taskRoutes.request("/", {
+      method: "PUT",
+      headers: { authorization: "Bearer token", "content-type": "application/json" },
+      body: JSON.stringify({ id: "tea", updatedAt, ...fields }),
+    });
+
+  beforeAll(async () => {
+    await taskRepo.insert({
+      id: "tea",
+      userId: "alice",
+      title: "Tea",
+      description: "Green",
+      createdAt: LONG_AGO,
+      updatedAt: LONG_AGO,
+    });
+    await taskShareRepo.insert({ id: "share-tea", taskId: "tea", sharedWithUserId: "bob" });
+  });
+
+  test("tells no one when it sends back what's stored", async () => {
+    vi.mocked(sendNotification).mockClear();
+    const res = await edit("2026-02-01T09:00:00.000Z", {
+      title: "Tea",
+      description: "Green",
+      status: "todo",
+      dueDate: null,
+    });
+    expect(res.status).toBe(200);
+    expect(sendNotification).not.toHaveBeenCalled();
+  });
+
+  test("names only what changed", async () => {
+    vi.mocked(sendNotification).mockClear();
+    const res = await edit("2026-03-01T09:00:00.000Z", { title: "Tea", description: "Black" });
+    expect(res.status).toBe(200);
+    expect(sendNotification).toHaveBeenCalledOnce();
+    expect(sendNotification).toHaveBeenCalledWith(
+      "bob",
+      expect.objectContaining({ type: "task-updated", changes: "new description" }),
+    );
   });
 });

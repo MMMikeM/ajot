@@ -29,17 +29,25 @@ export type List = Lists["lists"][number];
 
 export const INBOX = "inbox";
 
+/** Someone else's text as one line, so a line break in it can't start a line of the tool's own. */
+export const oneLine = (text: string) => text.replace(/[\s\p{Cc}]+/gu, " ").trim();
+
+const LINE_BREAK = /\r\n|[\n\r\v\f\u0085\u2028\u2029]/;
+
+/** Text that keeps its lines, each quoted, for the same reason. */
+export const quoted = (text: string) => text.split(LINE_BREAK).map((line) => `> ${line}`);
+
 /** The name of everyone whose things the caller can see: their contacts and each list's members. */
 export const peopleOf = ({ lists, contacts, tasks }: Lists) => {
   const names = new Map<string, string>();
-  for (const list of lists)
-    for (const c of list.collaborators ?? []) names.set(c.userId, c.user.name);
+  const add = (id: string, name: string) => names.set(id, oneLine(name));
+  for (const list of lists) for (const c of list.collaborators ?? []) add(c.userId, c.user.name);
   for (const t of tasks) {
-    for (const s of t.shares) names.set(s.sharedWithUserId, s.sharedWithUser.name);
-    if (t.assignee) names.set(t.assignee.id, t.assignee.name);
-    if (t.sentBy) names.set(t.sentBy.id, t.sentBy.name);
+    for (const s of t.shares) add(s.sharedWithUserId, s.sharedWithUser.name);
+    if (t.assignee) add(t.assignee.id, t.assignee.name);
+    if (t.sentBy) add(t.sentBy.id, t.sentBy.name);
   }
-  for (const c of contacts) names.set(c.contactUserId, c.contactUser.name);
+  for (const c of contacts) add(c.contactUserId, c.contactUser.name);
   return names;
 };
 
@@ -77,7 +85,20 @@ const othersWhoEdit = (task: Task, me: string, lists: List[], parent?: Task) => 
     .map((g) => g.userId);
 };
 
-const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
+type Context = { me: string; lists: List[]; people: People };
+
+const writersOf = (task: Task, { me, lists, people }: Context, parent?: Task) => {
+  const owner = (parent ?? task).userId;
+  const sentBy = task.sentBy && oneLine(task.sentBy.name);
+  const from = owner !== me ? nameOf(people, owner) : sentBy;
+  const editors = othersWhoEdit(task, me, lists, parent).map((id) => nameOf(people, id));
+  return { from, editors };
+};
+
+export const othersWhoWrite = (task: Task, context: Context, parent?: Task) => {
+  const { from, editors } = writersOf(task, context, parent);
+  return [...new Set([...(from ? [from] : []), ...editors])];
+};
 
 const STATUS_MARK = { todo: " ", in_progress: "~", done: "x" } as const;
 
@@ -85,21 +106,15 @@ const STATUS_MARK = { todo: " ", in_progress: "~", done: "x" } as const;
  * One task as a line. Text someone else could have written is marked as theirs, so it reads as
  * data: `from` its owner or sender, `shared with` everyone else who can edit it.
  */
-export const taskLine = (
-  task: Task,
-  { me, lists, people, notes }: { me: string; lists: List[]; people: People; notes: number },
-  parent?: Task,
-) => {
-  const parts = [`[${STATUS_MARK[task.status]}] ${oneLine(task.title)} [${task.id}]`];
-  if (task.dueDate) parts.push(`due ${task.dueDate}`);
-  if (task.assignee) parts.push(`assigned to ${task.assignee.name}`);
+export const taskLine = (task: Task, context: Context & { notes: number }, parent?: Task) => {
+  const parts = [`[${STATUS_MARK[task.status]}] ${oneLine(task.title)} [${oneLine(task.id)}]`];
+  if (task.dueDate) parts.push(`due ${oneLine(task.dueDate)}`);
+  if (task.assignee) parts.push(`assigned to ${oneLine(task.assignee.name)}`);
+  const { notes } = context;
   if (notes > 0) parts.push(`${notes} note${notes === 1 ? "" : "s"} of yours`);
-  const owner = (parent ?? task).userId;
-  if (owner !== me) parts.push(`from ${nameOf(people, owner)}`);
-  else if (task.sentBy) parts.push(`from ${task.sentBy.name}`);
-  const editors = othersWhoEdit(task, me, lists, parent);
-  if (editors.length > 0)
-    parts.push(`shared with ${editors.map((id) => nameOf(people, id)).join(", ")}`);
+  const { from, editors } = writersOf(task, context, parent);
+  if (from) parts.push(`from ${from}`);
+  if (editors.length > 0) parts.push(`shared with ${editors.join(", ")}`);
   return parts.join(" · ");
 };
 

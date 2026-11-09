@@ -1,6 +1,5 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createMcpHandler, requireBearerAuth } from "@modelcontextprotocol/server";
-import * as metricRepo from "../db/metric.repo";
 import { apiFor } from "./api";
 import { buildServer } from "./server";
 import { callerOf, verifier } from "./verify";
@@ -28,12 +27,7 @@ export const mountMcp = (app: OpenAPIHono) => {
     const origin = c.req.header("origin");
     if (origin) console.log(`[mcp] a request from origin ${origin}`);
     const auth = await gate(c.req.raw);
-    if (auth instanceof Response) {
-      metricRepo
-        .add(new Map([["mcp-auth-fail", 1]]))
-        .catch((err) => console.error("[mcp] couldn't count:", err));
-      return auth;
-    }
+    if (auth instanceof Response) return auth;
     return handler.fetch(c.req.raw, { authInfo: auth });
   });
 };
