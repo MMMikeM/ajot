@@ -30,7 +30,6 @@ export const clearLocalStorage = async (page: Page): Promise<void> => {
   await page.evaluate(() => localStorage.clear());
 };
 
-/** Clears IndexedDB: the offline outbox and the saved lists. */
 export const clearIDB = async (page: Page): Promise<void> => {
   await page.evaluate(async () => {
     const dbs = (await indexedDB.databases?.()) ?? [];
@@ -52,7 +51,6 @@ export const clearIDB = async (page: Page): Promise<void> => {
 export const startsWith = (text: string) =>
   new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
 
-/** The sheet offers what a task doesn't have yet on a quiet line where it would live */
 export const tapAddLine = (
   sheet: Locator,
   line:
@@ -64,7 +62,6 @@ export const tapAddLine = (
     | "Add a note",
 ) => sheet.getByRole("button", { name: line, exact: true }).click();
 
-/** Opens the List picker in the sheet's header */
 export const openListPicker = (sheet: Locator) =>
   sheet.getByRole("combobox", { name: "List" }).click();
 

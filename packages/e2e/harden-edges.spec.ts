@@ -42,7 +42,6 @@ test("a long list name stays readable", async ({ page }, testInfo) => {
   await openNavSheet(page);
   const name = page.getByRole("dialog").getByText(LONG_NAME);
   await expect(name).toBeVisible();
-  // Wrapped, not clipped
   expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   const { height } = (await name.boundingBox())!;
   expect(height).toBeGreaterThan(30);

@@ -59,7 +59,7 @@ const fileShare = (taskId: string, categoryId: string | null) => {
   );
 };
 
-/** Moves a task to another list the way `mode` allows; in "list" mode it isn't this user's to move. */
+/** In "list" mode the task isn't this user's to move, so this does nothing. */
 export const moveToList = (task: Task, mode: Placement["mode"], categoryId: string | null) => {
   if (mode === "owner") updateTask(task.id, { categoryId });
   else if (mode === "share") fileShare(task.id, categoryId);

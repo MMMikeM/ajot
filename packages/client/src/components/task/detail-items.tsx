@@ -27,9 +27,9 @@ import { AddRow, DetailRow, ItemRow, rowText } from "~/components/task/detail-ro
 import { pushUndoToast, quoted } from "~/lib/undo-toast";
 
 /**
- * "Add a subtask" and its kin: a quiet line that becomes its field when pressed, the plus staying
- * in the gutter so nothing moves. Once opened the field stays until the sheet closes: hiding it on
- * blur shifted the sheet under the pointer, so the press that blurred it landed on something else.
+ * The plus stays in the gutter so nothing moves. Once opened the field stays until the sheet
+ * closes: hiding it on blur would shift the sheet under the pointer, so the press that blurred it
+ * would land on something else.
  */
 const AddLine = ({
   label,
@@ -83,10 +83,7 @@ const AddLine = ({
   );
 };
 
-/**
- * Text edited in place: `start` swaps it for its field, a blur saves a changed value, and Escape
- * cancels only the edit, leaving the sheet open.
- */
+/** Escape cancels only the edit, leaving the sheet open. */
 const useInlineEdit = (value: string, save: (value: string) => void) => {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -134,8 +131,8 @@ const EditTrigger = ({ className, ...props }: Omit<ComponentProps<"button">, "ty
 );
 
 /**
- * A subtask's title, edited in place by a tap or click on it. Being a control of its own also keeps
- * a touch on its first letters from being moved to the checkbox beside it.
+ * Being a control of its own keeps a touch on the title's first letters from being moved to the
+ * checkbox beside it.
  */
 const SubtaskTitle = ({ sub, done, canEdit }: { sub: Task; done: boolean; canEdit: boolean }) => {
   const { editing, start, field } = useInlineEdit(sub.title, (title) =>

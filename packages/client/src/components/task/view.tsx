@@ -58,10 +58,9 @@ const writeDoneOpen = (open: boolean) => {
 };
 
 /**
- * A task moving from the list into Done, here or on another device. Ticking a row removes it from
- * the list, and on a phone Done is usually closed, so the count drops in to show where it went;
- * ticking the last one settles "All done." in. Loading and switching lists don't move one across,
- * so they show either at once.
+ * Ticking a row, here or on another device, removes it from the list, and on a phone Done is
+ * usually closed, so the count drops in to show where it went; ticking the last one settles
+ * "All done." in. Loading and switching lists don't move one across, so they show either at once.
  */
 const useLandingInDone = (doneCount: number, activeCount: number, listId: string | null) => {
   const [seen, setSeen] = useState({ doneCount, activeCount, listId });

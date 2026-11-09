@@ -3,7 +3,7 @@ import { openListPicker, startsWith, tapAddLine } from "./helpers/app";
 import { MOCK_ME, MOCK_SARAH, mockApi, shareWith } from "./helpers/mock-api";
 
 // The task detail sheet: what a task has, and a quiet line to add what it hasn't, where it would
-// live. Against the dev server with /api mocked
+// live. /api is mocked.
 
 test.use({ serviceWorkers: "block" });
 

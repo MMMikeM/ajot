@@ -7,7 +7,6 @@ const otherYearFormat = new Intl.DateTimeFormat(undefined, {
 });
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 
-/** The day `at` falls on in the device's time zone. */
 const localDay = (at: Date) =>
   Temporal.PlainDate.from({ year: at.getFullYear(), month: at.getMonth() + 1, day: at.getDate() });
 
@@ -22,10 +21,7 @@ const formatDay = (day: Temporal.PlainDate) =>
     new Date(day.year, day.month - 1, day.day),
   );
 
-/**
- * A due date as the list shows it, and as a screen reader says it. A past one stays a date, so it
- * reads as when the task was due rather than as its age.
- */
+/** A past due date stays a date, so it reads as when the task was due rather than as its age. */
 export const formatDueDate = (due: string) => {
   const day = Temporal.PlainDate.from(due.slice(0, 10));
   const days = daysFromToday(day);
@@ -36,7 +32,6 @@ export const formatDueDate = (due: string) => {
   return { label, spoken: overdue ? `${label}, overdue` : label, overdue };
 };
 
-/** A due date in full, as the task sheet shows it: the time and year only when they say something. */
 export const formatDueDateTime = (due: string) => {
   const dt = Temporal.PlainDateTime.from(due);
   return dt.toLocaleString(undefined, {

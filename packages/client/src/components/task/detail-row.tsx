@@ -3,7 +3,7 @@ import { tv, type VariantProps } from "tailwind-variants";
 import { ListRow } from "~/components/ui/list-row";
 import { cn } from "~/lib/utils";
 
-/** The sheet's text: Body Small on desktop, 1rem on touch. Fields size their own, so they take it too. */
+/** Fields size their own text, so they take this too. */
 export const rowText = "text-sm touch:text-base";
 
 export const lineButton =
@@ -12,8 +12,8 @@ export const lineButton =
 export const quietText = "text-hint hover:text-foreground touch:active:text-foreground";
 
 /**
- * One line of the sheet. The gutter lines up with the title's checkbox, so icons hang under it and
- * every value starts where the title text does; a line is tall enough for a 44px target on touch.
+ * The gutter lines up with the title's checkbox, so icons hang under it and every value starts
+ * where the title text does; a line is tall enough for a 44px target on touch.
  */
 const detailRow = tv({
   slots: {
@@ -55,10 +55,7 @@ export const DetailRow = ({
   );
 };
 
-/**
- * Something the task doesn't have yet, offered where it would live. The whole line is the
- * control, so the icon in the gutter brightens with its words.
- */
+/** The whole line is the control, so the icon in the gutter brightens with its words. */
 export const AddRow = ({
   icon,
   onClick,
@@ -83,7 +80,6 @@ export const AddRow = ({
   );
 };
 
-/** A subtask, note or person on the task: a row of its own that lights up under the pointer. */
 export const ItemRow = ({ className, ...props }: Omit<ComponentProps<typeof ListRow>, "size">) => (
   <ListRow size="sm" className={cn("-mx-2 min-h-9 touch:min-h-11", className)} {...props} />
 );

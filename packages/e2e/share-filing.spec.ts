@@ -79,7 +79,6 @@ const sidebarLists = async (page: Page) =>
       .evaluateAll((spans) => spans.map((s) => s.getAttribute("title") ?? ""))
   ).sort();
 
-/** Opens the sheet's List picker, and reads what it offers besides the Inbox. */
 const offeredLists = async (page: Page, sheet: Locator) => {
   await openListPicker(sheet);
   await expect(page.getByRole("option").first()).toBeVisible();
