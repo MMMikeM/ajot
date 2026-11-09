@@ -21,7 +21,8 @@ sealed interface WidgetState {
   data class Inbox(val tasks: List<WidgetTask>?) : WidgetState
 }
 
-// App-private and left out of backups (allowBackup="false"), so the token stays on this phone
+// App-private, and left out of backups and device transfer (res/xml/data_extraction_rules.xml),
+// so the token stays on this phone
 private val Context.widgetStore by preferencesDataStore("widget")
 private val TOKEN = stringPreferencesKey("token")
 private val TASKS = stringPreferencesKey("tasks")
@@ -43,10 +44,6 @@ object WidgetData {
     return code
   }
 
-  suspend fun useCode(context: Context, code: String) {
-    context.widgetStore.edit { it[CODE] = code }
-  }
-
   private fun newCode(): String {
     val bytes = ByteArray(32).also { SecureRandom().nextBytes(it) }
     return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
@@ -54,15 +51,20 @@ object WidgetData {
 
   suspend fun isSignedIn(context: Context) = token(context) != null
 
+  // Ticks still waiting to be sent outlive a sign-out: they go once the widget signs in again
   suspend fun connect(context: Context, token: String) {
     context.widgetStore.edit {
-      it.clear()
+      it.remove(TASKS)
+      it.remove(CODE)
       it[TOKEN] = token
     }
   }
 
   suspend fun disconnect(context: Context) {
-    context.widgetStore.edit { it.clear() }
+    context.widgetStore.edit {
+      it.remove(TOKEN)
+      it.remove(TASKS)
+    }
   }
 
   fun state(context: Context): Flow<WidgetState> =
@@ -80,8 +82,12 @@ object WidgetData {
     context.widgetStore.edit { it[PENDING] = it[PENDING].orEmpty() + id }
   }
 
+  /** Sent: out of the saved Inbox too, so a fetch made before the server had it can't bring it back. */
   suspend fun clearPending(context: Context, id: String) {
-    context.widgetStore.edit { it[PENDING] = it[PENDING].orEmpty() - id }
+    context.widgetStore.edit {
+      it[PENDING] = it[PENDING].orEmpty() - id
+      it[TASKS]?.let { json -> it[TASKS] = serialize(parse(json).filterNot { task -> task.id == id }) }
+    }
   }
 
   private fun parse(json: String): List<WidgetTask> {

@@ -4,6 +4,9 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -73,6 +76,21 @@ class TasksWidgetReceiver : GlanceAppWidgetReceiver() {
   override fun onEnabled(context: Context) {
     super.onEnabled(context)
     RefreshWorker.schedule(context)
+  }
+
+  // The last one removed: nothing left to refresh, and its token has no one to show the Inbox to
+  override fun onDisabled(context: Context) {
+    super.onDisabled(context)
+    RefreshWorker.stop(context)
+    goAsync().let { pending ->
+      CoroutineScope(Dispatchers.IO).launch {
+        try {
+          WidgetData.disconnect(context)
+        } finally {
+          pending.finish()
+        }
+      }
+    }
   }
 
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {

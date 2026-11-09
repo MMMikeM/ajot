@@ -15,7 +15,9 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import android.os.SystemClock
 import kotlinx.coroutines.delay
+import org.json.JSONException
 
 private val online = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
@@ -31,6 +33,9 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
       Result.success()
     } catch (_: IOException) {
       Result.retry()
+    } catch (_: JSONException) {
+      // Not the Inbox (a proxy's page, a refusal): keep the saved one until the next run
+      Result.success()
     } finally {
       TasksWidget().updateAll(applicationContext)
     }
@@ -44,6 +49,10 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
           ExistingWorkPolicy.REPLACE,
           OneTimeWorkRequestBuilder<RefreshWorker>().setConstraints(online).build(),
         )
+    }
+
+    fun stop(context: Context) {
+      WorkManager.getInstance(context).cancelUniqueWork("refresh-every-15-minutes")
     }
 
     // Android's shortest period; pushes and opening the app refresh it sooner
@@ -65,16 +74,17 @@ class TickWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
   override suspend fun doWork(): Result {
     val id = inputData.getString(ID) ?: return Result.success()
     val stamp = inputData.getString(STAMP) ?: return Result.success()
-    val token = WidgetData.token(applicationContext)
+    // Signed out, the tick waits for the widget to sign in again rather than being dropped
+    val token = WidgetData.token(applicationContext) ?: return Result.retry()
     return try {
-      if (token != null) AjotApi.markDone(token, id, stamp)
+      AjotApi.markDone(token, id, stamp)
       WidgetData.clearPending(applicationContext, id)
       RefreshWorker.now(applicationContext)
       Result.success()
     } catch (_: AjotApi.SignedOut) {
       WidgetData.disconnect(applicationContext)
       TasksWidget().updateAll(applicationContext)
-      Result.success()
+      Result.retry()
     } catch (_: IOException) {
       Result.retry()
     }
@@ -104,8 +114,9 @@ class TickWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 class ClaimWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
   override suspend fun doWork(): Result {
     val code = inputData.getString(CODE) ?: return Result.success()
-    // Inside WorkManager's ten minutes, and the server's approval lasts as long
-    repeat(ATTEMPTS) {
+    // Inside WorkManager's ten minutes; the server's approval lasts as long
+    val until = SystemClock.elapsedRealtime() + BUDGET_MS
+    while (SystemClock.elapsedRealtime() < until) {
       val token =
         try {
           AjotApi.claim(code)
@@ -126,14 +137,15 @@ class ClaimWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
 
   companion object {
     private const val CODE = "code"
-    private const val ATTEMPTS = 110
+    private const val BUDGET_MS = 9 * 60_000L
     private const val EVERY_MS = 4_000L
 
     fun start(context: Context, code: String) {
+      // The same code until it's claimed, so a launch never cancels a claim the server has answered
       WorkManager.getInstance(context)
         .enqueueUniqueWork(
           "claim",
-          ExistingWorkPolicy.REPLACE,
+          ExistingWorkPolicy.KEEP,
           OneTimeWorkRequestBuilder<ClaimWorker>()
             .setConstraints(online)
             .setInputData(workDataOf(CODE to code))
