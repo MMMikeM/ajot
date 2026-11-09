@@ -122,7 +122,8 @@ export const shareTask = async (taskId: string, username: string, permission: "v
 };
 
 export const removeTaskShare = async (shareId: string) => {
-  await client.api.tasks.share.$delete({ json: { id: shareId } });
+  const res = await reach(client.api.tasks.share.$delete({ json: { id: shareId } }));
+  if (!res.ok) throw await errorFrom(res, "Couldn't stop sharing. Try again.");
 };
 
 const AUTH_FAILED = {

@@ -35,6 +35,7 @@ const signupSchema = z.object({
 });
 
 const serverSchema = z.string().check(z.minLength(1, "Enter your sync server's address"));
+const blankAccount = { username: "", password: "", name: "" };
 
 const readPendingInvite = () => {
   try {
@@ -76,7 +77,7 @@ const AuthView = () => {
 
   const schema = mode === "login" ? loginSchema : signupSchema;
   const form = useForm({
-    defaultValues: { server: getServerUrl(), username: "", password: "", name: "" },
+    defaultValues: { server: getServerUrl(), ...blankAccount },
     onSubmit: async ({ value }) => {
       setServerError(null);
       let result: { userId: string; token: string; name: string; username: string };
@@ -261,7 +262,12 @@ const AuthView = () => {
                   className="touch:text-sm"
                   onClick={() => {
                     setMode(mode === "login" ? "signup" : "login");
-                    form.reset();
+                    // keepDefaultValues: as new defaults these would differ from the next
+                    // render's, and the form would replace the typed server with the saved one
+                    form.reset(
+                      { server: form.state.values.server, ...blankAccount },
+                      { keepDefaultValues: true },
+                    );
                     setServerError(null);
                   }}
                 >

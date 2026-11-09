@@ -14,6 +14,7 @@ import { createPrewarm, filesRunOf } from "~/lib/sync/prewarm";
 import { syncFiles } from "~/lib/files/file-job";
 import { readWorkerSession } from "~/lib/sync/worker-session";
 import { createUploadSender } from "~/lib/files/sender";
+import { uploadsAwaitRetry } from "~/lib/files/uploads";
 import { retryWaitingNow } from "~/lib/files/store";
 import { apiClient, succeeded } from "~/lib/api-client";
 import { loadSnapshotEntry } from "~/lib/snapshot-store";
@@ -226,11 +227,20 @@ self.addEventListener("push", (event: PushEvent) => {
 
 type SyncEvent = ExtendableEvent & { tag: string };
 
+// A sync whose promise rejects is fired again later, on the browser's own backoff; one that
+// resolves is done for good
+const syncUploads = async () => {
+  await retryWaitingNow().catch(console.error);
+  await sendUploads();
+  const session = await readWorkerSession();
+  if (session?.userId && (await uploadsAwaitRetry(session.userId)))
+    throw new Error("Uploads are still waiting to be sent");
+};
+
 // Registered by lib/attachments/queue.ts each time a page queues a file
 self.addEventListener("sync", (event) => {
   const sync = event as SyncEvent;
-  if (sync.tag === "ajot-uploads")
-    sync.waitUntil(retryWaitingNow().catch(console.error).then(sendUploads));
+  if (sync.tag === "ajot-uploads") sync.waitUntil(syncUploads());
 });
 
 type PeriodicSyncEvent = ExtendableEvent & { tag: string };

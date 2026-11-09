@@ -12,15 +12,17 @@ import type { SignedInSession } from "~/lib/api-client";
 export const ext = ((globalThis as { browser?: typeof browser }).browser ??
   (globalThis as { chrome?: typeof browser }).chrome)!;
 
-const getStored = async (key: string) =>
-  ((await ext.storage.local.get(key)) as Record<string, string | undefined>)[key];
-
+// One read, so a sign-in or sign-out landing between reads can't pair one account's token with
+// another's user
 export const getStoredSession = async (): Promise<SignedInSession | null> => {
-  const [token, serverUrl, userId] = await Promise.all([
-    getStored(TOKEN_KEY),
-    getStored(SERVER_URL_KEY),
-    getStored(USER_ID_KEY),
-  ]);
+  const {
+    [TOKEN_KEY]: token,
+    [SERVER_URL_KEY]: serverUrl,
+    [USER_ID_KEY]: userId,
+  } = (await ext.storage.local.get([TOKEN_KEY, SERVER_URL_KEY, USER_ID_KEY])) as Record<
+    string,
+    string | undefined
+  >;
   return token && serverUrl ? { token, serverUrl, userId: userId ?? null } : null;
 };
 

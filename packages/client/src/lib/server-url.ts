@@ -16,6 +16,16 @@ if (isExtension && !serverUrl && getAuthToken()) clearSession();
 
 export const getServerUrl = () => serverUrl;
 
+// Signing in from another tab changes it there; this tab's next request goes to the new server
+if (isExtension && typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.storageArea !== localStorage) return;
+    // null: localStorage.clear()
+    if (e.key === SERVER_URL_KEY || e.key === null)
+      serverUrl = localStorage.getItem(SERVER_URL_KEY) ?? "";
+  });
+}
+
 /** The background scripts read the copy in extension storage, so it's written before resolving. */
 export const setServerUrl = async (url: string) => {
   if (!isExtension) return;

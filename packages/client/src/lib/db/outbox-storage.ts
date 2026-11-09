@@ -23,6 +23,48 @@ const writeJournal = (key: string, value: string) => {
   }
 };
 
+// The adapter's defaults, named so the reads below open the same store
+const OUTBOX_DB = "offline-transactions";
+const OUTBOX_STORE = "transactions";
+
+/**
+ * Reads of the outbox's IndexedDB store that reject when IndexedDB fails. The adapter's own answer
+ * a failure as nothing stored, and an edit missing from the outbox is one the leader has sent, so
+ * every tab would settle its unsent edits.
+ */
+const strictReads = () => {
+  let opening: Promise<IDBDatabase> | undefined;
+  const open = () =>
+    (opening ??= new Promise((resolve, reject) => {
+      // Whichever of this and the adapter opens it first creates the store, so both make it alike
+      const request = indexedDB.open(OUTBOX_DB, 1);
+      request.onupgradeneeded = () => request.result.createObjectStore(OUTBOX_STORE);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    }));
+  const ask = async <T>(query: (store: IDBObjectStore) => IDBRequest<T>) => {
+    try {
+      const db = await open();
+      return await new Promise<T>((resolve, reject) => {
+        const request = query(db.transaction(OUTBOX_STORE).objectStore(OUTBOX_STORE));
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    } catch (err) {
+      // A connection the browser lost stays lost: the next read opens another
+      const lost = opening;
+      opening = undefined;
+      void lost?.then((db) => db.close(), () => {});
+      throw err;
+    }
+  };
+  return {
+    get: async (key: string) =>
+      ((await ask((store) => store.get(key))) as string | undefined) ?? null,
+    keys: async () => (await ask((store) => store.getAllKeys())) as string[],
+  };
+};
+
 /** A queued transaction as the library stores it, which keeps its metadata at the top. */
 type StoredTransaction = { metadata?: unknown };
 
@@ -33,6 +75,11 @@ export type OutboxStorage = StorageAdapter & {
    * queue it to be sent again. Resolves false if it didn't fit there and had to wait for IndexedDB.
    */
   keep: (key: string, value: string) => Promise<boolean>;
+  /**
+   * What `keys` lists from localStorage alone, for when IndexedDB can't be read: never an answer
+   * to whether an edit was sent, only edits there are to send.
+   */
+  journaledKeys: () => string[];
 };
 
 /**
@@ -45,18 +92,25 @@ export type OutboxStorage = StorageAdapter & {
  */
 const journaledStorage = (isVisible: (stored: StoredTransaction) => boolean): OutboxStorage => {
   const durable = IndexedDBAdapter.probe().then(({ available }) =>
-    available ? new IndexedDBAdapter() : null,
+    available ? new IndexedDBAdapter(OUTBOX_DB, OUTBOX_STORE) : null,
   );
+  const strict = durable.then((store) => (store ? strictReads() : null));
 
+  // The executor reads a transaction on its own only to rewrite it as it settles, and a rejection
+  // there stops it sending until the page reloads; a missing one it already handles
   const read = async (key: string) =>
     localStorage.getItem(journalKey(key)) ?? (await (await durable)?.get(key)) ?? null;
+
+  const readStrictly = async (key: string) =>
+    localStorage.getItem(journalKey(key)) ?? (await (await strict)?.get(key)) ?? null;
 
   // `keys` reads each transaction to see whose it is, and the library then reads each one it
   // listed: that second read takes the first's value instead of going back to IndexedDB
   const listedValues = new Map<string, string>();
 
-  const listed = async (key: string) => {
-    const value = await read(key);
+  const listed = async (key: string) => listedAs(key, await readStrictly(key));
+
+  const listedAs = (key: string, value: string | null) => {
     if (value === null) return false;
     try {
       if (!isVisible(JSON.parse(value) as StoredTransaction)) return false;
@@ -102,11 +156,13 @@ const journaledStorage = (isVisible: (stored: StoredTransaction) => boolean): Ou
       // The journal before IndexedDB too: a transaction moving from one to the other, as the
       // leader saves it, is in at least one of them throughout
       const journaledBefore = journalKeys();
-      const stored = (await (await durable)?.keys()) ?? [];
+      const stored = (await (await strict)?.keys()) ?? [];
       const keys = [...new Set([...journaledBefore, ...stored, ...journalKeys()])];
       const shown = await Promise.all(keys.map(listed));
       return keys.filter((_, i) => shown[i]);
     },
+    journaledKeys: () =>
+      journalKeys().filter((key) => listedAs(key, localStorage.getItem(journalKey(key)))),
     async clear() {
       listedValues.clear();
       for (const key of journalKeys()) localStorage.removeItem(journalKey(key));

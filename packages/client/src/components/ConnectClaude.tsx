@@ -107,7 +107,9 @@ export function ConnectClaude() {
       <AlertDialog
         open={!!revoking}
         onOpenChange={(open) => {
-          if (!open) setRevoking(null);
+          if (open) return;
+          setRevoking(null);
+          setRevokeError(null);
         }}
       >
         <AlertDialogContent>

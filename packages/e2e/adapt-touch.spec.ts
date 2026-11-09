@@ -90,6 +90,18 @@ test.describe("swipe tray", () => {
       await expectFullyOnScreen(page, target.getByRole("button", { name, exact: true }));
   });
 
+  test("a done task offers only delete", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "the swipe tray is touch-only");
+    await openList(page);
+    await page.getByRole("button", { name: /done \(\d+\)/i }).click();
+    const target = row(page, "Buy oat milk");
+    await swipeOpen(page, target);
+
+    for (const name of ["Date", "Subtask"])
+      await expect(target.getByRole("button", { name, exact: true })).toHaveCount(0);
+    await expectFullyOnScreen(page, target.getByRole("button", { name: "Delete", exact: true }));
+  });
+
   test("the open tray covers the row's end, leaving the start of the title in view", async ({
     page,
   }, testInfo) => {

@@ -184,6 +184,7 @@ type Sharing = ReturnType<typeof useSharing>;
 
 export const SharingField = ({ task, sharing }: { task: Task; sharing: Sharing }) => {
   const [adding, setAdding] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const { isOwner, sharedList, userId } = sharing;
   // Someone it was shared with sees who else has it, never themselves
   const shares = task.shares.filter((s) => s.sharedWithUserId !== userId);
@@ -203,6 +204,15 @@ export const SharingField = ({ task, sharing }: { task: Task; sharing: Sharing }
 
   if (shares.length === 0 && !adding) return offer;
 
+  const remove = async (shareId: string) => {
+    setRemoveError(null);
+    try {
+      await removeTaskShare(shareId);
+    } catch (err) {
+      setRemoveError(err instanceof Error ? err.message : "Couldn't stop sharing. Try again.");
+    }
+  };
+
   return (
     <>
       <DetailRow icon={<Users />} label="Shared with">
@@ -218,11 +228,12 @@ export const SharingField = ({ task, sharing }: { task: Task; sharing: Sharing }
             </span>
             {isOwner && (
               <RevealGroup>
-                <RevealButton onClick={() => removeTaskShare(share.id)}>Remove</RevealButton>
+                <RevealButton onClick={() => void remove(share.id)}>Remove</RevealButton>
               </RevealGroup>
             )}
           </ItemRow>
         ))}
+        {removeError && <span className="py-1 text-xs text-destructive">{removeError}</span>}
         {isOwner && adding && <AddShare taskId={task.id} sharing={sharing} />}
       </DetailRow>
       {offer}

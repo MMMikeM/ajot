@@ -172,13 +172,14 @@ function TaskRow({
     setAddingSubtask(false);
   }
 
+  // A done task the user can't delete has nothing left in its tray
+  const swipeEnabled = IS_TOUCH && !isSubtask && (!isDone || canDelete);
   const {
     containerRef,
     trayRef,
     isOpen: isSwipeOpen,
     close: closeSwipe,
-  } = useSwipeReveal(!IS_TOUCH || !!isSubtask, swipeHint);
-  const swipeEnabled = IS_TOUCH && !isSubtask;
+  } = useSwipeReveal(!swipeEnabled, swipeHint);
 
   const openPicker = () => dateRef.current?.showPicker();
 
@@ -269,27 +270,29 @@ function TaskRow({
             className="invisible absolute top-0 right-0 z-1 grid h-full translate-x-full auto-cols-fr grid-flow-col bg-muted group-data-[swiping]/swipe:visible before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-6 before:bg-linear-to-l before:from-card"
             inert={!isSwipeOpen}
           >
-            <button
-              onClick={() => {
-                openPicker();
-                closeSwipe();
-              }}
-              className={swipeActionClass}
-            >
-              <Calendar size={16} />
-              Date
-            </button>
             {!isDone && (
-              <button
-                onClick={() => {
-                  setAddingSubtask(true);
-                  closeSwipe();
-                }}
-                className={swipeActionClass}
-              >
-                <Plus size={16} />
-                Subtask
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    openPicker();
+                    closeSwipe();
+                  }}
+                  className={swipeActionClass}
+                >
+                  <Calendar size={16} />
+                  Date
+                </button>
+                <button
+                  onClick={() => {
+                    setAddingSubtask(true);
+                    closeSwipe();
+                  }}
+                  className={swipeActionClass}
+                >
+                  <Plus size={16} />
+                  Subtask
+                </button>
+              </>
             )}
             {canDelete && (
               <button

@@ -24,6 +24,7 @@ type ExecutorInternals = {
 const CHANNEL = "outbox";
 const SETTLED_REMEMBERED = 1000;
 const HELD_RECHECK_MS = 250;
+const REPLAY_RETRY_MS = 5_000;
 
 const QUEUED: Message = { type: "queued" };
 
@@ -43,14 +44,28 @@ export class SharedOutboxExecutor extends OfflineExecutor {
   readonly #settledElsewhere = new Set<string>();
   #reading: Promise<void> | null = null;
   #readAgain = false;
+  #replayTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     config: OfflineConfig & { storage?: OutboxStorage; canSend: (metadata: unknown) => boolean },
   ) {
     // Set once this executor exists: the library calls it from the constructor's async start
-    const leading = { onLead: () => {} };
+    const leading = { onLead: () => {}, onUnread: () => {} };
+    const { storage } = config;
     super({
       ...config,
+      // The library replays only the edits it lists and settles none it doesn't, so when IndexedDB
+      // can't be read it sends what the journal holds. Rejecting instead, as the tab starts
+      // leading, would fail every edit made in it.
+      storage: storage && {
+        ...storage,
+        keys: () =>
+          storage.keys().catch((err: unknown) => {
+            console.warn("[outbox] couldn't read the outbox to send it:", err);
+            leading.onUnread();
+            return storage.journaledKeys();
+          }),
+      },
       onLeadershipChange: (isLeader) => {
         config.onLeadershipChange?.(isLeader);
         if (isLeader) leading.onLead();
@@ -62,9 +77,10 @@ export class SharedOutboxExecutor extends OfflineExecutor {
       // The last leader may have sent edits and gone before it said so
       this.#channel?.postMessage(QUEUED);
     };
+    leading.onUnread = () => this.#replayLater();
     this.#mutationFns = config.mutationFns;
     this.#canSend = config.canSend;
-    const { storage, collections } = config;
+    const { collections } = config;
     this.#outbox = storage
       ? new OutboxManager(
           {
@@ -210,6 +226,14 @@ export class SharedOutboxExecutor extends OfflineExecutor {
     } catch (err) {
       console.warn("[outbox] couldn't read the outbox:", err);
     }
+  }
+
+  #replayLater() {
+    if (this.#replayTimer) return;
+    this.#replayTimer = setTimeout(() => {
+      this.#replayTimer = null;
+      if (this.isOfflineEnabled) this.#pickUp();
+    }, REPLAY_RETRY_MS);
   }
 
   // What the library runs as a tab becomes the leader. Private in the library, which has no way to
