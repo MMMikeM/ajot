@@ -1,7 +1,7 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { createSelectSchema } from "drizzle-orm/zod";
 import { db } from "./client";
-import { taskShares } from "./schema";
+import { taskShares, tasks } from "./schema";
 import { InsertFailedError, NotFoundError } from "./errors";
 import * as userRepo from "./user.repo";
 
@@ -48,7 +48,19 @@ export const updateCategory = async (
   const [row] = await db
     .update(taskShares)
     .set({ categoryId })
-    .where(and(eq(taskShares.taskId, taskId), eq(taskShares.sharedWithUserId, sharedWithUserId)))
+    .where(
+      and(
+        eq(taskShares.taskId, taskId),
+        eq(taskShares.sharedWithUserId, sharedWithUserId),
+        inArray(
+          taskShares.taskId,
+          db
+            .select({ id: tasks.id })
+            .from(tasks)
+            .where(and(eq(tasks.id, taskId), isNull(tasks.deletedAt))),
+        ),
+      ),
+    )
     .returning();
   if (!row) throw new NotFoundError("task shared with you", taskId);
   return row;
@@ -61,7 +73,7 @@ export const withSharedWithUser = {
 export const listForTasks = async (taskIds: string[]) => {
   if (taskIds.length === 0) return [];
   return db.query.tasks.findMany({
-    where: { id: { in: taskIds } },
+    where: { id: { in: taskIds }, deletedAt: { isNull: true } },
     columns: { id: true },
     with: { shares: { with: withSharedWithUser } },
   });

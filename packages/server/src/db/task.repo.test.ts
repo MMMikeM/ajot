@@ -4,7 +4,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { db } from "./client";
 import * as taskRepo from "./task.repo";
 import * as taskShareRepo from "./task-share.repo";
-import { StaleUpdateError } from "./errors";
+import { NotFoundError, StaleUpdateError } from "./errors";
 import { tasks, users } from "./schema";
 
 // vi.mock runs before this file's imports, so the database it builds can only be imported there
@@ -206,6 +206,24 @@ describe("sharing again with the same person", () => {
     expect(await db.query.taskShares.findMany({ columns: { id: true } })).toEqual([
       { id: "first" },
     ]);
+  });
+});
+
+describe("filing a share", () => {
+  beforeEach(async () => {
+    await db.insert(users).values({ id: "bob", name: "Bob", username: "bob", passwordHash: "x" });
+    await addTask("t", "a0");
+    await taskShareRepo.insert({ id: "s", taskId: "t", sharedWithUserId: "bob" });
+  });
+
+  test("files it while the task is live", async () => {
+    expect(await taskShareRepo.updateCategory("t", "bob", null)).toMatchObject({ id: "s" });
+  });
+
+  test("is refused once the task is deleted, as if it weren't shared", async () => {
+    await taskRepo.remove("t");
+    await expect(taskShareRepo.updateCategory("t", "bob", null)).rejects.toThrow(NotFoundError);
+    expect(await taskShareRepo.listForTasks(["t"])).toEqual([]);
   });
 });
 

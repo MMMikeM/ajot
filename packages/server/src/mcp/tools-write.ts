@@ -6,7 +6,7 @@ import { now } from "@newtab-todo/shared/iso";
 import { taskStatuses } from "../db/schema";
 import { Refusal, refusalOf, type Api } from "./api";
 import type { McpCaller } from "./caller";
-import { INBOX, loadLists, othersInList } from "./lists";
+import { INBOX, loadLists, oneLine, othersInList } from "./lists";
 import { guarded } from "./tool";
 
 const writes = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
@@ -62,10 +62,8 @@ export const registerWriteTools = (server: McpServer, caller: McpCaller, api: Ap
         if (!res.ok) throw await refusalOf(res);
         const task = await res.json();
         const lists = await loadLists(api);
-        const listName =
-          categoryId === null
-            ? "the Inbox"
-            : (lists.lists.find((l) => l.id === categoryId)?.name ?? "the list");
+        const name = lists.lists.find((l) => l.id === categoryId)?.name;
+        const listName = categoryId === null ? "the Inbox" : name ? oneLine(name) : "the list";
         const others = othersInList(lists, categoryId, me);
         return [
           `Added "${task.title}" [${task.id}] to ${listName}.`,

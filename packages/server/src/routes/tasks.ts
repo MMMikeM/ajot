@@ -194,7 +194,9 @@ export const taskRoutes = authed()
       // What the client stamped wins; an older one sends neither
       const stamps = taskChangeStamps(fields, updatedAt);
       const notifiableFields = ["title", "description", "status", "dueDate"] as const;
-      const changedNotifiable = notifiableFields.filter((f) => f in fields);
+      const changedNotifiable = notifiableFields.filter(
+        (f) => fields[f] !== undefined && fields[f] !== task[f],
+      );
       const assigneeChanged = fields.assigneeId && fields.assigneeId !== task.assigneeId;
       const notifies = changedNotifiable.length > 0 || assigneeChanged;
       const actorNameLookup = notifies ? getUserName(userId) : undefined;

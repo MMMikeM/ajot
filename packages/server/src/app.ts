@@ -36,7 +36,8 @@ const app = new OpenAPIHono({ defaultHook: rejectInvalidInput });
 export const MAX_BODY_BYTES = 256 * 1024;
 
 app.onError((err, c) => {
-  if (err instanceof LoggedHTTPException) console.warn(`[${err.status}] ${err.detail}`);
+  if (err instanceof LoggedHTTPException)
+    console.warn(`[${err.status}] ${c.req.method} ${c.req.path}: ${err.detail}`);
   if (err instanceof HTTPException) {
     return c.json({ error: err.message }, err.status);
   }

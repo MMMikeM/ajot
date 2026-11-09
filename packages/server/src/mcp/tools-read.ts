@@ -9,7 +9,10 @@ import {
   listIdOf,
   loadLists,
   notesOn,
+  oneLine,
+  othersWhoWrite,
   peopleOf,
+  quoted,
   sidebarOrder,
   taskLine,
   type Lists,
@@ -59,11 +62,11 @@ export const registerReadTools = (server: McpServer, caller: McpCaller, api: Api
         topLevelIn(lists, me, id).filter((t) => t.status !== "done").length;
       const lines = [`Inbox [${INBOX}] · ${open(null)} open`];
       for (const list of [...lists.lists].sort(sidebarOrder(me))) {
-        const parts = [`${list.name} [${list.id}]`, `${open(list.id)} open`];
+        const parts = [`${oneLine(list.name)} [${oneLine(list.id)}]`, `${open(list.id)} open`];
         if (list.userId !== me) parts.push(`${people.get(list.userId) ?? "someone"}'s list`);
         const others = (list.collaborators ?? []).filter((c) => c.userId !== me);
         if (others.length > 0)
-          parts.push(`shared with ${others.map((c) => c.user.name).join(", ")}`);
+          parts.push(`shared with ${others.map((c) => oneLine(c.user.name)).join(", ")}`);
         lines.push(parts.join(" · "));
       }
       return lines.join("\n");
@@ -128,7 +131,8 @@ export const registerReadTools = (server: McpServer, caller: McpCaller, api: Api
       const byId = new Map(lists.tasks.map((t) => [t.id, t]));
       const listName = (task: Task) => {
         const id = listIdOf(task, me, lists.lists);
-        return id === null ? "Inbox" : (lists.lists.find((l) => l.id === id)?.name ?? "a list");
+        const name = lists.lists.find((l) => l.id === id)?.name;
+        return id === null ? "Inbox" : name ? oneLine(name) : "a list";
       };
       const line = lineOf(lists, me);
       const found = lists.tasks
@@ -144,7 +148,7 @@ export const registerReadTools = (server: McpServer, caller: McpCaller, api: Api
       return found
         .map((task) => {
           const parent = task.parentId ? byId.get(task.parentId) : undefined;
-          const where = parent ? `under "${parent.title}"` : `in ${listName(task)}`;
+          const where = parent ? `under "${oneLine(parent.title)}"` : `in ${listName(task)}`;
           return `- ${line(task, parent)} · ${where}`;
         })
         .join("\n");
@@ -167,17 +171,24 @@ export const registerReadTools = (server: McpServer, caller: McpCaller, api: Api
       const parent = task.parentId ? lists.tasks.find((t) => t.id === task.parentId) : undefined;
       const line = lineOf(lists, me);
       const lines = [line(task, parent)];
-      if (parent) lines.push(`Subtask of "${parent.title}" [${parent.id}]`);
+      if (parent) lines.push(`Subtask of "${oneLine(parent.title)}" [${oneLine(parent.id)}]`);
       else {
         const id = listIdOf(task, me, lists.lists);
-        lines.push(
-          `In ${id === null ? "the Inbox" : (lists.lists.find((l) => l.id === id)?.name ?? "a list")}`,
-        );
+        const name = lists.lists.find((l) => l.id === id)?.name;
+        lines.push(`In ${id === null ? "the Inbox" : name ? oneLine(name) : "a list"}`);
       }
-      const shares = task.shares.map((s) => `${s.sharedWithUser.name} (${s.permission})`);
+      const shares = task.shares.map((s) => `${oneLine(s.sharedWithUser.name)} (${s.permission})`);
       if (shares.length > 0) lines.push(`Shared with ${shares.join(", ")}`);
-      lines.push(`Added ${task.createdAt}${task.completedAt ? `, done ${task.completedAt}` : ""}`);
-      if (task.description) lines.push("", "Details:", task.description);
+      const done = task.completedAt ? `, done ${oneLine(task.completedAt)}` : "";
+      lines.push(`Added ${task.createdAt}${done}`);
+      if (task.description) {
+        const writers = othersWhoWrite(task, context(lists, me), parent);
+        const heading =
+          writers.length > 0
+            ? `Details, which ${writers.join(", ")} may have written:`
+            : "Details:";
+        lines.push("", heading, ...quoted(task.description));
+      }
       const subtasks = subtasksOf(lists, task.id);
       if (subtasks.length > 0)
         lines.push("", "Subtasks:", ...subtasks.map((s) => `- ${line(s, task)}`));
