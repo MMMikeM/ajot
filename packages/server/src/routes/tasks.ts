@@ -127,9 +127,15 @@ export const taskRoutes = authed()
         sortOrder,
         userId,
       });
+      // A retry of a create that's since been deleted: nothing to announce or remind about
+      if (result.deletedAt) return c.json(result, 200);
       if (result.dueDate) await notificationQueueRepo.scheduleFirstReminder(result.id);
-      const added = { ...result, subtasks: [], shares: [] };
-      broadcast(c, "tasks", "insert", added, await audienceOf(result.id));
+      // A retry gets the stored row, which may have been shared or gained subtasks since
+      const [added, audience] = await Promise.all([
+        taskRepo.findListItem(result.id),
+        audienceOf(result.id),
+      ]);
+      broadcast(c, "tasks", "insert", added, audience);
       if (parent) await markTaskEdited(c, parent.task.id, userId, data.createdAt, parent.access);
       return c.json(result, 200);
     },

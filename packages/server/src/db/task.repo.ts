@@ -135,15 +135,15 @@ export const findWithAccess = async (id: string, { deleted = false } = {}) => {
 const STAMPS = ["updatedAt", "editedAt", "completedAt"] as const;
 
 // A retried insert gets the stored row back unchanged: the no-op update lets RETURNING yield it.
-// Re-inserting a deleted task restores it, since the conflict update clears deletedAt.
-// An id someone else's task already has updates nothing, so it returns nothing and restores nothing.
+// Deleted stays deleted: a create retried after the delete mustn't bring it back (Undo restores
+// through `restore`). An id someone else's task already has updates nothing, so it returns nothing.
 export const insert = async (data: Insert) => {
   const [row] = await db
     .insert(tasks)
     .values({ ...stampsNotAfterNow(data, [...STAMPS]), sortOrder: keptSortOrder(data.sortOrder) })
     .onConflictDoUpdate({
       target: tasks.id,
-      set: { updatedAt: sql`${tasks.updatedAt}`, deletedAt: sql`null` },
+      set: { updatedAt: sql`${tasks.updatedAt}` },
       setWhere: eq(tasks.userId, data.userId),
     })
     .returning(sentColumns);
