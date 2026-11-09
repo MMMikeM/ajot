@@ -148,9 +148,8 @@ describe("a subtask's restore", () => {
     await expect(taskRepo.restore("sub", BEFORE_THE_DELETE)).rejects.toHaveProperty(
       ...refusedByAForeignKey,
     );
-    await expect(
-      taskRepo.insert({ id: "sub", userId: "alice", parentId: "parent", title: "Re-added" }),
-    ).rejects.toHaveProperty(...refusedByAForeignKey);
+    // A retried create gets the deleted row back as it is, rather than restoring it
+    await taskRepo.insert({ id: "sub", userId: "alice", parentId: "parent", title: "Re-added" });
     const sub = await db.query.tasks.findFirst({ where: { id: "sub" } });
     expect(sub?.deletedAt).not.toBeNull();
   });
@@ -208,4 +207,13 @@ describe("sharing again with the same person", () => {
       { id: "first" },
     ]);
   });
+});
+
+test("a create retried after the task was deleted leaves it deleted", async () => {
+  await taskRepo.insert({ id: "gone", userId: "alice", title: "Gone" });
+  await taskRepo.remove("gone");
+
+  const retried = await taskRepo.insert({ id: "gone", userId: "alice", title: "Gone" });
+
+  expect(retried.deletedAt).not.toBeNull();
 });
