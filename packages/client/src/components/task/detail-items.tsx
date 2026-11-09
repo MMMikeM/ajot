@@ -146,7 +146,7 @@ const SubtaskTitle = ({ sub, done, canEdit }: { sub: Task; done: boolean; canEdi
         aria-label="Subtask"
         {...field}
         onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Enter" && !e.nativeEvent.isComposing) e.currentTarget.blur();
           field.onKeyDown(e);
         }}
         maxLength={MAX_TITLE}

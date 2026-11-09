@@ -15,8 +15,10 @@ const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8")
 };
 const icons = { 192: "icons/icon-192.png", 512: "icons/icon-512.png" };
 
-// The user picks the server at runtime, so any HTTPS origin, plus local servers for development
-const CONNECT_SRC = "connect-src 'self' https: http://localhost:* http://127.0.0.1:*";
+// The user picks the server at runtime, so any HTTPS origin, plus local servers for development,
+// and data: for an image the context menu attaches. Not plain http: it would let the extension
+// sign in to a server over http and send its token in the clear.
+const CONNECT_SRC = "connect-src 'self' https: http://localhost:* http://127.0.0.1:* data:";
 
 const firefoxManifest = {
   manifest_version: 2,
@@ -80,7 +82,7 @@ const patchHtml = (outDir: string) => {
 
   // Extension CSP blocks inline scripts
   html = html.replace(
-    /<script([^>]*)>([\s\S]+?)<\/script>/g,
+    /<script([^>]*)>([\s\S]*?)<\/script>/g,
     (match, attrs: string, content: string) => {
       if (attrs.includes("src=") || !content.trim()) return match;
       const filename = `_inline-${scriptCount++}.js`;

@@ -2,7 +2,13 @@ import "fake-indexeddb/auto";
 import { now as stamp } from "@newtab-todo/shared/iso";
 import { beforeEach, describe, expect, test } from "vite-plus/test";
 import { addUpload, readBlob, readUploads, retryWaitingNow, type Upload } from "~/lib/files/store";
-import { deleteUpload, drainUploads, undoDeleteUpload, type DrainDeps } from "~/lib/files/uploads";
+import {
+  deleteUpload,
+  drainUploads,
+  undoDeleteUpload,
+  uploadsAwaitRetry,
+  type DrainDeps,
+} from "~/lib/files/uploads";
 
 const SESSION = { token: "tok", serverUrl: "https://ajot.test", userId: "u1" };
 
@@ -200,6 +206,23 @@ describe("drainUploads", () => {
       "POST /api/attachments/complete",
     ]);
     expect(await readUploads()).toEqual([]);
+  });
+});
+
+describe("uploadsAwaitRetry", () => {
+  test("a failed request backing off waits for a retry, for its own account", async () => {
+    await addUpload(entry("a1", { posted: true, attempts: 1, retryAt: now + 5_000 }), {
+      file: new Blob(["abc"]),
+    });
+    expect(await uploadsAwaitRetry("u1")).toBe(true);
+    expect(await uploadsAwaitRetry("u2")).toBe(false);
+  });
+
+  test("a refusal, or a delete waiting out its Undo, doesn't", async () => {
+    await addUpload(entry("a1", { attempts: 1, failed: "No." }), { file: new Blob(["abc"]) });
+    await addUpload(entry("a2"), { file: new Blob(["abc"]) });
+    await deleteUpload("a2", now);
+    expect(await uploadsAwaitRetry("u1")).toBe(false);
   });
 });
 

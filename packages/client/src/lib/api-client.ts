@@ -34,6 +34,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     what = "The server",
+    /** The refusal's message for a person, when its body had one. */
+    readonly reason?: string,
   ) {
     super(`${what} answered ${status}`);
   }
@@ -42,7 +44,7 @@ export class ApiError extends Error {
 /** The response, narrowed to the route's success types; any other answer throws `ApiError`. */
 export const succeeded = async <R extends Reply>(request: Promise<R>) => {
   const res = await request;
-  if (!res.ok) throw new ApiError(res.status);
+  if (!res.ok) throw new ApiError(res.status, undefined, await errorOf(res));
   return res as Extract<R, { ok: true }>;
 };
 

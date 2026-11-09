@@ -7,6 +7,24 @@ const HINT_SEEN_KEY = "newtab-todo-swipe-hint-seen";
 // Module-level so opening one row can close all the others
 const closeRegistry = new Set<() => void>();
 
+// Storage can throw (private mode, blocked site data). Then nothing could record the hint as
+// seen, so it counts as seen rather than peeking on every visit.
+const readHintSeen = () => {
+  try {
+    return !!localStorage.getItem(HINT_SEEN_KEY);
+  } catch {
+    return true;
+  }
+};
+
+const writeHintSeen = () => {
+  try {
+    localStorage.setItem(HINT_SEEN_KEY, "1");
+  } catch {
+    /* not remembered this time */
+  }
+};
+
 /**
  * Attaches non-passive touchmove (required for preventDefault) via useEffect
  * rather than React synthetic events so we can actually stop scroll during
@@ -120,6 +138,23 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
       if (el) el.style.transform = `translateX(${next}px)`;
     };
 
+    const settle = (open: boolean) => {
+      const width = gestureWidth.current;
+      const el = trayRef.current;
+      if (el) {
+        el.style.transition = `transform ${SNAP_MS}ms ease-out`;
+        el.style.transform = open ? `translateX(${-width}px)` : "translateX(0px)";
+      }
+
+      currentPx.current = open ? -width : 0;
+      isOpenRef.current = open;
+      setIsOpen(open);
+      isDraggingRef.current = false;
+      touchStartX.current = null;
+      touchStartY.current = null;
+      if (!open) clearSwipingAfter(SNAP_MS);
+    };
+
     const onTouchEnd = () => {
       if (!isDraggingRef.current) {
         touchStartX.current = null;
@@ -139,28 +174,30 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
         });
       }
 
-      const el = trayRef.current;
-      if (el) {
-        el.style.transition = `transform ${SNAP_MS}ms ease-out`;
-        el.style.transform = shouldOpen ? `translateX(${-width}px)` : "translateX(0px)";
-      }
+      settle(shouldOpen);
+    };
 
-      currentPx.current = shouldOpen ? -width : 0;
-      isOpenRef.current = shouldOpen;
-      setIsOpen(shouldOpen);
-      isDraggingRef.current = false;
-      touchStartX.current = null;
-      if (!shouldOpen) clearSwipingAfter(SNAP_MS);
+    // The browser took the touch away (a system gesture, an alert), so the drag says nothing
+    // about where the user meant the tray to go: it goes back to where the gesture found it
+    const onTouchCancel = () => {
+      if (!isDraggingRef.current) {
+        touchStartX.current = null;
+        touchStartY.current = null;
+        return;
+      }
+      settle(isOpenRef.current);
     };
 
     container.addEventListener("touchstart", onTouchStart, { passive: true });
     container.addEventListener("touchmove", onTouchMove, { passive: false });
     container.addEventListener("touchend", onTouchEnd, { passive: true });
+    container.addEventListener("touchcancel", onTouchCancel, { passive: true });
 
     return () => {
       container.removeEventListener("touchstart", onTouchStart);
       container.removeEventListener("touchmove", onTouchMove);
       container.removeEventListener("touchend", onTouchEnd);
+      container.removeEventListener("touchcancel", onTouchCancel);
       closeRegistry.delete(close);
     };
   }, [disabled]);
@@ -178,7 +215,7 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
 
   useEffect(() => {
     if (disabled || !hint) return;
-    if (localStorage.getItem(HINT_SEEN_KEY)) return;
+    if (readHintSeen()) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     let peeking = false;
@@ -186,7 +223,7 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
     const startTimer = window.setTimeout(() => {
       const el = trayRef.current;
       if (!el || isOpenRef.current || isDraggingRef.current) return;
-      localStorage.setItem(HINT_SEEN_KEY, "1");
+      writeHintSeen();
       peeking = true;
       markSwiping();
       el.style.transition = "transform 420ms cubic-bezier(0.22, 1, 0.36, 1)";

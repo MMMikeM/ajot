@@ -156,6 +156,17 @@ export const drainUploads = (session: SignedInSession, given: Partial<DrainDeps>
   });
 };
 
+/**
+ * Whether any of the account's uploads is backing off after a request that may yet go through.
+ * One waiting out Undo before it's dropped isn't: no request of its failed.
+ */
+export const uploadsAwaitRetry = async (userId: string) =>
+  (await readUploads()).some((upload) => {
+    if (upload.uploaderId !== userId || upload.attempts === 0) return false;
+    const step = nextStep(upload, Number.POSITIVE_INFINITY);
+    return step !== undefined && step !== "drop";
+  });
+
 /** Kept until Undo can't bring it back; a DELETE goes first if the server has its row. */
 export const deleteUpload = (id: string, now = Date.now()) =>
   changeUpload(id, (upload) => ({ ...upload, deletedAt: now, attempts: 0, retryAt: 0 }));
