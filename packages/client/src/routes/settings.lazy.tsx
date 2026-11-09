@@ -79,7 +79,12 @@ export function SettingsPage() {
   const router = useRouter();
   const isDesk = useIsDesk();
   const signedIn = !!useAuthToken();
-  const [appPackage] = useState(androidAppPackage);
+  const [appPackage, setAppPackage] = useState<string | null>(null);
+  useEffect(() => {
+    androidAppPackage()
+      .then(setAppPackage)
+      .catch(() => setAppPackage(null));
+  }, []);
   const isPwa = getBuildTarget() === "browser";
 
   return (
@@ -258,42 +263,25 @@ const InstallRow = () => {
   );
 };
 
-// Android's own "Add widget?" dialog places it already showing the Inbox
-const AddWidgetRow = ({ appPackage }: { appPackage: string }) => {
-  const [adding, setAdding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const add = async () => {
-    setAdding(true);
-    setError(null);
-    try {
-      await addWidgetToHomeScreen(appPackage);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't add it. Try again.");
-    } finally {
-      setAdding(false);
-    }
-  };
-  return (
-    <div className="-mx-2 flex flex-col">
-      <button
-        type="button"
-        disabled={adding}
-        onClick={() => void add()}
-        className={cn(
-          listRowVariants(),
-          "cursor-pointer items-start text-left focus-visible:bg-muted disabled:cursor-default touch:py-3",
-        )}
-      >
-        <LayoutGrid aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-hint" />
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-sm font-medium text-foreground">Add Inbox to home screen</span>
-          <span className="text-xs text-hint">Tick tasks off without opening Ajot.</span>
-        </span>
-      </button>
-      {error && <p className="px-2 text-sm text-destructive">{error}</p>}
-    </div>
-  );
-};
+// Android's own "Add widget?" dialog places it; its first tap signs it in
+const AddWidgetRow = ({ appPackage }: { appPackage: string }) => (
+  <div className="-mx-2 flex flex-col">
+    <button
+      type="button"
+      onClick={() => addWidgetToHomeScreen(appPackage)}
+      className={cn(
+        listRowVariants(),
+        "cursor-pointer items-start text-left focus-visible:bg-muted touch:py-3",
+      )}
+    >
+      <LayoutGrid aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-hint" />
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-sm font-medium text-foreground">Add Inbox to home screen</span>
+        <span className="text-xs text-hint">Tick tasks off without opening Ajot.</span>
+      </span>
+    </button>
+  </div>
+);
 
 // Read by this device's worker on each push, so it's saved here rather than with the server
 const GroupNotifications = () => {

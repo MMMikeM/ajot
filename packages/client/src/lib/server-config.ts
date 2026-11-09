@@ -7,6 +7,8 @@ export type ServerConfig = {
   awaitingFirstUser: boolean;
   /** Null when the server has no bucket, or is from before attachments. */
   attachments: AttachmentsConfig | null;
+  /** The Android app built for this server, if any. */
+  androidPackage: string | null;
 };
 
 export const normalizeServerUrl = (input: string) => {
@@ -29,5 +31,6 @@ export const fetchServerConfig = async (serverUrl: string): Promise<ServerConfig
     vapidPublicKey: config.vapidPublicKey,
     awaitingFirstUser: !!config.awaitingFirstUser,
     attachments: attachmentsOf(config.attachments),
+    androidPackage: typeof config.androidPackage === "string" ? config.androidPackage : null,
   };
 };

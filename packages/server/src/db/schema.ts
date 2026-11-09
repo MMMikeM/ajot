@@ -198,7 +198,8 @@ export const mcpTokens = sqliteTable(
     check("widget_token_has_session", sql`${t.kind} <> 'widget' OR ${t.sessionId} IS NOT NULL`),
     uniqueIndex("mcp_tokens_hash_idx").on(t.tokenHash),
     index("mcp_tokens_user_idx").on(t.userId),
-    index("mcp_tokens_session_idx").on(t.sessionId),
+    // One widget token per sign-in; NULLs, which Claude's tokens hold, are always distinct
+    uniqueIndex("mcp_tokens_one_per_session").on(t.sessionId),
   ],
 );
 

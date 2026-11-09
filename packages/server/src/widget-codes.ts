@@ -22,14 +22,21 @@ const dropExpired = () => {
  */
 export const approve = (code: string, userId: string, sessionId: string) => {
   dropExpired();
+  // One waiting per sign-in, so no one can fill the server's memory with codes
+  for (const [key, approval] of approvals)
+    if (approval.sessionId === sessionId) approvals.delete(key);
   approvals.set(hash(code), { userId, sessionId, expiresAt: Date.now() + APPROVAL_MS });
 };
 
-/** Once only. */
+/** Once only, unless `putBack` returns it after a claim that failed. */
 export const take = (code: string) => {
   dropExpired();
   const key = hash(code);
   const approval = approvals.get(key);
   approvals.delete(key);
   return approval;
+};
+
+export const putBack = (code: string, approval: Approval) => {
+  if (approval.expiresAt > Date.now()) approvals.set(hash(code), approval);
 };

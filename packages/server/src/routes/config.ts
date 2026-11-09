@@ -10,6 +10,8 @@ const configSchema = z.object({
   awaitingFirstUser: z.boolean(),
   // Null without a bucket, which turns attachments off
   attachments: z.object({ maxBytes: z.number() }).nullable(),
+  // The one Android app a page may sign the widget in for: a launch's referrer must name it
+  androidPackage: z.string().nullable(),
 });
 
 /** What a client needs to know about the server it was pointed at, before signing in. */
@@ -25,6 +27,7 @@ export const configRoutes = new OpenAPIHono().openapi(
         vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? "",
         awaitingFirstUser: (await userRepo.count()) === 0,
         attachments: storage ? { maxBytes: MAX_ATTACHMENT_BYTES } : null,
+        androidPackage: process.env.ANDROID_PACKAGE_NAME || null,
       },
       200,
     ),
