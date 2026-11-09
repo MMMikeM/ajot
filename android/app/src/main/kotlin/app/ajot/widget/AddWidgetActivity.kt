@@ -6,21 +6,15 @@ import android.content.ComponentName
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
-import kotlinx.coroutines.runBlocking
 
 /**
- * Settings' "Add Inbox to home screen" (client/src/lib/android-app.ts): Android's own dialog
- * places the widget, which signs in with the code the page has already approved.
+ * Settings' "Add Inbox to home screen" (client/src/lib/android-app.ts): Android's own dialog places
+ * the widget, which signs in on its first tap. It takes no code: any page or app can open this, and
+ * a code it handed over would choose whose Inbox the widget shows.
  */
 class AddWidgetActivity : Activity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    val code = intent.getStringExtra("code")
-    if (code != null) {
-      // A few bytes of app-private storage, before the activity closes
-      runBlocking { WidgetData.useCode(this@AddWidgetActivity, code) }
-      ClaimWorker.start(this, code)
-    }
     val manager = AppWidgetManager.getInstance(this)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && manager.isRequestPinAppWidgetSupported)
       manager.requestPinAppWidget(ComponentName(this, TasksWidgetReceiver::class.java), null, null)

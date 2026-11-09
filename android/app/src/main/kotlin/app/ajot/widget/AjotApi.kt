@@ -39,7 +39,10 @@ object AjotApi {
       }
     }
 
-  /** Done, or refused for good (gone, no longer shared): either way, nothing left to send. */
+  /**
+   * Done, or refused for good (gone, no longer shared): either way, nothing left to send. The route
+   * answers 200 with each task it refused, so a server error there is retried like any other.
+   */
   suspend fun markDone(token: String, id: String, stamp: String) {
     withContext(Dispatchers.IO) {
       val body =
@@ -47,7 +50,11 @@ object AjotApi {
           .put("ids", JSONArray(listOf(id)))
           .put("status", "done")
           .put("updatedAt", stamp)
-      request("PUT", "/api/tasks/status", token, body.toString())
+      val reply = request("PUT", "/api/tasks/status", token, body.toString())
+      val refused = runCatching { JSONObject(reply).optJSONArray("refused") }.getOrNull()
+      for (i in 0 until (refused?.length() ?: 0))
+        if (refused!!.getJSONObject(i).optInt("status") >= 500)
+          throw IOException("marking $id done answered ${refused.getJSONObject(i).optInt("status")}")
     }
   }
 
