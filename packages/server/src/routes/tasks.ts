@@ -17,17 +17,39 @@ import { audienceOf, markTaskEdited, requireTask } from "./task-users";
 import { sendReachChanges } from "./reach";
 import { inboxOf } from "../widget-inbox";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
-import { MAX_ID, MAX_STATUS_IDS, MAX_USERNAME } from "@newtab-todo/shared/field-limits";
+import {
+  MAX_ID,
+  MAX_SHARES_ON_ADD,
+  MAX_STATUS_IDS,
+  MAX_USERNAME,
+} from "@newtab-todo/shared/field-limits";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
 import { HTTPException } from "hono/http-exception";
-import { taskStatuses } from "../db/schema";
-import { limitSharing } from "../rate-limit";
+import { sharePermissions, taskStatuses } from "../db/schema";
+import { limitSharing, mayAnnounceShare } from "../rate-limit";
 
 const shareSchema = z.object({
   taskId: z.string().max(MAX_ID),
   username: z.string().min(1, "Choose someone to share with.").max(MAX_USERNAME, ONLY_CONTACTS),
   permission: z.enum(["view", "edit"]).default("edit"),
 });
+
+// Who it's shared with as it's added, so a task added offline goes out shared, with no share
+// request racing its add. The client picks each share's id, so its copy matches the server's.
+const addSchema = taskRepo.insertSchema.extend({
+  shares: z
+    .array(
+      z.object({
+        id: z.string().max(MAX_ID),
+        sharedWithUserId: z.string().max(MAX_ID),
+        permission: z.enum(sharePermissions).default("edit"),
+      }),
+    )
+    .max(MAX_SHARES_ON_ADD, `A task can be shared with at most ${MAX_SHARES_ON_ADD} people as it's added.`)
+    .default([]),
+});
+
+const addedSchema = taskRepo.responseSchema.extend({ shares: taskRepo.listItemSchema.shape.shares });
 
 const sendSchema = taskRepo.insertSchema
   .pick({ id: true, title: true, description: true, createdAt: true, updatedAt: true })
@@ -99,22 +121,27 @@ export const taskRoutes = authed()
     authedRoute({
       method: "post",
       path: "/",
-      request: jsonBody(taskRepo.insertSchema),
-      responses: { 200: taskRepo.responseSchema, 400: true, 403: true, 404: true, 409: true },
+      request: jsonBody(addSchema),
+      responses: { 200: addedSchema, 400: true, 403: true, 404: true, 409: true },
     }),
     async (c) => {
-      const data = c.req.valid("json");
+      const { shares: sharesAsked, ...data } = c.req.valid("json");
       const userId = c.get("userId");
-      if (data.parentId && data.categoryId) throw new BadRequestError(SUBTASK_GOES_WITH_PARENT);
+      if (data.parentId && (data.categoryId || sharesAsked.length > 0))
+        throw new BadRequestError(SUBTASK_GOES_WITH_PARENT);
 
       // Sent without a sort key, a task goes where the app puts one it adds
-      const [parent, canUseList, mayAssign, sortOrder] = await Promise.all([
+      const [parent, canUseList, mayAssign, sortOrder, contacts] = await Promise.all([
         data.parentId ? requireTask(data.parentId, userId, "edit") : null,
         data.categoryId ? categoryRepo.canUse(data.categoryId, userId) : true,
         canAssign(userId, data.assigneeId),
         data.sortOrder === undefined && !data.parentId
           ? taskRepo.nextSortOrder(userId)
           : data.sortOrder,
+        contactRepo.contactsAmong(
+          userId,
+          sharesAsked.map((share) => share.sharedWithUserId),
+        ),
       ]);
       if (parent?.task.parentId) throw new BadRequestError("Subtasks can't have subtasks.");
       if (!canUseList) throw new ForbiddenError(NOT_YOUR_LIST);
@@ -128,16 +155,35 @@ export const taskRoutes = authed()
         userId,
       });
       // A retry of a create that's since been deleted: nothing to announce or remind about
-      if (result.deletedAt) return c.json(result, 200);
+      if (result.deletedAt) return c.json({ ...result, shares: [] }, 200);
       if (result.dueDate) await notificationQueueRepo.scheduleFirstReminder(result.id);
-      // A retry gets the stored row, which may have been shared or gained subtasks since
+      // Someone no longer a contact by the time an add made offline arrives is left out rather
+      // than refused, which would lose the task
+      const shared = await taskShareRepo.insertNew(
+        sharesAsked
+          .filter((share) => contacts.has(share.sharedWithUserId))
+          .map((share) => ({ ...share, taskId: result.id })),
+      );
+      // A retry gets the stored row, which may have been shared or gained subtasks since. Whoever
+      // it's shared with is in the audience, so they get it as an insert too
       const [added, audience] = await Promise.all([
         taskRepo.findListItem(result.id),
         audienceOf(result.id),
       ]);
       broadcast(c, "tasks", "insert", added, audience);
       if (parent) await markTaskEdited(c, parent.task.id, userId, data.createdAt, parent.access);
-      return c.json(result, 200);
+      if (shared.length > 0) {
+        const fromUser = await getUserName(userId);
+        for (const share of shared)
+          if (mayAnnounceShare(userId))
+            sendNotification(share.sharedWithUserId, {
+              type: "task-shared",
+              taskId: result.id,
+              taskTitle: result.title,
+              fromUser,
+            });
+      }
+      return c.json({ ...result, shares: added.shares }, 200);
     },
   )
   .openapi(
