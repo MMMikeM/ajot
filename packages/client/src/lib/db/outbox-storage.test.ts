@@ -39,14 +39,18 @@ const EDIT = JSON.stringify({ metadata: {} });
  */
 const failReads = (succeeding = 0) => {
   const transaction = Object.getOwnPropertyDescriptor(IDBDatabase.prototype, "transaction")!
-    .value as (this: IDBDatabase, ...args: Parameters<IDBDatabase["transaction"]>) => IDBTransaction;
+    .value as (
+    this: IDBDatabase,
+    ...args: Parameters<IDBDatabase["transaction"]>
+  ) => IDBTransaction;
   let left = succeeding;
-  return vi
-    .spyOn(IDBDatabase.prototype, "transaction")
-    .mockImplementation(function (this: IDBDatabase, ...args) {
-      if (left-- > 0) return transaction.apply(this, args);
-      throw new DOMException("Connection to Indexed Database server lost", "UnknownError");
-    });
+  return vi.spyOn(IDBDatabase.prototype, "transaction").mockImplementation(function (
+    this: IDBDatabase,
+    ...args
+  ) {
+    if (left-- > 0) return transaction.apply(this, args);
+    throw new DOMException("Connection to Indexed Database server lost", "UnknownError");
+  });
 };
 
 const savedEdit = async () => {
