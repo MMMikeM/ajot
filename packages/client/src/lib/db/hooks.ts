@@ -134,7 +134,7 @@ export const updateCategory = (id: string, fields: Partial<Category>) => {
 };
 
 /**
- * Returns the transaction, whose `isPersisted.promise` rejects if the server refuses, and an
+ * Returns the transaction, whose `when("settled")` rejects if the server refuses, and an
  * undo that puts back exactly what this changed.
  */
 export const deleteCategory = (id: string, tasks: CategoryTaskAction) => {
@@ -215,7 +215,7 @@ const restoreCategory = (
       if (tasksCollection.has(id))
         tasksCollection.update(id, (draft) => fileMyShare(draft, userId, category.id));
   });
-  return transaction.isPersisted.promise;
+  return transaction.when("settled");
 };
 
 type NewNote = Pick<Note, "userId" | "taskId"> & { content: string };
@@ -258,7 +258,7 @@ export const deleteNote = (id: string) => {
 /**
  * Removes the contact for both people, not only this user, and the lists they shared. Its Undo
  * queues behind it, so a dropped connection loses neither. Returns the transaction, whose
- * `isPersisted.promise` rejects if the server refuses, and an undo that resolves once the server
+ * `when("settled")` rejects if the server refuses, and an undo that resolves once the server
  * has them back.
  */
 export const removeContact = (id: string) => {
@@ -273,7 +273,7 @@ export const removeContact = (id: string) => {
       mutationFnName: "restoreContact",
       metadata,
     });
-    return restore.mutate(() => contactsCollection.insert(contact)).isPersisted.promise;
+    return restore.mutate(() => contactsCollection.insert(contact)).when("settled");
   };
   return { transaction, undo };
 };
