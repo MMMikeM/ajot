@@ -21,7 +21,9 @@ test("@ shares a task as it's added, offline too, with no request of its own to 
   await expect(page.getByRole("option", { name: new RegExp(user2Auth.name) })).toBeVisible();
   await page.keyboard.press("Enter");
 
-  await expect(page.getByRole("button", { name: `Don't share with ${user2Auth.name}` })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: `Don't share with ${user2Auth.name}` }),
+  ).toBeVisible();
   await expect(input(page)).toHaveValue(`${title} `);
   await page.keyboard.press("Enter");
   await expect(input(page)).toHaveValue("");

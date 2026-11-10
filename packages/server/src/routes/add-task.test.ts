@@ -23,7 +23,10 @@ vi.mock("../auth", () => ({
   validateSession: async () => "alice",
 }));
 vi.mock("../broadcast", () => ({ broadcast: vi.fn(), broadcastAll: vi.fn() }));
-vi.mock("../notify", () => ({ sendNotification: vi.fn(), getUserName: vi.fn(async () => "Alice") }));
+vi.mock("../notify", () => ({
+  sendNotification: vi.fn(),
+  getUserName: vi.fn(async () => "Alice"),
+}));
 
 const at = "2026-11-05T09:00:00.000Z";
 

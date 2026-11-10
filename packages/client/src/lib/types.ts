@@ -9,3 +9,6 @@ export type Category = CategoryWithCollaborators;
 export type Note = NoteSelect;
 export type Contact = ContactWithUser;
 export type Attachment = AttachmentRow;
+
+/** Someone a task can be shared with as it's added: one of your contacts. */
+export type Taggable = { id: string; name: string; username: string };

@@ -5,7 +5,8 @@ import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { MAX_SHARES_ON_ADD, MAX_TITLE } from "@newtab-todo/shared/field-limits";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
-import { mentionAt, suggestionsFor, withoutMention, type Taggable } from "./mention";
+import type { Taggable } from "~/lib/types";
+import { mentionAt, suggestionsFor, withoutMention } from "./mention";
 
 // No autofocus on touch: opening the keyboard on mount is jarring and stops the layout settling
 const IS_TOUCH =
@@ -126,7 +127,7 @@ export function AddTaskInput({
               title={`Don't share with ${person.name}`}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => unpick(person)}
-              className="relative grid size-5 shrink-0 place-items-center rounded-full text-hint transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-1 focus-visible:outline-hint after:absolute after:-inset-3 touch:after:-inset-3"
+              className="relative grid size-5 shrink-0 place-items-center rounded-full text-hint transition-colors after:absolute after:-inset-3 hover:text-foreground focus-visible:text-foreground focus-visible:outline-1 focus-visible:outline-hint touch:after:-inset-3"
             >
               <X className="size-3.5" />
             </button>

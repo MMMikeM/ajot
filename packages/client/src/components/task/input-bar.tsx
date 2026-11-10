@@ -12,7 +12,7 @@ import { useNavContext } from "~/lib/state/nav-context";
 import { INBOX_COLOR } from "~/lib/constants";
 import { ColorDot } from "~/components/ui/color-dot";
 import { revealWhenShown } from "./reveal-added";
-import type { Taggable } from "./mention";
+import type { Taggable } from "~/lib/types";
 
 // Fixed overlays (toasts) read the height to sit above the bar on touch
 const useInputBarHeightVar = () => {
