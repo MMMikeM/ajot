@@ -24,7 +24,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.5",
+    "@hono/node-server": "^2.1.6",
     "@hono/zod-openapi": "^1.6.3",
     "@mmmike/web-push": "^1.5.0",
     "@modelcontextprotocol/server": "2.4.0",
@@ -33,11 +33,11 @@
     "@paralleldrive/cuid2": "^3.3.0",
     "@smithy/hash-node": "4.5.2",
     "@smithy/protocol-http": "5.6.2",
-    "@smithy/signature-v4": "5.7.4",
+    "@smithy/signature-v4": "5.7.5",
     "@tursodatabase/serverless": "^1.4.1",
     "drizzle-orm": "1.0.0-rc.4",
     "fractional-indexing": "^4.0.0",
-    "hono": "^4.13.13",
+    "hono": "^4.13.17",
     "zod": "^4.6.7"
   },
   "devDependencies": {

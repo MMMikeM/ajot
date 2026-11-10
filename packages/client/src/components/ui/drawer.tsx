@@ -47,12 +47,13 @@ function SheetBlur() {
   const [halfway, setHalfway] = useState(false);
   useEffect(() => {
     if (halfway || !open) return;
-    let frame = requestAnimationFrame(function check() {
+    const frame = { id: 0 };
+    frame.id = requestAnimationFrame(function check() {
       const sheetTop = ref.current?.parentElement?.getBoundingClientRect().top ?? Infinity;
       if (sheetTop <= window.innerHeight / 2) setHalfway(true);
-      else frame = requestAnimationFrame(check);
+      else frame.id = requestAnimationFrame(check);
     });
-    return () => cancelAnimationFrame(frame);
+    return () => cancelAnimationFrame(frame.id);
   }, [halfway, open]);
   const blurred = open && (halfway || settled);
   return (
