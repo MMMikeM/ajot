@@ -1,9 +1,9 @@
 # CI builds the server stage while the tests run and passes its image in; locally it's the stage below
 ARG SERVER_IMAGE=server
-ARG NODE_IMAGE=node:24.22.2-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8
+ARG NODE_IMAGE=node:26.13.0-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216
 
 FROM ${NODE_IMAGE} AS base
-RUN corepack enable && corepack install -g pnpm@12.6.0
+RUN corepack enable && corepack install -g pnpm@12.18.0
 
 ENV CI=true
 

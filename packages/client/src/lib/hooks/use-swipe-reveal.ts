@@ -218,18 +218,17 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
     if (readHintSeen()) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    let peeking = false;
-    let returnTimer: number | undefined;
+    const peek: { active: boolean; returnTimer?: number } = { active: false };
     const startTimer = window.setTimeout(() => {
       const el = trayRef.current;
       if (!el || isOpenRef.current || isDraggingRef.current) return;
       writeHintSeen();
-      peeking = true;
+      peek.active = true;
       markSwiping();
       el.style.transition = "transform 420ms cubic-bezier(0.22, 1, 0.36, 1)";
       el.style.transform = `translateX(${-trayWidth()}px)`;
-      returnTimer = window.setTimeout(() => {
-        peeking = false;
+      peek.returnTimer = window.setTimeout(() => {
+        peek.active = false;
         if (isOpenRef.current || isDraggingRef.current) return;
         el.style.transition = "transform 320ms ease-in-out";
         el.style.transform = "translateX(0px)";
@@ -239,9 +238,9 @@ export const useSwipeReveal = (disabled = false, hint = false) => {
 
     return () => {
       window.clearTimeout(startTimer);
-      window.clearTimeout(returnTimer);
+      window.clearTimeout(peek.returnTimer);
       const el = trayRef.current;
-      if (peeking && el && !isOpenRef.current && !isDraggingRef.current) {
+      if (peek.active && el && !isOpenRef.current && !isDraggingRef.current) {
         el.style.transform = "translateX(0px)";
         clearSwipingAfter(0);
       }
