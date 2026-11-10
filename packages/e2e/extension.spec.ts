@@ -1,10 +1,11 @@
 import { chromium, type BrowserContext, type Worker } from "@playwright/test";
 import { resolve } from "node:path";
 import { test, expect } from "./fixtures";
-import { addList, apiRequest, uploadImage } from "./helpers/api";
+import { addList, apiRequest, tasksOf, uploadImage } from "./helpers/api";
 import type { AuthResult } from "./helpers/auth";
 import { deliverPush, queueUpload, savedTitles } from "./helpers/background";
 import { API_PORT } from "./helpers/stack";
+import { USER_1 } from "./helpers/users";
 
 // Runs against the built Chrome extension: `pnpm test:e2e:background`. Playwright can't load a
 // Firefox MV2 add-on, so its background is checked by hand.
@@ -94,6 +95,31 @@ test.describe("the extension's background saves the lists for the next new tab",
     const page = await openInFlightMode(user1Auth);
     await expect(page.getByText(title)).toBeVisible();
   });
+});
+
+// The first tab leads, so it sends what the second queues: it must learn the server signed in to,
+// not only the token, or every edit waits for a reload
+test("a tab open before signing in sends what's added after, to the server signed in to", async ({
+  user1Auth,
+}) => {
+  const leader = await context.newPage();
+  await leader.goto(`${extensionUrl}/index.html`);
+  await leader.waitForSelector("#add-task-input");
+
+  const page = await context.newPage();
+  await page.goto(`${extensionUrl}/index.html#/auth`);
+  await page.getByLabel("Server").fill(SERVER_URL);
+  await page.getByLabel("Username").fill(user1Auth.username);
+  await page.getByLabel("Password").fill(USER_1.password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.waitForSelector("#add-task-input");
+
+  const title = `Added after signing in ${Date.now()}`;
+  await page.fill("#add-task-input", title);
+  await page.keyboard.press("Enter");
+  await expect
+    .poll(async () => (await tasksOf(user1Auth.token)).map((t) => t.title), { timeout: 10_000 })
+    .toContain(title);
 });
 
 // What a tab queued before it closed: the background sends it, so collaborators get it with no tab
