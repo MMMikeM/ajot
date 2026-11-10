@@ -4,6 +4,7 @@ import { getCurrentUserId } from "~/lib/auth/current-user";
 import { now } from "~/lib/utils";
 import { tasksCollection } from "~/lib/db/collections";
 import { createOfflineTransaction } from "~/lib/db/offline";
+import type { Taggable } from "~/components/task/mention";
 
 /** Returns the new task's id. */
 export const addTask = async (
@@ -12,6 +13,7 @@ export const addTask = async (
   parentId?: string | null,
   description: string | null = null,
   id = nanoid(),
+  shareWith: readonly Taggable[] = [],
 ) => {
   // An insert before the first load settles can leave the collection stuck loading (signed
   // out, its sync never completes), and the sort order below needs the loaded siblings.
@@ -44,7 +46,17 @@ export const addTask = async (
       completedAt: null,
       deletedAt: null,
       subtasks: [],
-      shares: [],
+      // Sent with the task, so it arrives shared, offline too. The server keeps these ids
+      shares: shareWith.map((person) => ({
+        id: nanoid(),
+        taskId: id,
+        sharedWithUserId: person.id,
+        categoryId: null,
+        permission: "edit" as const,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        sharedWithUser: person,
+      })),
       assignee: null,
       sentBy: null,
     }),

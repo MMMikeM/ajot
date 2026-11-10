@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import { ChevronDown } from "lucide-react";
 import { AddTaskInput } from "./add-input";
-import { useCategories } from "~/lib/db/hooks";
+import { useCategories, useContacts } from "~/lib/db/hooks";
 import { usePeople } from "~/lib/hooks/use-people";
 import { CollabBadge } from "~/components/category-nav/CollabBadge";
 import { addTask } from "~/lib/db/add-task";
@@ -12,6 +12,7 @@ import { useNavContext } from "~/lib/state/nav-context";
 import { INBOX_COLOR } from "~/lib/constants";
 import { ColorDot } from "~/components/ui/color-dot";
 import { revealWhenShown } from "./reveal-added";
+import type { Taggable } from "./mention";
 
 // Fixed overlays (toasts) read the height to sit above the bar on touch
 const useInputBarHeightVar = () => {
@@ -37,6 +38,12 @@ export function TaskInputBar() {
   const currentUserId = useOptimisticUserId();
   const { data: rawCategories } = useCategories();
   const people = usePeople();
+  const { data: contactRows } = useContacts();
+  const contacts = (contactRows ?? []).map(({ contactUser }) => ({
+    id: contactUser.id,
+    name: contactUser.name,
+    username: contactUser.username,
+  }));
   const { setNavOpen } = useNavContext();
   const barRef = useInputBarHeightVar();
 
@@ -48,14 +55,14 @@ export function TaskInputBar() {
   // Keyed per add, so a second "Added to Inbox" is a new node and is announced again
   const [added, setAdded] = useState({ count: 0, listName: "" });
 
-  const handleAdd = (title: string) => {
+  const handleAdd = (title: string, shareWith: Taggable[]) => {
     const id = nanoid();
     // On the phone the input sits below the list, so a task added to a long one lands out of
     // sight. On desktop it's above a page the window scrolls: following the task down would take
     // the input off screen, every add.
     if (matchMedia("(pointer: coarse)").matches) revealWhenShown(id);
     setAdded((prev) => ({ count: prev.count + 1, listName }));
-    void addTask(title, activeCategoryId ?? null, null, null, id);
+    void addTask(title, activeCategoryId ?? null, null, null, id, shareWith);
   };
 
   return (
@@ -79,7 +86,7 @@ export function TaskInputBar() {
         )}
         <ChevronDown size={14} className="shrink-0 text-hint" />
       </button>
-      <AddTaskInput onAdd={handleAdd} />
+      <AddTaskInput onAdd={handleAdd} contacts={contacts} />
       <output className="sr-only">
         {added.count > 0 && <span key={added.count}>Added to {added.listName}</span>}
       </output>
