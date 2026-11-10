@@ -135,19 +135,19 @@ test("only the owner can restore, and a deleted task can't be edited", async ({
   expect(await findTask(user1Auth.token, "Owned")).toBeTruthy();
 });
 
-test("an Undo from before restores existed still brings the task back", async ({ user1Auth }) => {
+test("a create sent again after the task was deleted leaves it deleted", async ({ user1Auth }) => {
   const at = new Date().toISOString();
   const body = {
-    id: `legacy-${Date.now()}`,
+    id: `retried-${Date.now()}`,
     userId: user1Auth.userId,
-    title: "Legacy",
+    title: "Retried",
     createdAt: at,
     updatedAt: at,
   };
   await apiRequest("POST", "/api/tasks", body, user1Auth.token);
   await apiRequest("DELETE", "/api/tasks", { id: body.id }, user1Auth.token);
   await apiRequest("POST", "/api/tasks", body, user1Auth.token);
-  expect(await findTask(user1Auth.token, "Legacy")).toBeTruthy();
+  expect(await findTask(user1Auth.token, "Retried")).toBeUndefined();
 });
 
 test("deleting a list hides its tasks and their notes, and they can come back to the Inbox", async ({
