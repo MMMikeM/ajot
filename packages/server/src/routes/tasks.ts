@@ -45,11 +45,16 @@ const addSchema = taskRepo.insertSchema.extend({
         permission: z.enum(sharePermissions).default("edit"),
       }),
     )
-    .max(MAX_SHARES_ON_ADD, `A task can be shared with at most ${MAX_SHARES_ON_ADD} people as it's added.`)
+    .max(
+      MAX_SHARES_ON_ADD,
+      `A task can be shared with at most ${MAX_SHARES_ON_ADD} people as it's added.`,
+    )
     .default([]),
 });
 
-const addedSchema = taskRepo.responseSchema.extend({ shares: taskRepo.listItemSchema.shape.shares });
+const addedSchema = taskRepo.responseSchema.extend({
+  shares: taskRepo.listItemSchema.shape.shares,
+});
 
 const sendSchema = taskRepo.insertSchema
   .pick({ id: true, title: true, description: true, createdAt: true, updatedAt: true })

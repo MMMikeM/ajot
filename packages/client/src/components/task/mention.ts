@@ -1,5 +1,4 @@
-/** Someone a task can be shared with as it's added: one of your contacts. */
-export type Taggable = { id: string; name: string; username: string };
+import type { Taggable } from "~/lib/types";
 
 export const MAX_SUGGESTIONS = 6;
 

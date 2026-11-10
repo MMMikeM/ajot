@@ -29,7 +29,11 @@ for (const [device, prefix] of [
   [phone, "phone"],
   [desktop, "desktop"],
 ] as const) {
-  const context = await browser.newContext({ ...device, colorScheme: "dark", serviceWorkers: "block" });
+  const context = await browser.newContext({
+    ...device,
+    colorScheme: "dark",
+    serviceWorkers: "block",
+  });
   const page = await context.newPage();
   await mockApi(page);
   await stream.holdOpen(page);

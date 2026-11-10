@@ -4,7 +4,7 @@ import { getCurrentUserId } from "~/lib/auth/current-user";
 import { now } from "~/lib/utils";
 import { tasksCollection } from "~/lib/db/collections";
 import { createOfflineTransaction } from "~/lib/db/offline";
-import type { Taggable } from "~/components/task/mention";
+import type { Taggable } from "~/lib/types";
 
 /** Returns the new task's id. */
 export const addTask = async (
