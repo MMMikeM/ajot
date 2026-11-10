@@ -234,6 +234,7 @@ export const mockApi = async (
     "/api/contacts": data.contacts,
     "/api/notes": data.notes,
     "/api/attachments": data.attachments,
+    "/api/mcp/tokens": [],
     "/api/config": {
       vapidPublicKey: "",
       awaitingFirstUser: false,
