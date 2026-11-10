@@ -3,7 +3,8 @@ ARG SERVER_IMAGE=server
 ARG NODE_IMAGE=node:26.13.0-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216
 
 FROM ${NODE_IMAGE} AS base
-RUN corepack enable && corepack install -g pnpm@12.18.0
+# Node 25 and later ship without corepack
+RUN npm install -g pnpm@12.18.0
 
 ENV CI=true
 
