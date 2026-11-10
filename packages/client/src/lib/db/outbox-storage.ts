@@ -54,7 +54,10 @@ const strictReads = () => {
       // A connection the browser lost stays lost: the next read opens another
       const lost = opening;
       opening = undefined;
-      void lost?.then((db) => db.close(), () => {});
+      void lost?.then(
+        (db) => db.close(),
+        () => {},
+      );
       throw err;
     }
   };

@@ -109,4 +109,4 @@ await fresh(browser, phone, "", async (page) => {
 });
 
 await browser.close();
-await stream.close();
+stream.close();

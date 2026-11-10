@@ -49,15 +49,13 @@ describe("nextSortOrder", () => {
   test("goes after a task shared with the user too, which their list shows among theirs", async () => {
     await db.insert(users).values({ id: "bob", name: "Bob", username: "bob", passwordHash: "x" });
     await addTask("mine", "a0");
-    await db
-      .insert(tasks)
-      .values({
-        id: "bobs",
-        userId: "bob",
-        title: "bobs",
-        sortOrder: "a5",
-        updatedAt: BEFORE_THE_DELETE,
-      });
+    await db.insert(tasks).values({
+      id: "bobs",
+      userId: "bob",
+      title: "bobs",
+      sortOrder: "a5",
+      updatedAt: BEFORE_THE_DELETE,
+    });
     await taskShareRepo.insert({
       id: "s",
       taskId: "bobs",
