@@ -150,6 +150,14 @@ export const limitSharing = (userId: string) => {
   sharing.count(userId);
 };
 
+/** For a share made with a task as it's added: refusing it would lose the task, so past the limit
+ * it's still made, and only not announced. */
+export const mayAnnounceShare = (userId: string) => {
+  if (sharing.waitMs(userId) > 0) return false;
+  sharing.count(userId);
+  return true;
+};
+
 const makingTokens = createLimiter({ limit: 10, windowMs: 60 * 60_000 });
 
 export const limitMcpTokens = (userId: string) => {

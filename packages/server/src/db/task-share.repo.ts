@@ -9,6 +9,14 @@ export type Insert = typeof taskShares.$inferInsert;
 
 export const responseSchema = createSelectSchema(taskShares);
 
+// A retried add mustn't undo a change made since, such as a share turned to view, so a share
+// someone already has stays as it is. Returns only the shares it added. A share removed between an
+// add and its retry comes back: the retry can't tell it from one that never landed.
+export const insertNew = async (rows: Insert[]) => {
+  if (rows.length === 0) return [];
+  return db.insert(taskShares).values(rows).onConflictDoNothing().returning();
+};
+
 // A share they already have keeps its id; only a new permission changes it
 export const insert = async (data: Insert) => {
   const [row] = await db

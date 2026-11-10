@@ -20,6 +20,8 @@ export const MAX_SORT_KEY = 1_000;
 export const MAX_TASK_IDS = 2_000;
 /** Tasks one status change may tick or reopen together. */
 export const MAX_STATUS_IDS = 50;
+/** People a task may be shared with as it's added. */
+export const MAX_SHARES_ON_ADD = 20;
 export const MAX_FILE_NAME = 255;
 // The most a server may be configured to take in one file (ATTACHMENT_MAX_MB)
 export const MAX_FILE_BYTES = 100 * 1024 * 1024;

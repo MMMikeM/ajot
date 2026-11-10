@@ -182,6 +182,11 @@ describe("who sent a task", () => {
 
   test("is never set by adding a task of one's own", async () => {
     vi.mocked(taskRepo.insert).mockResolvedValueOnce({ ...draft, userId: "alice" } as never);
+    vi.mocked(taskRepo.findListItem).mockResolvedValueOnce({
+      ...draft,
+      userId: "alice",
+      shares: [],
+    } as never);
     const res = await post(taskRoutes, "/", { ...draft, userId: "", sentById: "bob" });
     expect(res.status).toBe(200);
     expect(vi.mocked(taskRepo.insert).mock.calls[0]![0]).not.toHaveProperty("sentById");

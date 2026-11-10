@@ -35,6 +35,15 @@ export const exists = async (userId: string, contactUserId: string): Promise<boo
   return !!row;
 };
 
+export const contactsAmong = async (userId: string, userIds: string[]) => {
+  if (userIds.length === 0) return new Set<string>();
+  const rows = await db.query.contacts.findMany({
+    where: { userId, contactUserId: { in: userIds } },
+    columns: { contactUserId: true },
+  });
+  return new Set(rows.map((row) => row.contactUserId));
+};
+
 export const findContactUser = async (userId: string, username: string) => {
   const row = await db.query.contacts.findFirst({
     where: { userId, contactUser: { username } },
