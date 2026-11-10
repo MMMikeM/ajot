@@ -65,7 +65,7 @@ export const useCategoryActions = () => {
       });
       if (wasActive) setActiveCategoryId(cat.id);
     });
-    transaction.isPersisted.promise.catch(() => {
+    transaction.when("settled").catch(() => {
       toastManager.close(undoToastId);
       toastManager.add({ title: `Couldn't delete “${cat.name}”. Try again.` });
       if (wasActive) setActiveCategoryId(cat.id);

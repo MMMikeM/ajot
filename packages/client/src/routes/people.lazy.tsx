@@ -34,7 +34,7 @@ export function PeoplePage() {
         toastManager.add({ title: `Couldn't bring back ${name}` });
       });
     });
-    transaction.isPersisted.promise.catch((err) => {
+    transaction.when("settled").catch((err) => {
       console.error("[contacts] remove failed:", err);
       toastManager.close(undoToastId);
       toastManager.add({ title: `Couldn't remove ${name}. Try again.` });
