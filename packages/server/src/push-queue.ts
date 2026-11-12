@@ -1,5 +1,6 @@
 import type { MutationEvent } from "@newtab-todo/shared";
 import { findRecipients, sendPush } from "./push";
+import * as userRepo from "./db/user.repo";
 import {
   planPushes,
   type ChangeSource,
@@ -29,8 +30,18 @@ const flush = async (userId: string) => {
   pending.delete(userId);
   clearTimeout(batch.timer);
   try {
-    const { subs, preferences } = await findRecipients([userId]);
-    const pushes = planPushes(userId, batch, subs, preferences);
+    const othersIds = batch.changes.flatMap(({ source }) =>
+      source.userId && source.userId !== userId ? [source.userId] : [],
+    );
+    const [{ subs, preferences }, names] = await Promise.all([
+      findRecipients([userId]),
+      // Without them the push still goes, saying "Someone"
+      userRepo.findNames([...new Set(othersIds)]).catch((err: unknown) => {
+        console.error(`Push to ${userId}: couldn't read who made the changes:`, err);
+        return new Map<string, string>();
+      }),
+    ]);
+    const pushes = planPushes(userId, batch, subs, preferences, names);
     if (pushes.length === 0) return;
     const delivered = await Promise.all(
       pushes.map((push) => sendPush(push.subs, push.message, push.options)),

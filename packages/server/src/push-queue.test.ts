@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { findRecipients, sendPush } from "./push";
 import { flushPushes, queueChanges } from "./push-queue";
+import { findNames } from "./db/user.repo";
 
 vi.mock("./push", () => ({
   findRecipients: vi.fn(),
   sendPush: vi.fn(),
 }));
+vi.mock("./db/user.repo", () => ({ findNames: vi.fn() }));
 
 const laptop = {
   endpoint: "laptop",
@@ -40,6 +42,7 @@ beforeEach(() => {
       }) as never,
   );
   vi.mocked(sendPush).mockResolvedValue(1);
+  vi.mocked(findNames).mockResolvedValue(new Map([["friend", "Sam"]]));
   vi.spyOn(console, "log").mockImplementation(() => {});
 });
 
@@ -65,5 +68,20 @@ describe("queueChanges", () => {
     await vi.advanceTimersByTimeAsync(1_000);
 
     expect(sentIds()).toEqual([["mine"], ["theirs"]]);
+  });
+
+  test("says who else made a change, and still sends when that can't be read", async () => {
+    queueChanges(["me"], [edit("theirs")], { userId: "friend" });
+    await vi.advanceTimersByTimeAsync(1_000);
+    vi.mocked(findNames).mockRejectedValueOnce(new Error("offline"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    queueChanges(["me"], [edit("theirs")], { userId: "friend" });
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    const said = vi.mocked(sendPush).mock.calls.map(([, message]) => message);
+    expect(said).toMatchObject([
+      { changed: [{ id: "theirs", by: "Sam" }] },
+      { changed: [{ id: "theirs", by: "Someone" }] },
+    ]);
   });
 });

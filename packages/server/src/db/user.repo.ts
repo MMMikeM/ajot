@@ -20,6 +20,12 @@ export type Insert = typeof users.$inferInsert;
 export const findName = async (id: string) =>
   (await db.query.users.findFirst({ where: { id }, columns: { name: true } }))?.name;
 
+export const findNames = async (ids: string[]) => {
+  if (ids.length === 0) return new Map<string, string>();
+  const rows = await db.query.users.findMany({ where: { id: { in: ids } }, columns: nameColumns });
+  return new Map(rows.map((row) => [row.id, row.name]));
+};
+
 /** For signing in; undefined when no one has the username, which isn't logged. */
 export const findWithPassword = async (username: string) =>
   db.query.users.findFirst({ where: { username } });

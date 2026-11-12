@@ -1,6 +1,11 @@
 import type { SendPushOptions } from "@mmmike/web-push/send";
 import {
+  MAX_CHANGED_NAME,
+  mergeChanges,
   NOTIFICATION_TRIGGERS,
+  type ChangedItem,
+  type ChangeSummary,
+  type ModelName,
   type MutationEvent,
   type PushMessage,
   type PushPayload,
@@ -13,11 +18,22 @@ export type DevicePreferences = { muted: PushTrigger[]; urgent: boolean };
 // throws for anything longer, before sending to anyone
 const MAX_PAYLOAD_BYTES = 3993;
 
-/** A plain "changes" still makes the device fetch the lists, which is what every push is for. */
+/**
+ * The rows go first, then half the changes listed at a time. A plain "changes" still makes the
+ * device fetch the lists, which is what every push is for.
+ */
 export const fitted = (message: PushMessage): PushMessage => {
   if (Buffer.byteLength(JSON.stringify(message)) <= MAX_PAYLOAD_BYTES) return message;
   const { rows, ...withoutRows } = message;
-  return rows ? fitted(withoutRows) : { type: "changes" };
+  if (rows) return fitted(withoutRows);
+  if (message.type !== "changes" || !message.changed || message.changed.length <= 1)
+    return { type: "changes" };
+  const kept = Math.floor(message.changed.length / 2);
+  return fitted({
+    type: "changes",
+    changed: message.changed.slice(0, kept),
+    more: (message.more ?? 0) + message.changed.length - kept,
+  });
 };
 
 export const DEFAULT_PUSH_PREFERENCES: DevicePreferences = { muted: [], urgent: true };
@@ -25,6 +41,41 @@ export const DEFAULT_PUSH_PREFERENCES: DevicePreferences = { muted: [], urgent: 
 export const deviceKey = (userId: string, deviceId: string) => `${userId}:${deviceId}`;
 
 export type ChangeSource = { userId?: string; deviceId?: string };
+
+type Change = PushBatch["changes"][number];
+
+// What each kind of row is called by, in the rows the server broadcasts
+const NAME_FIELDS: Partial<Record<ModelName, string>> = {
+  tasks: "title",
+  notes: "title",
+  categories: "name",
+  attachments: "name",
+};
+
+const nameOf = ({ model, data }: Change["event"]) => {
+  const field = NAME_FIELDS[model];
+  const name = field && (data as Record<string, unknown>)[field];
+  if (typeof name !== "string" || !name.trim()) return undefined;
+  const trimmed = name.trim();
+  return trimmed.length > MAX_CHANGED_NAME ? `${trimmed.slice(0, MAX_CHANGED_NAME - 1)}…` : trimmed;
+};
+
+/** What a device is told changed, each change named by who made it unless it was them. */
+const summarise = (
+  userId: string,
+  changes: Change[],
+  names: ReadonlyMap<string, string>,
+): ChangeSummary =>
+  mergeChanges(undefined, {
+    changed: changes.flatMap(({ event, source }): ChangedItem[] => {
+      const id = (event.data as { id?: unknown }).id;
+      if (typeof id !== "string") return [];
+      const by =
+        source.userId === userId ? undefined : (names.get(source.userId ?? "") ?? "Someone");
+      return [{ id, model: event.model, action: event.action, name: nameOf(event), by }];
+    }),
+    more: 0,
+  });
 
 export type NotificationPayload = Extract<
   PushPayload,
@@ -58,6 +109,8 @@ export const planPushes = <S extends Recipient>(
   batch: PushBatch,
   subs: S[],
   preferences: Map<string, DevicePreferences>,
+  /** Of whoever made the batch's changes, for telling the others who did */
+  names: ReadonlyMap<string, string> = new Map(),
 ): PlannedPush<S>[] => {
   const rows =
     batch.changes.length > 0
@@ -88,14 +141,18 @@ export const planPushes = <S extends Recipient>(
     // Only a worker new enough to show "changes" uploads a device id; an older one would show
     // nothing, which is the silent push Chrome and Safari punish
     if (sub.deviceId === null) continue;
-    const triggers = batch.changes
-      .filter(({ source }) => source.deviceId !== sub.deviceId)
-      .map(({ source }): PushTrigger =>
-        source.userId === userId ? "own-changes" : "others-changes",
-      );
+    const heard = batch.changes.filter(
+      ({ source }) =>
+        source.deviceId !== sub.deviceId &&
+        !muted.includes(source.userId === userId ? "own-changes" : "others-changes"),
+    );
     // A device that was offline only needs the latest one
-    if (triggers.some((trigger) => !muted.includes(trigger)))
-      add(sub, { type: "changes" }, { topic: "changes", urgency });
+    if (heard.length > 0)
+      add(
+        sub,
+        { type: "changes", ...summarise(userId, heard, names) },
+        { topic: "changes", urgency },
+      );
   }
   return [...planned.values()];
 };

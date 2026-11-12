@@ -26,6 +26,7 @@ import {
   GROUPED_KEY,
   type Group,
   type ReplacingOptions,
+  withChangesShown,
 } from "~/lib/notification-group";
 
 declare let self: ServiceWorkerGlobalScope;
@@ -174,10 +175,15 @@ const ICON = "/icons/icon-192.png";
 
 /**
  * One notification per thing it's about, the newest replacing the last, or with grouping on in
- * Settings, one for everything. "Your lists were updated" makes no sound; anything else replacing
- * an older notification still alerts.
+ * Settings, one for everything. A "changes" notification makes no sound, and lists what the one
+ * it replaces did too; anything else replacing an older notification still alerts.
  */
-const show = async (notification: ShownNotification) => {
+const show = async (incoming: ShownNotification) => {
+  const showing = await self.registration.getNotifications();
+  const notification = withChangesShown(
+    incoming,
+    showing.map((shown) => shown.data as unknown),
+  );
   const sound: ReplacingOptions =
     notification.tag === "changes" ? { silent: true } : { renotify: true };
   if ((await loadSnapshotEntry(GROUPED_KEY)) !== true)
@@ -185,7 +191,7 @@ const show = async (notification: ShownNotification) => {
       body: notification.body,
       icon: ICON,
       tag: notification.tag,
-      data: { url: notification.url },
+      data: { url: notification.url, changes: notification.changes },
       ...sound,
     });
   const [open] = await self.registration.getNotifications({ tag: GROUP_TAG });
