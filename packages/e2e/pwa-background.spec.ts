@@ -15,6 +15,9 @@ import { PREVIEW_PORT } from "./helpers/stack";
 
 // Runs against the production build, which has the service worker: `pnpm test:e2e:background`
 
+// The headless shell denies notifications whatever the context grants, so the worker's would throw
+test.use({ channel: "chromium" });
+
 const ORIGIN = `http://localhost:${PREVIEW_PORT}`;
 
 let context: BrowserContext;
@@ -110,6 +113,36 @@ test.describe("the PWA's worker saves the lists for the next launch", () => {
     const page = await openInFlightMode(`/task/${id}`);
     await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue(title);
   });
+});
+
+test("a changes push says what changed, adding to the one before it until the app is opened", async () => {
+  const shown = () =>
+    worker.evaluate(async () =>
+      (
+        await (
+          self as unknown as { registration: ServiceWorkerRegistration }
+        ).registration.getNotifications()
+      ).map(({ title, body }) => ({ title, body })),
+    );
+  await deliverPush(context, ORIGIN, {
+    type: "changes",
+    changed: [{ id: "a", model: "tasks", action: "insert", name: "Milk" }],
+    more: 0,
+  });
+  await expect.poll(shown).toEqual([{ title: "Ajot", body: 'Added "Milk"' }]);
+
+  await deliverPush(context, ORIGIN, {
+    type: "changes",
+    changed: [{ id: "b", model: "tasks", action: "update", name: "Bread", by: "Sam" }],
+    more: 0,
+  });
+  await expect
+    .poll(shown)
+    .toEqual([{ title: "Ajot", body: 'You: Added "Milk"\nSam: Edited "Bread"' }]);
+
+  // Seen once the app is open, so the next push starts a new list
+  await context.newPage().then((page) => page.goto("/"));
+  await expect.poll(shown).toEqual([]);
 });
 
 test("opened offline with no lists saved, it still takes a task and sends it once online", async ({

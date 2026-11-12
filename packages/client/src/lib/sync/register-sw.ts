@@ -45,6 +45,18 @@ const registerPeriodicPrewarm = async (reg: PeriodicSyncRegistration) => {
   await reg.periodicSync.register("prewarm", { minInterval: PREWARM_EVERY_MS });
 };
 
+/**
+ * The app on screen shows what changed, and a "changes" notification left open would go on adding
+ * each new push to what was already seen.
+ */
+const closeChangesShown = (reg: ServiceWorkerRegistration) =>
+  reg
+    .getNotifications({ tag: "changes" })
+    .then((shown) => {
+      for (const notification of shown) notification.close();
+    })
+    .catch((err) => console.warn("[sw] couldn't close notifications:", err));
+
 export const registerServiceWorker = () => {
   console.log("[sw] guards:", {
     hasWindow: typeof window !== "undefined",
@@ -72,11 +84,14 @@ export const registerServiceWorker = () => {
     .then((reg) => {
       console.log("[sw] registered:", reg.scope, reg);
       registerPeriodicPrewarm(reg).catch((err) => console.warn("[sw] periodic sync:", err));
+      void closeChangesShown(reg);
 
       // Fallbacks for when the stream can't reopen, such as a server without one
       setInterval(checkForUpdate, UPDATE_POLL_MS);
       document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible") checkForUpdate();
+        if (document.visibilityState !== "visible") return;
+        checkForUpdate();
+        void closeChangesShown(reg);
       });
     })
     .catch((err) => console.error("[sw] registration failed:", err));
