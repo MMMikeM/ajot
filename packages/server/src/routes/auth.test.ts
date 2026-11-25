@@ -12,6 +12,7 @@ vi.mock("../db/session.repo", () => ({ forgetUser: vi.fn() }));
 vi.mock("../auth-service", () => ({ login: vi.fn(), signup: vi.fn() }));
 vi.mock("../auth", () => ({ extractToken: vi.fn(), validateSession: vi.fn() }));
 vi.mock("../notify", () => ({ sendNotification: vi.fn() }));
+vi.mock("../push-queue", () => ({ queueChanges: vi.fn() }));
 vi.mock("./contact-changes", () => ({ sendContactChanges: vi.fn() }));
 
 // Mounted as app.ts mounts it, under an app whose hook every route inherits

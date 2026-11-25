@@ -10,12 +10,13 @@ import {
 vi.mock("./push-queue", () => ({ queueChanges: vi.fn() }));
 
 const stream = () => ({ write: vi.fn(), close: vi.fn() });
+const signedIn = (userId: string) => ({ userId, sessionId: `${userId}'s` });
 
 test("one account's hundredth stream leaves no room for another, and closes none", () => {
   const streams = Array.from({ length: 100 }, stream);
   for (const writer of streams) {
     expect(hasRoomForStream("alice")).toBe(true);
-    registerClient("alice", writer);
+    registerClient(signedIn("alice"), writer);
   }
   expect(hasRoomForStream("alice")).toBe(false);
   expect(hasRoomForStream("bob")).toBe(true);
@@ -34,8 +35,8 @@ test("one account's hundredth stream leaves no room for another, and closes none
 test("a notification reaches only its user's open streams, as its own event", () => {
   const bobs = stream();
   const carols = stream();
-  registerClient("bob", bobs);
-  registerClient("carol", carols);
+  registerClient(signedIn("bob"), bobs);
+  registerClient(signedIn("carol"), carols);
   const payload = {
     type: "task-sent",
     taskId: "t1",

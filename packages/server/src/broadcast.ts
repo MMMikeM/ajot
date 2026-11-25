@@ -8,7 +8,15 @@ export type { MutationEvent };
 
 type SSEWriter = { write: (event: string, data: string) => void; close: () => void };
 
-const sseClients = new Map<string, Set<SSEWriter>>();
+/** The sign-in a stream was opened with, so signing out closes it. */
+export type StreamOwner = { userId: string; sessionId: string };
+/** Every stream of an account, as a password reset ends, or of one sign-in, as signing out does. */
+export type StreamsOf = Pick<StreamOwner, "userId"> | Pick<StreamOwner, "sessionId">;
+
+export const isOneOf = (owner: StreamOwner, streams: StreamsOf) =>
+  "userId" in streams ? owner.userId === streams.userId : owner.sessionId === streams.sessionId;
+
+const sseClients = new Map<string, Map<SSEWriter, StreamOwner>>();
 
 // Far more tabs than anyone keeps open; enough to stop one account holding the server's connections
 // open. One past it is refused rather than closing an older one, whose EventSource would reconnect
@@ -18,9 +26,9 @@ const MAX_STREAMS_PER_USER = 100;
 export const hasRoomForStream = (userId: string) =>
   (sseClients.get(userId)?.size ?? 0) < MAX_STREAMS_PER_USER;
 
-export const registerClient = (userId: string, writer: SSEWriter) => {
-  if (!sseClients.has(userId)) sseClients.set(userId, new Set());
-  sseClients.get(userId)!.add(writer);
+export const registerClient = (owner: StreamOwner, writer: SSEWriter) => {
+  if (!sseClients.has(owner.userId)) sseClients.set(owner.userId, new Map());
+  sseClients.get(owner.userId)!.set(writer, owner);
 };
 
 export const unregisterClient = (userId: string, writer: SSEWriter) => {
@@ -33,7 +41,7 @@ export const unregisterClient = (userId: string, writer: SSEWriter) => {
 const writeEvents = (events: MutationEvent[], userIds: string[]) => {
   const payloads = events.map((event) => JSON.stringify(event));
   for (const uid of userIds) {
-    for (const client of sseClients.get(uid) ?? []) {
+    for (const client of sseClients.get(uid)?.keys() ?? []) {
       for (const payload of payloads) client.write("data-changed", payload);
     }
   }
@@ -41,7 +49,7 @@ const writeEvents = (events: MutationEvent[], userIds: string[]) => {
 
 export const writeNotification = (userId: string, payload: NotificationPayload) => {
   const data = JSON.stringify(payload);
-  for (const client of sseClients.get(userId) ?? []) client.write(SSE_NOTIFICATION, data);
+  for (const client of sseClients.get(userId)?.keys() ?? []) client.write(SSE_NOTIFICATION, data);
 };
 
 export const notifyMutation = (
@@ -60,9 +68,19 @@ const changeSource = (c: Context): ChangeSource => ({
 
 export const closeAllClients = () => {
   for (const writers of sseClients.values()) {
-    for (const writer of writers) writer.close();
+    for (const writer of writers.keys()) writer.close();
   }
   sseClients.clear();
+};
+
+export const closeStreamsOf = (streams: StreamsOf) => {
+  for (const [userId, writers] of sseClients) {
+    for (const [writer, owner] of writers) {
+      if (!isOneOf(owner, streams)) continue;
+      unregisterClient(userId, writer);
+      writer.close();
+    }
+  }
 };
 
 export const broadcast = (

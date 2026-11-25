@@ -19,6 +19,8 @@ import { sendNotification } from "../notify";
 import { isSignedRevocation } from "../session-revocation";
 import { sendContactChanges } from "./contact-changes";
 import { createLimiter, limitableIp, limitsFor, refuseIfLimited } from "../rate-limit";
+import { closeStreamsOf, type StreamsOf } from "../broadcast";
+import { dropTicketsOf } from "../stream-tickets";
 
 // Plain ASCII, so no one can sign up as a lookalike of someone else's name in another script
 const USERNAME = /^[A-Za-z0-9._-]+$/;
@@ -65,6 +67,11 @@ const revocationSchema = z.object({
   at: z.number(),
   signature: z.string().max(MAX_ID),
 });
+
+const endStreamsOf = (streams: StreamsOf) => {
+  dropTicketsOf(streams);
+  closeStreamsOf(streams);
+};
 
 // Each try costs an argon2 hash, 19 MiB and most of the one CPU, so a flood from one address is cut
 // off whatever the usernames, and guessing one account's password from it is slowed further. Not
@@ -161,7 +168,11 @@ export const authRoutes = new OpenAPIHono()
       const token = extractToken(c.req.raw);
       if (!token) throw new HTTPException(401, { message: UNAUTHORIZED });
       // Only this device's session: the account stays signed in everywhere else
-      await sessionRepo.remove(token);
+      try {
+        await sessionRepo.remove(token);
+      } finally {
+        endStreamsOf({ sessionId: sessionRepo.idOf(token) });
+      }
       return c.json(okBody, 200);
     },
   )
@@ -173,13 +184,14 @@ export const authRoutes = new OpenAPIHono()
       request: jsonBody(revocationSchema),
       responses: { 200: okSchema, 401: "Not signed with this server's database token" },
     }),
-    // reset-password.ts deletes the sessions itself; this only stops this process's cache
-    // vouching for them
+    // reset-password.ts deletes the sessions itself; this stops this process's cache vouching for
+    // them, and ends the streams they opened
     async (c) => {
       const revocation = c.req.valid("json");
       if (!isSignedRevocation(process.env.TURSO_AUTH_TOKEN, revocation))
         throw new HTTPException(401, { message: UNAUTHORIZED });
       sessionRepo.forgetUser(revocation.userId);
+      endStreamsOf({ userId: revocation.userId });
       return c.json(okBody, 200);
     },
   );
