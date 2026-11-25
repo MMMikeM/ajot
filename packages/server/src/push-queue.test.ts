@@ -84,4 +84,15 @@ describe("queueChanges", () => {
       { changed: [{ id: "theirs", by: "Someone" }] },
     ]);
   });
+
+  test("a batch whose devices can't be read is sent once they can, with what came after it", async () => {
+    vi.mocked(findRecipients).mockRejectedValueOnce(new Error("offline"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    queueChanges(["me"], [edit("a")], fromPhone);
+    await vi.advanceTimersByTimeAsync(1_000);
+    queueChanges(["me"], [edit("b")], fromPhone);
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(sentIds()).toEqual([["a", "b"]]);
+  });
 });

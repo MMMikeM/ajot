@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import app from "./app";
 import { closeAllClients } from "./broadcast";
+import { sendRetriesNow } from "./push";
 import { flushPushes } from "./push-queue";
 import { startPurging } from "./purge";
 
@@ -36,12 +37,18 @@ console.log(`Server listening on http://0.0.0.0:${port}`);
 const server = serve({ fetch: app.fetch, port, hostname: "0.0.0.0" });
 startPurging();
 
+const sendWaitingPushes = () => Promise.all([flushPushes(), sendRetriesNow()]);
+
 const shutdown = (signal: string) => {
   console.log(`[${signal}] shutting down`);
   // Close SSE streams first — they hold the server open indefinitely.
   closeAllClients();
-  // Pushes wait a moment to group changes, so send any still waiting first
-  void flushPushes().finally(() => server.close(() => process.exit(0)));
+  // Pushes wait a moment to group changes, and retries wait seconds more, so send them now
+  const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+  void Promise.all([sendWaitingPushes(), closed])
+    // The requests still running when the server began closing have queued theirs since
+    .then(sendWaitingPushes)
+    .finally(() => process.exit(0));
   setTimeout(() => {
     console.error("[shutdown] forced exit after timeout");
     process.exit(1);
