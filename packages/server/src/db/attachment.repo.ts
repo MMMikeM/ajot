@@ -1,4 +1,4 @@
-import { and, eq, getColumns, inArray, isNull, sum } from "drizzle-orm";
+import { and, eq, getColumns, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { z } from "@hono/zod-openapi";
 import { createInsertSchema, createSelectSchema } from "drizzle-orm/zod";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
@@ -11,7 +11,8 @@ import { stampsNotAfterNow } from "./stamps";
 export type Insert = typeof attachments.$inferInsert;
 export type Attachment = Omit<typeof attachments.$inferSelect, "purgedAt">;
 
-const { purgedAt: _purgedAt, ...sentColumns } = getColumns(attachments);
+const columns = getColumns(attachments);
+const { purgedAt: _purgedAt, ...sentColumns } = columns;
 
 export const responseSchema = createSelectSchema(attachments).omit({ purgedAt: true });
 // Its id is in its bucket keys, so nothing in it may change the URL they're part of
@@ -83,23 +84,49 @@ export const uploadedOf = async (taskIds: string[]) =>
         columns: { purgedAt: false },
       });
 
-/** Undefined when the id is taken: the caller reads it to tell a retry from a clash. */
-export const insert = async (data: Insert) => {
+/** Every byte that may still be stored, which only the purge frees. */
+const usageOf = (uploaderId: string) =>
+  db
+    .select({
+      bytes: sql<number>`coalesce(sum(${attachments.size}), 0)`.mapWith(Number).as("bytes"),
+    })
+    .from(attachments)
+    .where(and(eq(attachments.uploaderId, uploaderId), isNull(attachments.purgedAt)));
+
+export const usageFor = async (uploaderId: string) => {
+  const [row] = await usageOf(uploaderId);
+  return row?.bytes ?? 0;
+};
+
+// Through each column's encoder, as .values() binds them: a boolean goes in as 0 or 1
+const boundValues = (data: Insert) =>
+  Object.fromEntries(
+    Object.entries(data)
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value]) => [
+        key,
+        sql`${sql.param(value, columns[key as keyof Insert])}`.as(key),
+      ]),
+  ) as Record<keyof Insert, SQL.Aliased>;
+
+/**
+ * Undefined when the id is taken, or the file would take its uploader past quotaBytes; the
+ * caller reads the id to tell which. One statement, so files added at once can't each see the
+ * room the other takes.
+ */
+export const insertWithinQuota = async (data: Insert, quotaBytes: number) => {
+  const usage = usageOf(data.uploaderId).as("usage");
   const [row] = await db
     .insert(attachments)
-    .values(stampsNotAfterNow(data, ["createdAt", "updatedAt"]))
+    .select((qb) =>
+      qb
+        .select(boundValues(stampsNotAfterNow(data, ["createdAt", "updatedAt"])))
+        .from(usage)
+        .where(sql`${usage.bytes} + ${data.size} <= ${quotaBytes}`),
+    )
     .onConflictDoNothing()
     .returning(sentColumns);
   return row;
-};
-
-/** Every byte that may still be stored, which only the purge frees. */
-export const usageFor = async (uploaderId: string) => {
-  const [row] = await db
-    .select({ bytes: sum(attachments.size).mapWith(Number) })
-    .from(attachments)
-    .where(and(eq(attachments.uploaderId, uploaderId), isNull(attachments.purgedAt)));
-  return row?.bytes ?? 0;
 };
 
 export const update = async (id: string, fields: Partial<Insert>) => {

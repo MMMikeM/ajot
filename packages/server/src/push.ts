@@ -25,6 +25,8 @@ type StoredSubscription = { endpoint: string; p256dh: string; auth: string; crea
 const REGISTERING_FOR_MS = 2 * 60_000;
 const RETRY_DELAYS_MS = [5_000, 15_000, 40_000];
 
+const waitingRetries = new Map<NodeJS.Timeout, () => Promise<unknown>>();
+
 const isRegistering = (sub: StoredSubscription) =>
   Date.now() - Date.parse(sub.createdAt) < REGISTERING_FOR_MS;
 
@@ -86,17 +88,25 @@ export const sendPush = async (
   const transient =
     delayMs === undefined ? [] : failed.filter(({ error }) => isWorthRetrying(error));
 
-  const removed = gone.filter((endpoint) => !registering.some((sub) => sub.endpoint === endpoint));
-  await pushSubscriptionRepo.removeMany([...removed, ...malformed.map(({ endpoint }) => endpoint)]);
-
   const again = subs.filter(
     (sub) =>
       registering.includes(sub) || transient.some(({ endpoint }) => endpoint === sub.endpoint),
   );
   if (delayMs !== undefined && again.length > 0) {
     const waitMs = Math.max(delayMs, ...transient.map(({ error }) => retryAfterMs(error)));
-    setTimeout(() => void sendPush(again, payload, options, attempt + 1), waitMs);
+    const timer = setTimeout(() => {
+      waitingRetries.delete(timer);
+      void retry(again, payload, options, attempt + 1);
+    }, waitMs);
+    // Sent early, it counts as this attempt, so a subscription still registering can't be
+    // deleted for answering 410 before its time
+    waitingRetries.set(timer, () => retry(again, payload, options, attempt));
   }
+
+  const removed = gone.filter((endpoint) => !registering.some((sub) => sub.endpoint === endpoint));
+  await pushSubscriptionRepo
+    .removeMany([...removed, ...malformed.map(({ endpoint }) => endpoint)])
+    .catch((err: unknown) => console.error("[push] couldn't remove gone subscriptions:", err));
 
   const logged = failed.filter(({ error }) => !(error instanceof InvalidSubscriptionError));
   if (logged.length > 0) {
@@ -107,6 +117,26 @@ export const sendPush = async (
   }
   return delivered;
 };
+
+const retry = (
+  subs: StoredSubscription[],
+  message: PushMessage,
+  options: SendPushOptions | undefined,
+  attempt: number,
+) =>
+  sendPush(subs, message, options, attempt).catch((err: unknown) =>
+    console.error(`Push [${message.type}] retry failed:`, err),
+  );
+
+/** For a server about to stop: send the retries now, rather than after it's gone. */
+export const sendRetriesNow = () =>
+  Promise.all(
+    [...waitingRetries].map(([timer, send]) => {
+      clearTimeout(timer);
+      waitingRetries.delete(timer);
+      return send();
+    }),
+  );
 
 export const findRecipients = async (userIds: string[]) => {
   const [subs, preferences] = await Promise.all([

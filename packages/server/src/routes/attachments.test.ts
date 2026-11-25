@@ -132,6 +132,13 @@ describe("adding", () => {
     expect((await as("alice").add("more", { size: 600 * 1024 })).status).toBe(413);
     expect((await as("bob").add("bobs", { size: 600 * 1024 })).status).toBe(200);
   });
+
+  test("two files sent at once can't both fit in what's left of the quota", async () => {
+    const statuses = await Promise.all(
+      ["one", "two"].map(async (id) => (await as("alice").add(id, { size: 600 * 1024 })).status),
+    );
+    expect(statuses.sort((a, b) => a - b)).toEqual([200, 413]);
+  });
 });
 
 describe("uploading", () => {

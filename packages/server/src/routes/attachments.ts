@@ -31,6 +31,7 @@ const ATTACHMENTS_OFF = "This server doesn't take attachments.";
 const ATTACHMENT_DELETED = "That file was deleted.";
 const TASK_DELETED = "That task was deleted.";
 const NOT_UPLOADED = "The file didn't finish uploading. Try again.";
+const OVER_QUOTA = `That's over your ${ATTACHMENT_QUOTA_BYTES / MB} MB of files.`;
 
 const uploadUrlRequestSchema = attachmentRepo.idSchema
   .extend({ thumbSize: z.number().int().positive().max(MAX_THUMB_BYTES).optional() })
@@ -126,10 +127,16 @@ export const attachmentRoutes = authed()
         throw new TooLargeError(`A file can be at most ${MAX_ATTACHMENT_BYTES / MB} MB.`);
       await requireLiveTask(data.taskId, userId);
       if ((await attachmentRepo.usageFor(userId)) + data.size > ATTACHMENT_QUOTA_BYTES)
-        throw new TooLargeError(`That's over your ${ATTACHMENT_QUOTA_BYTES / MB} MB of files.`);
+        throw new TooLargeError(OVER_QUOTA);
       limitAttaching(userId);
-      const result = await attachmentRepo.insert({ ...data, uploaderId: userId });
-      if (!result) throw new IdTakenError("attachment", data.id);
+      const result = await attachmentRepo.insertWithinQuota(
+        { ...data, uploaderId: userId },
+        ATTACHMENT_QUOTA_BYTES,
+      );
+      if (!result) {
+        if (await attachmentRepo.find(data.id)) throw new IdTakenError("attachment", data.id);
+        throw new TooLargeError(OVER_QUOTA);
+      }
       broadcast(c, "attachments", "insert", result, [userId]);
       return c.json(result, 200);
     },

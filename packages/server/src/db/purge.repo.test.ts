@@ -326,6 +326,35 @@ describe("purging attachments", () => {
       purged_at: null,
     });
   });
+
+  test("an upload finished while the purge runs keeps its bytes, or loses its row with them", async () => {
+    db.insert(attachments)
+      .values({
+        id: "att-racing",
+        taskId: "live",
+        uploaderId: "bob",
+        name: "f",
+        mimeType: "x",
+        size: 1,
+        createdAt: twoDaysAgo,
+      })
+      .run();
+    stored("u/a/att-racing");
+    const completing = {
+      ...bucket,
+      remove: async (key: string) => {
+        if (key === "a/att-racing") {
+          objects.set(key, hoursFromNow(0));
+          sqlite.exec(`UPDATE attachments SET uploaded_at = '${hoursFromNow(0)}'
+            WHERE id = 'att-racing'`);
+        }
+        return bucket.remove(key);
+      },
+    };
+    await purgeExpired(db, completing);
+    const row = sqlite.prepare("SELECT uploaded_at FROM attachments WHERE id = 'att-racing'").get();
+    expect(row === undefined || objects.has("a/att-racing")).toBe(true);
+  });
 });
 
 test("leaves no row pointing at one that's gone", () => {

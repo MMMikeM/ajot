@@ -84,22 +84,21 @@ const purgeDeletedAttachments = async (database: Database, bucket: Bucket, cutof
   return ids;
 };
 
-/** None of its bytes was confirmed, so there's no tombstone to keep. */
-const purgeUnfinishedAttachments = async (database: Database, bucket: Bucket) => {
-  const ids = await removeBytes(
+/**
+ * None of its bytes was confirmed, so there's no tombstone to keep. The row goes before its
+ * bytes, so a /complete that lands meanwhile keeps both; one that copies after the row is gone
+ * leaves bytes no row owns, for purgeStrayObjects.
+ */
+const purgeUnfinishedAttachments = async (database: Database, bucket: Bucket) =>
+  removeBytes(
     bucket,
     await idsOf(
-      database.all<{ id: string }>(sql`SELECT ${attachments.id} FROM ${attachments}
+      database.all<{ id: string }>(sql`DELETE FROM ${attachments}
         WHERE ${attachments.uploadedAt} IS NULL
-          AND ${attachments.createdAt} < ${hoursFromNow(-KEEP_UNFINISHED_HOURS)}`),
+          AND ${attachments.createdAt} < ${hoursFromNow(-KEEP_UNFINISHED_HOURS)}
+        RETURNING ${attachments.id}`),
     ),
   );
-  if (ids.length > 0)
-    await database.all(sql`DELETE FROM ${attachments}
-      WHERE ${inArray(attachments.id, ids)} AND ${attachments.uploadedAt} IS NULL
-      RETURNING ${attachments.id}`);
-  return ids;
-};
 
 /**
  * An upload's staged copy, or bytes whose row is gone or was never confirmed, as a step above
