@@ -14,7 +14,7 @@ import { createBackoff } from "~/lib/sync/backoff";
 import { getBuildTarget } from "~/lib/build-target";
 import { getServerUrl } from "~/lib/server-url";
 import { client } from "~/lib/api";
-import { eventStreamUrl } from "~/lib/sync/stream-url";
+import { eventStreamUrl, openEventStream } from "~/lib/sync/stream-url";
 import { ext } from "~/lib/ext";
 import { SSE_DATA_CHANGED, MSG_GET_STATUS, MSG_BG_STATUS, MSG_SYNC_ALL } from "~/lib/constants";
 import type { ModelName, MutationEvent } from "~/lib/constants";
@@ -25,7 +25,7 @@ import { trackSyncState, type SyncState } from "~/lib/sync/sync-state";
 import { shareSessionWithWorker } from "~/lib/sync/worker-session";
 import { checkForUpdate } from "~/lib/sync/register-sw";
 
-let es: EventSource | null = null;
+let stream: ReturnType<typeof openEventStream> | null = null;
 // Bumped by each connect and disconnect: a connect still waiting for its ticket opens nothing once
 // a later one has started, or the page has gone offline
 let connectAttempt = 0;
@@ -138,8 +138,8 @@ const sseBackoff = createBackoff(() => void connectSSE());
 const disconnectSSE = () => {
   connectAttempt++;
   sseBackoff.cancel();
-  es?.close();
-  es = null;
+  stream?.close();
+  stream = null;
 };
 
 const connectSSE = async () => {
@@ -162,26 +162,26 @@ const connectSSE = async () => {
     return;
   }
   if (attempt !== connectAttempt) return;
-  const source = new EventSource(url);
-  es = source;
-  source.addEventListener(SSE_DATA_CHANGED, (e: MessageEvent) => {
-    handleSSEData(e.data);
-  });
-  source.addEventListener("open", () => {
-    ownSyncState.opened();
-    sseBackoff.reset();
-    refetchAll();
-    // A deploy restarts the server, which drops the stream, so its reopening is the first sign of one
-    if (streamWasOpen) checkForUpdate();
-    streamWasOpen = true;
-  });
-  source.addEventListener("error", () => {
-    if (es !== source) return;
-    ownSyncState.failed();
-    if (source.readyState !== EventSource.CLOSED) return;
-    es = null;
-    sseBackoff.schedule();
-  });
+  stream = openEventStream(
+    url,
+    {
+      [SSE_DATA_CHANGED]: (e) => handleSSEData(e.data),
+      open: () => {
+        ownSyncState.opened();
+        sseBackoff.reset();
+        refetchAll();
+        // A deploy restarts the server, which drops the stream, so its reopening is the first sign
+        // of one
+        if (streamWasOpen) checkForUpdate();
+        streamWasOpen = true;
+      },
+    },
+    () => {
+      stream = null;
+      ownSyncState.failed();
+      sseBackoff.schedule();
+    },
+  );
 };
 
 const restartSSE = () => {
@@ -201,7 +201,7 @@ const listenNetworkChanges = () => {
     ownSyncState.stopped();
   });
   window.addEventListener("online", () => {
-    if (es && es.readyState !== EventSource.CLOSED) return;
+    if (stream) return;
     restartSSE();
   });
 };
@@ -218,7 +218,7 @@ const listenExtensionMessages = () => {
     } else if (msg?.type === MSG_SYNC_ALL) {
       if (backgroundHoldsSse()) syncStateStore.set("connected");
       // A tab with its own open SSE stream already applied the change this push announces.
-      else if (es?.readyState === EventSource.OPEN) return;
+      else if (stream?.isOpen()) return;
       refetchAll();
     }
   });
@@ -233,7 +233,7 @@ const listenSwMessages = () => {
 export const initSync = () => {
   const target = getBuildTarget();
   if (target === "browser" || (target === "extension" && !backgroundHoldsSse())) {
-    if (!es && getAuthToken()) void connectSSE();
+    if (!stream && getAuthToken()) void connectSSE();
     subscribeAuthToken(reconnect);
     listenNetworkChanges();
   }

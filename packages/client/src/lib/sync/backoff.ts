@@ -2,8 +2,8 @@ const MIN_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 60_000;
 
 /**
- * EventSource retries network errors itself, but an HTTP error response (a 502 from Fly's proxy
- * while the machine resumes or redeploys) closes it for good, so the caller has to reconnect.
+ * The caller reconnects after every error instead of EventSource retrying, since a ticket is
+ * spent once used; this spaces those attempts while the server is down or redeploying.
  */
 export const createBackoff = (retry: () => void) => {
   let delayMs = MIN_RETRY_MS;

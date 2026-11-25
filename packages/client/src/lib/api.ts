@@ -2,7 +2,7 @@ import { apiClient } from "~/lib/api-client";
 import { getAuthToken } from "~/lib/auth/token";
 import { expireSession } from "~/lib/auth/session";
 import { clientId } from "~/lib/client-id";
-import { getOrCreateDeviceId } from "~/lib/auth/current-user";
+import { getOrCreateDeviceId } from "~/lib/auth/device-id";
 import { getBuildTarget } from "~/lib/build-target";
 import { getServerUrl } from "~/lib/server-url";
 import { markStartup } from "~/lib/startup-timing";
