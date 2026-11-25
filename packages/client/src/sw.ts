@@ -4,6 +4,7 @@ import { cleanupOutdatedCaches, matchPrecache, precacheAndRoute } from "workbox-
 import { registerRoute, NavigationRoute } from "workbox-routing";
 import { NetworkFirst, CacheFirst } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
+import { serializeSubscription, subscribe, unsubscribe } from "@mmmike/web-push/client";
 import {
   toNotification,
   type PushMessage,
@@ -12,11 +13,12 @@ import {
 import { MSG_BUILD_VERSION, MSG_SYNC_ALL } from "@newtab-todo/shared/constants";
 import { createPrewarm, filesRunOf } from "~/lib/sync/prewarm";
 import { syncFiles } from "~/lib/files/file-job";
-import { readWorkerSession } from "~/lib/sync/worker-session";
+import { readWorkerSession, workerSignedOut } from "~/lib/sync/worker-session";
 import { createUploadSender } from "~/lib/files/sender";
 import { uploadsAwaitRetry } from "~/lib/files/uploads";
 import { retryWaitingNow } from "~/lib/files/store";
 import { apiClient, succeeded } from "~/lib/api-client";
+import { fetchServerConfig } from "~/lib/server-config";
 import { loadSnapshotEntry } from "~/lib/snapshot-store";
 import { keepShare } from "~/lib/share-store";
 import { SHARED_TEXT_FIELDS, type SharedText } from "@newtab-todo/shared/share-target";
@@ -205,29 +207,79 @@ const show = async (incoming: ShownNotification) => {
   });
 };
 
-// Push: web subscriptions only receive visible notifications; silent sync goes to extensions.
-self.addEventListener("push", (event: PushEvent) => {
-  const payload = event.data?.json() as PushMessage | undefined;
-  if (!payload?.type) return;
-
+const handlePush = (payload: PushMessage) => {
   const received = openPages().then((pages) =>
     count(`push-received:${payload.type}:${stateOf(pages)}`),
   );
   const notification = toNotification(payload);
-  if (!notification) return event.waitUntil(received);
+  if (!notification) return received;
 
-  event.waitUntil(
-    Promise.all([
-      received,
-      show(notification),
-      self.clients.matchAll().then((clients) => {
-        for (const client of clients) {
-          client.postMessage({ type: MSG_SYNC_ALL });
-        }
-      }),
-      prewarm(payload.rows),
-      sendSmallUploads(),
-    ]),
+  return Promise.all([
+    received,
+    show(notification),
+    self.clients.matchAll().then((clients) => {
+      for (const client of clients) {
+        client.postMessage({ type: MSG_SYNC_ALL });
+      }
+    }),
+    prewarm(payload.rows),
+    sendSmallUploads(),
+  ]);
+};
+
+/**
+ * A web push must show a notification, or the browser shows its own and Safari revokes the
+ * permission, but not the account's changes to whoever uses the device now. Each one replaces the
+ * last without a sound, until the push service stops delivering to the ended subscription; the
+ * server drops it as gone on its next send.
+ */
+const endSignedOutPush = async () => {
+  await self.registration.showNotification("Signed out", {
+    body: "Sign in to get notifications again.",
+    icon: ICON,
+    tag: "signed-out",
+    silent: true,
+    data: { url: "/" },
+  });
+  await unsubscribe({ registration: self.registration });
+};
+
+const answerPush = async (payload: PushMessage) => {
+  if (await workerSignedOut().catch(() => false)) return endSignedOutPush();
+  await handlePush(payload);
+};
+
+// Push: web subscriptions only receive visible notifications; silent sync goes to extensions.
+self.addEventListener("push", (event: PushEvent) => {
+  const payload = event.data?.json() as PushMessage | undefined;
+  if (!payload?.type) return;
+  event.waitUntil(answerPush(payload));
+});
+
+/**
+ * Uploads the subscription the browser replaced this one with, or makes one: with no page open,
+ * nothing else would tell the server where this device's pushes go now. A failed upload is sent
+ * again by the next page opened (lib/sync/push.ts).
+ */
+const resubscribe = async () => {
+  const session = await readWorkerSession();
+  if (!session) return;
+  const { vapidPublicKey } = await fetchServerConfig(session.serverUrl);
+  // Keeps the browser's replacement when it has one under the server's key
+  const result = await subscribe(vapidPublicKey, { registration: self.registration });
+  if (result.status !== "subscribed") throw new Error(`push ${result.status}`);
+  await succeeded(
+    apiClient(session).api.push.subscribe.$post({
+      query: {},
+      header: session.deviceId ? { "x-device-id": session.deviceId } : {},
+      json: serializeSubscription(result.subscription),
+    }),
+  );
+};
+
+self.addEventListener("pushsubscriptionchange", (event) => {
+  (event as ExtendableEvent).waitUntil(
+    resubscribe().catch((err) => console.error("[sw] couldn't resubscribe:", err)),
   );
 });
 

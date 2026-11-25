@@ -5,7 +5,7 @@ import {
 } from "@mmmike/web-push/client";
 import { apiHeaders, client } from "~/lib/api";
 import { apiClient, succeeded } from "~/lib/api-client";
-import { getOrCreateDeviceId } from "~/lib/auth/current-user";
+import { getOrCreateDeviceId } from "~/lib/auth/device-id";
 import { getAuthToken } from "~/lib/auth/token";
 import { fetchServerConfig } from "~/lib/server-config";
 import { getServerUrl } from "~/lib/server-url";

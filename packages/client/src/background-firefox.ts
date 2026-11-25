@@ -7,7 +7,7 @@ import {
   MSG_BG_STATUS,
 } from "~/lib/constants";
 import { createBackoff } from "~/lib/sync/backoff";
-import { eventStreamUrl } from "~/lib/sync/stream-url";
+import { eventStreamUrl, openEventStream } from "~/lib/sync/stream-url";
 import { trackSyncState } from "~/lib/sync/sync-state";
 import { getStoredSession, notifyTabs } from "~/lib/ext";
 import { sendMenuShares, setupContextMenu } from "~/lib/context-menu";
@@ -60,7 +60,7 @@ browser.notifications?.onClicked.addListener((id) => {
 });
 browser.notifications?.onClosed.addListener((id) => notificationUrls.delete(id));
 
-let eventSource: EventSource | null = null;
+let stream: ReturnType<typeof openEventStream> | null = null;
 let connectAttempt = 0;
 
 // No open tab is listening when the page sends this, so it rejects
@@ -75,8 +75,8 @@ const backoff = createBackoff(() => {
 const disconnect = () => {
   connectAttempt++;
   backoff.cancel();
-  eventSource?.close();
-  eventSource = null;
+  stream?.close();
+  stream = null;
 };
 
 const connect = async () => {
@@ -107,50 +107,44 @@ const connect = async () => {
     return;
   }
   if (attempt !== connectAttempt) return;
-  const source = new EventSource(url);
-  eventSource = source;
-
-  source.addEventListener(SSE_DATA_CHANGED, (e: MessageEvent) => {
-    console.log("[bg-sse] data-changed event received");
-    schedulePrewarm();
-    if (e.data) {
-      try {
-        const payload = JSON.parse(e.data);
-        browser.runtime.sendMessage({ type: "SSE_MUTATION", payload }).catch(() => {});
-        return;
-      } catch {}
-    }
-    void notifyTabs();
-  });
-
-  source.addEventListener(SSE_NOTIFICATION, (e: MessageEvent) => {
-    try {
-      showNotification(JSON.parse(e.data) as PushPayload).catch(console.error);
-    } catch (err) {
-      console.error("[bg-sse] unreadable notification:", err);
-    }
-  });
-
-  source.addEventListener("open", () => {
-    console.log("[bg-sse] connected");
-    syncState.opened();
-    backoff.reset();
-    void notifyTabs();
-    schedulePrewarm();
-    void sendWaitingNow();
-  });
-
-  source.onerror = () => {
-    if (eventSource !== source) return;
-    syncState.failed();
-    if (source.readyState !== EventSource.CLOSED) {
-      console.log("[bg-sse] connection error, will auto-reconnect");
-      return;
-    }
-    eventSource = null;
-    const delayMs = backoff.schedule();
-    if (delayMs !== null) console.log(`[bg-sse] connection closed, retrying in ${delayMs / 1000}s`);
-  };
+  stream = openEventStream(
+    url,
+    {
+      [SSE_DATA_CHANGED]: (e) => {
+        console.log("[bg-sse] data-changed event received");
+        schedulePrewarm();
+        if (e.data) {
+          try {
+            const payload = JSON.parse(e.data);
+            browser.runtime.sendMessage({ type: "SSE_MUTATION", payload }).catch(() => {});
+            return;
+          } catch {}
+        }
+        void notifyTabs();
+      },
+      [SSE_NOTIFICATION]: (e) => {
+        try {
+          showNotification(JSON.parse(e.data) as PushPayload).catch(console.error);
+        } catch (err) {
+          console.error("[bg-sse] unreadable notification:", err);
+        }
+      },
+      open: () => {
+        console.log("[bg-sse] connected");
+        syncState.opened();
+        backoff.reset();
+        void notifyTabs();
+        schedulePrewarm();
+        void sendWaitingNow();
+      },
+    },
+    () => {
+      stream = null;
+      syncState.failed();
+      const delayMs = backoff.schedule();
+      if (delayMs !== null) console.log(`[bg-sse] connection lost, retrying in ${delayMs / 1000}s`);
+    },
+  );
 };
 
 browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
@@ -171,7 +165,7 @@ addEventListener("offline", () => {
   syncState.stopped();
 });
 addEventListener("online", () => {
-  if (eventSource && eventSource.readyState !== EventSource.CLOSED) return;
+  if (stream) return;
   console.log("[bg-sse] back online, reconnecting");
   backoff.reset();
   syncState.restart();
