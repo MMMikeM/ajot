@@ -10,19 +10,17 @@ on:
     paths: ["android/**", ".github/workflows/android.yml"]
   workflow_dispatch:
   workflow_call:
-    inputs:
-      tag:
-        type: string
-        required: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   apk:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       # Android refuses an update whose versionCode isn't higher, so it grows with the version
       - name: Version
@@ -73,16 +71,7 @@ jobs:
           apksigner="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner"
           "$apksigner" verify --print-certs ajot-*.apk | grep SHA-256 | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - if: ${{ !inputs.tag }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ajot-android
           path: ajot-*.apk
-
-      # One APK per release, which Obtainium needs to update in the background
-      - if: ${{ inputs.tag }}
-        name: Attach to the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
-        run: gh release upload "$TAG" ajot-*.apk

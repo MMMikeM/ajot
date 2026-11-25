@@ -66,7 +66,7 @@ pnpm dev
 
 The server is Hono and Drizzle on Turso. The client is React 19 with TanStack Router, DB and Query, and a Workbox service worker. Vite+ runs the monorepo's tasks. Pushes to `main` deploy through CI once the tests pass.
 
-To release the extensions, bump `version` in `packages/client/package.json`, merge it, and push a matching tag (`git tag v1.2.0 origin/main && git push origin v1.2.0`). `.github/workflows/release.yml` builds both and attaches them, with the source, to a GitHub release. With `AMO_API_KEY` and `AMO_API_SECRET` set as repository secrets (an API key from addons.mozilla.org), it signs the Firefox add-on for self-distribution and attaches the `updates.json` an installed copy checks, so Firefox updates to it within a day; without them the Firefox zip only loads as a temporary add-on.
+To release the extensions, bump `version` in `packages/client/package.json`, merge it, and once its Deploy run has deployed it, push a matching tag (`git tag v1.2.0 origin/main && git push origin v1.2.0`). A tag on a commit that isn't on `main`, or that production doesn't run, fails. `.github/workflows/release.yml` builds both extensions and the Android app and publishes them, with the source, as a GitHub release once every file is ready. It signs the Firefox add-on for self-distribution with `AMO_API_KEY` and `AMO_API_SECRET`, repository secrets (an API key from addons.mozilla.org) the release fails without, and attaches the `updates.json` an installed copy checks, so Firefox updates to it within a day.
 
 ## License
 
