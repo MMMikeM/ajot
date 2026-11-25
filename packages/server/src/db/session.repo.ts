@@ -83,9 +83,12 @@ export const findValid = async (token: string) => {
   return session;
 };
 
+/** The id `findValid` gives the token's session. */
+export const idOf = (token: string) => hashToken(token);
+
 // Forgotten even if the delete fails: one that fails in transit may still have been applied
 export const remove = async (token: string) => {
-  const id = hashToken(token);
+  const id = idOf(token);
   try {
     await db.delete(sessions).where(inArray(sessions.id, storedIds(token)));
   } finally {

@@ -6,8 +6,13 @@ import { route, type RouteOf, type ShorthandRoute } from "./routes/crud";
 import { ForbiddenError, UNAUTHORIZED } from "./db/errors";
 import { mayCall, widgetMayCall, type McpCaller } from "./mcp/caller";
 import * as mcpTokenRepo from "./db/mcp-token.repo";
+import * as sessionRepo from "./db/session.repo";
 
-export type AuthEnv = { Bindings: { mcpCaller?: McpCaller }; Variables: { userId: string } };
+export type AuthEnv = {
+  Bindings: { mcpCaller?: McpCaller };
+  // Set only for a request made with a session token
+  Variables: { userId: string; sessionId?: string };
+};
 
 const authMiddleware: MiddlewareHandler<AuthEnv> = async (c, next) => {
   const caller = c.env?.mcpCaller;
@@ -31,6 +36,7 @@ const authMiddleware: MiddlewareHandler<AuthEnv> = async (c, next) => {
     return next();
   }
   c.set("userId", await validateSession(token));
+  c.set("sessionId", sessionRepo.idOf(token));
   await next();
 };
 
