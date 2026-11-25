@@ -2,16 +2,21 @@ import { ComponentProps } from "react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { isSortableOperation } from "@dnd-kit/react/sortable";
 import { keyAt } from "@newtab-todo/shared/sort-order";
+import { canEditTask } from "@newtab-todo/shared/task-access";
 import { updateTask, updateCategory, moveToList } from "~/lib/db/hooks";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { listChoices } from "~/lib/effective-category";
-import { categoriesById } from "~/lib/task-holders";
+import { categoriesById, holders } from "~/lib/task-holders";
 import { toastManager } from "~/lib/undo-toast";
 import { CATEGORY_DROP_PREFIX } from "~/lib/constants";
 import type { Task, Category } from "~/lib/types";
 
 type DragEndEvent = Parameters<
   NonNullable<ComponentProps<typeof DragDropProvider>["onDragEnd"]>
+>[0];
+
+type DragOverEvent = Parameters<
+  NonNullable<ComponentProps<typeof DragDropProvider>["onDragOver"]>
 >[0];
 
 interface Params {
@@ -30,7 +35,15 @@ export const useTaskActions = ({
   const userId = useOptimisticUserId();
   const lists = categoriesById(categories);
 
-  const handleReorder = (taskId: string, newIndex: number, groupTasks: Task[]) => {
+  const canReorder = (task: Task | undefined, parent?: Task) =>
+    !!task && canEditTask(holders(task, lists, parent), userId);
+
+  const handleReorder = (taskId: string, newIndex: number, groupTasks: Task[], parent?: Task) => {
+    const task = groupTasks.find((t) => t.id === taskId);
+    if (!canReorder(task, parent)) {
+      toastManager.add({ title: "You can only view this task." });
+      return;
+    }
     const others = groupTasks.filter((t) => t.id !== taskId).map((t) => t.sortOrder);
     updateTask(taskId, { sortOrder: keyAt(others, newIndex) });
   };
@@ -38,6 +51,14 @@ export const useTaskActions = ({
   const handleReorderCategory = (catId: string, newIndex: number, cats: Category[]) => {
     const others = cats.filter((c) => c.id !== catId).map((c) => c.sortOrder);
     updateCategory(catId, { sortOrder: keyAt(others, newIndex) });
+  };
+
+  // A task the user can only view still drags, to file their share of it in a list of their own,
+  // but its row mustn't move among the others: dnd-kit puts a moved row back only on a cancel
+  const handleDragOver = (event: DragOverEvent) => {
+    const { source } = event.operation;
+    if (source?.type !== "task") return;
+    if (!canReorder(activeTasks.find((t) => t.id === String(source.id)))) event.preventDefault();
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -69,10 +90,12 @@ export const useTaskActions = ({
         }
       } else if (source.type === "subtask") {
         // Done subtasks aren't in the list, so the drop index counts only the open ones
-        const siblings = getSubtasks(String(source.group)).filter((t) => t.status !== "done");
+        const parentId = String(source.group);
+        const siblings = getSubtasks(parentId).filter((t) => t.status !== "done");
         const newIndex = siblings.findIndex((t) => t.id === targetId);
         if (newIndex !== -1 && String(source.id) !== targetId) {
-          handleReorder(String(source.id), newIndex, siblings);
+          const parent = activeTasks.find((t) => t.id === parentId);
+          handleReorder(String(source.id), newIndex, siblings, parent);
         }
       } else {
         const newIndex = activeTasks.findIndex((t) => t.id === targetId);
@@ -83,5 +106,5 @@ export const useTaskActions = ({
     }
   };
 
-  return { handleDragEnd };
+  return { handleDragOver, handleDragEnd };
 };

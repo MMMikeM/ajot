@@ -12,7 +12,7 @@ import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { compareSortOrder } from "@newtab-todo/shared/sort-order";
 import { useTasks, useCategories } from "~/lib/db/hooks";
-import { useActiveCategoryId } from "~/lib/state/active-category";
+import { useOpenListId } from "~/lib/state/active-category";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { getEffectiveCategoryId } from "~/lib/effective-category";
 import { categoriesById } from "~/lib/task-holders";
@@ -251,7 +251,7 @@ const groupSubtasks = (tasks: Task[]) => {
 export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => void }) {
   const { data: allTasks, isLoading: tasksLoading } = useTasks();
   const { data: rawCategories, isLoading: categoriesLoading } = useCategories();
-  const activeCategoryId = useActiveCategoryId();
+  const activeCategoryId = useOpenListId();
   // Optimistic id falls back to the device id, so signed-out tasks (stamped with
   // that id by addTask) still count as owned and show up in the list.
   const userId = useOptimisticUserId();
@@ -300,7 +300,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
     doneRowFocus.setRows(doneRowIds);
   }, [activeRowFocus, doneRowFocus, activeRowIds, doneRowIds]);
 
-  const { handleDragEnd } = useDndActions({
+  const { handleDragOver, handleDragEnd } = useDndActions({
     categories,
     activeCategoryId,
     activeTasks,
@@ -324,7 +324,7 @@ export function TaskView({ onSelectTask }: { onSelectTask: (taskId: string) => v
   if (isLoading && !hasRows) return <TaskRowsSkeleton />;
 
   return (
-    <DragDropProvider onDragEnd={handleDragEnd}>
+    <DragDropProvider onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
       <FlipList list={columnRef} resetKey={activeCategoryId}>
         <div ref={columnRef} className="flex flex-1 flex-col gap-4">
           <FlipList list={activeListRef} resetKey={activeCategoryId} arrivals>

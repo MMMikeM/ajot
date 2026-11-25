@@ -7,7 +7,7 @@ import { usePeople } from "~/lib/hooks/use-people";
 import { CollabBadge } from "~/components/category-nav/CollabBadge";
 import { addTask } from "~/lib/db/add-task";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
-import { useActiveCategoryId } from "~/lib/state/active-category";
+import { useOpenListId } from "~/lib/state/active-category";
 import { useNavContext } from "~/lib/state/nav-context";
 import { INBOX_COLOR } from "~/lib/constants";
 import { ColorDot } from "~/components/ui/color-dot";
@@ -34,7 +34,7 @@ const useInputBarHeightVar = () => {
 };
 
 export function TaskInputBar() {
-  const activeCategoryId = useActiveCategoryId();
+  const openListId = useOpenListId();
   const currentUserId = useOptimisticUserId();
   const { data: rawCategories } = useCategories();
   const people = usePeople();
@@ -47,8 +47,8 @@ export function TaskInputBar() {
   const { setNavOpen } = useNavContext();
   const barRef = useInputBarHeightVar();
 
-  const activeCategory = activeCategoryId
-    ? ((rawCategories ?? []).find((c) => c.id === activeCategoryId) ?? null)
+  const activeCategory = openListId
+    ? ((rawCategories ?? []).find((c) => c.id === openListId) ?? null)
     : null;
 
   const listName = activeCategory?.name ?? "Inbox";
@@ -62,7 +62,7 @@ export function TaskInputBar() {
     // the input off screen, every add.
     if (matchMedia("(pointer: coarse)").matches) revealWhenShown(id);
     setAdded((prev) => ({ count: prev.count + 1, listName }));
-    void addTask(title, activeCategoryId ?? null, null, null, id, shareWith);
+    void addTask(title, openListId, null, null, id, shareWith);
   };
 
   return (

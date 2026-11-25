@@ -1,8 +1,11 @@
 import { CornerDownRight, FileText } from "lucide-react";
+import { canEditTask } from "@newtab-todo/shared/task-access";
 import { Checkbox, checkboxDoneClass } from "~/components/ui/checkbox";
 import { ColorDot } from "~/components/ui/color-dot";
+import { useOptimisticUserId } from "~/lib/auth/current-user";
 import { INBOX_COLOR } from "~/lib/constants";
 import { formatDueDate } from "~/lib/dates";
+import { categoriesById, holders, type CategoriesById } from "~/lib/task-holders";
 import { cn } from "~/lib/utils";
 import type { SearchHit, SearchResults as Results } from "~/lib/search";
 import type { Category, Task } from "~/lib/types";
@@ -19,15 +22,19 @@ const doneDate = (task: Task) =>
 function ResultRow({
   hit,
   list,
+  lists,
   onOpen,
   onToggle,
 }: {
   hit: SearchHit;
   list: ListLabel;
+  lists: CategoriesById;
   onOpen: (taskId: string) => void;
   onToggle: (task: Task) => void;
 }) {
   const { task } = hit;
+  const userId = useOptimisticUserId();
+  const canEdit = canEditTask(holders(task, lists, hit.parent), userId);
   const done = task.status === "done";
   const isSubtask = !!task.parentId;
   const due = !done && task.dueDate ? formatDueDate(task.dueDate) : null;
@@ -39,6 +46,7 @@ function ResultRow({
     >
       <Checkbox
         checked={done}
+        readOnly={!canEdit}
         onCheckedChange={() => onToggle(task)}
         aria-label={task.title}
         // Its target ends where the row's gap does and reaches left instead, as a task row's does
@@ -114,6 +122,7 @@ export function SearchResults({
   onOpen: (taskId: string) => void;
   onToggle: (task: Task) => void;
 }) {
+  const lists = categoriesById(categories);
   const listOf = (listId: string | null): ListLabel => {
     if (listId === null) return { name: "Inbox", color: INBOX_COLOR };
     const category = categories.find((c) => c.id === listId);
@@ -136,6 +145,7 @@ export function SearchResults({
                   key={hit.task.id}
                   hit={hit}
                   list={list}
+                  lists={lists}
                   onOpen={onOpen}
                   onToggle={onToggle}
                 />
@@ -156,6 +166,7 @@ export function SearchResults({
                 key={hit.task.id}
                 hit={hit}
                 list={listOf(hit.listId)}
+                lists={lists}
                 onOpen={onOpen}
                 onToggle={onToggle}
               />

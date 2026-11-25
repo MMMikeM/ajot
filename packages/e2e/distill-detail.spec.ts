@@ -263,6 +263,10 @@ test("a view-only share offers notes and nothing else to change", async ({ page 
   await expect(sheet.getByRole("textbox", { name: "Title" })).toHaveAttribute("readonly", "", {
     timeout: 15000,
   });
+  await expect(sheet.getByRole("checkbox", { name: "Mark done" })).toHaveAttribute(
+    "aria-readonly",
+    "true",
+  );
   await expect(sheet.getByText(/Nov 6/)).toBeVisible();
   await expect(sheet.getByRole("button", { name: "Clear" })).toHaveCount(0);
   await expect(sheet.getByRole("button", { name: /^Due date/ })).toHaveCount(0);
