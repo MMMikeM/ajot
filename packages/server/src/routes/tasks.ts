@@ -328,7 +328,11 @@ export const taskRoutes = authed()
       const checked = await requireTasks([...new Set(ids)], userId, "edit");
       const allowed = checked.flatMap((outcome) => (outcome.refusal ? [] : [outcome]));
       const results = await taskRepo
-        .updateAll(allowed.map((outcome) => outcome.id), updatedAt, { ...stamps, status })
+        .updateAll(
+          allowed.map((outcome) => outcome.id),
+          updatedAt,
+          { ...stamps, status },
+        )
         .catch((err: unknown) => {
           console.error(`[tasks] couldn't change ${allowed.length} tasks' status:`, err);
           return undefined;
