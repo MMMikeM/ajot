@@ -29,6 +29,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       # GitHub lists every commit author and Co-authored-by as a contributor, and a contributor
       # stays listed even after the commits are rewritten
@@ -95,6 +96,8 @@ jobs:
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       # The suite's database and bucket images, pulled while everything else installs rather than
       # once the tests start; api-stack.ts names them
@@ -150,6 +153,8 @@ jobs:
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       # master as of 2026-04-08: the last release, 1.5 from 2024, still runs on Node 20
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
@@ -192,6 +197,8 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
@@ -201,13 +208,6 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-
-      # Once every suite has passed. A migration that fails rolls back and stops the deploy.
-      - name: Migrate the database
-        run: pnpm --filter @newtab-todo/server db:migrate
-        env:
-          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
 
       # master as of 2026-04-08: the last release, 1.5 from 2024, still runs on Node 20
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
@@ -220,12 +220,26 @@ jobs:
           name: client-build
           path: packages/client
 
-      # So the build can pull the server image
+      # So the build can pull the server image and push the release
       - run: flyctl auth docker
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - run: flyctl deploy --local-only --ha=false --build-arg SERVER_IMAGE=registry.fly.io/ajot:server-${{ github.sha }}
+      # Pushed before the migration, so an image that fails to build or push leaves the database as
+      # the running code expects it
+      - name: Build the release image
+        run: |
+          docker build --build-arg SERVER_IMAGE=registry.fly.io/ajot:server-${{ github.sha }} -t registry.fly.io/ajot:release-${{ github.sha }} .
+          docker push registry.fly.io/ajot:release-${{ github.sha }}
+
+      # Once every suite has passed. A migration that fails rolls back and stops the deploy.
+      - name: Migrate the database
+        run: pnpm --filter @newtab-todo/server db:migrate
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+
+      - run: flyctl deploy --ha=false --image registry.fly.io/ajot:release-${{ github.sha }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 

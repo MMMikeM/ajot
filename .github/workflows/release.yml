@@ -7,13 +7,22 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  # The extensions talk to production, so a tag releases only what it already runs
+  gate:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Check the tag matches the version
         id: version
@@ -24,6 +33,37 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check the tag is on main
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$GITHUB_REF_NAME isn't on main"
+            exit 1
+          fi
+
+      # The deploy job rather than the run: a run whose commit main moved past skips it and still
+      # succeeds
+      - name: Check production runs it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?head_sha=$sha&branch=main&event=push" --jq '.workflow_runs[].id')
+          for run in $runs; do
+            deployed=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs" --jq '.jobs[] | select(.name == "deploy" and .conclusion == "success") | .id')
+            [ -n "$deployed" ] && exit 0
+          done
+          echo "::error::No Deploy run has deployed $sha. Once one has, re-run this workflow."
+          exit 1
+
+  # Without the write token, since the dependencies install and web-ext holds the AMO key here
+  extensions:
+    needs: gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
@@ -39,30 +79,25 @@ jobs:
 
       - name: Package
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.gate.outputs.version }}
         run: |
           (cd packages/client/dist-extension/firefox && zip -r -X -q "$OLDPWD/ajot-$VERSION-firefox.zip" .)
           (cd packages/client/dist-extension/chrome && zip -r -X -q "$OLDPWD/ajot-$VERSION-chrome.zip" .)
           git archive --format=zip -o "ajot-$VERSION-source.zip" HEAD
 
-      # A secret can't be read in an `if`, so this says whether there is one
-      - name: Check for an AMO key
-        id: amo
-        env:
-          KEY: ${{ secrets.AMO_API_KEY }}
-        run: echo "configured=${KEY:+yes}" >> "$GITHUB_OUTPUT"
-
       # Release Firefox refuses an unsigned add-on except as a temporary one. Signed for
       # self-distribution ("unlisted"): automatic, with no wait for review and no store listing.
-      # Skipped until the AMO API key is a secret.
       - name: Sign for Firefox
-        if: steps.amo.outputs.configured == 'yes'
         env:
           WEB_EXT_API_KEY: ${{ secrets.AMO_API_KEY }}
           WEB_EXT_API_SECRET: ${{ secrets.AMO_API_SECRET }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.gate.outputs.version }}
         run: |
-          pnpm dlx web-ext@10.8.0 sign --channel=unlisted \
+          if [ -z "$WEB_EXT_API_KEY" ] || [ -z "$WEB_EXT_API_SECRET" ]; then
+            echo "::error::AMO_API_KEY and AMO_API_SECRET must be repository secrets to sign the Firefox add-on"
+            exit 1
+          fi
+          pnpm exec web-ext sign --channel=unlisted \
             --source-dir=packages/client/dist-extension/firefox \
             --upload-source-code="ajot-$VERSION-source.zip" \
             --artifacts-dir=signed
@@ -72,18 +107,35 @@ jobs:
             --arg link "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/ajot-$VERSION-firefox.xpi" \
             '{addons: {"@ajot": {updates: [{version: $version, update_link: $link}]}}}' > updates.json
 
-      - name: Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          files=(ajot-"$VERSION"-*)
-          [ -f updates.json ] && files+=(updates.json)
-          gh release create "$GITHUB_REF_NAME" "${files[@]}" --generate-notes
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: extensions
+          path: |
+            ajot-${{ needs.gate.outputs.version }}-*
+            updates.json
+          if-no-files-found: error
 
   android:
-    needs: release
+    needs: gate
     uses: ./.github/workflows/android.yml
-    with:
-      tag: ${{ github.ref_name }}
     secrets: inherit
+
+  # The only job with the write token, and it runs nothing from the repo. A draft until every file
+  # is attached, so the latest release, whose updates.json installed copies check, is never partial.
+  release:
+    needs: [extensions, android]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: release
+          merge-multiple: true
+
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* --draft --verify-tag --generate-notes
+          gh release edit "$GITHUB_REF_NAME" --draft=false
