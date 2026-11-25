@@ -143,9 +143,7 @@ export const findAllWithAccess = async (ids: string[]) => {
     { task: NonNullable<WithAccess["task"]>; access: WithAccess["access"] }
   >();
   if (ids.length === 0) return found;
-  const rows = await withAccessWhere(
-    and(inArray(taskAccess.taskId, ids), isNull(tasks.deletedAt)),
-  );
+  const rows = await withAccessWhere(and(inArray(taskAccess.taskId, ids), isNull(tasks.deletedAt)));
   for (const { task, ...access } of rows) {
     const entry = found.get(task.id) ?? { task, access: [] };
     entry.access.push(access);

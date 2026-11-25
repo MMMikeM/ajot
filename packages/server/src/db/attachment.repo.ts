@@ -103,10 +103,7 @@ const boundValues = (data: Insert) =>
   Object.fromEntries(
     Object.entries(data)
       .filter(([, value]) => value !== undefined)
-      .map(([key, value]) => [
-        key,
-        sql`${sql.param(value, columns[key as keyof Insert])}`.as(key),
-      ]),
+      .map(([key, value]) => [key, sql`${sql.param(value, columns[key as keyof Insert])}`.as(key)]),
   ) as Record<keyof Insert, SQL.Aliased>;
 
 /**
