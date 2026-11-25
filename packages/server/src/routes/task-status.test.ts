@@ -1,4 +1,6 @@
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
+import { hoursFromNow } from "@newtab-todo/shared/iso";
+import * as inviteTokenRepo from "../db/invite-token.repo";
 import * as taskRepo from "../db/task.repo";
 import * as taskShareRepo from "../db/task-share.repo";
 import * as userRepo from "../db/user.repo";
@@ -110,4 +112,27 @@ describe("an edit to a shared task", () => {
       expect.objectContaining({ type: "task-updated", changes: "new description" }),
     );
   });
+});
+
+test("someone a task is shared with can't assign it to their own contact, who can't see it", async () => {
+  await taskRepo.insert({
+    id: "bobs",
+    userId: "bob",
+    title: "Bob's",
+    createdAt: LONG_AGO,
+    updatedAt: LONG_AGO,
+  });
+  await taskShareRepo.insert({ id: "share-bobs", taskId: "bobs", sharedWithUserId: "alice" });
+  await inviteTokenRepo.consume(await inviteTokenRepo.create("alice", hoursFromNow(1)), "carol");
+  vi.mocked(sendNotification).mockClear();
+
+  const res = await taskRoutes.request("/", {
+    method: "PUT",
+    headers: { authorization: "Bearer token", "content-type": "application/json" },
+    body: JSON.stringify({ id: "bobs", updatedAt: new Date().toISOString(), assigneeId: "carol" }),
+  });
+
+  expect(res.status).toBe(403);
+  expect(sendNotification).not.toHaveBeenCalled();
+  expect((await taskRepo.findListItem("bobs")).assigneeId).toBeNull();
 });

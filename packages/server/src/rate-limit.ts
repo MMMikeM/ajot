@@ -158,6 +158,21 @@ export const mayAnnounceShare = (userId: string) => {
   return true;
 };
 
+// An edit pushes its task's title to everyone else on the task, so a script editing in a loop
+// could keep their phones going with titles it chose
+const notifyingOfEdits = createLimiter({
+  limit: Number(process.env.EDIT_NOTIFICATIONS_PER_10_MINUTES) || 200,
+  windowMs: 10 * 60_000,
+});
+
+/** Counted once per edit that tells anyone. Refusing the edit would lose it, so past the limit it's
+ * still saved, and only not announced. */
+export const mayNotifyOfEdit = (userId: string) => {
+  if (notifyingOfEdits.waitMs(userId) > 0) return false;
+  notifyingOfEdits.count(userId);
+  return true;
+};
+
 const makingTokens = createLimiter({ limit: 10, windowMs: 60 * 60_000 });
 
 export const limitMcpTokens = (userId: string) => {

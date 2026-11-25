@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
-import { BadRequestError, ForbiddenError, ONLY_CONTACTS } from "../db/errors";
+import { BadRequestError, ForbiddenError, ONLY_CONTACTS, StaleUpdateError } from "../db/errors";
 import * as taskRepo from "../db/task.repo";
 import * as taskShareRepo from "../db/task-share.repo";
 import * as contactRepo from "../db/contact.repo";
@@ -13,7 +13,7 @@ import { jsonBody } from "./crud";
 import { idBody } from "../db/field-limits";
 import * as reachRepo from "../db/reach.repo";
 import * as attachmentRepo from "../db/attachment.repo";
-import { audienceOf, markTaskEdited, requireTask } from "./task-users";
+import { audienceOf, markTaskEdited, requireTask, requireTasks } from "./task-users";
 import { sendReachChanges } from "./reach";
 import { inboxOf } from "../widget-inbox";
 import { taskChangeStamps } from "@newtab-todo/shared/task-stamps";
@@ -24,9 +24,8 @@ import {
   MAX_USERNAME,
 } from "@newtab-todo/shared/field-limits";
 import { isoDatetime } from "@newtab-todo/shared/iso-schema";
-import { HTTPException } from "hono/http-exception";
 import { sharePermissions, taskStatuses } from "../db/schema";
-import { limitSharing, mayAnnounceShare } from "../rate-limit";
+import { limitSharing, mayAnnounceShare, mayNotifyOfEdit } from "../rate-limit";
 
 const shareSchema = z.object({
   taskId: z.string().max(MAX_ID),
@@ -73,11 +72,7 @@ const formatDueDate = (dueDate: string) => {
   return Number.isNaN(day.getTime()) ? dueDate : dueDateFormat.format(day);
 };
 
-const canAssign = async (userId: string, assigneeId: string | null | undefined) =>
-  !assigneeId || assigneeId === userId || contactRepo.exists(userId, assigneeId);
-
 const NOT_YOUR_LIST = "That list isn't yours.";
-const NOT_A_CONTACT = "You can only assign tasks to your contacts.";
 const SUBTASK_GOES_WITH_PARENT = "A subtask goes wherever its parent is.";
 
 const syncReminder = (taskId: string, dueDate: string | null) =>
@@ -134,12 +129,13 @@ export const taskRoutes = authed()
       const userId = c.get("userId");
       if (data.parentId && (data.categoryId || sharesAsked.length > 0))
         throw new BadRequestError(SUBTASK_GOES_WITH_PARENT);
+      if (data.assigneeId && data.assigneeId !== userId)
+        throw new BadRequestError("A new task can only be assigned to you.");
 
       // Sent without a sort key, a task goes where the app puts one it adds
-      const [parent, canUseList, mayAssign, sortOrder, contacts] = await Promise.all([
+      const [parent, canUseList, sortOrder, contacts] = await Promise.all([
         data.parentId ? requireTask(data.parentId, userId, "edit") : null,
         data.categoryId ? categoryRepo.canUse(data.categoryId, userId) : true,
-        canAssign(userId, data.assigneeId),
         data.sortOrder === undefined && !data.parentId
           ? taskRepo.nextSortOrder(userId)
           : data.sortOrder,
@@ -150,7 +146,6 @@ export const taskRoutes = authed()
       ]);
       if (parent?.task.parentId) throw new BadRequestError("Subtasks can't have subtasks.");
       if (!canUseList) throw new ForbiddenError(NOT_YOUR_LIST);
-      if (!mayAssign) throw new BadRequestError(NOT_A_CONTACT);
 
       // An older client doesn't send completedAt
       const result = await taskRepo.insert({
@@ -203,12 +198,16 @@ export const taskRoutes = authed()
       const userId = c.get("userId");
 
       const restoring = fields.deletedAt === null;
-      const [{ task, mine, audience }, canUseList, mayAssign] = await Promise.all([
+      const [{ task, mine, audience }, canUseList] = await Promise.all([
         requireTask(id, userId, restoring ? "manage" : "edit", { deleted: restoring }),
         fields.categoryId ? categoryRepo.canUse(fields.categoryId, userId) : true,
-        canAssign(userId, fields.assigneeId),
       ]);
-      if (!mayAssign) throw new BadRequestError(NOT_A_CONTACT);
+      const assigneeChanged =
+        fields.assigneeId !== undefined && fields.assigneeId !== task.assigneeId;
+      if (assigneeChanged && !mine.canDelete)
+        throw new ForbiddenError("Only its owner can assign it.");
+      if (assigneeChanged && fields.assigneeId && !audience.includes(fields.assigneeId))
+        throw new BadRequestError("Share it with them before assigning it to them.");
       // Someone it's shared with files their share instead (PUT /share); anyone else moving it
       // could take it away from its owner or its list's people
       if ("categoryId" in fields && !mine.canDelete)
@@ -248,8 +247,11 @@ export const taskRoutes = authed()
       const changedNotifiable = notifiableFields.filter(
         (f) => fields[f] !== undefined && fields[f] !== task[f],
       );
-      const assigneeChanged = fields.assigneeId && fields.assigneeId !== task.assigneeId;
-      const notifies = changedNotifiable.length > 0 || assigneeChanged;
+      const toldOfAssignment = assigneeChanged && fields.assigneeId !== userId && fields.assigneeId;
+      // Every push about a task replaces the one showing for it, so the assignee is told only that
+      const othersTold = audience.filter((uid) => uid !== userId && uid !== toldOfAssignment);
+      const notifies =
+        !!toldOfAssignment || (changedNotifiable.length > 0 && othersTold.length > 0);
       const actorNameLookup = notifies ? getUserName(userId) : undefined;
       const moving = "categoryId" in fields ? await reachRepo.read({ taskIds: [id] }) : undefined;
       const result = await taskRepo.update(id, updatedAt, { ...stamps, ...fields });
@@ -258,13 +260,18 @@ export const taskRoutes = authed()
       if (task.parentId && stamps.editedAt)
         await markTaskEdited(c, task.parentId, userId, updatedAt);
 
-      if (actorNameLookup) {
+      if (actorNameLookup && mayNotifyOfEdit(userId)) {
         const actorName = await actorNameLookup;
 
-        const allRecipients = audience.filter((uid) => uid !== userId);
-
+        if (toldOfAssignment)
+          sendNotification(toldOfAssignment, {
+            type: "task-assigned",
+            taskId: id,
+            taskTitle: result.title,
+            fromUser: actorName,
+          });
         if (fields.status === "done" && task.status !== "done") {
-          for (const recipientId of allRecipients) {
+          for (const recipientId of othersTold) {
             sendNotification(recipientId, {
               type: "task-completed",
               taskId: id,
@@ -273,21 +280,14 @@ export const taskRoutes = authed()
               byUser: actorName,
             });
           }
-        } else if (assigneeChanged) {
-          sendNotification(fields.assigneeId!, {
-            type: "task-assigned",
-            taskId: id,
-            taskTitle: result.title,
-            fromUser: actorName,
-          });
-        } else if (changedNotifiable.length > 0 && allRecipients.length > 0) {
+        } else if (changedNotifiable.length > 0) {
           const changeDescriptions = changedNotifiable.map((f) => {
             if (f === "title") return "renamed";
             if (f === "description") return "new description";
             if (f === "status") return result.status === "done" ? "marked done" : "reopened";
             return result.dueDate ? `due ${formatDueDate(result.dueDate)}` : "due date removed";
           });
-          for (const recipientId of allRecipients) {
+          for (const recipientId of othersTold) {
             sendNotification(recipientId, {
               type: "task-updated",
               taskId: id,
@@ -325,24 +325,29 @@ export const taskRoutes = authed()
       const userId = c.get("userId");
       const actorNameLookup = getUserName(userId);
       const stamps = taskChangeStamps({ status }, updatedAt);
-      const unique = [...new Set(ids)];
-      const outcomes = await Promise.allSettled(
-        unique.map(async (id) => {
-          const { task, audience } = await requireTask(id, userId, "edit");
-          const result = await taskRepo.update(id, updatedAt, { ...stamps, status });
-          broadcast(c, "tasks", "update", result, audience);
-          return { before: task, result, audience };
-        }),
-      );
+      const checked = await requireTasks([...new Set(ids)], userId, "edit");
+      const allowed = checked.flatMap((outcome) => (outcome.refusal ? [] : [outcome]));
+      const results = await taskRepo
+        .updateAll(allowed.map((outcome) => outcome.id), updatedAt, { ...stamps, status })
+        .catch((err: unknown) => {
+          console.error(`[tasks] couldn't change ${allowed.length} tasks' status:`, err);
+          return undefined;
+        });
+      const resultOf = new Map(results?.map((result) => [result.id, result]));
 
-      const updated = outcomes.flatMap((o) => (o.status === "fulfilled" ? [o.value] : []));
-      const refused = outcomes.flatMap((o, i) => {
-        if (o.status === "fulfilled") return [];
-        const id = unique[i]!;
-        if (o.reason instanceof HTTPException)
-          return [{ id, status: o.reason.status, error: o.reason.message }];
-        console.error(`[tasks] couldn't change ${id}'s status:`, o.reason);
-        return [{ id, status: 500, error: "Couldn't change it. Try again." }];
+      const updated = allowed.flatMap(({ id, task, audience }) => {
+        const result = resultOf.get(id);
+        return result ? [{ before: task, result, audience }] : [];
+      });
+      for (const { result, audience } of updated) broadcast(c, "tasks", "update", result, audience);
+      const refused = checked.flatMap((outcome) => {
+        const { id } = outcome;
+        if (outcome.refusal)
+          return [{ id, status: outcome.refusal.status, error: outcome.refusal.message }];
+        if (!results) return [{ id, status: 500, error: "Couldn't change it. Try again." }];
+        if (resultOf.has(id)) return [];
+        const stale = new StaleUpdateError("task", id);
+        return [{ id, status: stale.status, error: stale.message }];
       });
 
       const changedFor = new Map<string, { id: string; title: string }[]>();
@@ -352,7 +357,7 @@ export const taskRoutes = authed()
           if (recipientId !== userId)
             changedFor.set(recipientId, [...(changedFor.get(recipientId) ?? []), result]);
       }
-      if (changedFor.size > 0) {
+      if (changedFor.size > 0 && mayNotifyOfEdit(userId)) {
         const actorName = await actorNameLookup;
         for (const [recipientId, [first, ...others]] of changedFor) {
           const about = { taskId: first!.id, taskTitle: first!.title, more: others.length };
