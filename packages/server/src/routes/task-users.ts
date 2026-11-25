@@ -2,23 +2,25 @@ import type { Context } from "hono";
 import { widest } from "@newtab-todo/shared/task-access";
 import * as taskRepo from "../db/task.repo";
 import * as categoryRepo from "../db/category.repo";
+import { HTTPException } from "hono/http-exception";
 import { ForbiddenError, NotFoundError } from "../db/errors";
 import { broadcast } from "../broadcast";
 
 export const audienceFrom = (access: taskRepo.AccessRow[]) =>
   widest(access).map((grant) => grant.userId);
 
+type TaskAction = "see" | "edit" | "manage";
+
 /**
  * Someone who can't see it gets the same 404 as for a task that doesn't exist, so its id can't be
  * probed.
  */
-export const requireTask = async (
+const allowedOn = (
   id: string,
   userId: string,
-  action: "see" | "edit" | "manage",
-  { deleted = false } = {},
+  action: TaskAction,
+  { task, access }: taskRepo.WithAccess,
 ) => {
-  const { task, access } = await taskRepo.findWithAccess(id, { deleted });
   const mine = widest(access).find((grant) => grant.userId === userId);
   if (!task || !mine) throw new NotFoundError("task", id);
   if (action === "edit" && !mine.canEdit)
@@ -26,6 +28,28 @@ export const requireTask = async (
   if (action === "manage" && !mine.canDelete)
     throw new ForbiddenError("Only the task's owner can do that.");
   return { task, mine, access, audience: audienceFrom(access) };
+};
+
+export const requireTask = async (
+  id: string,
+  userId: string,
+  action: TaskAction,
+  { deleted = false } = {},
+) => allowedOn(id, userId, action, await taskRepo.findWithAccess(id, { deleted }));
+
+const NOT_FOUND: taskRepo.WithAccess = { task: undefined, access: [] };
+
+/** As `requireTask` for each live task, in one read, with each refusal returned in its place. */
+export const requireTasks = async (ids: string[], userId: string, action: TaskAction) => {
+  const found = await taskRepo.findAllWithAccess(ids);
+  return ids.map((id) => {
+    try {
+      return { id, ...allowedOn(id, userId, action, found.get(id) ?? NOT_FOUND) };
+    } catch (refusal) {
+      if (refusal instanceof HTTPException) return { id, refusal };
+      throw refusal;
+    }
+  });
 };
 
 /** A deleted list has no members, only its owner. */

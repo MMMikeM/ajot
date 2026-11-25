@@ -1,4 +1,4 @@
-import { and, eq, getColumns, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, getColumns, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { keyAfter } from "@newtab-todo/shared/sort-order";
 import { keptSortOrder } from "./sort-key";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
@@ -114,8 +114,8 @@ export const accessTo = async (taskIds: string[]) =>
 export type AccessRow = Awaited<ReturnType<typeof accessTo>>[number];
 
 // Filtered on the view's task_id, so each branch of task_access is an index lookup
-export const findWithAccess = async (id: string, { deleted = false } = {}) => {
-  const rows = await db
+const withAccessWhere = (where: SQL | undefined) =>
+  db
     .select({
       task: sentColumns,
       taskId: taskAccess.taskId,
@@ -125,10 +125,33 @@ export const findWithAccess = async (id: string, { deleted = false } = {}) => {
     })
     .from(taskAccess)
     .innerJoin(tasks, eq(tasks.id, taskAccess.taskId))
-    .where(
-      deleted ? eq(taskAccess.taskId, id) : and(eq(taskAccess.taskId, id), isNull(tasks.deletedAt)),
-    );
-  return { task: rows[0]?.task, access: rows.map(({ task: _task, ...access }) => access) };
+    .where(where);
+
+export const findWithAccess = async (id: string, { deleted = false } = {}) => {
+  const rows = await withAccessWhere(
+    deleted ? eq(taskAccess.taskId, id) : and(eq(taskAccess.taskId, id), isNull(tasks.deletedAt)),
+  );
+  return { task: rows.at(0)?.task, access: rows.map(({ task: _task, ...access }) => access) };
+};
+
+export type WithAccess = Awaited<ReturnType<typeof findWithAccess>>;
+
+/** Live tasks only, keyed by id; one nobody can reach has no entry. */
+export const findAllWithAccess = async (ids: string[]) => {
+  const found = new Map<
+    string,
+    { task: NonNullable<WithAccess["task"]>; access: WithAccess["access"] }
+  >();
+  if (ids.length === 0) return found;
+  const rows = await withAccessWhere(
+    and(inArray(taskAccess.taskId, ids), isNull(tasks.deletedAt)),
+  );
+  for (const { task, ...access } of rows) {
+    const entry = found.get(task.id) ?? { task, access: [] };
+    entry.access.push(access);
+    found.set(task.id, entry);
+  }
+  return found;
 };
 
 // The stamps a client sends that later writes compare against
@@ -165,18 +188,24 @@ export const insertSent = async (data: Insert) => {
 };
 
 export const update = async (id: string, updatedAt: string, fields: Partial<Insert>) => {
+  const [row] = await updateAll([id], updatedAt, fields);
+  if (!row) throw new StaleUpdateError("task", id);
+  return row;
+};
+
+/** In no particular order, leaving out each task changed since `updatedAt` or gone. */
+export const updateAll = async (ids: string[], updatedAt: string, fields: Partial<Insert>) => {
+  if (ids.length === 0) return [];
   const at = notAfterNow(updatedAt);
-  const [row] = await db
+  return db
     .update(tasks)
     .set({
       ...stampsNotAfterNow(fields, [...STAMPS]),
       sortOrder: keptSortOrder(fields.sortOrder),
       updatedAt: at,
     })
-    .where(and(eq(tasks.id, id), lt(tasks.updatedAt, at)))
+    .where(and(inArray(tasks.id, ids), lt(tasks.updatedAt, at)))
     .returning(sentColumns);
-  if (!row) throw new StaleUpdateError("task", id);
-  return row;
 };
 
 // Leaves updatedAt, the sync clock, alone: a note or subtask changing must not beat a pending
