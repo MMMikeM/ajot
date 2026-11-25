@@ -43,9 +43,25 @@ import {
   useSharing,
 } from "~/components/task/detail-people";
 
-const TITLE_SLOT = "task-title";
-
-const isEditingTitle = () => document.activeElement?.getAttribute("data-slot") === TITLE_SLOT;
+/**
+ * A field's text, following the task's while it isn't being edited. A blur saves only what the
+ * user changed since focusing it, so focusing and leaving never writes back text another device
+ * has replaced meanwhile.
+ */
+const useTaskText = (saved: string) => {
+  const [text, setText] = useState(saved);
+  const [atFocus, setAtFocus] = useState<string | null>(null);
+  if (atFocus === null && text !== saved) setText(saved);
+  return {
+    text,
+    setText,
+    onFocus: () => setAtFocus(text),
+    onBlur: (save: (text: string) => void) => {
+      if (atFocus !== null && text !== atFocus) save(text);
+      setAtFocus(null);
+    },
+  };
+};
 
 // Underlined only while editing, so the title and details read as text, not a form
 const quietField = "border-transparent focus-visible:border-hint";
@@ -119,15 +135,11 @@ const TaskDetailContent = ({
 }) => {
   const userId = useOptimisticUserId();
   const { handleToggle, handleDelete } = useTaskActions();
-  const [title, setTitle] = useState(task.title);
-  const [description, setDescription] = useState(task.description ?? "");
+  const title = useTaskText(task.title);
+  const description = useTaskText(task.description ?? "");
   const isDone = task.status === "done";
   const isTopLevel = !task.parentId;
   const dateRef = useRef<HTMLInputElement>(null);
-
-  if (title !== task.title && !isEditingTitle()) {
-    setTitle(task.title);
-  }
 
   const { data: allNotes = [] } = useNotes();
   const notes = allNotes.filter((n) => n.taskId === task.id);
@@ -185,11 +197,12 @@ const TaskDetailContent = ({
         <div className="flex items-start gap-3">
           <Checkbox
             checked={isDone}
+            readOnly={!canEdit}
             onCheckedChange={() => handleToggle(task)}
             aria-label="Mark done"
             className={cn(
               "mt-3 touch:mt-2.75 touch:size-4.5 touch:after:-inset-y-3.5 touch:after:-right-3 touch:after:-left-4",
-              isReadyToTick(task, subtasks) && "border-primary",
+              canEdit && isReadyToTick(task, subtasks) && "border-primary",
             )}
           />
           {/* Bare control + aria-label: a raw <textarea> doesn't register with Base UI's
@@ -197,27 +210,29 @@ const TaskDetailContent = ({
           <div className="flex min-w-0 flex-1 flex-col">
             <Textarea
               ref={autoGrow}
-              data-slot={TITLE_SLOT}
               aria-label="Title"
               readOnly={!canEdit}
               rows={1}
               maxLength={MAX_TITLE}
               enterKeyHint="done"
-              value={title}
+              value={title.text}
               onChange={(e) => {
-                setTitle(e.target.value.replace(/\n/g, " "));
+                title.setText(e.target.value.replace(/\n/g, " "));
                 autoGrow(e.target);
               }}
+              onFocus={title.onFocus}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.nativeEvent.isComposing) {
                   e.preventDefault();
                   e.currentTarget.blur();
                 }
               }}
-              onBlur={() => {
-                const trimmed = title.trim();
-                if (trimmed && trimmed !== task.title) updateTask(task.id, { title: trimmed });
-              }}
+              onBlur={() =>
+                title.onBlur((text) => {
+                  const trimmed = text.trim();
+                  if (trimmed && trimmed !== task.title) updateTask(task.id, { title: trimmed });
+                })
+              }
               className={cn(
                 "py-2 text-lg leading-snug font-semibold md:text-lg",
                 quietField,
@@ -242,24 +257,27 @@ const TaskDetailContent = ({
             <Textarea
               ref={autoGrow}
               aria-label="Details"
-              value={description}
+              value={description.text}
               maxLength={MAX_TEXT}
               readOnly={!canEdit}
               onChange={(e) => {
-                setDescription(e.target.value);
+                description.setText(e.target.value);
                 autoGrow(e.target);
               }}
-              onBlur={() => {
-                const val = description.trim() || null;
-                if (val !== (task.description ?? null)) updateTask(task.id, { description: val });
-              }}
+              onFocus={description.onFocus}
+              onBlur={() =>
+                description.onBlur((text) => {
+                  const val = text.trim() || null;
+                  if (val !== (task.description ?? null)) updateTask(task.id, { description: val });
+                })
+              }
               placeholder="Add details"
               rows={1}
               className={cn("py-1.5 text-muted-foreground", quietField)}
             />
           </DetailRow>
         )}
-        <LinkRows text={description} />
+        <LinkRows text={description.text} />
 
         {/* Hidden native picker: the browser supplies the date UI. Absolute, so it takes no
             gap in the column; the picker opens where it sits, by the date line. */}

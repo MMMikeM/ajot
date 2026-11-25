@@ -56,3 +56,20 @@ test("narrow pointer windows swap the sidebar for the list-title sheet", async (
   await page.getByTestId("category-nav-trigger").click();
   await expect(page.getByRole("button", { name: "Add list" })).toBeVisible();
 });
+
+test("a task added while the open list is one that's gone goes to the Inbox", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("newtab-todo-active-category", "c-gone"));
+  await mockApi(page);
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  // The header counts the Inbox only once the open list has been found gone
+  const header = page.getByRole("heading", { name: "Inbox" }).locator("xpath=..");
+  await expect(header.getByText(/^\d+ open$/)).toBeVisible({ timeout: 15000 });
+  const added = page.waitForRequest(
+    (req) => req.method() === "POST" && new URL(req.url()).pathname === "/api/tasks",
+  );
+
+  await page.fill("#add-task-input", "Water the plants");
+  await page.keyboard.press("Enter");
+
+  expect((await added).postDataJSON().categoryId).toBeNull();
+});

@@ -18,7 +18,8 @@ import { Calendar, Plus, Trash2, Users } from "lucide-react";
 import { InitialsAvatar } from "~/components/ui/initials-avatar";
 import { useSwipeReveal } from "~/lib/hooks/use-swipe-reveal";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
-import { canDeleteTask } from "@newtab-todo/shared/task-access";
+import { tasksCollection } from "~/lib/db/collections";
+import { canDeleteTask, canEditTask } from "@newtab-todo/shared/task-access";
 import { holders, type CategoriesById } from "~/lib/task-holders";
 import { ownerNameOf, samePeople, type People } from "~/lib/people";
 import { isReadyToTick } from "~/lib/ready-to-tick";
@@ -124,6 +125,11 @@ function TaskRow({
   const isDone = task.status === "done";
   const due = task.dueDate ? formatDueDate(task.dueDate) : null;
   const showDate = !!due && (!hideDate || due.overdue);
+  const dueClass = isDone
+    ? "text-muted-foreground"
+    : due?.overdue
+      ? "text-destructive"
+      : "text-date";
   // In a shared list everyone sees every task, so only whose it is needs saying
   const reachesOthers = !isSubtask && (isInSharedCategory || task.shares.length > 0);
   const ownerName = reachesOthers && !isOwned ? ownerNameOf(task, people) : undefined;
@@ -137,9 +143,11 @@ function TaskRow({
   const hasShareChip = !!owner || sharedWith.length > 0;
   const sentBy = !isSubtask && isOwned ? task.sentBy?.name : undefined;
   const hasMeta = showDate || hasShareChip || !!sentBy || !!task.assignee;
-  const canSetDate = !isDone && !showDate;
-  const canAddSubtask = !isSubtask && !isDone;
-  const canDelete = canDeleteTask(holders(task, lists, parent), currentUserId);
+  const held = holders(task, lists, parent);
+  const canEdit = canEditTask(held, currentUserId);
+  const canSetDate = canEdit && !isDone && !showDate;
+  const canAddSubtask = canEdit && !isSubtask && !isDone;
+  const canDelete = canDeleteTask(held, currentUserId);
   const deleteLabel = isSubtask ? "Delete subtask" : "Delete task";
   const hoverActionCount = Number(canSetDate) + Number(canAddSubtask) + Number(canDelete);
   const dateRef = useRef<HTMLInputElement>(null);
@@ -148,15 +156,31 @@ function TaskRow({
   const [completing, setCompleting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const completeTimer = useRef<number | undefined>(undefined);
-  const tickAlreadySaved = useRef(false);
-  useEffect(() => () => window.clearTimeout(completeTimer.current), []);
+  const tickUnsaved = useRef(false);
+  const latest = useRef({ task, onToggle });
+  useEffect(() => {
+    latest.current = { task, onToggle };
+  });
+  // A row removed while its tick lingers (another list or search opened, the task moved on another
+  // device) takes its timers with it, so the tick saves here
+  useEffect(
+    () => () => {
+      window.clearTimeout(completeTimer.current);
+      if (!tickUnsaved.current) return;
+      tickUnsaved.current = false;
+      const current = tasksCollection.get(latest.current.task.id);
+      // Deleted meanwhile, or ticked elsewhere, which toggling would undo
+      if (current && current.status !== "done") latest.current.onToggle(current);
+    },
+    [],
+  );
   // A page being closed or put away gets no more timers, so a tick still lingering saves now
   useEffect(() => {
     if (!completing) return;
     const saveIfHidden = () => {
-      if (document.visibilityState !== "hidden" || tickAlreadySaved.current) return;
+      if (document.visibilityState !== "hidden" || !tickUnsaved.current) return;
       window.clearTimeout(completeTimer.current);
-      tickAlreadySaved.current = true;
+      tickUnsaved.current = false;
       onToggle(task);
     };
     document.addEventListener("visibilitychange", saveIfHidden);
@@ -172,8 +196,8 @@ function TaskRow({
     setAddingSubtask(false);
   }
 
-  // A done task the user can't delete has nothing left in its tray
-  const swipeEnabled = IS_TOUCH && !isSubtask && (!isDone || canDelete);
+  // A task the user can't change or delete has nothing in its tray
+  const swipeEnabled = IS_TOUCH && !isSubtask && ((canEdit && !isDone) || canDelete);
   const {
     containerRef,
     trayRef,
@@ -187,16 +211,17 @@ function TaskRow({
     if (isDone) return onToggle(task);
     if (completing) {
       window.clearTimeout(completeTimer.current);
+      tickUnsaved.current = false;
       setCompleting(false);
       setLeaving(false);
       return;
     }
     setCompleting(true);
-    tickAlreadySaved.current = false;
+    tickUnsaved.current = true;
     completeTimer.current = window.setTimeout(() => {
       setLeaving(true);
       completeTimer.current = window.setTimeout(() => {
-        tickAlreadySaved.current = true;
+        tickUnsaved.current = false;
         onToggle(task);
       }, COMPLETE_LEAVE_MS);
     }, COMPLETE_LINGER_MS);
@@ -270,7 +295,7 @@ function TaskRow({
             className="invisible absolute top-0 right-0 z-1 grid h-full translate-x-full auto-cols-fr grid-flow-col bg-muted group-data-[swiping]/swipe:visible before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-6 before:bg-linear-to-l before:from-card"
             inert={!isSwipeOpen}
           >
-            {!isDone && (
+            {canEdit && !isDone && (
               <>
                 <button
                   onClick={() => {
@@ -325,6 +350,7 @@ function TaskRow({
         >
           <Checkbox
             checked={looksDone}
+            readOnly={!canEdit}
             onCheckedChange={handleCheck}
             onKeyDown={(e) => {
               if (e.key !== "Enter" || !onOpen) return;
@@ -342,7 +368,7 @@ function TaskRow({
                 ? "mt-0.5 touch:mt-px touch:after:-inset-y-3 touch:after:-right-2.5 touch:after:-left-3.75"
                 : "touch:after:-inset-y-3.5 touch:after:-right-2.5 touch:after:-left-5",
               isDone && checkboxDoneClass,
-              readyToTick && "border-primary",
+              readyToTick && canEdit && "border-primary",
             )}
           />
           {onOpen ? (
@@ -389,27 +415,30 @@ function TaskRow({
                 isSubtask ? "h-5" : "h-6",
               )}
             >
-              {due && showDate && (
-                <button
-                  type="button"
-                  onClick={openPicker}
-                  // Not an sr-only span: Chromium spaces out an absolutely positioned child ("Oct 25 , overdue")
-                  aria-label={!isDone && due.spoken !== due.label ? due.spoken : undefined}
-                  tabIndex={tabIndex}
-                  className={cn(
-                    "relative cursor-pointer text-xs whitespace-nowrap after:absolute after:-inset-x-1.5 after:-inset-y-2.5 hover:underline",
-                    // A task's fills its 44px row, as its checkbox's does; subtask rows sit closer
-                    !isSubtask && "touch:after:-inset-x-2 touch:after:-inset-y-3.5",
-                    isDone
-                      ? "text-muted-foreground"
-                      : due.overdue
-                        ? "text-destructive"
-                        : "text-date",
-                  )}
-                >
-                  {due.label}
-                </button>
-              )}
+              {due &&
+                showDate &&
+                (canEdit ? (
+                  <button
+                    type="button"
+                    onClick={openPicker}
+                    // Not an sr-only span: Chromium spaces out an absolutely positioned child ("Oct 25 , overdue")
+                    aria-label={!isDone && due.spoken !== due.label ? due.spoken : undefined}
+                    tabIndex={tabIndex}
+                    className={cn(
+                      "relative cursor-pointer text-xs whitespace-nowrap after:absolute after:-inset-x-1.5 after:-inset-y-2.5 hover:underline",
+                      // A task's fills its 44px row, as its checkbox's does; subtask rows sit closer
+                      !isSubtask && "touch:after:-inset-x-2 touch:after:-inset-y-3.5",
+                      dueClass,
+                    )}
+                  >
+                    {due.label}
+                  </button>
+                ) : (
+                  <span className={cn("text-xs whitespace-nowrap", dueClass)}>
+                    {due.label}
+                    {!isDone && due.overdue && <span className="sr-only">, overdue</span>}
+                  </span>
+                ))}
               {sentBy && <SentBy name={sentBy} />}
               {hasShareChip && <ShareChip owner={owner} sharedWith={sharedWith} />}
               {task.assignee && (
@@ -483,7 +512,7 @@ function TaskRow({
                 key={sub.id}
                 index={index}
                 // Done rows aren't sortable, and neither is what's under them
-                disabled={isDone}
+                disabled={isDone || !canEditTask(holders(sub, lists, task), currentUserId)}
                 task={sub}
                 lists={lists}
                 people={people}

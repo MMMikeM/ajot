@@ -104,3 +104,56 @@ test("a list dragged above another moves there, still one list to a row", async 
   for (const listRow of await rows.all())
     await expect(listRow.locator(":scope > button:not([data-slot])")).toHaveCount(1);
 });
+
+test("a tick still holding when another list opens is saved", async ({ page }) => {
+  await openList(page);
+  const target = row(page, "Pick up dry cleaning");
+  const taskId = await target.getAttribute("data-task-id");
+  const saved = page.waitForRequest(
+    (req) =>
+      req.method() === "PUT" &&
+      new URL(req.url()).pathname === "/api/tasks" &&
+      req.postDataJSON()?.id === taskId &&
+      req.postDataJSON()?.status === "done",
+  );
+
+  await target.getByRole("checkbox").click();
+  await page.getByTestId("category-sidebar").getByRole("button", { name: /^Work/ }).click();
+
+  await saved;
+});
+
+test("a task shared with you to view neither ticks nor moves among the others", async ({
+  page,
+}) => {
+  const data = mockData();
+  const restaurant = data.tasks.find((t) => t.title === "Pick a restaurant for Friday")!;
+  restaurant.shares = restaurant.shares.map((s) => ({ ...(s as object), permission: "view" }));
+  await openList(page, { data });
+  const writes: string[] = [];
+  page.on("request", (req) => {
+    if (req.method() !== "GET" && new URL(req.url()).pathname.startsWith("/api/tasks"))
+      writes.push(`${req.method()} ${new URL(req.url()).pathname}`);
+  });
+  const target = row(page, restaurant.title);
+  const checkbox = target.getByRole("checkbox");
+
+  await expect(checkbox).toHaveAttribute("aria-readonly", "true");
+  await checkbox.click();
+  await expect(checkbox).toHaveAttribute("aria-checked", "false");
+
+  const centre = async (locator: Locator) => {
+    const box = (await locator.boundingBox())!;
+    return [box.x + box.width / 2, box.y + box.height / 2] as const;
+  };
+  const titles = () => page.locator("ul[data-flip-key='active'] > li").allInnerTexts();
+  const before = await titles();
+  await page.mouse.move(...(await centre(target.getByRole("button", { name: restaurant.title }))));
+  await page.mouse.down();
+  await page.mouse.move(...(await centre(row(page, "Pick up dry cleaning"))), { steps: 12 });
+  await page.mouse.up();
+
+  await expect(page.getByText("You can only view this task.")).toBeVisible();
+  await expect.poll(titles).toEqual(before);
+  expect(writes).toEqual([]);
+});

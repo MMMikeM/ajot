@@ -1,7 +1,7 @@
 import { ChevronDown } from "lucide-react";
 import { useCategories, useTasks } from "~/lib/db/hooks";
 import { useOptimisticUserId } from "~/lib/auth/current-user";
-import { useActiveCategoryId } from "~/lib/state/active-category";
+import { useOpenListId } from "~/lib/state/active-category";
 import { useNavContext } from "~/lib/state/nav-context";
 import { categoriesById } from "~/lib/task-holders";
 import { countOpenTasksByCategory } from "~/lib/effective-category";
@@ -12,18 +12,16 @@ import { cn } from "~/lib/utils";
 
 /** Opens the category sheet where the sidebar doesn't fit (touch, narrow windows). */
 export function CategoryHeader() {
-  const activeCategoryId = useActiveCategoryId();
+  const openListId = useOpenListId();
   const userId = useOptimisticUserId();
   const { data: categories } = useCategories();
   const { data: tasks } = useTasks();
   const { setNavOpen } = useNavContext();
   const isDesk = useIsDesk();
 
-  const active = activeCategoryId
-    ? (categories ?? []).find((c) => c.id === activeCategoryId)
-    : undefined;
+  const active = openListId ? (categories ?? []).find((c) => c.id === openListId) : undefined;
   const lists = categoriesById(categories ?? []);
-  const openCount = countOpenTasksByCategory(tasks ?? [], userId, lists).get(activeCategoryId) ?? 0;
+  const openCount = countOpenTasksByCategory(tasks ?? [], userId, lists).get(openListId) ?? 0;
 
   // On touch nothing else shows the full name, so it wraps; the dot, chevron and count
   // sit on its first line, a 2.1875rem line box

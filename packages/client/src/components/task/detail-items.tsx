@@ -206,12 +206,14 @@ export const Subtasks = ({
             {subtasks.map((sub) => {
               const isDone = sub.status === "done";
               const held = holders(sub, lists, task);
+              const canEdit = canEditTask(held, userId);
               return (
                 <ItemRow key={sub.id} className="items-start">
                   {/* Checkbox, title and Delete centre on the title's first line. The target ends
                     where the gap does and reaches left into the gutter, off the title. */}
                   <Checkbox
                     checked={isDone}
+                    readOnly={!canEdit}
                     aria-label={sub.title}
                     onCheckedChange={() => onToggle(sub)}
                     className={cn(
@@ -219,7 +221,7 @@ export const Subtasks = ({
                       isDone && checkboxDoneClass,
                     )}
                   />
-                  <SubtaskTitle sub={sub} done={isDone} canEdit={canEditTask(held, userId)} />
+                  <SubtaskTitle sub={sub} done={isDone} canEdit={canEdit} />
                   {canDeleteTask(held, userId) && (
                     <RevealGroup className="items-start pt-1.5 touch:pt-0">
                       <DeleteItemButton
